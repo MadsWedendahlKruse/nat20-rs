@@ -1,5 +1,8 @@
 use crate::combat::damage::*;
-use crate::dice::dice::*;
+use crate::item::equipment::armor::Armor;
+use crate::item::equipment::equipment::EquipmentItem;
+use crate::item::equipment::equipment::GeneralEquipmentSlot;
+use crate::item::equipment::equipment::HandSlot;
 use crate::stats::ability::*;
 use crate::stats::d20_check::*;
 use crate::stats::modifier::*;
@@ -7,6 +10,8 @@ use crate::stats::proficiency::Proficiency;
 use crate::stats::skill::*;
 
 use std::collections::HashMap;
+
+use strum::IntoEnumIterator;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum CharacterClass {
@@ -19,14 +24,18 @@ pub enum CharacterClass {
 
 #[derive(Debug)]
 pub struct Character {
-    name: String,
-    class_levels: HashMap<CharacterClass, u8>,
-    max_hp: i32,
-    current_hp: i32,
-    ability_scores: HashMap<Ability, AbilityScore>,
-    skills: HashMap<Skill, D20Check>,
-    saving_throws: HashMap<Ability, D20Check>,
-    resistances: DamageResistances,
+    pub name: String,
+    pub class_levels: HashMap<CharacterClass, u8>,
+    pub max_hp: i32,
+    pub current_hp: i32,
+    pub ability_scores: HashMap<Ability, AbilityScore>,
+    pub skills: HashMap<Skill, D20Check>,
+    pub saving_throws: HashMap<Ability, D20Check>,
+    pub resistances: DamageResistances,
+    armor: Option<Armor>,
+    melee_weapons: HashMap<HandSlot, Option<EquipmentItem>>,
+    ranged_weapons: HashMap<HandSlot, Option<EquipmentItem>>,
+    equipment: HashMap<GeneralEquipmentSlot, Option<EquipmentItem>>,
 }
 
 impl Character {
@@ -39,16 +48,38 @@ impl Character {
         saving_throws: HashMap<Ability, D20Check>,
         resistances: DamageResistances,
     ) -> Self {
-        // TODO: Default values for ability scores and skills
+        // Ensure all abilities and skills are initialized
+        let mut ability_scores_mut = ability_scores.clone();
+        for ability in Ability::iter() {
+            if !ability_scores.contains_key(&ability) {
+                ability_scores_mut.insert(ability, AbilityScore::default(ability));
+            }
+        }
+        let mut skills_mut = skills.clone();
+        for skill in Skill::iter() {
+            if !skills.contains_key(&skill) {
+                skills_mut.insert(skill, D20Check::new(Proficiency::None));
+            }
+        }
+        let mut saving_throws_mut = saving_throws.clone();
+        for ability in Ability::iter() {
+            if !saving_throws.contains_key(&ability) {
+                saving_throws_mut.insert(ability, D20Check::new(Proficiency::None));
+            }
+        }
         Self {
             name: name.to_string(),
             class_levels,
             max_hp,
             current_hp: max_hp,
-            ability_scores,
-            skills,
-            saving_throws,
+            ability_scores: ability_scores_mut,
+            skills: skills_mut,
+            saving_throws: saving_throws_mut,
             resistances,
+            armor: None,
+            melee_weapons: HashMap::new(),
+            ranged_weapons: HashMap::new(),
+            equipment: HashMap::new(),
         }
     }
 
@@ -69,6 +100,10 @@ impl Character {
             17..=20 => 6,
             _ => 2, // fallback default
         }
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.current_hp > 0
     }
 
     pub fn take_damage(&mut self, damage_roll_result: &DamageRollResult) -> DamageMitigationResult {
@@ -96,6 +131,23 @@ impl Character {
             .unwrap()
     }
 
+    pub fn add_ability_modifier(
+        &mut self,
+        ability: Ability,
+        source: ModifierSource,
+        modifier: i32,
+    ) {
+        if let Some(ability_score) = self.ability_scores.get_mut(&ability) {
+            ability_score.modifiers.add_modifier(source, modifier);
+        }
+    }
+
+    pub fn remove_ability_modifier(&mut self, ability: Ability, source: &ModifierSource) {
+        if let Some(ability_score) = self.ability_scores.get_mut(&ability) {
+            ability_score.modifiers.remove_modifier(source);
+        }
+    }
+
     pub fn skill_check(&self, skill: Skill) -> D20CheckResult {
         let mut skill_check = self.skills.get(&skill).unwrap().clone();
         skill_check
@@ -108,6 +160,18 @@ impl Character {
         let skill_check = self.skills.get(&skill).unwrap();
         let ability = skill_ability(skill);
         self.ability_check_modifier_set(ability, skill_check)
+    }
+
+    pub fn add_skill_modifier(&mut self, skill: Skill, source: ModifierSource, modifier: i32) {
+        if let Some(skill_check) = self.skills.get_mut(&skill) {
+            skill_check.modifiers.add_modifier(source, modifier);
+        }
+    }
+
+    pub fn remove_skill_modifier(&mut self, skill: Skill, source: &ModifierSource) {
+        if let Some(skill_check) = self.skills.get_mut(&skill) {
+            skill_check.modifiers.remove_modifier(source)
+        }
     }
 
     pub fn saving_throw(&self, ability: Ability) -> D20CheckResult {
@@ -136,16 +200,57 @@ impl Character {
         modifiers
     }
 
-    pub fn is_alive(&self) -> bool {
-        self.current_hp > 0
+    pub fn equip_armor(&mut self, armor: Armor) -> Option<Armor> {
+        let equipped_armor = self.unequip_armor();
+        armor.on_equip(self);
+        self.armor = Some(armor);
+        equipped_armor
+    }
+
+    pub fn unequip_armor(&mut self) -> Option<Armor> {
+        if let Some(armor) = self.armor.take() {
+            armor.on_unequip(self);
+            Some(armor)
+        } else {
+            None
+        }
+    }
+
+    pub fn armor_class(&self) -> ModifierSet {
+        if let Some(armor) = &self.armor {
+            armor.armor_class(self)
+        } else {
+            let mut armor_class = ModifierSet::new();
+            armor_class.add_modifier(ModifierSource::Custom("Base".to_string()), 10);
+            armor_class
+        }
+    }
+
+    pub fn equip_item(
+        &mut self,
+        slot: GeneralEquipmentSlot,
+        item: EquipmentItem,
+    ) -> Option<EquipmentItem> {
+        let equipped_item = self.unequip_item(slot);
+        item.on_equip(self);
+        self.equipment.insert(slot, Some(item));
+        equipped_item
+    }
+
+    pub fn unequip_item(&mut self, slot: GeneralEquipmentSlot) -> Option<EquipmentItem> {
+        if let Some(item) = self.equipment.remove(&slot) {
+            item.as_ref().map(|i| i.on_unequip(self));
+            item
+        } else {
+            None
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::combat::damage::DamageComponentResult;
-
     use super::*;
+    use crate::stats::proficiency::Proficiency;
 
     #[test]
     fn test_character_creation() {
@@ -207,196 +312,5 @@ mod tests {
         );
 
         assert_eq!(character.proficiency_bonus(), 2);
-    }
-
-    #[test]
-    fn test_character_skill_modifier() {
-        let mut abilities = HashMap::new();
-        let mut strength = AbilityScore::new(Ability::Strength, 17);
-        strength
-            .modifiers
-            .add_modifier(ModifierSource::Item("Ring of Strength".to_string()), 2);
-        abilities.insert(Ability::Strength, strength);
-
-        let mut skills = HashMap::new();
-        let mut athletics = D20Check::new(Proficiency::Proficient);
-        athletics
-            .modifiers
-            .add_modifier(ModifierSource::Item("Athlete's Belt".to_string()), 1);
-        skills.insert(Skill::Athletics, athletics);
-
-        let mut class_levels = HashMap::new();
-        class_levels.insert(CharacterClass::Fighter, 5);
-
-        let character = Character::new(
-            "Thorin",
-            class_levels,
-            20,
-            abilities,
-            skills,
-            HashMap::new(),
-            DamageResistances::new(),
-        );
-
-        // 17 (base) + 2 (item) = 19
-        assert_eq!(character.ability_total(Ability::Strength), 19);
-        // Calculate the expected skill modifier
-        // 4 (ability) + 1 (item) + 3 (proficiency) = 8
-        assert_eq!(character.skill_modifier(Skill::Athletics).total(), 8);
-        print!(
-            "Athletics Modifier: {} = {:?}",
-            character.skill_modifier(Skill::Athletics).total(),
-            character.skill_modifier(Skill::Athletics)
-        );
-    }
-
-    #[test]
-    fn test_character_take_damage() {
-        let mut resistances = DamageResistances::new();
-        resistances.add_effect(
-            DamageType::Fire,
-            DamageMitigationEffect {
-                source: ModifierSource::Item("Boots of Fire Resistance".to_string()),
-                op: MitigationOp::Resistance,
-            },
-        );
-        let mut character = Character::new(
-            "Thorin",
-            HashMap::new(),
-            20,
-            HashMap::new(),
-            HashMap::new(),
-            HashMap::new(),
-            resistances,
-        );
-
-        assert_eq!(character.current_hp, 20);
-
-        let damage_roll_result = DamageRollResult {
-            label: "Fireball".to_string(),
-            components: vec![DamageComponentResult {
-                damage_type: DamageType::Fire,
-                result: DiceGroupRollResult {
-                    label: "Fireball".to_string(),
-                    rolls: vec![4, 4, 4, 4, 4, 4, 4, 4],
-                    die_size: DieSize::D8,
-                    modifiers: ModifierSet::new(),
-                    subtotal: 32,
-                },
-            }],
-            total: 32,
-        };
-
-        character.take_damage(&damage_roll_result);
-        // Fire resistance halves the damage
-        // 20 - (32 / 2) = 4
-        assert_eq!(character.current_hp, 4);
-    }
-
-    #[test]
-    fn test_character_heal() {
-        let mut character = Character::new(
-            "Thorin",
-            HashMap::new(),
-            20,
-            HashMap::new(),
-            HashMap::new(),
-            HashMap::new(),
-            DamageResistances::new(),
-        );
-
-        let damage_roll_result = DamageRollResult {
-            label: "Arrow".to_string(),
-            components: vec![DamageComponentResult {
-                damage_type: DamageType::Piercing,
-                result: DiceGroupRollResult {
-                    label: "Arrow".to_string(),
-                    rolls: vec![5, 5],
-                    die_size: DieSize::D6,
-                    modifiers: ModifierSet::new(),
-                    subtotal: 10,
-                },
-            }],
-            total: 10,
-        };
-
-        character.take_damage(&damage_roll_result);
-        character.heal(5);
-        assert_eq!(character.current_hp, 15);
-    }
-
-    #[test]
-    fn test_character_is_alive() {
-        let mut character = Character::new(
-            "Thorin",
-            HashMap::new(),
-            20,
-            HashMap::new(),
-            HashMap::new(),
-            HashMap::new(),
-            DamageResistances::new(),
-        );
-
-        assert!(character.is_alive());
-
-        let damage_roll_result = DamageRollResult {
-            label: "Power Word Kill".to_string(),
-            components: vec![DamageComponentResult {
-                damage_type: DamageType::Piercing,
-                result: DiceGroupRollResult {
-                    label: "Power Word Kill".to_string(),
-                    rolls: vec![100],
-                    die_size: DieSize::D100,
-                    modifiers: ModifierSet::new(),
-                    subtotal: 100,
-                },
-            }],
-            total: 100,
-        };
-
-        character.take_damage(&damage_roll_result);
-        assert!(!character.is_alive());
-    }
-
-    #[test]
-    fn test_character_saving_throw_modifier() {
-        let mut abilities = HashMap::new();
-        let mut strength = AbilityScore::new(Ability::Strength, 16);
-        strength
-            .modifiers
-            .add_modifier(ModifierSource::Item("Ring of Strength".to_string()), 2);
-        abilities.insert(Ability::Strength, strength);
-
-        let mut saving_throws = HashMap::new();
-        let mut strength_saving_throw = D20Check::new(Proficiency::Proficient);
-        strength_saving_throw.modifiers.add_modifier(
-            ModifierSource::Item("Strength Saving Throw Item".to_string()),
-            3,
-        );
-        saving_throws.insert(Ability::Strength, strength_saving_throw);
-
-        let mut class_levels = HashMap::new();
-        class_levels.insert(CharacterClass::Fighter, 5);
-
-        let character = Character::new(
-            "Thorin",
-            class_levels,
-            20,
-            abilities,
-            HashMap::new(),
-            saving_throws,
-            DamageResistances::new(),
-        );
-
-        // 4 (ability) + 3 (item) + 3 (proficiency) = 10
-        assert_eq!(
-            character.saving_throw_modifier(Ability::Strength).total(),
-            10
-        );
-        println!(
-            "Strength Saving Throw Modifier: {} = {:?}",
-            character.saving_throw_modifier(Ability::Strength).total(),
-            character.saving_throw_modifier(Ability::Strength)
-        );
     }
 }

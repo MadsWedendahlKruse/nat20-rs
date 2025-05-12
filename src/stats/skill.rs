@@ -1,10 +1,10 @@
 use std::hash::Hash;
 
 use super::ability::Ability;
-use super::modifier::ModifierSet;
-use super::proficiency::Proficiency;
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
+use strum::EnumIter;
+
+#[derive(EnumIter, Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum Skill {
     Acrobatics,
     Athletics,

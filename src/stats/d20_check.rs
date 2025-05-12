@@ -80,6 +80,10 @@ impl D20Check {
         &self.advantage_tracker
     }
 
+    pub fn advantage_tracker_mut(&mut self) -> &mut AdvantageTracker {
+        &mut self.advantage_tracker
+    }
+
     pub fn perform(&self) -> D20CheckResult {
         let mut rng = rand::rng();
         // Technically inefficient to always roll two dice, but it's probably not a big deal

@@ -1,6 +1,8 @@
 use super::modifier::{ModifierSet, ModifierSource};
 
-#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)]
+use strum::EnumIter;
+
+#[derive(EnumIter, Hash, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum Ability {
     Strength,
     Dexterity,
@@ -10,7 +12,7 @@ pub enum Ability {
     Charisma,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AbilityScore {
     pub ability: Ability,
     pub base: i32,
