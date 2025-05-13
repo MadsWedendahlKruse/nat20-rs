@@ -34,28 +34,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_proficiency_bonus() {
+    fn proficiency_bonus() {
         let prof = Proficiency::Proficient;
         assert_eq!(prof.bonus(2), 2);
         assert_eq!(prof.bonus(3), 3);
     }
 
     #[test]
-    fn test_expertise_bonus() {
+    fn expertise_bonus() {
         let prof = Proficiency::Expertise;
         assert_eq!(prof.bonus(2), 4);
         assert_eq!(prof.bonus(3), 6);
     }
 
     #[test]
-    fn test_half_bonus() {
+    fn half_bonus() {
         let prof = Proficiency::Half;
         assert_eq!(prof.bonus(2), 1);
         assert_eq!(prof.bonus(3), 1);
     }
 
     #[test]
-    fn test_none_bonus() {
+    fn none_bonus() {
         let prof = Proficiency::None;
         assert_eq!(prof.bonus(2), 0);
         assert_eq!(prof.bonus(3), 0);

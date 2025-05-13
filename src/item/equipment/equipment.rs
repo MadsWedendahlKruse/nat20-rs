@@ -28,6 +28,15 @@ pub enum HandSlot {
     Off,
 }
 
+impl HandSlot {
+    pub fn other(&self) -> HandSlot {
+        match self {
+            HandSlot::Main => HandSlot::Off,
+            HandSlot::Off => HandSlot::Main,
+        }
+    }
+}
+
 pub struct EquipmentItem {
     pub item: Item,
     pub kind: EquipmentType,
@@ -107,8 +116,8 @@ pub enum EquipmentType {
     Boots,
     Amulet,
     Ring,
-    // MeleeWeapon,
-    // RangedWeapon,
+    MeleeWeapon,
+    RangedWeapon,
 }
 
 impl EquipmentType {
@@ -124,7 +133,14 @@ impl EquipmentType {
                 EquipmentSlot::General(GeneralEquipmentSlot::Ring(0)),
                 EquipmentSlot::General(GeneralEquipmentSlot::Ring(1)),
             ],
-            // EquipmentType::MeleeWeapon => vec![EquipmentSlot::Melee(HandSlot::Main)],
+            EquipmentType::MeleeWeapon => vec![
+                EquipmentSlot::Melee(HandSlot::Main),
+                EquipmentSlot::Melee(HandSlot::Off),
+            ],
+            EquipmentType::RangedWeapon => vec![
+                EquipmentSlot::Ranged(HandSlot::Main),
+                EquipmentSlot::Ranged(HandSlot::Off),
+            ],
         }
     }
 }

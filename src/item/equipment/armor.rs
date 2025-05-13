@@ -1,15 +1,10 @@
 use crate::creature::character::Character;
 use crate::item::equipment::equipment::*;
-use crate::item::item::*;
 use crate::stats::ability::Ability;
 use crate::stats::d20_check::AdvantageType;
 use crate::stats::modifier::ModifierSet;
 use crate::stats::modifier::ModifierSource;
 use crate::stats::skill::Skill;
-
-use std::sync::Arc;
-
-use super::equipment;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ArmorType {
@@ -112,10 +107,12 @@ impl Armor {
 
 #[cfg(test)]
 mod tests {
+    use crate::item::item::ItemRarity;
+
     use super::*;
 
     #[test]
-    fn test_clothing() {
+    fn clothing() {
         let equipment: EquipmentItem = EquipmentItem::new(
             "Clothes".to_string(),
             "A test clothing item.".to_string(),
@@ -132,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn test_light_armor() {
+    fn light_armor() {
         let equipment: EquipmentItem = EquipmentItem::new(
             "Leather Armor".to_string(),
             "A test light armor item.".to_string(),
@@ -149,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    fn test_medium_armor() {
+    fn medium_armor() {
         let equipment: EquipmentItem = EquipmentItem::new(
             "Chain Shirt".to_string(),
             "A test medium armor item.".to_string(),
@@ -166,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn test_heavy_armor() {
+    fn heavy_armor() {
         let equipment: EquipmentItem = EquipmentItem::new(
             "Plate Armor".to_string(),
             "A test heavy armor item.".to_string(),

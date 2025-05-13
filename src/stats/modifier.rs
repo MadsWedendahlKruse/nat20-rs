@@ -14,7 +14,7 @@ pub enum ModifierSource {
     Proficiency(Proficiency),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModifierSet {
     pub modifiers: HashMap<ModifierSource, i32>,
 }
@@ -67,7 +67,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_modifiers() {
+    fn modifiers() {
         let mut modifiers = ModifierSet::new();
         modifiers.add_modifier(ModifierSource::Item("Belt of Strength".to_string()), 4);
         modifiers.add_modifier(ModifierSource::Spell("Bless".to_string()), 1);

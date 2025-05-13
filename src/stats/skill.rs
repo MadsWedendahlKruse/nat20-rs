@@ -39,7 +39,7 @@ mod tests {
     use crate::stats::ability::Ability;
 
     #[test]
-    fn test_skill_ability_map() {
+    fn skill_ability_map() {
         assert_eq!(skill_ability(Skill::Acrobatics), Ability::Dexterity);
         assert_eq!(skill_ability(Skill::Athletics), Ability::Strength);
         assert_eq!(skill_ability(Skill::Stealth), Ability::Dexterity);

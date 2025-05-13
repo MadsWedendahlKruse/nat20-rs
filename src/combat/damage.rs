@@ -29,25 +29,40 @@ impl fmt::Display for DamageType {
 
 /// --- DAMAGE APPLICATION ---
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DamageComponent {
-    pub dice: DiceGroup,
+    pub dice_roll: DiceSetRoll,
     pub damage_type: DamageType,
 }
 
 #[derive(Debug)]
+pub struct DamageComponentResult {
+    pub result: DiceSetRollResult,
+    pub damage_type: DamageType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DamageRoll {
-    pub components: Vec<DamageComponent>,
+    /// Separate the primary so we know where to apply e.g. ability modifiers
+    pub primary: DamageComponent,
+    pub bonus: Vec<DamageComponent>,
     pub label: String,
 }
 
 impl DamageRoll {
-    fn roll(&self) -> DamageRollResult {
+    pub fn roll(&self) -> DamageRollResult {
         let mut components = Vec::new();
         let mut total = 0;
 
-        for component in &self.components {
-            let result = component.dice.roll();
+        let primary_result = self.primary.dice_roll.roll();
+        total += primary_result.subtotal;
+        components.push(DamageComponentResult {
+            damage_type: self.primary.damage_type,
+            result: primary_result,
+        });
+
+        for component in &self.bonus {
+            let result = component.dice_roll.roll();
             total += result.subtotal;
             components.push(DamageComponentResult {
                 damage_type: component.damage_type,
@@ -61,12 +76,6 @@ impl DamageRoll {
             total,
         }
     }
-}
-
-#[derive(Debug)]
-pub struct DamageComponentResult {
-    pub damage_type: DamageType,
-    pub result: DiceGroupRollResult,
 }
 
 #[derive(Debug)]
@@ -98,20 +107,20 @@ impl DamageRollResult {
 /// --- DAMAGE MITIGATION ---
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum MitigationOp {
+pub enum MitigationOperation {
     Resistance,         // divide by 2
     Vulnerability,      // multiply by 2
     Immunity,           // set to 0
     FlatReduction(i32), // subtract N
 }
 
-impl fmt::Display for MitigationOp {
+impl fmt::Display for MitigationOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MitigationOp::Resistance => write!(f, "/ 2"),
-            MitigationOp::Vulnerability => write!(f, "* 2"),
-            MitigationOp::Immunity => write!(f, "* 0"),
-            MitigationOp::FlatReduction(amount) => write!(f, "-{}", amount),
+            MitigationOperation::Resistance => write!(f, "/ 2"),
+            MitigationOperation::Vulnerability => write!(f, "* 2"),
+            MitigationOperation::Immunity => write!(f, "* 0"),
+            MitigationOperation::FlatReduction(amount) => write!(f, "-{}", amount),
         }
     }
 }
@@ -119,7 +128,7 @@ impl fmt::Display for MitigationOp {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DamageMitigationEffect {
     pub source: ModifierSource,
-    pub op: MitigationOp,
+    pub operation: MitigationOperation,
 }
 
 #[derive(Debug)]
@@ -161,17 +170,17 @@ impl DamageResistances {
 
             if let Some(effects) = self.effects.get(&dtype) {
                 for effect in effects {
-                    match effect.op {
-                        MitigationOp::Resistance => {
+                    match effect.operation {
+                        MitigationOperation::Resistance => {
                             value /= 2;
                         }
-                        MitigationOp::Vulnerability => {
+                        MitigationOperation::Vulnerability => {
                             value *= 2;
                         }
-                        MitigationOp::Immunity => {
+                        MitigationOperation::Immunity => {
                             value = 0;
                         }
-                        MitigationOp::FlatReduction(amount) => {
+                        MitigationOperation::FlatReduction(amount) => {
                             value = (value - amount).max(0);
                         }
                     }
@@ -207,7 +216,11 @@ impl fmt::Display for DamageComponentMitigation {
         }
         write!(f, "{}", self.after_mods)?;
         for modif in &self.modifiers {
-            write!(f, " ({} {}) {:?}", self.original, modif.op, modif.source)?;
+            write!(
+                f,
+                " ({} {}) {:?}",
+                self.original, modif.operation, modif.source
+            )?;
         }
         return Ok(());
     }
@@ -236,21 +249,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_damage_roll() {
+    fn damage_roll() {
         let mut modifiers = ModifierSet::new();
         modifiers.add_modifier(ModifierSource::Ability(Ability::Strength), 2);
         let damage_roll = DamageRoll {
-            components: vec![
-                DamageComponent {
-                    dice: DiceGroup::new(2, DieSize::D6, modifiers, "Base damage".to_string()),
-                    damage_type: DamageType::Slashing,
-                },
-                DamageComponent {
-                    dice: DiceGroup::new(1, DieSize::D4, ModifierSet::new(), "Enchant".to_string()),
-                    damage_type: DamageType::Fire,
-                },
-            ],
-            label: "Everburn Blade".to_string(),
+            label: "Sword of Flame".to_string(),
+            primary: DamageComponent {
+                dice_roll: DiceSetRoll::new(
+                    DiceSet {
+                        num_dice: 2,
+                        die_size: DieSize::D6,
+                    },
+                    modifiers,
+                    "Base damage".to_string(),
+                ),
+                damage_type: DamageType::Slashing,
+            },
+            bonus: vec![DamageComponent {
+                dice_roll: DiceSetRoll::new(
+                    DiceSet {
+                        num_dice: 1,
+                        die_size: DieSize::D4,
+                    },
+                    ModifierSet::new(),
+                    "Fire Enchant".to_string(),
+                ),
+                damage_type: DamageType::Fire,
+            }],
         };
 
         let result = damage_roll.roll();
@@ -263,13 +288,13 @@ mod tests {
     }
 
     #[test]
-    fn test_damage_mitigation() {
+    fn damage_mitigation_resistance() {
         let roll_result = DamageRollResult {
-            label: "Everburn Blade".to_string(),
+            label: "Sword of Flame".to_string(),
             components: vec![
                 DamageComponentResult {
                     damage_type: DamageType::Slashing,
-                    result: DiceGroupRollResult {
+                    result: DiceSetRollResult {
                         label: "Base damage".to_string(),
                         rolls: vec![3, 4],
                         die_size: DieSize::D6,
@@ -279,7 +304,7 @@ mod tests {
                 },
                 DamageComponentResult {
                     damage_type: DamageType::Fire,
-                    result: DiceGroupRollResult {
+                    result: DiceSetRollResult {
                         label: "Enchant".to_string(),
                         rolls: vec![2],
                         die_size: DieSize::D4,
@@ -298,7 +323,7 @@ mod tests {
             DamageType::Slashing,
             vec![DamageMitigationEffect {
                 source: ModifierSource::Item("Shield of Resistance".to_string()),
-                op: MitigationOp::Resistance,
+                operation: MitigationOperation::Resistance,
             }],
         );
 

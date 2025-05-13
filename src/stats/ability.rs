@@ -54,7 +54,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ability_modifier() {
+    fn ability_modifier() {
         let ability_score = AbilityScore::new(Ability::Strength, 16);
         let modifier = ability_score.ability_modifier();
         assert_eq!(modifier.total(), 3); // (16 - 10) / 2 = 3
@@ -62,7 +62,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ability_total() {
+    fn ability_total() {
         let mut ability_score = AbilityScore::new(Ability::Dexterity, 14);
         ability_score
             .modifiers

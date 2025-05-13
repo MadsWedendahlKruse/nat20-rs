@@ -135,7 +135,7 @@ mod tests {
     use crate::stats::modifier::ModifierSource;
 
     #[test]
-    fn test_d20_check() {
+    fn d20_check() {
         let mut check = D20Check::new(Proficiency::Proficient);
         check
             .modifiers
@@ -155,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    fn test_d20_check_with_advantage() {
+    fn d20_check_with_advantage() {
         let mut check = D20Check::new(Proficiency::Proficient);
         check
             .modifiers
@@ -181,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn test_d20_check_with_disadvantage() {
+    fn d20_check_with_disadvantage() {
         let mut check = D20Check::new(Proficiency::Proficient);
         check.advantage_tracker.add(
             AdvantageType::Disadvantage,

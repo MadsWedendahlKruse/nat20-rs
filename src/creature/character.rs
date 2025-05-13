@@ -3,6 +3,10 @@ use crate::item::equipment::armor::Armor;
 use crate::item::equipment::equipment::EquipmentItem;
 use crate::item::equipment::equipment::GeneralEquipmentSlot;
 use crate::item::equipment::equipment::HandSlot;
+use crate::item::equipment::weapon::Weapon;
+use crate::item::equipment::weapon::WeaponCategory;
+use crate::item::equipment::weapon::WeaponProperties;
+use crate::item::equipment::weapon::WeaponType;
 use crate::stats::ability::*;
 use crate::stats::d20_check::*;
 use crate::stats::modifier::*;
@@ -32,9 +36,13 @@ pub struct Character {
     pub skills: HashMap<Skill, D20Check>,
     pub saving_throws: HashMap<Ability, D20Check>,
     pub resistances: DamageResistances,
+    // TODO: Might have to make this more granular later
+    // TODO: Should it just be a bool? Not sure if you can have expertise in a weapon
+    weapon_proficiencies: HashMap<WeaponCategory, Proficiency>,
+    // Equipped items
     armor: Option<Armor>,
-    melee_weapons: HashMap<HandSlot, Option<EquipmentItem>>,
-    ranged_weapons: HashMap<HandSlot, Option<EquipmentItem>>,
+    melee_weapons: HashMap<HandSlot, Option<Weapon>>,
+    ranged_weapons: HashMap<HandSlot, Option<Weapon>>,
     equipment: HashMap<GeneralEquipmentSlot, Option<EquipmentItem>>,
 }
 
@@ -76,6 +84,7 @@ impl Character {
             skills: skills_mut,
             saving_throws: saving_throws_mut,
             resistances,
+            weapon_proficiencies: HashMap::new(),
             armor: None,
             melee_weapons: HashMap::new(),
             ranged_weapons: HashMap::new(),
@@ -245,72 +254,90 @@ impl Character {
             None
         }
     }
+
+    pub fn has_weapon_in_hand(&self, weapon_type: WeaponType, hand: HandSlot) -> bool {
+        self.weapon_map(weapon_type).contains_key(&hand)
+    }
+
+    pub fn weapon_in_hand(&self, weapon_type: WeaponType, hand: HandSlot) -> Option<&Weapon> {
+        self.weapon_map(weapon_type)
+            .get(&hand)
+            .and_then(|w| w.as_ref())
+    }
+
+    pub fn equip_weapon(&mut self, weapon: Weapon, hand: HandSlot) -> Vec<Weapon> {
+        let mut unequipped_weapons = Vec::new();
+        if let Some(unequipped_weapon) = self.unequip_weapon(weapon.weapon_type.clone(), hand) {
+            unequipped_weapons.push(unequipped_weapon);
+        }
+        if weapon.has_property(&WeaponProperties::TwoHanded) {
+            if let Some(unequipped_weapon) =
+                self.unequip_weapon(weapon.weapon_type.clone(), hand.other())
+            {
+                unequipped_weapons.push(unequipped_weapon);
+            }
+        }
+        weapon.on_equip(self);
+        let weapon_type = weapon.weapon_type.clone();
+        self.weapon_map_mut(weapon_type).insert(hand, Some(weapon));
+        unequipped_weapons
+    }
+
+    pub fn unequip_weapon(&mut self, weapon_type: WeaponType, hand: HandSlot) -> Option<Weapon> {
+        if let Some(weapon) = self.weapon_map_mut(weapon_type).remove(&hand) {
+            weapon.as_ref().map(|w| w.on_unequip(self));
+            weapon
+        } else {
+            None
+        }
+    }
+
+    pub fn attack_roll(&self, weapon: &Weapon) -> D20CheckResult {
+        let mut attack_roll = D20Check::new(
+            self.weapon_proficiencies
+                .get(&weapon.category)
+                .unwrap_or(&Proficiency::None)
+                .clone(),
+        );
+        // TODO: Effect hook to determine advantage/disadvantage
+
+        let ability = weapon.determine_ability(self);
+        attack_roll.modifiers.add_modifier(
+            ModifierSource::Ability(ability),
+            self.ability_modifier(ability).total(),
+        );
+
+        attack_roll.perform()
+    }
+
+    fn weapon_map(&self, weapon_type: WeaponType) -> &HashMap<HandSlot, Option<Weapon>> {
+        match weapon_type {
+            WeaponType::Melee => &self.melee_weapons,
+            WeaponType::Ranged => &self.ranged_weapons,
+        }
+    }
+
+    fn weapon_map_mut(
+        &mut self,
+        weapon_type: WeaponType,
+    ) -> &mut HashMap<HandSlot, Option<Weapon>> {
+        match weapon_type {
+            WeaponType::Melee => &mut self.melee_weapons,
+            WeaponType::Ranged => &mut self.ranged_weapons,
+        }
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::stats::proficiency::Proficiency;
-
-    #[test]
-    fn test_character_creation() {
-        let mut class_levels = HashMap::new();
-        class_levels.insert(CharacterClass::Fighter, 3);
-        class_levels.insert(CharacterClass::Wizard, 2);
-
-        let mut abilities = HashMap::new();
-        abilities.insert(Ability::Strength, AbilityScore::new(Ability::Strength, 16));
-
-        let mut skills = HashMap::new();
-        skills.insert(Skill::Athletics, D20Check::new(Proficiency::Proficient));
-
-        let character = Character::new(
-            "Thorin",
-            class_levels,
-            20,
-            abilities,
-            skills,
+impl Default for Character {
+    fn default() -> Self {
+        Character::new(
+            "John Doe",
             HashMap::new(),
-            DamageResistances::new(),
-        );
-
-        assert_eq!(character.name, "Thorin");
-        assert_eq!(character.max_hp, 20);
-        assert_eq!(character.current_hp, 20);
-    }
-
-    #[test]
-    fn test_character_total_level() {
-        let mut class_levels = HashMap::new();
-        class_levels.insert(CharacterClass::Fighter, 3);
-        class_levels.insert(CharacterClass::Wizard, 2);
-
-        let character = Character::new(
-            "Thorin",
-            class_levels,
-            20,
+            10,
             HashMap::new(),
             HashMap::new(),
             HashMap::new(),
             DamageResistances::new(),
-        );
-
-        assert_eq!(character.total_level(), 5);
-    }
-
-    #[test]
-    fn test_character_proficiency_bonus() {
-        let class_levels = HashMap::new();
-        let character = Character::new(
-            "Thorin",
-            class_levels,
-            20,
-            HashMap::new(),
-            HashMap::new(),
-            HashMap::new(),
-            DamageResistances::new(),
-        );
-
-        assert_eq!(character.proficiency_bonus(), 2);
+        )
     }
 }

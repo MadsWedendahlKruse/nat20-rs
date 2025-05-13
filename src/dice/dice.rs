@@ -1,9 +1,8 @@
 use rand::Rng;
 
-use crate::stats::ability::Ability;
 use crate::stats::modifier::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DieSize {
     D4 = 4,
     D6 = 6,
@@ -14,34 +13,38 @@ pub enum DieSize {
     D100 = 100,
 }
 
-#[derive(Debug)]
-pub struct DiceGroup {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DiceSet {
     pub num_dice: u32,
     pub die_size: DieSize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiceSetRoll {
+    pub dice: DiceSet,
     pub modifiers: ModifierSet,
     pub label: String,
 }
 
-impl DiceGroup {
-    pub fn new(num_dice: u32, die_size: DieSize, modifier: ModifierSet, label: String) -> Self {
+impl DiceSetRoll {
+    pub fn new(dice_set: DiceSet, modifier: ModifierSet, label: String) -> Self {
         Self {
-            num_dice,
-            die_size,
+            dice: dice_set,
             modifiers: modifier,
             label,
         }
     }
 
-    pub fn roll(&self) -> DiceGroupRollResult {
+    pub fn roll(&self) -> DiceSetRollResult {
         let mut rng = rand::rng();
-        let rolls: Vec<u32> = (0..self.num_dice)
-            .map(|_| rng.random_range(1..=self.die_size as u32))
+        let rolls: Vec<u32> = (0..self.dice.num_dice)
+            .map(|_| rng.random_range(1..=self.dice.die_size as u32))
             .collect();
         let subtotal = rolls.iter().sum::<u32>() as i32 + self.modifiers.total();
 
-        DiceGroupRollResult {
+        DiceSetRollResult {
             label: self.label.clone(),
-            die_size: self.die_size,
+            die_size: self.dice.die_size,
             rolls,
             modifiers: self.modifiers.clone(),
             subtotal,
@@ -49,16 +52,16 @@ impl DiceGroup {
     }
 
     pub fn min_roll(&self) -> i32 {
-        (self.num_dice as i32) + self.modifiers.total()
+        (self.dice.num_dice as i32) + self.modifiers.total()
     }
 
     pub fn max_roll(&self) -> i32 {
-        (self.num_dice as i32 * self.die_size as i32) + self.modifiers.total()
+        (self.dice.num_dice as i32 * self.dice.die_size as i32) + self.modifiers.total()
     }
 }
 
 #[derive(Debug)]
-pub struct DiceGroupRollResult {
+pub struct DiceSetRollResult {
     pub label: String,
     pub die_size: DieSize,
     pub rolls: Vec<u32>,
@@ -68,7 +71,7 @@ pub struct DiceGroupRollResult {
 
 #[derive(Debug)]
 pub struct CompositeRoll {
-    pub groups: Vec<DiceGroup>,
+    pub groups: Vec<DiceSetRoll>,
     pub label: String, // optional general label for the whole roll
 }
 
@@ -102,7 +105,7 @@ impl CompositeRoll {
 #[derive(Debug)]
 pub struct CompositeRollResult {
     pub label: String,
-    pub components: Vec<DiceGroupRollResult>,
+    pub components: Vec<DiceSetRollResult>,
     pub total: i32,
 }
 
@@ -126,15 +129,19 @@ impl CompositeRollResult {
 
 #[cfg(test)]
 mod tests {
+    use crate::stats::ability::Ability;
+
     use super::*;
 
     #[test]
-    fn test_dice_roll() {
+    fn dice_roll() {
         let mut modifiers = ModifierSet::new();
         modifiers.add_modifier(ModifierSource::Ability(Ability::Charisma), 3);
-        let dice = DiceGroup {
-            num_dice: 2,
-            die_size: DieSize::D6,
+        let dice = DiceSetRoll {
+            dice: DiceSet {
+                num_dice: 2,
+                die_size: DieSize::D6,
+            },
             modifiers,
             label: "Test Dice".to_string(),
         };
@@ -155,18 +162,22 @@ mod tests {
     }
 
     #[test]
-    fn test_composite_roll() {
+    fn composite_roll() {
         let mut modifiers = ModifierSet::new();
         modifiers.add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
-        let group1 = DiceGroup {
-            num_dice: 2,
-            die_size: DieSize::D6,
+        let group1 = DiceSetRoll {
+            dice: DiceSet {
+                num_dice: 2,
+                die_size: DieSize::D6,
+            },
             modifiers: modifiers,
             label: "Group 1".to_string(),
         };
-        let group2 = DiceGroup {
-            num_dice: 3,
-            die_size: DieSize::D4,
+        let group2 = DiceSetRoll {
+            dice: DiceSet {
+                num_dice: 3,
+                die_size: DieSize::D4,
+            },
             modifiers: ModifierSet::new(),
             label: "Group 2".to_string(),
         };
