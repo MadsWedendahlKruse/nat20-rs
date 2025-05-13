@@ -53,7 +53,7 @@ mod tests {
             .add_modifier(ModifierSource::Item("Ring of Dexterity".to_string()), 2);
 
         let mut equipment: EquipmentItem = EquipmentItem::new(
-            "Spidersilk Armour".to_string(),
+            "Armor of Sneaking".to_string(),
             "Tracings of glossy black spider-web mark this drow-made armour. Its supple, but strong - and made to blend in with the dark caves and crevices of the Underdark.".to_string(),
             5.85,
             1000,
@@ -63,7 +63,7 @@ mod tests {
         equipment.add_on_equip(|character| {
             character.add_skill_modifier(
                 Skill::Stealth,
-                ModifierSource::Item("Spidersilk Armour".to_string()),
+                ModifierSource::Item("Armor of Sneaking".to_string()),
                 1,
             );
             character
@@ -73,20 +73,20 @@ mod tests {
                 .advantage_tracker_mut()
                 .add(
                     AdvantageType::Advantage,
-                    ModifierSource::Item("Spidersilk Armour".to_string()),
+                    ModifierSource::Item("Armor of Sneaking".to_string()),
                 );
         });
         equipment.add_on_unequip(|character| {
             character.remove_skill_modifier(
                 Skill::Stealth,
-                &ModifierSource::Item("Spidersilk Armour".to_string()),
+                &ModifierSource::Item("Armor of Sneaking".to_string()),
             );
             character
                 .saving_throws
                 .get_mut(&Ability::Constitution)
                 .unwrap()
                 .advantage_tracker_mut()
-                .remove(&ModifierSource::Item("Spidersilk Armour".to_string()));
+                .remove(&ModifierSource::Item("Armor of Sneaking".to_string()));
         });
         let armor = Armor::light(equipment, 12);
 
@@ -117,7 +117,7 @@ mod tests {
         let armor_name = character.unequip_armor().unwrap().equipment.item.name;
         let armor_class = character.armor_class();
         println!("Un-equipped {:?}", armor_name);
-        assert_eq!(armor_name, "Spidersilk Armour");
+        assert_eq!(armor_name, "Armor of Sneaking");
         // Check if the armor class is updated
         println!("{:?}", armor_class);
         assert_eq!(10, armor_class.total());
