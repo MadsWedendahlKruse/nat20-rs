@@ -1,4 +1,5 @@
 use crate::combat::damage::*;
+use crate::effects::effects::Effect;
 use crate::item::equipment::armor::Armor;
 use crate::item::equipment::equipment::EquipmentItem;
 use crate::item::equipment::equipment::GeneralEquipmentSlot;
@@ -36,14 +37,15 @@ pub struct Character {
     pub skills: HashMap<Skill, D20Check>,
     pub saving_throws: HashMap<Ability, D20Check>,
     pub resistances: DamageResistances,
-    // TODO: Might have to make this more granular later
+    // TODO: Might have to make this more granular later (not just martial/simple)
     // TODO: Should it just be a bool? Not sure if you can have expertise in a weapon
-    weapon_proficiencies: HashMap<WeaponCategory, Proficiency>,
+    pub weapon_proficiencies: HashMap<WeaponCategory, Proficiency>,
     // Equipped items
     armor: Option<Armor>,
     melee_weapons: HashMap<HandSlot, Option<Weapon>>,
     ranged_weapons: HashMap<HandSlot, Option<Weapon>>,
     equipment: HashMap<GeneralEquipmentSlot, Option<EquipmentItem>>,
+    effects: Vec<Effect>,
 }
 
 impl Character {
@@ -89,6 +91,7 @@ impl Character {
             melee_weapons: HashMap::new(),
             ranged_weapons: HashMap::new(),
             equipment: HashMap::new(),
+            effects: Vec::new(),
         }
     }
 
@@ -292,22 +295,22 @@ impl Character {
         }
     }
 
-    pub fn attack_roll(&self, weapon: &Weapon) -> D20CheckResult {
-        let mut attack_roll = D20Check::new(
-            self.weapon_proficiencies
-                .get(&weapon.category)
-                .unwrap_or(&Proficiency::None)
-                .clone(),
-        );
-        // TODO: Effect hook to determine advantage/disadvantage
-
-        let ability = weapon.determine_ability(self);
-        attack_roll.modifiers.add_modifier(
-            ModifierSource::Ability(ability),
-            self.ability_modifier(ability).total(),
-        );
-
-        attack_roll.perform()
+    // TODO: Should the argument we the weapon or the hand?
+    pub fn attack_roll(&self, weapon_type: WeaponType, hand: HandSlot) -> D20Check {
+        // TODO: Unarmed attacks
+        let mut attack_roll = self
+            .weapon_in_hand(weapon_type, hand)
+            .unwrap()
+            .attack_roll(self);
+        for effect in &self.effects {
+            (effect.pre_attack_roll)(self, &mut attack_roll)
+        }
+        attack_roll
+        // let mut result = attack_roll.perform();
+        // for effect in &self.effects {
+        //     (effect.post_attack_roll)(self, &mut result)
+        // }
+        // result
     }
 
     fn weapon_map(&self, weapon_type: WeaponType) -> &HashMap<HandSlot, Option<Weapon>> {
@@ -325,6 +328,14 @@ impl Character {
             WeaponType::Melee => &mut self.melee_weapons,
             WeaponType::Ranged => &mut self.ranged_weapons,
         }
+    }
+
+    pub fn add_effect(&mut self, effect: Effect) {
+        self.effects.push(effect);
+    }
+
+    pub fn remove_effect(&mut self, effect: &Effect) {
+        self.effects.retain(|e| e != effect);
     }
 }
 

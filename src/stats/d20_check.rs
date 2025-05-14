@@ -64,7 +64,7 @@ impl AdvantageTracker {
 pub struct D20Check {
     pub modifiers: ModifierSet,
     pub proficiency: Proficiency,
-    pub advantage_tracker: AdvantageTracker,
+    advantage_tracker: AdvantageTracker,
 }
 
 impl D20Check {

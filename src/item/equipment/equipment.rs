@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use crate::creature::character::Character;
+use crate::effects::effects::Effect;
 use crate::item::item::{Item, ItemRarity};
 
 // Armor and weapons behave differently compared to other equipment, so they need special handling.
@@ -40,8 +41,10 @@ impl HandSlot {
 pub struct EquipmentItem {
     pub item: Item,
     pub kind: EquipmentType,
+    // TODO: Clarify the difference between on_equip, on_unequip and effects.
     on_equip: Vec<Box<dyn Fn(&mut Character)>>,
     on_unequip: Vec<Box<dyn Fn(&mut Character)>>,
+    effects: Vec<Effect>,
 }
 
 impl EquipmentItem {
@@ -64,12 +67,16 @@ impl EquipmentItem {
             kind,
             on_equip: Vec::new(),
             on_unequip: Vec::new(),
+            effects: Vec::new(),
         }
     }
 
     pub fn on_equip(&self, character: &mut Character) {
         for func in &self.on_equip {
             func(character);
+        }
+        for effect in &self.effects {
+            character.add_effect(effect.clone());
         }
     }
 
@@ -84,6 +91,9 @@ impl EquipmentItem {
         for func in &self.on_unequip {
             func(character);
         }
+        for effect in &self.effects {
+            character.remove_effect(effect);
+        }
     }
 
     pub fn add_on_unequip<F>(&mut self, func: F)
@@ -91,6 +101,15 @@ impl EquipmentItem {
         F: Fn(&mut Character) + 'static,
     {
         self.on_unequip.push(Box::new(func));
+    }
+
+    pub fn add_effect(&mut self, effect: Effect) {
+        self.effects.push(effect);
+    }
+
+    // TODO: Not sure if it's actually needed to remove effects from equipment.
+    pub fn remove_effect(&mut self, effect: &Effect) {
+        self.effects.retain(|e| e != effect);
     }
 }
 
@@ -101,8 +120,8 @@ impl fmt::Debug for EquipmentItem {
         f.debug_struct("EquipmentItem")
             .field("item", &self.item)
             .field("kind", &self.kind)
-            .field("on_equip", &"fn(...)")
-            .field("on_unequip", &"fn(...)")
+            // .field("on_equip", &"fn(...)")
+            // .field("on_unequip", &"fn(...)")
             .finish()
     }
 }

@@ -1,10 +1,12 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::{
-    combat::damage::{DamageRoll, DamageRollResult},
+    combat::damage::DamageRoll,
     creature::character::Character,
     dice::dice::DiceSet,
-    stats::{ability::Ability, modifier::ModifierSource},
+    stats::{
+        ability::Ability, d20_check::D20Check, modifier::ModifierSource, proficiency::Proficiency,
+    },
 };
 
 use super::equipment::{EquipmentItem, EquipmentType, HandSlot};
@@ -38,6 +40,7 @@ pub enum WeaponProperties {
     TwoHanded,
     /// Damage if wielded with two hands
     Versatile(DiceSet),
+    Enchantment(u32),
 }
 
 // These are really extra abilities, so might have to handle them differently
@@ -59,7 +62,6 @@ pub struct Weapon {
     pub weapon_type: WeaponType,
     pub properties: HashSet<WeaponProperties>,
     pub damage_roll: DamageRoll,
-    pub enchantment: u32,
     ability: Ability,
 }
 
@@ -69,7 +71,6 @@ impl Weapon {
         category: WeaponCategory,
         properties: HashSet<WeaponProperties>,
         damage_roll: DamageRoll,
-        enchantment: u32,
     ) -> Self {
         let weapon_type = match equipment.kind {
             EquipmentType::MeleeWeapon => WeaponType::Melee,
@@ -86,13 +87,38 @@ impl Weapon {
             weapon_type,
             properties,
             damage_roll,
-            enchantment,
             ability,
         }
     }
 
     pub fn has_property(&self, property: &WeaponProperties) -> bool {
         self.properties.contains(property)
+    }
+
+    pub fn attack_roll(&self, character: &Character) -> D20Check {
+        let mut attack_roll = D20Check::new(
+            character
+                .weapon_proficiencies
+                .get(&self.category)
+                .unwrap_or(&Proficiency::None)
+                .clone(),
+        );
+
+        let ability = self.determine_ability(character);
+        attack_roll.modifiers.add_modifier(
+            ModifierSource::Ability(ability),
+            character.ability_modifier(ability).total(),
+        );
+
+        let enchantment = self.enchantment();
+        if enchantment > 0 {
+            attack_roll.modifiers.add_modifier(
+                ModifierSource::Item("Enchantment".to_string()),
+                enchantment as i32,
+            );
+        }
+
+        attack_roll
     }
 
     pub fn damage_roll(&self, character: &Character, hand: HandSlot) -> DamageRoll {
@@ -117,11 +143,29 @@ impl Weapon {
             ModifierSource::Ability(ability),
             character.ability_modifier(ability).total(),
         );
-        damage_roll.primary.dice_roll.modifiers.add_modifier(
-            ModifierSource::Item("Enchantment".to_string()),
-            self.enchantment as i32,
-        );
+
+        let enchantment = self.enchantment();
+        if enchantment > 0 {
+            damage_roll.primary.dice_roll.modifiers.add_modifier(
+                ModifierSource::Item("Enchantment".to_string()),
+                enchantment as i32,
+            );
+        }
+
         damage_roll
+    }
+
+    fn enchantment(&self) -> u32 {
+        self.properties
+            .iter()
+            .find_map(|prop| {
+                if let WeaponProperties::Enchantment(enchantment) = prop {
+                    Some(*enchantment)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0)
     }
 
     pub fn determine_ability(&self, character: &Character) -> Ability {
@@ -185,15 +229,14 @@ mod tests {
         let weapon = Weapon::new(
             equipment,
             WeaponCategory::Martial,
-            HashSet::from([WeaponProperties::Finesse]),
+            HashSet::from([WeaponProperties::Finesse, WeaponProperties::Enchantment(1)]),
             damage_roll,
-            1,
         );
 
         assert_eq!(weapon.equipment.item.name, "Longsword");
         assert_eq!(weapon.category, WeaponCategory::Martial);
         assert_eq!(weapon.weapon_type, WeaponType::Melee);
-        assert_eq!(weapon.properties.len(), 1);
+        assert_eq!(weapon.properties.len(), 2);
         assert_eq!(weapon.damage_roll.primary.dice_roll.dice.num_dice, 1);
         assert_eq!(
             weapon.damage_roll.primary.dice_roll.dice.die_size,
@@ -233,7 +276,6 @@ mod tests {
                 WeaponCategory::Martial,
                 HashSet::from([WeaponProperties::Finesse]),
                 damage_roll,
-                1,
             );
         });
         assert!(result.is_err());

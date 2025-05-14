@@ -27,6 +27,7 @@ pub struct DiceSetRoll {
 }
 
 impl DiceSetRoll {
+    // TODO: Redundant new?
     pub fn new(dice_set: DiceSet, modifier: ModifierSet, label: String) -> Self {
         Self {
             dice: dice_set,

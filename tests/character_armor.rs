@@ -17,19 +17,19 @@ mod tests {
         let mut character = Character::default();
 
         let equipment: EquipmentItem = EquipmentItem::new(
-            "Adamantine Splint Armour".to_string(),
-            "The adamantine plates lock and slide together perfectly - offering protection against even the deadliest of blades.".to_string(),
+            "Adamantium Armour".to_string(),
+            "A suit of armor made from adamantium.".to_string(),
             19.0,
-            18,
+            5000,
             ItemRarity::VeryRare,
             EquipmentType::Armor,
         );
-        let armor = Armor::heavy(equipment, 18);
+        let armor = Armor::heavy(equipment, 19);
 
         character.equip_armor(armor);
 
         let armor_class = character.armor_class();
-        assert_eq!(18, armor_class.total());
+        assert_eq!(19, armor_class.total());
         println!("{:?}", armor_class);
     }
 
@@ -54,7 +54,7 @@ mod tests {
 
         let mut equipment: EquipmentItem = EquipmentItem::new(
             "Armor of Sneaking".to_string(),
-            "Tracings of glossy black spider-web mark this drow-made armour. Its supple, but strong - and made to blend in with the dark caves and crevices of the Underdark.".to_string(),
+            "It's made of a lightweight material that allows for silent movement.".to_string(),
             5.85,
             1000,
             ItemRarity::Rare,

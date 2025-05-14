@@ -20,6 +20,7 @@ mod tests {
     use nat20_rs::item::item::ItemRarity;
     use nat20_rs::stats::ability::*;
     use nat20_rs::stats::modifier::*;
+    use nat20_rs::stats::proficiency::Proficiency;
 
     #[test]
     fn character_weapon_finesse_modifier() {
@@ -37,7 +38,6 @@ mod tests {
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
             damage_roll,
-            1,
         );
 
         let mut character = Character::default();
@@ -54,10 +54,10 @@ mod tests {
         // Check that the damage roll uses Dexterity modifier
         let damage_roll = weapon.damage_roll(&mut character, HandSlot::Main);
         let damage_roll_result = damage_roll.roll();
-        // Min: 1 (1d8) + 3 (Dex) + 1 (enchantment) = 5
-        // Max: 8 (1d8) + 3 (Dex) + 1 (enchantment) = 12
+        // Min: 1 (1d8) + 3 (Dex) = 4
+        // Max: 8 (1d8) + 3 (Dex) = 11
         assert!(
-            damage_roll_result.total >= 5 && damage_roll_result.total <= 12,
+            damage_roll_result.total >= 4 && damage_roll_result.total <= 11,
             "Damage roll total out of bounds: {}",
             damage_roll_result.total
         );
@@ -66,7 +66,6 @@ mod tests {
         assert!(damage_roll
             .primary
             .dice_roll
-            .modifiers
             .modifiers
             .get(&ModifierSource::Ability(Ability::Dexterity))
             .is_some());
@@ -90,9 +89,11 @@ mod tests {
         let trident = Weapon::new(
             equipment,
             WeaponCategory::Martial,
-            HashSet::from([WeaponProperties::Versatile(dice_set_two_handed)]),
+            HashSet::from([
+                WeaponProperties::Versatile(dice_set_two_handed),
+                WeaponProperties::Enchantment(1),
+            ]),
             create_damage_roll(1, DieSize::D6, "Trident One-Handed", DamageType::Piercing),
-            1,
         );
 
         let mut character = Character::default();
@@ -123,7 +124,6 @@ mod tests {
             WeaponCategory::Simple,
             HashSet::from([WeaponProperties::Light]),
             create_damage_roll(1, DieSize::D4, "Dagger", DamageType::Piercing),
-            1,
         );
         let unequipped_weapons = character.equip_weapon(dagger, HandSlot::Off);
         // Check that nothing was unequipped and the character has a weapon in their hand
@@ -171,7 +171,6 @@ mod tests {
             WeaponCategory::Simple,
             HashSet::from([WeaponProperties::Light]),
             create_damage_roll(1, DieSize::D4, "Dagger", DamageType::Piercing),
-            1,
         );
         let trident = Weapon::new(
             EquipmentItem::new(
@@ -183,12 +182,14 @@ mod tests {
                 EquipmentType::MeleeWeapon,
             ),
             WeaponCategory::Martial,
-            HashSet::from([WeaponProperties::Versatile(DiceSet {
-                num_dice: 1,
-                die_size: DieSize::D8,
-            })]),
+            HashSet::from([
+                WeaponProperties::Versatile(DiceSet {
+                    num_dice: 1,
+                    die_size: DieSize::D8,
+                }),
+                WeaponProperties::Enchantment(1),
+            ]),
             create_damage_roll(1, DieSize::D6, "Trident One-Handed", DamageType::Piercing),
-            1,
         );
 
         let mut character = Character::default();
@@ -213,7 +214,6 @@ mod tests {
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::TwoHanded]),
             create_damage_roll(2, DieSize::D6, "Greatsword", DamageType::Slashing),
-            1,
         );
         let unequipped_weapons = character.equip_weapon(greatsword, HandSlot::Main);
         // Check that both weapons were unequipped
@@ -221,6 +221,51 @@ mod tests {
         assert!(character.has_weapon_in_hand(WeaponType::Melee, HandSlot::Main));
         // Off-hand should be empty
         assert!(!character.has_weapon_in_hand(WeaponType::Melee, HandSlot::Off));
+    }
+
+    #[test]
+    fn character_attack_roll_basic() {
+        let equipment = EquipmentItem::new(
+            "Longsword".to_string(),
+            "A longsword".to_string(),
+            5.0,
+            1,
+            ItemRarity::Common,
+            EquipmentType::MeleeWeapon,
+        );
+        let weapon = Weapon::new(
+            equipment,
+            WeaponCategory::Martial,
+            HashSet::from([WeaponProperties::Finesse]),
+            create_damage_roll(1, DieSize::D8, "Longsword", DamageType::Slashing),
+        );
+
+        let mut character = Character::default();
+        character
+            .ability_scores
+            .insert(Ability::Strength, AbilityScore::new(Ability::Strength, 14));
+        character.ability_scores.insert(
+            Ability::Dexterity,
+            AbilityScore::new(Ability::Dexterity, 16),
+        );
+
+        // Check that the attack roll uses Dexterity modifier
+        let attack_roll = weapon.attack_roll(&mut character);
+        assert!(attack_roll
+            .modifiers
+            .get(&ModifierSource::Ability(Ability::Dexterity))
+            .is_some());
+        // Check that the attack roll does not have a proficiency modifier
+        assert!(attack_roll
+            .modifiers
+            .get(&ModifierSource::Proficiency(Proficiency::Proficient))
+            .is_none());
+        // Check that the attack roll does not have an enchantment modifier
+        assert!(attack_roll
+            .modifiers
+            .get(&ModifierSource::Item("Enchantment".to_string()))
+            .is_none());
+        println!("{:?}", attack_roll);
     }
 
     fn create_damage_roll(

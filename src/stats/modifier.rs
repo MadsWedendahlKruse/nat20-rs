@@ -16,7 +16,7 @@ pub enum ModifierSource {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModifierSet {
-    pub modifiers: HashMap<ModifierSource, i32>,
+    modifiers: HashMap<ModifierSource, i32>,
 }
 
 impl ModifierSet {
@@ -39,6 +39,10 @@ impl ModifierSet {
             let entry = self.modifiers.entry(source.clone()).or_insert(0);
             *entry += value;
         }
+    }
+
+    pub fn get(&self, source: &ModifierSource) -> Option<i32> {
+        self.modifiers.get(source).cloned()
     }
 
     // Only used for ability modifiers

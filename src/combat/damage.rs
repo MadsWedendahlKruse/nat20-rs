@@ -1,5 +1,5 @@
 use crate::dice::dice::*;
-use crate::stats::modifier::ModifierSource;
+use crate::stats::modifier::{ModifierSet, ModifierSource};
 
 use std::collections::HashMap;
 use std::fmt;
@@ -35,6 +35,15 @@ pub struct DamageComponent {
     pub damage_type: DamageType,
 }
 
+impl DamageComponent {
+    pub fn new(num_dice: u32, die_size: DieSize, damage_type: DamageType, label: String) -> Self {
+        Self {
+            dice_roll: DiceSetRoll::new(DiceSet { num_dice, die_size }, ModifierSet::new(), label),
+            damage_type,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct DamageComponentResult {
     pub result: DiceSetRollResult,
@@ -50,6 +59,15 @@ pub struct DamageRoll {
 }
 
 impl DamageRoll {
+    // TODO: There's too many labels everywhere
+    pub fn new(num_dice: u32, die_size: DieSize, damage_type: DamageType, label: String) -> Self {
+        Self {
+            label: label.clone(),
+            primary: DamageComponent::new(num_dice, die_size, damage_type, label),
+            bonus: Vec::new(),
+        }
+    }
+
     pub fn roll(&self) -> DamageRollResult {
         let mut components = Vec::new();
         let mut total = 0;
