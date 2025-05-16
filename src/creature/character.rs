@@ -2,6 +2,7 @@ use crate::combat::damage::*;
 use crate::effects::effects::Effect;
 use crate::item::equipment::armor::Armor;
 use crate::item::equipment::equipment::EquipmentItem;
+use crate::item::equipment::equipment::EquipmentSlot;
 use crate::item::equipment::equipment::GeneralEquipmentSlot;
 use crate::item::equipment::equipment::HandSlot;
 use crate::item::equipment::weapon::Weapon;
@@ -12,11 +13,11 @@ use crate::stats::ability::*;
 use crate::stats::d20_check::*;
 use crate::stats::modifier::*;
 use crate::stats::proficiency::Proficiency;
+use crate::stats::saving_throw::create_saving_throw_set;
+use crate::stats::saving_throw::SavingThrowSet;
 use crate::stats::skill::*;
 
 use std::collections::HashMap;
-
-use strum::IntoEnumIterator;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum CharacterClass {
@@ -33,9 +34,9 @@ pub struct Character {
     pub class_levels: HashMap<CharacterClass, u8>,
     pub max_hp: i32,
     pub current_hp: i32,
-    pub ability_scores: HashMap<Ability, AbilityScore>,
-    pub skills: HashMap<Skill, D20Check>,
-    pub saving_throws: HashMap<Ability, D20Check>,
+    pub ability_scores: AbilityScoreSet,
+    skills: SkillSet,
+    saving_throws: SavingThrowSet,
     pub resistances: DamageResistances,
     // TODO: Might have to make this more granular later (not just martial/simple)
     // TODO: Should it just be a bool? Not sure if you can have expertise in a weapon
@@ -49,43 +50,16 @@ pub struct Character {
 }
 
 impl Character {
-    pub fn new(
-        name: &str,
-        class_levels: HashMap<CharacterClass, u8>,
-        max_hp: i32,
-        ability_scores: HashMap<Ability, AbilityScore>,
-        skills: HashMap<Skill, D20Check>,
-        saving_throws: HashMap<Ability, D20Check>,
-        resistances: DamageResistances,
-    ) -> Self {
-        // Ensure all abilities and skills are initialized
-        let mut ability_scores_mut = ability_scores.clone();
-        for ability in Ability::iter() {
-            if !ability_scores.contains_key(&ability) {
-                ability_scores_mut.insert(ability, AbilityScore::default(ability));
-            }
-        }
-        let mut skills_mut = skills.clone();
-        for skill in Skill::iter() {
-            if !skills.contains_key(&skill) {
-                skills_mut.insert(skill, D20Check::new(Proficiency::None));
-            }
-        }
-        let mut saving_throws_mut = saving_throws.clone();
-        for ability in Ability::iter() {
-            if !saving_throws.contains_key(&ability) {
-                saving_throws_mut.insert(ability, D20Check::new(Proficiency::None));
-            }
-        }
+    pub fn new(name: &str, class_levels: HashMap<CharacterClass, u8>, max_hp: i32) -> Self {
         Self {
             name: name.to_string(),
             class_levels,
             max_hp,
             current_hp: max_hp,
-            ability_scores: ability_scores_mut,
-            skills: skills_mut,
-            saving_throws: saving_throws_mut,
-            resistances,
+            ability_scores: AbilityScoreSet::new(),
+            skills: create_skill_set(),
+            saving_throws: create_saving_throw_set(),
+            resistances: DamageResistances::new(),
             weapon_proficiencies: HashMap::new(),
             armor: None,
             melee_weapons: HashMap::new(),
@@ -128,95 +102,35 @@ impl Character {
         self.current_hp = (self.current_hp + amount).min(self.max_hp);
     }
 
-    pub fn ability(&self, ability: Ability) -> &AbilityScore {
-        self.ability_scores.get(&ability).unwrap()
+    pub fn ability_scores(&self) -> &AbilityScoreSet {
+        &self.ability_scores
     }
 
-    pub fn ability_total(&self, ability: Ability) -> i32 {
-        self.ability(ability).total()
+    pub fn ability_scores_mut(&mut self) -> &mut AbilityScoreSet {
+        &mut self.ability_scores
     }
 
-    pub fn ability_modifier(&self, ability: Ability) -> ModifierSet {
-        self.ability_scores
-            .get(&ability)
-            .map(|a| a.ability_modifier())
-            .unwrap()
+    pub fn skills(&self) -> &SkillSet {
+        &self.skills
     }
 
-    pub fn add_ability_modifier(
-        &mut self,
-        ability: Ability,
-        source: ModifierSource,
-        modifier: i32,
-    ) {
-        if let Some(ability_score) = self.ability_scores.get_mut(&ability) {
-            ability_score.modifiers.add_modifier(source, modifier);
-        }
+    pub fn skills_mut(&mut self) -> &mut SkillSet {
+        &mut self.skills
     }
 
-    pub fn remove_ability_modifier(&mut self, ability: Ability, source: &ModifierSource) {
-        if let Some(ability_score) = self.ability_scores.get_mut(&ability) {
-            ability_score.modifiers.remove_modifier(source);
-        }
+    pub fn saving_throws(&self) -> &SavingThrowSet {
+        &self.saving_throws
     }
 
-    pub fn skill_check(&self, skill: Skill) -> D20CheckResult {
-        let mut skill_check = self.skills.get(&skill).unwrap().clone();
-        skill_check
-            .modifiers
-            .add_modifier_set(&self.skill_modifier(skill));
-        skill_check.perform()
-    }
-
-    pub fn skill_modifier(&self, skill: Skill) -> ModifierSet {
-        let skill_check = self.skills.get(&skill).unwrap();
-        let ability = skill_ability(skill);
-        self.ability_check_modifier_set(ability, skill_check)
-    }
-
-    pub fn add_skill_modifier(&mut self, skill: Skill, source: ModifierSource, modifier: i32) {
-        if let Some(skill_check) = self.skills.get_mut(&skill) {
-            skill_check.modifiers.add_modifier(source, modifier);
-        }
-    }
-
-    pub fn remove_skill_modifier(&mut self, skill: Skill, source: &ModifierSource) {
-        if let Some(skill_check) = self.skills.get_mut(&skill) {
-            skill_check.modifiers.remove_modifier(source)
-        }
-    }
-
-    pub fn saving_throw(&self, ability: Ability) -> D20CheckResult {
-        let mut saving_throw_check = self.saving_throws.get(&ability).unwrap().clone();
-        saving_throw_check
-            .modifiers
-            .add_modifier_set(&self.saving_throw_modifier(ability));
-        saving_throw_check.perform()
-    }
-
-    pub fn saving_throw_modifier(&self, ability: Ability) -> ModifierSet {
-        let saving_throw_check = self.saving_throws.get(&ability).unwrap();
-        self.ability_check_modifier_set(ability, saving_throw_check)
-    }
-
-    fn ability_check_modifier_set(&self, ability: Ability, d20_check: &D20Check) -> ModifierSet {
-        let mut modifiers = d20_check.modifiers.clone();
-        modifiers.add_modifier(
-            ModifierSource::Ability(ability),
-            self.ability_modifier(ability).total(),
-        );
-        modifiers.add_modifier(
-            ModifierSource::Proficiency(d20_check.proficiency),
-            d20_check.proficiency.bonus(self.proficiency_bonus()),
-        );
-        modifiers
+    pub fn saving_throws_mut(&mut self) -> &mut SavingThrowSet {
+        &mut self.saving_throws
     }
 
     pub fn equip_armor(&mut self, armor: Armor) -> Option<Armor> {
-        let equipped_armor = self.unequip_armor();
+        let unequipped_armor = self.unequip_armor();
         armor.on_equip(self);
         self.armor = Some(armor);
-        equipped_armor
+        unequipped_armor
     }
 
     pub fn unequip_armor(&mut self) -> Option<Armor> {
@@ -233,7 +147,7 @@ impl Character {
             armor.armor_class(self)
         } else {
             let mut armor_class = ModifierSet::new();
-            armor_class.add_modifier(ModifierSource::Custom("Base".to_string()), 10);
+            armor_class.add_modifier(ModifierSource::Custom("Unarmored".to_string()), 10);
             armor_class
         }
     }
@@ -243,10 +157,14 @@ impl Character {
         slot: GeneralEquipmentSlot,
         item: EquipmentItem,
     ) -> Option<EquipmentItem> {
-        let equipped_item = self.unequip_item(slot);
+        if !item.kind.can_equip_in_slot(EquipmentSlot::General(slot)) {
+            return None;
+        }
+
+        let unequipped_item = self.unequip_item(slot);
         item.on_equip(self);
         self.equipment.insert(slot, Some(item));
-        equipped_item
+        unequipped_item
     }
 
     pub fn unequip_item(&mut self, slot: GeneralEquipmentSlot) -> Option<EquipmentItem> {
@@ -295,8 +213,7 @@ impl Character {
         }
     }
 
-    // TODO: Should the argument we the weapon or the hand?
-    pub fn attack_roll(&self, weapon_type: WeaponType, hand: HandSlot) -> D20Check {
+    pub fn attack_roll(&self, weapon_type: WeaponType, hand: HandSlot) -> D20CheckResult {
         // TODO: Unarmed attacks
         let mut attack_roll = self
             .weapon_in_hand(weapon_type, hand)
@@ -305,12 +222,11 @@ impl Character {
         for effect in &self.effects {
             (effect.pre_attack_roll)(self, &mut attack_roll)
         }
-        attack_roll
-        // let mut result = attack_roll.perform();
-        // for effect in &self.effects {
-        //     (effect.post_attack_roll)(self, &mut result)
-        // }
-        // result
+        let mut result = attack_roll.perform(self.proficiency_bonus());
+        for effect in &self.effects {
+            (effect.post_attack_roll)(self, &mut result)
+        }
+        result
     }
 
     fn weapon_map(&self, weapon_type: WeaponType) -> &HashMap<HandSlot, Option<Weapon>> {
@@ -330,25 +246,23 @@ impl Character {
         }
     }
 
+    pub fn effects(&self) -> &Vec<Effect> {
+        &self.effects
+    }
+
     pub fn add_effect(&mut self, effect: Effect) {
+        (effect.on_apply)(self);
         self.effects.push(effect);
     }
 
     pub fn remove_effect(&mut self, effect: &Effect) {
+        (effect.on_unapply)(self);
         self.effects.retain(|e| e != effect);
     }
 }
 
 impl Default for Character {
     fn default() -> Self {
-        Character::new(
-            "John Doe",
-            HashMap::new(),
-            10,
-            HashMap::new(),
-            HashMap::new(),
-            HashMap::new(),
-            DamageResistances::new(),
-        )
+        Character::new("John Doe", HashMap::new(), 10)
     }
 }

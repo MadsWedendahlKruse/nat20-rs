@@ -1,10 +1,20 @@
-use crate::creature::character::Character;
-use crate::item::equipment::equipment::*;
-use crate::stats::ability::Ability;
-use crate::stats::d20_check::AdvantageType;
-use crate::stats::modifier::ModifierSet;
-use crate::stats::modifier::ModifierSource;
-use crate::stats::skill::Skill;
+use std::sync::Arc;
+
+use crate::{
+    creature::character::Character,
+    effects::{
+        effects::{Effect, EffectDuration},
+        hooks::SkillCheckHook,
+    },
+    stats::{
+        ability::Ability,
+        d20_check::AdvantageType,
+        modifier::{ModifierSet, ModifierSource},
+        skill::Skill,
+    },
+};
+
+use super::equipment::EquipmentItem;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ArmorType {
@@ -25,17 +35,34 @@ pub struct Armor {
 
 impl Armor {
     fn new(
-        equipment: EquipmentItem,
+        mut equipment: EquipmentItem,
         armor_type: ArmorType,
         armor_class: i32,
         max_dexterity_bonus: i32,
         stealth_disadvantage: bool,
     ) -> Armor {
+        let item_name = Arc::new(equipment.item.name.clone());
+        let modifier_source: ModifierSource = ModifierSource::Item(item_name.clone().to_string());
+
         let mut armor_class_modifiers = ModifierSet::new();
-        armor_class_modifiers.add_modifier(
-            ModifierSource::Item(equipment.item.name.clone()),
-            armor_class,
-        );
+        armor_class_modifiers.add_modifier(modifier_source.clone(), armor_class);
+
+        if stealth_disadvantage {
+            let mut stealth_disadvantage_effect =
+                Effect::new(modifier_source.clone(), EffectDuration::Persistent);
+
+            let mut skill_check_hook = SkillCheckHook::new(Skill::Stealth);
+            skill_check_hook.check_hook = Arc::new(move |_, d20_check| {
+                d20_check
+                    .advantage_tracker_mut()
+                    .add(AdvantageType::Disadvantage, modifier_source.clone());
+            });
+
+            stealth_disadvantage_effect.skill_check_hook = Some(skill_check_hook);
+
+            equipment.add_effect(stealth_disadvantage_effect);
+        }
+
         Armor {
             equipment,
             armor_type,
@@ -68,10 +95,16 @@ impl Armor {
     }
 
     pub fn armor_class(&self, character: &Character) -> ModifierSet {
+        if self.max_dexterity_bonus == 0 {
+            return self.armor_class.clone();
+        }
+
         let dex_mod = character
-            .ability_modifier(Ability::Dexterity)
+            .ability_scores()
+            .modifier(Ability::Dexterity)
             .total()
             .min(self.max_dexterity_bonus);
+
         let mut armor_class_modifiers = self.armor_class.clone();
         armor_class_modifiers.add_modifier(ModifierSource::Ability(Ability::Dexterity), dex_mod);
         armor_class_modifiers
@@ -79,35 +112,16 @@ impl Armor {
 
     pub fn on_equip(&self, character: &mut Character) {
         self.equipment.on_equip(character);
-        if self.stealth_disadvantage {
-            character
-                .skills
-                .get_mut(&Skill::Stealth)
-                .unwrap()
-                .advantage_tracker_mut()
-                .add(
-                    AdvantageType::Disadvantage,
-                    ModifierSource::Item(self.equipment.item.name.clone()),
-                );
-        }
     }
 
     pub fn on_unequip(&self, character: &mut Character) {
         self.equipment.on_unequip(character);
-        if self.stealth_disadvantage {
-            character
-                .skills
-                .get_mut(&Skill::Stealth)
-                .unwrap()
-                .advantage_tracker_mut()
-                .remove(&ModifierSource::Item(self.equipment.item.name.clone()));
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::item::item::ItemRarity;
+    use crate::item::{equipment::equipment::EquipmentType, item::ItemRarity};
 
     use super::*;
 

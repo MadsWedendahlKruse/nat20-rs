@@ -42,9 +42,9 @@ mod tests {
 
         let mut character = Character::default();
         character
-            .ability_scores
-            .insert(Ability::Strength, AbilityScore::new(Ability::Strength, 14));
-        character.ability_scores.insert(
+            .ability_scores_mut()
+            .set(Ability::Strength, AbilityScore::new(Ability::Strength, 14));
+        character.ability_scores_mut().set(
             Ability::Dexterity,
             AbilityScore::new(Ability::Dexterity, 16),
         );
@@ -242,9 +242,9 @@ mod tests {
 
         let mut character = Character::default();
         character
-            .ability_scores
-            .insert(Ability::Strength, AbilityScore::new(Ability::Strength, 14));
-        character.ability_scores.insert(
+            .ability_scores_mut()
+            .set(Ability::Strength, AbilityScore::new(Ability::Strength, 14));
+        character.ability_scores_mut().set(
             Ability::Dexterity,
             AbilityScore::new(Ability::Dexterity, 16),
         );
@@ -252,17 +252,17 @@ mod tests {
         // Check that the attack roll uses Dexterity modifier
         let attack_roll = weapon.attack_roll(&mut character);
         assert!(attack_roll
-            .modifiers
+            .modifiers()
             .get(&ModifierSource::Ability(Ability::Dexterity))
             .is_some());
         // Check that the attack roll does not have a proficiency modifier
         assert!(attack_roll
-            .modifiers
+            .modifiers()
             .get(&ModifierSource::Proficiency(Proficiency::Proficient))
             .is_none());
         // Check that the attack roll does not have an enchantment modifier
         assert!(attack_roll
-            .modifiers
+            .modifiers()
             .get(&ModifierSource::Item("Enchantment".to_string()))
             .is_none());
         println!("{:?}", attack_roll);

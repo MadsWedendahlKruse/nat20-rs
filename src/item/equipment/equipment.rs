@@ -41,9 +41,6 @@ impl HandSlot {
 pub struct EquipmentItem {
     pub item: Item,
     pub kind: EquipmentType,
-    // TODO: Clarify the difference between on_equip, on_unequip and effects.
-    on_equip: Vec<Box<dyn Fn(&mut Character)>>,
-    on_unequip: Vec<Box<dyn Fn(&mut Character)>>,
     effects: Vec<Effect>,
 }
 
@@ -65,42 +62,20 @@ impl EquipmentItem {
                 rarity,
             },
             kind,
-            on_equip: Vec::new(),
-            on_unequip: Vec::new(),
             effects: Vec::new(),
         }
     }
 
     pub fn on_equip(&self, character: &mut Character) {
-        for func in &self.on_equip {
-            func(character);
-        }
         for effect in &self.effects {
             character.add_effect(effect.clone());
         }
     }
 
-    pub fn add_on_equip<F>(&mut self, func: F)
-    where
-        F: Fn(&mut Character) + 'static,
-    {
-        self.on_equip.push(Box::new(func));
-    }
-
     pub fn on_unequip(&self, character: &mut Character) {
-        for func in &self.on_unequip {
-            func(character);
-        }
         for effect in &self.effects {
             character.remove_effect(effect);
         }
-    }
-
-    pub fn add_on_unequip<F>(&mut self, func: F)
-    where
-        F: Fn(&mut Character) + 'static,
-    {
-        self.on_unequip.push(Box::new(func));
     }
 
     pub fn add_effect(&mut self, effect: Effect) {
@@ -140,26 +115,21 @@ pub enum EquipmentType {
 }
 
 impl EquipmentType {
-    pub fn valid_slots(&self) -> Vec<EquipmentSlot> {
-        match self {
-            EquipmentType::Headwear => vec![EquipmentSlot::General(GeneralEquipmentSlot::Headwear)],
-            EquipmentType::Cloak => vec![EquipmentSlot::General(GeneralEquipmentSlot::Cloak)],
-            EquipmentType::Armor => vec![EquipmentSlot::Armor],
-            EquipmentType::Gloves => vec![EquipmentSlot::General(GeneralEquipmentSlot::Gloves)],
-            EquipmentType::Boots => vec![EquipmentSlot::General(GeneralEquipmentSlot::Boots)],
-            EquipmentType::Amulet => vec![EquipmentSlot::General(GeneralEquipmentSlot::Amulet)],
-            EquipmentType::Ring => vec![
-                EquipmentSlot::General(GeneralEquipmentSlot::Ring(0)),
-                EquipmentSlot::General(GeneralEquipmentSlot::Ring(1)),
-            ],
-            EquipmentType::MeleeWeapon => vec![
-                EquipmentSlot::Melee(HandSlot::Main),
-                EquipmentSlot::Melee(HandSlot::Off),
-            ],
-            EquipmentType::RangedWeapon => vec![
-                EquipmentSlot::Ranged(HandSlot::Main),
-                EquipmentSlot::Ranged(HandSlot::Off),
-            ],
+    pub fn can_equip_in_slot(&self, slot: EquipmentSlot) -> bool {
+        match (self, slot) {
+            (EquipmentType::Headwear, EquipmentSlot::General(GeneralEquipmentSlot::Headwear)) => {
+                true
+            }
+            (EquipmentType::Cloak, EquipmentSlot::General(GeneralEquipmentSlot::Cloak)) => true,
+            (EquipmentType::Armor, EquipmentSlot::Armor) => true,
+            (EquipmentType::Gloves, EquipmentSlot::General(GeneralEquipmentSlot::Gloves)) => true,
+            (EquipmentType::Boots, EquipmentSlot::General(GeneralEquipmentSlot::Boots)) => true,
+            (EquipmentType::Amulet, EquipmentSlot::General(GeneralEquipmentSlot::Amulet)) => true,
+            (EquipmentType::Ring, EquipmentSlot::General(GeneralEquipmentSlot::Ring(0)))
+            | (EquipmentType::Ring, EquipmentSlot::General(GeneralEquipmentSlot::Ring(1))) => true,
+            (EquipmentType::MeleeWeapon, EquipmentSlot::Melee(_)) => true,
+            (EquipmentType::RangedWeapon, EquipmentSlot::Ranged(_)) => true,
+            _ => false,
         }
     }
 }

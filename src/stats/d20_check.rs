@@ -1,7 +1,13 @@
+use crate::creature::character::Character;
 use crate::stats::modifier::{ModifierSet, ModifierSource};
 use crate::stats::proficiency::Proficiency;
 
 use rand::Rng;
+use std::collections::HashMap;
+use std::hash::Hash;
+use strum::IntoEnumIterator;
+
+use super::ability::Ability;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RollMode {
@@ -62,8 +68,8 @@ impl AdvantageTracker {
 
 #[derive(Debug, Clone)]
 pub struct D20Check {
-    pub modifiers: ModifierSet,
-    pub proficiency: Proficiency,
+    modifiers: ModifierSet,
+    proficiency: Proficiency,
     advantage_tracker: AdvantageTracker,
 }
 
@@ -84,7 +90,36 @@ impl D20Check {
         &mut self.advantage_tracker
     }
 
-    pub fn perform(&self) -> D20CheckResult {
+    pub fn modifiers(&self) -> &ModifierSet {
+        &self.modifiers
+    }
+
+    pub fn modifiers_mut(&mut self) -> &mut ModifierSet {
+        &mut self.modifiers
+    }
+
+    pub fn add_modifier(&mut self, source: ModifierSource, value: i32) {
+        self.modifiers.add_modifier(source, value);
+    }
+
+    pub fn remove_modifier(&mut self, source: &ModifierSource) {
+        self.modifiers.remove_modifier(source);
+    }
+
+    pub fn proficiency(&self) -> &Proficiency {
+        &self.proficiency
+    }
+
+    pub fn set_proficiency(&mut self, proficiency: Proficiency) {
+        self.proficiency = proficiency;
+    }
+
+    pub fn perform(&mut self, proficiency_bonus: i32) -> D20CheckResult {
+        self.add_modifier(
+            ModifierSource::Proficiency(self.proficiency),
+            self.proficiency.bonus(proficiency_bonus),
+        );
+
         let mut rng = rand::rng();
         // Technically inefficient to always roll two dice, but it's probably not a big deal
         let roll1 = rng.random_range(1..=20);
@@ -105,7 +140,7 @@ impl D20Check {
         let total = selected_roll + total_modifier.max(0) as u32;
 
         D20CheckResult {
-            roll_mode,
+            advantage_tracker: self.advantage_tracker.clone(),
             rolls,
             selected_roll,
             modifier_breakdown: self.modifiers.clone(),
@@ -119,7 +154,7 @@ impl D20Check {
 
 #[derive(Debug)]
 pub struct D20CheckResult {
-    pub roll_mode: RollMode,
+    pub advantage_tracker: AdvantageTracker,
     pub rolls: Vec<u32>,
     pub selected_roll: u32,
     pub modifier_breakdown: ModifierSet,
@@ -129,10 +164,92 @@ pub struct D20CheckResult {
     pub is_crit_fail: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct D20CheckSet<K, H>
+where
+    K: Eq + Hash + IntoEnumIterator + Copy,
+{
+    checks: HashMap<K, D20Check>,
+    get_hooks: fn(K, &Character) -> Vec<&H>,
+    apply_check_hook: fn(&H, &Character, &mut D20Check),
+    apply_result_hook: fn(&H, &Character, &mut D20CheckResult),
+    ability_mapper: fn(K) -> Ability,
+}
+
+impl<K, H> D20CheckSet<K, H>
+where
+    K: Eq + Hash + IntoEnumIterator + Copy,
+{
+    pub fn new(
+        get_hooks: fn(K, &Character) -> Vec<&H>,
+        apply_check_hook: fn(&H, &Character, &mut D20Check),
+        apply_result_hook: fn(&H, &Character, &mut D20CheckResult),
+        ability_mapper: fn(K) -> Ability,
+    ) -> Self {
+        let checks = K::iter()
+            .map(|k| (k, D20Check::new(Proficiency::None)))
+            .collect();
+        Self {
+            checks,
+            get_hooks,
+            apply_check_hook,
+            apply_result_hook,
+            ability_mapper,
+        }
+    }
+
+    fn get(&self, key: K) -> &D20Check {
+        self.checks.get(&key).unwrap()
+    }
+
+    fn get_mut(&mut self, key: K) -> &mut D20Check {
+        self.checks.get_mut(&key).unwrap()
+    }
+
+    pub fn set_proficiency(&mut self, key: K, prof: Proficiency) {
+        self.get_mut(key).set_proficiency(prof);
+    }
+
+    pub fn add_modifier(&mut self, key: K, source: ModifierSource, value: i32) {
+        self.get_mut(key).add_modifier(source, value);
+    }
+
+    pub fn remove_modifier(&mut self, key: K, source: &ModifierSource) {
+        self.get_mut(key).remove_modifier(source);
+    }
+
+    pub fn check(&self, key: K, character: &Character) -> D20CheckResult {
+        let mut d20 = self.get(key).clone();
+        let ability = (self.ability_mapper)(key);
+        let ability_scores = character.ability_scores();
+        d20.add_modifier(
+            ModifierSource::Ability(ability),
+            ability_scores.total(ability),
+        );
+
+        let hooks = (self.get_hooks)(key, character);
+
+        for hook in hooks.iter() {
+            (self.apply_check_hook)(hook, character, &mut d20);
+        }
+
+        let mut result = d20.perform(character.proficiency_bonus());
+
+        for hook in hooks.iter() {
+            (self.apply_result_hook)(hook, character, &mut result);
+        }
+
+        result
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stats::modifier::ModifierSource;
+    use crate::stats::{
+        modifier::ModifierSource,
+        skill::{create_skill_set, Skill},
+    };
 
     #[test]
     fn d20_check() {
@@ -140,17 +257,14 @@ mod tests {
         check
             .modifiers
             .add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
-        check
-            .modifiers
-            .add_modifier(ModifierSource::Proficiency(Proficiency::Proficient), 2);
-        let result = check.perform();
+        let result = check.perform(2);
 
         // 1d20 + 2 + 2
         // Min: 1 + 2 + 2 = 5
         // Max: 20 + 2 + 2 = 24
         assert!(result.total >= 5 && result.total <= 24);
         assert_eq!(result.rolls.len(), 1);
-        assert_eq!(result.roll_mode, RollMode::Normal);
+        assert_eq!(result.advantage_tracker.roll_mode(), RollMode::Normal);
         println!("{:?}", result);
     }
 
@@ -164,14 +278,14 @@ mod tests {
             AdvantageType::Advantage,
             ModifierSource::Item("Lucky Charm".to_string()),
         );
-        let result = check.perform();
+        let result = check.perform(0);
 
         // 1d20 + 2
         // Min: 1 + 2 = 3
         // Max: 20 + 2 = 22
         assert!(result.total >= 3 && result.total <= 22);
         assert_eq!(result.rolls.len(), 2);
-        assert_eq!(result.roll_mode, RollMode::Advantage);
+        assert_eq!(result.advantage_tracker.roll_mode(), RollMode::Advantage);
         // Check if the selected roll is the maximum
         assert_eq!(
             result.selected_roll,
@@ -182,24 +296,46 @@ mod tests {
 
     #[test]
     fn d20_check_with_disadvantage() {
-        let mut check = D20Check::new(Proficiency::Proficient);
+        let mut check = D20Check::new(Proficiency::Expertise);
         check.advantage_tracker.add(
             AdvantageType::Disadvantage,
             ModifierSource::Item("Cursed Ring".to_string()),
         );
-        let result = check.perform();
+        let result = check.perform(4);
 
         // 1d20
-        // Min: 1 = 1
-        // Max: 20 = 20
-        assert!(result.total >= 1 && result.total <= 20);
+        // Min: 1 + 8 = 9
+        // Max: 20 + 8 = 28
+        assert!(result.total >= 9 && result.total <= 28);
         assert_eq!(result.rolls.len(), 2);
-        assert_eq!(result.roll_mode, RollMode::Disadvantage);
+        assert_eq!(result.advantage_tracker.roll_mode(), RollMode::Disadvantage);
         // Check if the selected roll is the minimum
         assert_eq!(
             result.selected_roll,
             result.rolls.iter().min().unwrap().clone()
         );
+        println!("{:?}", result);
+    }
+
+    #[test]
+    fn d20_check_with_advantage_and_disadvantage() {
+        let mut check = D20Check::new(Proficiency::Expertise);
+        check.advantage_tracker.add(
+            AdvantageType::Advantage,
+            ModifierSource::Item("Lucky Charm".to_string()),
+        );
+        check.advantage_tracker.add(
+            AdvantageType::Disadvantage,
+            ModifierSource::Item("Cursed Ring".to_string()),
+        );
+        let result = check.perform(4);
+
+        // 1d20
+        // Min: 1 + 8 = 9
+        // Max: 20 + 8 = 28
+        assert!(result.total >= 9 && result.total <= 28);
+        assert_eq!(result.rolls.len(), 1);
+        assert_eq!(result.advantage_tracker.roll_mode(), RollMode::Normal);
         println!("{:?}", result);
     }
 }

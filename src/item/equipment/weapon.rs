@@ -105,14 +105,14 @@ impl Weapon {
         );
 
         let ability = self.determine_ability(character);
-        attack_roll.modifiers.add_modifier(
+        attack_roll.add_modifier(
             ModifierSource::Ability(ability),
-            character.ability_modifier(ability).total(),
+            character.ability_scores.total(ability),
         );
 
         let enchantment = self.enchantment();
         if enchantment > 0 {
-            attack_roll.modifiers.add_modifier(
+            attack_roll.add_modifier(
                 ModifierSource::Item("Enchantment".to_string()),
                 enchantment as i32,
             );
@@ -141,7 +141,7 @@ impl Weapon {
         let ability = self.determine_ability(&character);
         damage_roll.primary.dice_roll.modifiers.add_modifier(
             ModifierSource::Ability(ability),
-            character.ability_modifier(ability).total(),
+            character.ability_scores.total(ability),
         );
 
         let enchantment = self.enchantment();
@@ -171,8 +171,8 @@ impl Weapon {
     pub fn determine_ability(&self, character: &Character) -> Ability {
         if self.has_property(&WeaponProperties::Finesse) {
             // Return the higher of the two abilities
-            let str = character.ability_total(Ability::Strength);
-            let dex = character.ability_total(Ability::Dexterity);
+            let str = character.ability_scores.total(Ability::Strength);
+            let dex = character.ability_scores.total(Ability::Dexterity);
             if str > dex {
                 Ability::Strength
             } else {

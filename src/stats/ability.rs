@@ -1,6 +1,8 @@
+use std::{collections::HashMap, hash::Hash};
+
 use super::modifier::{ModifierSet, ModifierSource};
 
-use strum::EnumIter;
+use strum::{EnumIter, IntoEnumIterator};
 
 #[derive(EnumIter, Hash, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum Ability {
@@ -46,6 +48,49 @@ impl AbilityScore {
 
     pub fn total(&self) -> i32 {
         self.base + self.modifiers.total()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AbilityScoreSet {
+    pub scores: HashMap<Ability, AbilityScore>,
+}
+
+impl AbilityScoreSet {
+    pub fn new() -> Self {
+        let mut scores = HashMap::new();
+        for ability in Ability::iter() {
+            scores.insert(ability, AbilityScore::default(ability));
+        }
+        Self { scores }
+    }
+
+    pub fn get(&self, ability: Ability) -> &AbilityScore {
+        self.scores.get(&ability).unwrap()
+    }
+
+    fn get_mut(&mut self, ability: Ability) -> &mut AbilityScore {
+        self.scores.get_mut(&ability).unwrap()
+    }
+
+    pub fn set(&mut self, ability: Ability, score: AbilityScore) {
+        self.scores.insert(ability, score);
+    }
+
+    pub fn modifier(&self, ability: Ability) -> ModifierSet {
+        self.get(ability).ability_modifier()
+    }
+
+    pub fn total(&self, ability: Ability) -> i32 {
+        self.modifier(ability).total()
+    }
+
+    pub fn add_modifier(&mut self, ability: Ability, source: ModifierSource, value: i32) {
+        self.get_mut(ability).modifiers.add_modifier(source, value);
+    }
+
+    pub fn remove_modifier(&mut self, ability: Ability, source: &ModifierSource) {
+        self.get_mut(ability).modifiers.remove_modifier(source);
     }
 }
 
