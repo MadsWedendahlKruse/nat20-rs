@@ -4,6 +4,7 @@ use crate::{
     combat::damage::DamageRoll,
     creature::character::Character,
     dice::dice::DiceSet,
+    effects::effects::Effect,
     stats::{
         ability::Ability, d20_check::D20Check, modifier::ModifierSource, proficiency::Proficiency,
     },
@@ -57,7 +58,7 @@ pub enum WeaponProperties {
 
 #[derive(Debug)]
 pub struct Weapon {
-    pub equipment: EquipmentItem,
+    equipment: EquipmentItem,
     pub category: WeaponCategory,
     pub weapon_type: WeaponType,
     pub properties: HashSet<WeaponProperties>,
@@ -91,6 +92,10 @@ impl Weapon {
         }
     }
 
+    pub fn name(&self) -> &str {
+        &self.equipment.item.name
+    }
+
     pub fn has_property(&self, property: &WeaponProperties) -> bool {
         self.properties.contains(property)
     }
@@ -107,7 +112,7 @@ impl Weapon {
         let ability = self.determine_ability(character);
         attack_roll.add_modifier(
             ModifierSource::Ability(ability),
-            character.ability_scores.total(ability),
+            character.ability_scores().total(ability),
         );
 
         let enchantment = self.enchantment();
@@ -133,7 +138,9 @@ impl Weapon {
             }
         });
         if versatile_dice.is_some()
-            && !character.has_weapon_in_hand(self.weapon_type.clone(), hand.other())
+            && !character
+                .loadout()
+                .has_weapon_in_hand(&self.weapon_type, hand.other())
         {
             damage_roll.primary.dice_roll.dice = versatile_dice.unwrap().clone();
         }
@@ -141,7 +148,7 @@ impl Weapon {
         let ability = self.determine_ability(&character);
         damage_roll.primary.dice_roll.modifiers.add_modifier(
             ModifierSource::Ability(ability),
-            character.ability_scores.total(ability),
+            character.ability_scores().total(ability),
         );
 
         let enchantment = self.enchantment();
@@ -171,8 +178,8 @@ impl Weapon {
     pub fn determine_ability(&self, character: &Character) -> Ability {
         if self.has_property(&WeaponProperties::Finesse) {
             // Return the higher of the two abilities
-            let str = character.ability_scores.total(Ability::Strength);
-            let dex = character.ability_scores.total(Ability::Dexterity);
+            let str = character.ability_scores().total(Ability::Strength);
+            let dex = character.ability_scores().total(Ability::Dexterity);
             if str > dex {
                 Ability::Strength
             } else {
@@ -183,12 +190,8 @@ impl Weapon {
         }
     }
 
-    pub fn on_equip(&self, character: &mut Character) {
-        self.equipment.on_equip(character);
-    }
-
-    pub fn on_unequip(&self, character: &mut Character) {
-        self.equipment.on_unequip(character);
+    pub fn effects(&self) -> &Vec<Effect> {
+        self.equipment.effects()
     }
 }
 

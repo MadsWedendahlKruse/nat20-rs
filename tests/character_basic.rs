@@ -100,15 +100,13 @@ mod tests {
         character.current_hp = 20;
         assert_eq!(character.current_hp, 20);
 
-        let mut resistances = DamageResistances::new();
-        resistances.add_effect(
+        character.resistances_mut().add_effect(
             DamageType::Fire,
             DamageMitigationEffect {
                 source: ModifierSource::Item("Boots of Fire Resistance".to_string()),
                 operation: MitigationOperation::Resistance,
             },
         );
-        character.resistances = resistances;
 
         let damage_roll_result = DamageRollResult {
             label: "Fireball".to_string(),

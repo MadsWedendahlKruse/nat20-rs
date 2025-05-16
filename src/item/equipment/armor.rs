@@ -110,12 +110,8 @@ impl Armor {
         armor_class_modifiers
     }
 
-    pub fn on_equip(&self, character: &mut Character) {
-        self.equipment.on_equip(character);
-    }
-
-    pub fn on_unequip(&self, character: &mut Character) {
-        self.equipment.on_unequip(character);
+    pub fn effects(&self) -> &Vec<Effect> {
+        self.equipment.effects()
     }
 }
 

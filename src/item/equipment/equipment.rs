@@ -66,18 +66,6 @@ impl EquipmentItem {
         }
     }
 
-    pub fn on_equip(&self, character: &mut Character) {
-        for effect in &self.effects {
-            character.add_effect(effect.clone());
-        }
-    }
-
-    pub fn on_unequip(&self, character: &mut Character) {
-        for effect in &self.effects {
-            character.remove_effect(effect);
-        }
-    }
-
     pub fn add_effect(&mut self, effect: Effect) {
         self.effects.push(effect);
     }
@@ -85,6 +73,10 @@ impl EquipmentItem {
     // TODO: Not sure if it's actually needed to remove effects from equipment.
     pub fn remove_effect(&mut self, effect: &Effect) {
         self.effects.retain(|e| e != effect);
+    }
+
+    pub fn effects(&self) -> &Vec<Effect> {
+        &self.effects
     }
 }
 

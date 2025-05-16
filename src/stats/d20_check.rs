@@ -227,29 +227,40 @@ where
             ability_scores.total(ability),
         );
 
-        let hooks = (self.get_hooks)(key, character);
-
-        for hook in hooks.iter() {
-            (self.apply_check_hook)(hook, character, &mut d20);
-        }
-
-        let mut result = d20.perform(character.proficiency_bonus());
-
-        for hook in hooks.iter() {
-            (self.apply_result_hook)(hook, character, &mut result);
-        }
-
-        result
+        execute_d20_check(
+            d20,
+            character,
+            &(self.get_hooks)(key, character),
+            |hook, character, check| (self.apply_check_hook)(*hook, character, check),
+            |hook, character, result| (self.apply_result_hook)(*hook, character, result),
+        )
     }
+}
+
+pub fn execute_d20_check<E>(
+    mut check: D20Check,
+    character: &Character,
+    hooks: &[E],
+    pre: impl Fn(&E, &Character, &mut D20Check),
+    post: impl Fn(&E, &Character, &mut D20CheckResult),
+) -> D20CheckResult {
+    for hook in hooks {
+        pre(hook, character, &mut check);
+    }
+
+    let mut result = check.perform(character.proficiency_bonus());
+
+    for hook in hooks {
+        post(hook, character, &mut result);
+    }
+
+    result
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stats::{
-        modifier::ModifierSource,
-        skill::{create_skill_set, Skill},
-    };
+    use crate::stats::modifier::ModifierSource;
 
     #[test]
     fn d20_check() {

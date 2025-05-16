@@ -25,7 +25,7 @@ mod tests {
 
         character.equip_armor(armor);
 
-        let armor_class = character.armor_class();
+        let armor_class = character.loadout().armor_class(&character);
         assert_eq!(19, armor_class.total());
         println!("{:?}", armor_class);
     }
@@ -57,7 +57,7 @@ mod tests {
 
         character.equip_armor(armor);
 
-        let armor_class = character.armor_class();
+        let armor_class = character.loadout().armor_class(&character);
         // Armour Class
         // Dex: 15 + 2 (item) = 17
         // 12 (armor) + 3 (Dex mod) = 15
@@ -66,7 +66,7 @@ mod tests {
 
         // Un-equip the armor
         let armor_name = character.unequip_armor().unwrap().equipment.item.name;
-        let armor_class = character.armor_class();
+        let armor_class = character.loadout().armor_class(&character);
         println!("Un-equipped {:?}", armor_name);
         assert_eq!(armor_name, "Light Armor");
         // Check if the armor class is updated

@@ -13,7 +13,6 @@ mod tests {
         },
         item::{
             equipment::{
-                self,
                 armor::Armor,
                 equipment::{EquipmentItem, EquipmentType, GeneralEquipmentSlot, HandSlot},
                 weapon::{Weapon, WeaponCategory, WeaponType},
@@ -71,12 +70,18 @@ mod tests {
         character.equip_weapon(weapon, HandSlot::Main);
 
         // No advantage before equipping the ring
-        let attack_roll = character.attack_roll(WeaponType::Melee, HandSlot::Main);
+        let attack_roll =
+            character
+                .loadout()
+                .attack_roll(&character, WeaponType::Melee, HandSlot::Main);
         assert_eq!(attack_roll.advantage_tracker.roll_mode(), RollMode::Normal);
 
         // Advantage after equipping the ring
         character.equip_item(GeneralEquipmentSlot::Ring(0), ring);
-        let attack_roll = character.attack_roll(WeaponType::Melee, HandSlot::Main);
+        let attack_roll =
+            character
+                .loadout()
+                .attack_roll(&character, WeaponType::Melee, HandSlot::Main);
         assert_eq!(
             attack_roll.advantage_tracker.roll_mode(),
             RollMode::Advantage
@@ -85,7 +90,10 @@ mod tests {
 
         // No advantage after unequipping the ring
         character.unequip_item(GeneralEquipmentSlot::Ring(0));
-        let attack_roll = character.attack_roll(WeaponType::Melee, HandSlot::Main);
+        let attack_roll =
+            character
+                .loadout()
+                .attack_roll(&character, WeaponType::Melee, HandSlot::Main);
         assert_eq!(attack_roll.advantage_tracker.roll_mode(), RollMode::Normal);
         println!("{:?}", attack_roll);
     }

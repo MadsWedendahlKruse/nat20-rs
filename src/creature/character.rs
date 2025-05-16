@@ -1,23 +1,22 @@
-use crate::combat::damage::*;
-use crate::effects::effects::Effect;
-use crate::item::equipment::armor::Armor;
-use crate::item::equipment::equipment::EquipmentItem;
-use crate::item::equipment::equipment::EquipmentSlot;
-use crate::item::equipment::equipment::GeneralEquipmentSlot;
-use crate::item::equipment::equipment::HandSlot;
-use crate::item::equipment::weapon::Weapon;
-use crate::item::equipment::weapon::WeaponCategory;
-use crate::item::equipment::weapon::WeaponProperties;
-use crate::item::equipment::weapon::WeaponType;
-use crate::stats::ability::*;
-use crate::stats::d20_check::*;
-use crate::stats::modifier::*;
-use crate::stats::proficiency::Proficiency;
-use crate::stats::saving_throw::create_saving_throw_set;
-use crate::stats::saving_throw::SavingThrowSet;
-use crate::stats::skill::*;
-
 use std::collections::HashMap;
+
+use crate::{
+    combat::damage::{DamageMitigationResult, DamageResistances, DamageRollResult},
+    effects::effects::Effect,
+    item::equipment::{
+        armor::Armor,
+        equipment::{EquipmentItem, GeneralEquipmentSlot, HandSlot},
+        loadout::{Loadout, TryEquipError},
+        weapon::{Weapon, WeaponCategory, WeaponType},
+    },
+    stats::{
+        ability::AbilityScoreSet,
+        d20_check::{execute_d20_check, D20CheckResult},
+        proficiency::Proficiency,
+        saving_throw::{create_saving_throw_set, SavingThrowSet},
+        skill::{create_skill_set, SkillSet},
+    },
+};
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum CharacterClass {
@@ -34,18 +33,15 @@ pub struct Character {
     pub class_levels: HashMap<CharacterClass, u8>,
     pub max_hp: i32,
     pub current_hp: i32,
-    pub ability_scores: AbilityScoreSet,
+    ability_scores: AbilityScoreSet,
     skills: SkillSet,
     saving_throws: SavingThrowSet,
-    pub resistances: DamageResistances,
+    resistances: DamageResistances,
     // TODO: Might have to make this more granular later (not just martial/simple)
     // TODO: Should it just be a bool? Not sure if you can have expertise in a weapon
     pub weapon_proficiencies: HashMap<WeaponCategory, Proficiency>,
     // Equipped items
-    armor: Option<Armor>,
-    melee_weapons: HashMap<HandSlot, Option<Weapon>>,
-    ranged_weapons: HashMap<HandSlot, Option<Weapon>>,
-    equipment: HashMap<GeneralEquipmentSlot, Option<EquipmentItem>>,
+    loadout: Loadout,
     effects: Vec<Effect>,
 }
 
@@ -61,10 +57,7 @@ impl Character {
             saving_throws: create_saving_throw_set(),
             resistances: DamageResistances::new(),
             weapon_proficiencies: HashMap::new(),
-            armor: None,
-            melee_weapons: HashMap::new(),
-            ranged_weapons: HashMap::new(),
-            equipment: HashMap::new(),
+            loadout: Loadout::new(),
             effects: Vec::new(),
         }
     }
@@ -126,124 +119,71 @@ impl Character {
         &mut self.saving_throws
     }
 
+    pub fn loadout(&self) -> &Loadout {
+        &self.loadout
+    }
+
     pub fn equip_armor(&mut self, armor: Armor) -> Option<Armor> {
-        let unequipped_armor = self.unequip_armor();
-        armor.on_equip(self);
-        self.armor = Some(armor);
-        unequipped_armor
+        self.add_effects(armor.effects().clone());
+        self.loadout.equip_armor(armor)
     }
 
     pub fn unequip_armor(&mut self) -> Option<Armor> {
-        if let Some(armor) = self.armor.take() {
-            armor.on_unequip(self);
-            Some(armor)
-        } else {
-            None
+        let unequiped_armor = self.loadout.unequip_armor();
+        if let Some(armor) = &unequiped_armor {
+            self.remove_effects(armor.effects());
         }
-    }
-
-    pub fn armor_class(&self) -> ModifierSet {
-        if let Some(armor) = &self.armor {
-            armor.armor_class(self)
-        } else {
-            let mut armor_class = ModifierSet::new();
-            armor_class.add_modifier(ModifierSource::Custom("Unarmored".to_string()), 10);
-            armor_class
-        }
+        unequiped_armor
     }
 
     pub fn equip_item(
         &mut self,
         slot: GeneralEquipmentSlot,
         item: EquipmentItem,
-    ) -> Option<EquipmentItem> {
-        if !item.kind.can_equip_in_slot(EquipmentSlot::General(slot)) {
-            return None;
+    ) -> Result<Option<EquipmentItem>, TryEquipError> {
+        let unequipped_item = self.loadout.equip_item(slot, item)?;
+        if let Some(item) = &unequipped_item {
+            self.remove_effects(item.effects());
         }
-
-        let unequipped_item = self.unequip_item(slot);
-        item.on_equip(self);
-        self.equipment.insert(slot, Some(item));
-        unequipped_item
+        let effects = self.loadout().item_in_slot(slot).unwrap().effects().clone();
+        self.add_effects(effects);
+        Ok(unequipped_item)
     }
 
     pub fn unequip_item(&mut self, slot: GeneralEquipmentSlot) -> Option<EquipmentItem> {
-        if let Some(item) = self.equipment.remove(&slot) {
-            item.as_ref().map(|i| i.on_unequip(self));
-            item
-        } else {
-            None
+        let unequipped_item = self.loadout.unequip_item(slot);
+        if let Some(item) = &unequipped_item {
+            self.remove_effects(item.effects());
         }
+        unequipped_item
     }
 
-    pub fn has_weapon_in_hand(&self, weapon_type: WeaponType, hand: HandSlot) -> bool {
-        self.weapon_map(weapon_type).contains_key(&hand)
-    }
-
-    pub fn weapon_in_hand(&self, weapon_type: WeaponType, hand: HandSlot) -> Option<&Weapon> {
-        self.weapon_map(weapon_type)
-            .get(&hand)
-            .and_then(|w| w.as_ref())
-    }
-
-    pub fn equip_weapon(&mut self, weapon: Weapon, hand: HandSlot) -> Vec<Weapon> {
-        let mut unequipped_weapons = Vec::new();
-        if let Some(unequipped_weapon) = self.unequip_weapon(weapon.weapon_type.clone(), hand) {
-            unequipped_weapons.push(unequipped_weapon);
-        }
-        if weapon.has_property(&WeaponProperties::TwoHanded) {
-            if let Some(unequipped_weapon) =
-                self.unequip_weapon(weapon.weapon_type.clone(), hand.other())
-            {
-                unequipped_weapons.push(unequipped_weapon);
-            }
-        }
-        weapon.on_equip(self);
-        let weapon_type = weapon.weapon_type.clone();
-        self.weapon_map_mut(weapon_type).insert(hand, Some(weapon));
-        unequipped_weapons
-    }
-
-    pub fn unequip_weapon(&mut self, weapon_type: WeaponType, hand: HandSlot) -> Option<Weapon> {
-        if let Some(weapon) = self.weapon_map_mut(weapon_type).remove(&hand) {
-            weapon.as_ref().map(|w| w.on_unequip(self));
-            weapon
-        } else {
-            None
-        }
-    }
-
-    pub fn attack_roll(&self, weapon_type: WeaponType, hand: HandSlot) -> D20CheckResult {
-        // TODO: Unarmed attacks
-        let mut attack_roll = self
-            .weapon_in_hand(weapon_type, hand)
-            .unwrap()
-            .attack_roll(self);
-        for effect in &self.effects {
-            (effect.pre_attack_roll)(self, &mut attack_roll)
-        }
-        let mut result = attack_roll.perform(self.proficiency_bonus());
-        for effect in &self.effects {
-            (effect.post_attack_roll)(self, &mut result)
-        }
-        result
-    }
-
-    fn weapon_map(&self, weapon_type: WeaponType) -> &HashMap<HandSlot, Option<Weapon>> {
-        match weapon_type {
-            WeaponType::Melee => &self.melee_weapons,
-            WeaponType::Ranged => &self.ranged_weapons,
-        }
-    }
-
-    fn weapon_map_mut(
+    pub fn equip_weapon(
         &mut self,
-        weapon_type: WeaponType,
-    ) -> &mut HashMap<HandSlot, Option<Weapon>> {
-        match weapon_type {
-            WeaponType::Melee => &mut self.melee_weapons,
-            WeaponType::Ranged => &mut self.ranged_weapons,
+        weapon: Weapon,
+        hand: HandSlot,
+    ) -> Result<Vec<Weapon>, TryEquipError> {
+        let unequipped_weapons = self.loadout.equip_weapon(weapon, hand)?;
+        for weapon in &unequipped_weapons {
+            self.add_effects(weapon.effects().clone());
         }
+        Ok(unequipped_weapons)
+    }
+
+    pub fn unequip_weapon(&mut self, weapon_type: &WeaponType, hand: HandSlot) -> Option<Weapon> {
+        let unequipped_weapon = self.loadout.unequip_weapon(weapon_type, hand);
+        if let Some(weapon) = &unequipped_weapon {
+            self.remove_effects(weapon.effects());
+        }
+        unequipped_weapon
+    }
+
+    pub fn resistances(&self) -> &DamageResistances {
+        &self.resistances
+    }
+
+    pub fn resistances_mut(&mut self) -> &mut DamageResistances {
+        &mut self.resistances
     }
 
     pub fn effects(&self) -> &Vec<Effect> {
@@ -255,9 +195,21 @@ impl Character {
         self.effects.push(effect);
     }
 
+    pub fn add_effects(&mut self, effects: Vec<Effect>) {
+        for effect in effects {
+            self.add_effect(effect);
+        }
+    }
+
     pub fn remove_effect(&mut self, effect: &Effect) {
         (effect.on_unapply)(self);
         self.effects.retain(|e| e != effect);
+    }
+
+    pub fn remove_effects(&mut self, effects: &Vec<Effect>) {
+        for effect in effects {
+            self.remove_effect(effect);
+        }
     }
 }
 

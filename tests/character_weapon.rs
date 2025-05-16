@@ -97,13 +97,21 @@ mod tests {
         );
 
         let mut character = Character::default();
-        let unequipped_weapons = character.equip_weapon(trident, HandSlot::Main);
+        let unequipped_weapons = match character.equip_weapon(trident, HandSlot::Main) {
+            Ok(unequipped_weapons) => unequipped_weapons,
+            Err(e) => {
+                panic!("Failed to equip weapon");
+            }
+        };
         // Check that nothing was unequipped and the character has a weapon in their hand
         assert_eq!(unequipped_weapons.len(), 0);
-        assert!(character.has_weapon_in_hand(WeaponType::Melee, HandSlot::Main));
+        assert!(character
+            .loadout()
+            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Main));
 
         let trident = character
-            .weapon_in_hand(WeaponType::Melee, HandSlot::Main)
+            .loadout()
+            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
             .unwrap();
         let damage_roll = trident.damage_roll(&character, HandSlot::Main);
         // Check that it's using the two handed dice set
@@ -125,13 +133,21 @@ mod tests {
             HashSet::from([WeaponProperties::Light]),
             create_damage_roll(1, DieSize::D4, "Dagger", DamageType::Piercing),
         );
-        let unequipped_weapons = character.equip_weapon(dagger, HandSlot::Off);
+        let unequipped_weapons = match character.equip_weapon(dagger, HandSlot::Off) {
+            Ok(unequipped_weapons) => unequipped_weapons,
+            Err(e) => {
+                panic!("Failed to equip weapon");
+            }
+        };
         // Check that nothing was unequipped and the character has a weapon in their hand
         assert_eq!(unequipped_weapons.len(), 0);
-        assert!(character.has_weapon_in_hand(WeaponType::Melee, HandSlot::Off));
+        assert!(character
+            .loadout()
+            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Off));
 
         let trident = character
-            .weapon_in_hand(WeaponType::Melee, HandSlot::Main)
+            .loadout()
+            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
             .unwrap();
         let damage_roll = trident.damage_roll(&character, HandSlot::Main);
         // Check that it's using the one handed dice set
@@ -140,16 +156,21 @@ mod tests {
 
         // Just for the hell of it check that we can un-equip the dagger
         let unequipped_weapon = character
-            .unequip_weapon(WeaponType::Melee, HandSlot::Off)
+            .unequip_weapon(&WeaponType::Melee, HandSlot::Off)
             .unwrap();
         // Check that the dagger was unequipped
-        assert!(unequipped_weapon.equipment.item.name == "Dagger");
-        assert!(!character.has_weapon_in_hand(WeaponType::Melee, HandSlot::Off));
+        assert!(unequipped_weapon.name() == "Dagger");
+        assert!(!character
+            .loadout()
+            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Off));
         // Check that the character still has the trident in their main hand
-        assert!(character.has_weapon_in_hand(WeaponType::Melee, HandSlot::Main));
+        assert!(character
+            .loadout()
+            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Main));
         // Check that the trident is still using the two handed dice set
         let trident = character
-            .weapon_in_hand(WeaponType::Melee, HandSlot::Main)
+            .loadout()
+            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
             .unwrap();
         let damage_roll = trident.damage_roll(&character, HandSlot::Main);
         assert!(damage_roll.primary.dice_roll.dice.num_dice == 1);
@@ -194,12 +215,26 @@ mod tests {
 
         let mut character = Character::default();
 
-        let unequipped_weapons = character.equip_weapon(dagger, HandSlot::Off);
+        let unequipped_weapons = match character.equip_weapon(dagger, HandSlot::Off) {
+            Ok(unequipped_weapons) => unequipped_weapons,
+            Err(e) => {
+                panic!("Failed to equip weapon");
+            }
+        };
         assert_eq!(unequipped_weapons.len(), 0);
-        let unequipped_weapons = character.equip_weapon(trident, HandSlot::Main);
+        let unequipped_weapons = match character.equip_weapon(trident, HandSlot::Main) {
+            Ok(unequipped_weapons) => unequipped_weapons,
+            Err(e) => {
+                panic!("Failed to equip weapon");
+            }
+        };
         assert_eq!(unequipped_weapons.len(), 0);
-        assert!(character.has_weapon_in_hand(WeaponType::Melee, HandSlot::Main));
-        assert!(character.has_weapon_in_hand(WeaponType::Melee, HandSlot::Off));
+        assert!(character
+            .loadout()
+            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Main));
+        assert!(character
+            .loadout()
+            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Off));
 
         // Equip a two-handed weapon (Greatsword) in the main hand
         let greatsword = Weapon::new(
@@ -215,12 +250,21 @@ mod tests {
             HashSet::from([WeaponProperties::TwoHanded]),
             create_damage_roll(2, DieSize::D6, "Greatsword", DamageType::Slashing),
         );
-        let unequipped_weapons = character.equip_weapon(greatsword, HandSlot::Main);
+        let unequipped_weapons = match character.equip_weapon(greatsword, HandSlot::Main) {
+            Ok(unequipped_weapons) => unequipped_weapons,
+            Err(e) => {
+                panic!("Failed to equip weapon");
+            }
+        };
         // Check that both weapons were unequipped
         assert_eq!(unequipped_weapons.len(), 2);
-        assert!(character.has_weapon_in_hand(WeaponType::Melee, HandSlot::Main));
+        assert!(character
+            .loadout()
+            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Main));
         // Off-hand should be empty
-        assert!(!character.has_weapon_in_hand(WeaponType::Melee, HandSlot::Off));
+        assert!(!character
+            .loadout()
+            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Off));
     }
 
     #[test]
