@@ -324,26 +324,18 @@ mod tests {
         let roll_result = DamageRollResult {
             label: "Sword of Flame".to_string(),
             components: vec![
-                DamageComponentResult {
-                    damage_type: DamageType::Slashing,
-                    result: DiceSetRollResult {
-                        label: "Base damage".to_string(),
-                        rolls: vec![3, 4],
-                        die_size: DieSize::D6,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 7,
-                    },
-                },
-                DamageComponentResult {
-                    damage_type: DamageType::Fire,
-                    result: DiceSetRollResult {
-                        label: "Enchant".to_string(),
-                        rolls: vec![2],
-                        die_size: DieSize::D4,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 2,
-                    },
-                },
+                create_damage_component_result(
+                    DamageType::Slashing,
+                    vec![3, 4],
+                    DieSize::D6,
+                    "Base damage".to_string(),
+                ),
+                create_damage_component_result(
+                    DamageType::Fire,
+                    vec![2],
+                    DieSize::D4,
+                    "Enchant".to_string(),
+                ),
             ],
             total: 9,
         };
@@ -370,26 +362,18 @@ mod tests {
         let roll_result = DamageRollResult {
             label: "Sword of Flame".to_string(),
             components: vec![
-                DamageComponentResult {
-                    damage_type: DamageType::Slashing,
-                    result: DiceSetRollResult {
-                        label: "Base damage".to_string(),
-                        rolls: vec![3, 4],
-                        die_size: DieSize::D6,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 7,
-                    },
-                },
-                DamageComponentResult {
-                    damage_type: DamageType::Fire,
-                    result: DiceSetRollResult {
-                        label: "Enchant".to_string(),
-                        rolls: vec![2],
-                        die_size: DieSize::D4,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 2,
-                    },
-                },
+                create_damage_component_result(
+                    DamageType::Slashing,
+                    vec![3, 4],
+                    DieSize::D6,
+                    "Base damage".to_string(),
+                ),
+                create_damage_component_result(
+                    DamageType::Fire,
+                    vec![2],
+                    DieSize::D4,
+                    "Enchant".to_string(),
+                ),
             ],
             total: 9,
         };
@@ -416,26 +400,18 @@ mod tests {
         let roll_result = DamageRollResult {
             label: "Sword of Flame".to_string(),
             components: vec![
-                DamageComponentResult {
-                    damage_type: DamageType::Slashing,
-                    result: DiceSetRollResult {
-                        label: "Base damage".to_string(),
-                        rolls: vec![3, 4],
-                        die_size: DieSize::D6,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 7,
-                    },
-                },
-                DamageComponentResult {
-                    damage_type: DamageType::Fire,
-                    result: DiceSetRollResult {
-                        label: "Enchant".to_string(),
-                        rolls: vec![2],
-                        die_size: DieSize::D4,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 2,
-                    },
-                },
+                create_damage_component_result(
+                    DamageType::Slashing,
+                    vec![3, 4],
+                    DieSize::D6,
+                    "Base damage".to_string(),
+                ),
+                create_damage_component_result(
+                    DamageType::Fire,
+                    vec![2],
+                    DieSize::D4,
+                    "Enchant".to_string(),
+                ),
             ],
             total: 9,
         };
@@ -462,26 +438,18 @@ mod tests {
         let roll_result = DamageRollResult {
             label: "Sword of Flame".to_string(),
             components: vec![
-                DamageComponentResult {
-                    damage_type: DamageType::Slashing,
-                    result: DiceSetRollResult {
-                        label: "Base damage".to_string(),
-                        rolls: vec![3, 4],
-                        die_size: DieSize::D6,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 7,
-                    },
-                },
-                DamageComponentResult {
-                    damage_type: DamageType::Fire,
-                    result: DiceSetRollResult {
-                        label: "Enchant".to_string(),
-                        rolls: vec![2],
-                        die_size: DieSize::D4,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 2,
-                    },
-                },
+                create_damage_component_result(
+                    DamageType::Slashing,
+                    vec![3, 4],
+                    DieSize::D6,
+                    "Base damage".to_string(),
+                ),
+                create_damage_component_result(
+                    DamageType::Fire,
+                    vec![2],
+                    DieSize::D4,
+                    "Enchant".to_string(),
+                ),
             ],
             total: 9,
         };
@@ -508,26 +476,18 @@ mod tests {
         let roll_result = DamageRollResult {
             label: "Sword of Flame".to_string(),
             components: vec![
-                DamageComponentResult {
-                    damage_type: DamageType::Slashing,
-                    result: DiceSetRollResult {
-                        label: "Base damage".to_string(),
-                        rolls: vec![3, 4],
-                        die_size: DieSize::D6,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 7,
-                    },
-                },
-                DamageComponentResult {
-                    damage_type: DamageType::Fire,
-                    result: DiceSetRollResult {
-                        label: "Enchant".to_string(),
-                        rolls: vec![2],
-                        die_size: DieSize::D4,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 2,
-                    },
-                },
+                create_damage_component_result(
+                    DamageType::Slashing,
+                    vec![3, 4],
+                    DieSize::D6,
+                    "Base damage".to_string(),
+                ),
+                create_damage_component_result(
+                    DamageType::Fire,
+                    vec![2],
+                    DieSize::D4,
+                    "Enchant".to_string(),
+                ),
             ],
             total: 9,
         };
@@ -561,26 +521,18 @@ mod tests {
         let roll_result = DamageRollResult {
             label: "Sword of Flame".to_string(),
             components: vec![
-                DamageComponentResult {
-                    damage_type: DamageType::Slashing,
-                    result: DiceSetRollResult {
-                        label: "Base damage".to_string(),
-                        rolls: vec![3, 4],
-                        die_size: DieSize::D6,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 7,
-                    },
-                },
-                DamageComponentResult {
-                    damage_type: DamageType::Fire,
-                    result: DiceSetRollResult {
-                        label: "Enchant".to_string(),
-                        rolls: vec![2],
-                        die_size: DieSize::D4,
-                        modifiers: ModifierSet::new(),
-                        subtotal: 2,
-                    },
-                },
+                create_damage_component_result(
+                    DamageType::Slashing,
+                    vec![3, 4],
+                    DieSize::D6,
+                    "Base damage".to_string(),
+                ),
+                create_damage_component_result(
+                    DamageType::Fire,
+                    vec![2],
+                    DieSize::D4,
+                    "Enchant".to_string(),
+                ),
             ],
             total: 9,
         };
@@ -614,16 +566,12 @@ mod tests {
     fn damage_mitigation_immunity_priority() {
         let roll_result = DamageRollResult {
             label: "Sword".to_string(),
-            components: vec![DamageComponentResult {
-                damage_type: DamageType::Slashing,
-                result: DiceSetRollResult {
-                    label: "Base damage".to_string(),
-                    rolls: vec![3, 4],
-                    die_size: DieSize::D6,
-                    modifiers: ModifierSet::new(),
-                    subtotal: 7,
-                },
-            }],
+            components: vec![create_damage_component_result(
+                DamageType::Slashing,
+                vec![3, 4],
+                DieSize::D6,
+                "Base damage".to_string(),
+            )],
             total: 7,
         };
 
@@ -653,5 +601,24 @@ mod tests {
         println!("{:?}", mitigation_result);
         assert_eq!(mitigation_result.total, 0);
         assert_eq!(mitigation_result.components.len(), 1);
+    }
+
+    fn create_damage_component_result(
+        damage_type: DamageType,
+        rolls: Vec<u32>,
+        die_size: DieSize,
+        label: String,
+    ) -> DamageComponentResult {
+        let total = rolls.iter().sum::<u32>() as i32;
+        DamageComponentResult {
+            damage_type,
+            result: DiceSetRollResult {
+                label,
+                rolls,
+                die_size,
+                modifiers: ModifierSet::new(),
+                subtotal: total,
+            },
+        }
     }
 }
