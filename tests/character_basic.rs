@@ -52,45 +52,7 @@ mod tests {
 
     #[test]
     fn character_skill_modifier() {
-        // TODO: Move test to SkillSet
 
-        // let mut abilities = HashMap::new();
-        // let mut strength = AbilityScore::new(Ability::Strength, 17);
-        // strength
-        //     .modifiers
-        //     .add_modifier(ModifierSource::Item("Ring of Strength".to_string()), 2);
-        // abilities.insert(Ability::Strength, strength);
-
-        // let mut skills = HashMap::new();
-        // let mut athletics = D20Check::new(Proficiency::Proficient);
-        // athletics
-        //     .modifiers
-        //     .add_modifier(ModifierSource::Item("Athlete's Belt".to_string()), 1);
-        // skills.insert(Skill::Athletics, athletics);
-
-        // let mut class_levels = HashMap::new();
-        // class_levels.insert(CharacterClass::Fighter, 5);
-
-        // let character = Character::new(
-        //     "Thorin",
-        //     class_levels,
-        //     20,
-        //     abilities,
-        //     skills,
-        //     HashMap::new(),
-        //     DamageResistances::new(),
-        // );
-
-        // // 17 (base) + 2 (item) = 19
-        // assert_eq!(character.ability_total(Ability::Strength), 19);
-        // // Calculate the expected skill modifier
-        // // 4 (ability) + 1 (item) + 3 (proficiency) = 8
-        // assert_eq!(character.skill_modifier(Skill::Athletics).total(), 8);
-        // print!(
-        //     "Athletics Modifier: {} = {:?}",
-        //     character.skill_modifier(Skill::Athletics).total(),
-        //     character.skill_modifier(Skill::Athletics)
-        // );
     }
 
     #[test]

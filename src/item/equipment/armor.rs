@@ -101,7 +101,7 @@ impl Armor {
 
         let dex_mod = character
             .ability_scores()
-            .modifier(Ability::Dexterity)
+            .ability_modifier(Ability::Dexterity)
             .total()
             .min(self.max_dexterity_bonus);
 

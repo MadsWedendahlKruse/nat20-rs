@@ -224,7 +224,7 @@ where
         let ability_scores = character.ability_scores();
         d20.add_modifier(
             ModifierSource::Ability(ability),
-            ability_scores.total(ability),
+            ability_scores.ability_modifier(ability).total(),
         );
 
         execute_d20_check(

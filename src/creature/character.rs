@@ -11,7 +11,6 @@ use crate::{
     },
     stats::{
         ability::AbilityScoreSet,
-        d20_check::{execute_d20_check, D20CheckResult},
         proficiency::Proficiency,
         saving_throw::{create_saving_throw_set, SavingThrowSet},
         skill::{create_skill_set, SkillSet},

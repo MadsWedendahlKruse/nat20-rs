@@ -77,12 +77,12 @@ impl AbilityScoreSet {
         self.scores.insert(ability, score);
     }
 
-    pub fn modifier(&self, ability: Ability) -> ModifierSet {
+    pub fn ability_modifier(&self, ability: Ability) -> ModifierSet {
         self.get(ability).ability_modifier()
     }
 
     pub fn total(&self, ability: Ability) -> i32 {
-        self.modifier(ability).total()
+        self.get(ability).total()
     }
 
     pub fn add_modifier(&mut self, ability: Ability, source: ModifierSource, value: i32) {
@@ -96,6 +96,7 @@ impl AbilityScoreSet {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -114,5 +115,78 @@ mod tests {
             .add_modifier(ModifierSource::Item("Ring of Dexterity".to_string()), 2);
         assert_eq!(ability_score.total(), 16); // 14 + 2 = 16
         assert_eq!(ability_score.ability_modifier().total(), 3); // (16 - 10) / 2 = 3
+    }
+
+    #[test]
+    fn ability_score_set() {
+        let mut ability_scores = AbilityScoreSet::new();
+        ability_scores.set(
+            Ability::Dexterity,
+            AbilityScore::new(Ability::Dexterity, 15),
+        );
+        ability_scores.add_modifier(
+            Ability::Dexterity,
+            ModifierSource::Item("Ring of Dexterity".to_string()),
+            2,
+        );
+
+        assert_eq!(ability_scores.total(Ability::Dexterity), 17);
+        assert_eq!(
+            ability_scores.ability_modifier(Ability::Dexterity).total(),
+            3
+        );
+    }
+
+    #[test]
+    fn ability_score_set_modifier() {
+        let mut ability_scores = AbilityScoreSet::new();
+        ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
+        ability_scores.add_modifier(
+            Ability::Strength,
+            ModifierSource::Item("Ring of Strength".to_string()),
+            2,
+        );
+
+        assert_eq!(ability_scores.total(Ability::Strength), 19);
+        assert_eq!(
+            ability_scores.ability_modifier(Ability::Strength).total(),
+            4
+        );
+    }
+
+    #[test]
+    fn ability_score_set_multiple_abilities() {
+        let mut ability_scores = AbilityScoreSet::new();
+        ability_scores.set(
+            Ability::Dexterity,
+            AbilityScore::new(Ability::Dexterity, 15),
+        );
+        ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
+        ability_scores.set(Ability::Charisma, AbilityScore::new(Ability::Charisma, 8));
+
+        assert_eq!(ability_scores.total(Ability::Dexterity), 15);
+        assert_eq!(ability_scores.total(Ability::Strength), 17);
+        assert_eq!(ability_scores.total(Ability::Charisma), 8);
+    }
+
+    #[test]
+    fn ability_score_set_remove_modifier() {
+        let mut ability_scores = AbilityScoreSet::new();
+        ability_scores.set(
+            Ability::Dexterity,
+            AbilityScore::new(Ability::Dexterity, 15),
+        );
+        ability_scores.add_modifier(
+            Ability::Dexterity,
+            ModifierSource::Item("Ring of Dexterity".to_string()),
+            2,
+        );
+
+        assert_eq!(ability_scores.total(Ability::Dexterity), 17);
+        ability_scores.remove_modifier(
+            Ability::Dexterity,
+            &ModifierSource::Item("Ring of Dexterity".to_string()),
+        );
+        assert_eq!(ability_scores.total(Ability::Dexterity), 15);
     }
 }

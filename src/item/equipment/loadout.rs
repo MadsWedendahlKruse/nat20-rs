@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::creature::character::Character;
-use crate::effects::effects::Effect;
 use crate::item::equipment::armor::Armor;
 use crate::item::equipment::equipment::*;
 use crate::item::equipment::weapon::{Weapon, WeaponProperties, WeaponType};

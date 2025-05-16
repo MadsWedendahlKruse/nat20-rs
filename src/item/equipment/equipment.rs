@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use crate::creature::character::Character;
 use crate::effects::effects::Effect;
 use crate::item::item::{Item, ItemRarity};
 
