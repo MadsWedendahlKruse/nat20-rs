@@ -3,24 +3,23 @@ extern crate nat20_rs;
 mod tests {
     use std::collections::HashSet;
 
-    use nat20_rs::combat::damage::DamageComponent;
-    use nat20_rs::combat::damage::DamageRoll;
-    use nat20_rs::combat::damage::DamageType;
-    use nat20_rs::creature::character::*;
-    use nat20_rs::dice::dice::DiceSet;
-    use nat20_rs::dice::dice::DiceSetRoll;
-    use nat20_rs::dice::dice::DieSize;
-    use nat20_rs::item::equipment::equipment::EquipmentItem;
-    use nat20_rs::item::equipment::equipment::EquipmentType;
-    use nat20_rs::item::equipment::equipment::HandSlot;
-    use nat20_rs::item::equipment::weapon::Weapon;
-    use nat20_rs::item::equipment::weapon::WeaponCategory;
-    use nat20_rs::item::equipment::weapon::WeaponProperties;
-    use nat20_rs::item::equipment::weapon::WeaponType;
-    use nat20_rs::item::item::ItemRarity;
-    use nat20_rs::stats::ability::*;
-    use nat20_rs::stats::modifier::*;
-    use nat20_rs::stats::proficiency::Proficiency;
+    use nat20_rs::{
+        combat::damage::{DamageComponent, DamageRoll, DamageType},
+        creature::character::Character,
+        dice::dice::{DiceSet, DiceSetRoll, DieSize},
+        item::{
+            equipment::{
+                equipment::{EquipmentItem, EquipmentType, HandSlot},
+                weapon::{Weapon, WeaponCategory, WeaponProperties, WeaponType},
+            },
+            item::ItemRarity,
+        },
+        stats::{
+            ability::{Ability, AbilityScore},
+            modifier::{ModifierSet, ModifierSource},
+            proficiency::Proficiency,
+        },
+    };
 
     #[test]
     fn character_weapon_finesse_modifier() {
@@ -54,6 +53,7 @@ mod tests {
         // Check that the damage roll uses Dexterity modifier
         let damage_roll = weapon.damage_roll(&mut character, HandSlot::Main);
         let damage_roll_result = damage_roll.roll();
+        println!("{:?}", damage_roll_result);
         // Min: 1 (1d8) + 3 (Dex) = 4
         // Max: 8 (1d8) + 3 (Dex) = 11
         assert!(
@@ -61,7 +61,6 @@ mod tests {
             "Damage roll total out of bounds: {}",
             damage_roll_result.total
         );
-        println!("{:?}", damage_roll_result);
         // Check that the damage roll has a dex modifier
         assert!(damage_roll
             .primary
@@ -97,12 +96,7 @@ mod tests {
         );
 
         let mut character = Character::default();
-        let unequipped_weapons = match character.equip_weapon(trident, HandSlot::Main) {
-            Ok(unequipped_weapons) => unequipped_weapons,
-            Err(e) => {
-                panic!("Failed to equip weapon");
-            }
-        };
+        let unequipped_weapons = character.equip_weapon(trident, HandSlot::Main).unwrap();
         // Check that nothing was unequipped and the character has a weapon in their hand
         assert_eq!(unequipped_weapons.len(), 0);
         assert!(character
@@ -133,12 +127,7 @@ mod tests {
             HashSet::from([WeaponProperties::Light]),
             create_damage_roll(1, DieSize::D4, "Dagger", DamageType::Piercing),
         );
-        let unequipped_weapons = match character.equip_weapon(dagger, HandSlot::Off) {
-            Ok(unequipped_weapons) => unequipped_weapons,
-            Err(e) => {
-                panic!("Failed to equip weapon");
-            }
-        };
+        let unequipped_weapons = character.equip_weapon(dagger, HandSlot::Off).unwrap();
         // Check that nothing was unequipped and the character has a weapon in their hand
         assert_eq!(unequipped_weapons.len(), 0);
         assert!(character
@@ -215,19 +204,9 @@ mod tests {
 
         let mut character = Character::default();
 
-        let unequipped_weapons = match character.equip_weapon(dagger, HandSlot::Off) {
-            Ok(unequipped_weapons) => unequipped_weapons,
-            Err(e) => {
-                panic!("Failed to equip weapon");
-            }
-        };
+        let unequipped_weapons = character.equip_weapon(dagger, HandSlot::Off).unwrap();
         assert_eq!(unequipped_weapons.len(), 0);
-        let unequipped_weapons = match character.equip_weapon(trident, HandSlot::Main) {
-            Ok(unequipped_weapons) => unequipped_weapons,
-            Err(e) => {
-                panic!("Failed to equip weapon");
-            }
-        };
+        let unequipped_weapons = character.equip_weapon(trident, HandSlot::Main).unwrap();
         assert_eq!(unequipped_weapons.len(), 0);
         assert!(character
             .loadout()
@@ -250,12 +229,7 @@ mod tests {
             HashSet::from([WeaponProperties::TwoHanded]),
             create_damage_roll(2, DieSize::D6, "Greatsword", DamageType::Slashing),
         );
-        let unequipped_weapons = match character.equip_weapon(greatsword, HandSlot::Main) {
-            Ok(unequipped_weapons) => unequipped_weapons,
-            Err(e) => {
-                panic!("Failed to equip weapon");
-            }
-        };
+        let unequipped_weapons = character.equip_weapon(greatsword, HandSlot::Main).unwrap();
         // Check that both weapons were unequipped
         assert_eq!(unequipped_weapons.len(), 2);
         assert!(character

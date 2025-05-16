@@ -148,7 +148,7 @@ impl Weapon {
         let ability = self.determine_ability(&character);
         damage_roll.primary.dice_roll.modifiers.add_modifier(
             ModifierSource::Ability(ability),
-            character.ability_scores().total(ability),
+            character.ability_scores().ability_modifier(ability).total(),
         );
 
         let enchantment = self.enchantment();
