@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    combat::damage::{DamageMitigationResult, DamageResistances, DamageRollResult},
+    combat::{
+        action::CombatAction,
+        damage::{DamageMitigationResult, DamageResistances, DamageRollResult},
+    },
     effects::effects::Effect,
     item::equipment::{
         armor::Armor,
@@ -15,6 +18,7 @@ use crate::{
         saving_throw::{create_saving_throw_set, SavingThrowSet},
         skill::{create_skill_set, SkillSet},
     },
+    utils::id::CharacterId,
 };
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
@@ -28,10 +32,11 @@ pub enum CharacterClass {
 
 #[derive(Debug)]
 pub struct Character {
+    id: CharacterId,
     pub name: String,
     pub class_levels: HashMap<CharacterClass, u8>,
-    pub max_hp: i32,
-    pub current_hp: i32,
+    max_hp: i32,
+    current_hp: i32,
     ability_scores: AbilityScoreSet,
     skills: SkillSet,
     saving_throws: SavingThrowSet,
@@ -39,7 +44,7 @@ pub struct Character {
     // TODO: Might have to make this more granular later (not just martial/simple)
     // TODO: Should it just be a bool? Not sure if you can have expertise in a weapon
     pub weapon_proficiencies: HashMap<WeaponCategory, Proficiency>,
-    // Equipped items
+    /// Equipped items
     loadout: Loadout,
     effects: Vec<Effect>,
 }
@@ -47,6 +52,7 @@ pub struct Character {
 impl Character {
     pub fn new(name: &str, class_levels: HashMap<CharacterClass, u8>, max_hp: i32) -> Self {
         Self {
+            id: CharacterId::new_v4(),
             name: name.to_string(),
             class_levels,
             max_hp,
@@ -59,6 +65,14 @@ impl Character {
             loadout: Loadout::new(),
             effects: Vec::new(),
         }
+    }
+
+    pub fn id(&self) -> CharacterId {
+        self.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn add_class_level(&mut self, class: CharacterClass, levels: u8) {
@@ -78,6 +92,14 @@ impl Character {
             17..=20 => 6,
             _ => 2, // fallback default
         }
+    }
+
+    pub fn max_hp(&self) -> i32 {
+        self.max_hp
+    }
+
+    pub fn hp(&self) -> i32 {
+        self.current_hp
     }
 
     pub fn is_alive(&self) -> bool {
@@ -210,10 +232,22 @@ impl Character {
             self.remove_effect(effect);
         }
     }
+
+    pub fn available_actions(&self) -> Vec<CombatAction> {
+        let mut actions = Vec::new();
+
+        for action in self.loadout.available_actions() {
+            actions.push(action);
+        }
+
+        // TODO: Spell actions
+
+        actions
+    }
 }
 
 impl Default for Character {
     fn default() -> Self {
-        Character::new("John Doe", HashMap::new(), 10)
+        Character::new("John Doe", HashMap::new(), 20)
     }
 }

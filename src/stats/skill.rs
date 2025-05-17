@@ -16,6 +16,7 @@ pub enum Skill {
     Stealth,
     Arcana,
     History,
+    Initiative,
     // Add more as needed
 }
 
@@ -36,6 +37,7 @@ skill_ability_map! {
     Stealth    => Dexterity,
     Arcana     => Intelligence,
     History    => Intelligence,
+    Initiative => Dexterity,
 }
 
 pub type SkillSet = D20CheckSet<Skill, SkillCheckHook>;
@@ -73,7 +75,7 @@ pub fn create_skill_set() -> SkillSet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stats::{ability::Ability, modifier::ModifierSource, proficiency::Proficiency};
+    use crate::stats::ability::Ability;
 
     #[test]
     fn skill_ability_map() {
@@ -82,16 +84,5 @@ mod tests {
         assert_eq!(skill_ability(Skill::Stealth), Ability::Dexterity);
         assert_eq!(skill_ability(Skill::Arcana), Ability::Intelligence);
         assert_eq!(skill_ability(Skill::History), Ability::Intelligence);
-    }
-
-    #[test]
-    fn skill_set() {
-        let mut skill_set = create_skill_set();
-        skill_set.set_proficiency(Skill::Acrobatics, Proficiency::Proficient);
-        skill_set.add_modifier(
-            Skill::Acrobatics,
-            ModifierSource::Item("Ring of Acrobatics".to_string()),
-            2,
-        );
     }
 }

@@ -37,6 +37,7 @@ impl HandSlot {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct EquipmentItem {
     pub item: Item,
     pub kind: EquipmentType,
@@ -79,20 +80,7 @@ impl EquipmentItem {
     }
 }
 
-use std::fmt;
-
-impl fmt::Debug for EquipmentItem {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EquipmentItem")
-            .field("item", &self.item)
-            .field("kind", &self.kind)
-            // .field("on_equip", &"fn(...)")
-            // .field("on_unequip", &"fn(...)")
-            .finish()
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EquipmentType {
     Headwear,
     Cloak,

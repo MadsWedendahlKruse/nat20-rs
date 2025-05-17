@@ -276,15 +276,189 @@ impl fmt::Display for DamageMitigationResult {
 
 #[cfg(test)]
 mod tests {
+    use rstest::{fixture, rstest};
+
     use crate::stats::{ability::Ability, modifier::ModifierSet, modifier::ModifierSource};
 
     use super::*;
 
-    #[test]
-    fn damage_roll() {
+    #[rstest]
+    fn damage_roll_values(damage_roll: DamageRoll) {
+        let result = damage_roll.roll();
+        assert_eq!(result.components.len(), 2);
+        // 2d6 + 1d4 + 2 (str mod)
+        // Min roll: 2 + 1 + 2 = 5
+        // Max roll: 12 + 4 + 2 = 18
+        assert!(result.total >= 5 && result.total <= 18);
+        result.display();
+    }
+
+    #[rstest]
+    fn damage_mitigation_resistance(damage_roll_result: DamageRollResult) {
+        let mut resistances = DamageResistances {
+            effects: HashMap::new(),
+        };
+        resistances.effects.insert(
+            DamageType::Slashing,
+            vec![DamageMitigationEffect {
+                source: ModifierSource::Item("Shield of Resistance".to_string()),
+                operation: MitigationOperation::Resistance,
+            }],
+        );
+
+        let mitigation_result = resistances.apply(&damage_roll_result);
+        // 7 / 2 + 2 = 3.5 + 2 = 5.5 -> round down to 5
+        assert_eq!(mitigation_result.total, 5);
+        println!("{:?}", mitigation_result);
+    }
+
+    #[rstest]
+    fn damage_mitigation_immunity(damage_roll_result: DamageRollResult) {
+        let mut resistances = DamageResistances {
+            effects: HashMap::new(),
+        };
+        resistances.effects.insert(
+            DamageType::Fire,
+            vec![DamageMitigationEffect {
+                source: ModifierSource::Item("Ring of Fire Immunity".to_string()),
+                operation: MitigationOperation::Immunity,
+            }],
+        );
+
+        let mitigation_result = resistances.apply(&damage_roll_result);
+        // 7 + 0 = 7
+        assert_eq!(mitigation_result.total, 7);
+        println!("{:?}", mitigation_result);
+    }
+
+    #[rstest]
+    fn damage_mitigation_vulnerability(damage_roll_result: DamageRollResult) {
+        let mut resistances = DamageResistances {
+            effects: HashMap::new(),
+        };
+        resistances.effects.insert(
+            DamageType::Slashing,
+            vec![DamageMitigationEffect {
+                source: ModifierSource::Item("Shield of Vulnerability".to_string()),
+                operation: MitigationOperation::Vulnerability,
+            }],
+        );
+
+        let mitigation_result = resistances.apply(&damage_roll_result);
+        // 7 * 2 + 2 = 16
+        assert_eq!(mitigation_result.total, 16);
+        println!("{:?}", mitigation_result);
+    }
+
+    #[rstest]
+    fn damage_mitigation_flat_reduction(damage_roll_result: DamageRollResult) {
+        let mut resistances = DamageResistances {
+            effects: HashMap::new(),
+        };
+        resistances.effects.insert(
+            DamageType::Slashing,
+            vec![DamageMitigationEffect {
+                source: ModifierSource::Item("Shield of Flat Reduction".to_string()),
+                operation: MitigationOperation::FlatReduction(3),
+            }],
+        );
+
+        let mitigation_result = resistances.apply(&damage_roll_result);
+        // 7 - 3 + 2 = 6
+        assert_eq!(mitigation_result.total, 6);
+        println!("{:?}", mitigation_result);
+    }
+
+    #[rstest]
+    fn damage_mitigation_multiple_effects(damage_roll_result: DamageRollResult) {
+        let mut resistances = DamageResistances {
+            effects: HashMap::new(),
+        };
+        resistances.effects.insert(
+            DamageType::Slashing,
+            vec![
+                DamageMitigationEffect {
+                    source: ModifierSource::Item("Shield of Resistance".to_string()),
+                    operation: MitigationOperation::Resistance,
+                },
+                DamageMitigationEffect {
+                    source: ModifierSource::Item("Shield of Flat Reduction".to_string()),
+                    operation: MitigationOperation::FlatReduction(3),
+                },
+            ],
+        );
+
+        let mitigation_result = resistances.apply(&damage_roll_result);
+        // Slashing: 7 - 3 / 2 = 2
+        // 2 Slashing + 2 Fire = 4
+        assert_eq!(mitigation_result.total, 4);
+        println!("{:?}", mitigation_result);
+    }
+
+    #[rstest]
+    fn damage_mitigation_multiple_types(damage_roll_result: DamageRollResult) {
+        let mut resistances = DamageResistances {
+            effects: HashMap::new(),
+        };
+        resistances.effects.insert(
+            DamageType::Slashing,
+            vec![DamageMitigationEffect {
+                source: ModifierSource::Item("Shield of Resistance".to_string()),
+                operation: MitigationOperation::Resistance,
+            }],
+        );
+        resistances.effects.insert(
+            DamageType::Fire,
+            vec![DamageMitigationEffect {
+                source: ModifierSource::Item("Ring of Fire Immunity".to_string()),
+                operation: MitigationOperation::Immunity,
+            }],
+        );
+
+        let mitigation_result = resistances.apply(&damage_roll_result);
+        // Slashing: 7 / 2 = 3.5 -> round down to 3
+        // Fire: 2 * 0 = 0
+        assert_eq!(mitigation_result.total, 3);
+        println!("{:?}", mitigation_result);
+    }
+
+    #[rstest]
+    fn damage_mitigation_immunity_priority(damage_roll_result: DamageRollResult) {
+        let mut resistances = DamageResistances {
+            effects: HashMap::new(),
+        };
+        resistances.effects.insert(
+            DamageType::Slashing,
+            vec![
+                DamageMitigationEffect {
+                    source: ModifierSource::Item("Shield of Resistance".to_string()),
+                    operation: MitigationOperation::Resistance,
+                },
+                DamageMitigationEffect {
+                    source: ModifierSource::Spell("Curse of Slashing".to_string()),
+                    operation: MitigationOperation::Vulnerability,
+                },
+                DamageMitigationEffect {
+                    source: ModifierSource::Item("Shield of Slashing Immunity".to_string()),
+                    operation: MitigationOperation::Immunity,
+                },
+            ],
+        );
+
+        let mitigation_result = resistances.apply(&damage_roll_result);
+        // Slashing immunity takes priority
+        println!("{:?}", mitigation_result);
+        // 7 - 0 = 0 slashing
+        // 0 slashing + 2 fire = 2
+        assert_eq!(mitigation_result.total, 2);
+        assert_eq!(mitigation_result.components.len(), 2);
+    }
+
+    #[fixture]
+    fn damage_roll() -> DamageRoll {
         let mut modifiers = ModifierSet::new();
         modifiers.add_modifier(ModifierSource::Ability(Ability::Strength), 2);
-        let damage_roll = DamageRoll {
+        DamageRoll {
             label: "Sword of Flame".to_string(),
             primary: DamageComponent {
                 dice_roll: DiceSetRoll::new(
@@ -308,317 +482,36 @@ mod tests {
                 ),
                 damage_type: DamageType::Fire,
             }],
-        };
-
-        let result = damage_roll.roll();
-        assert_eq!(result.components.len(), 2);
-        // 2d6 + 1d4 + 2 (str mod)
-        // Min roll: 2 + 1 + 2 = 5
-        // Max roll: 12 + 4 + 2 = 18
-        assert!(result.total >= 5 && result.total <= 18);
-        result.display();
+        }
     }
 
-    #[test]
-    fn damage_mitigation_resistance() {
-        let roll_result = DamageRollResult {
+    #[fixture]
+    fn damage_roll_result() -> DamageRollResult {
+        DamageRollResult {
             label: "Sword of Flame".to_string(),
             components: vec![
-                create_damage_component_result(
-                    DamageType::Slashing,
-                    vec![3, 4],
-                    DieSize::D6,
-                    "Base damage".to_string(),
-                ),
-                create_damage_component_result(
-                    DamageType::Fire,
-                    vec![2],
-                    DieSize::D4,
-                    "Enchant".to_string(),
-                ),
-            ],
-            total: 9,
-        };
-
-        let mut resistances = DamageResistances {
-            effects: HashMap::new(),
-        };
-        resistances.effects.insert(
-            DamageType::Slashing,
-            vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Shield of Resistance".to_string()),
-                operation: MitigationOperation::Resistance,
-            }],
-        );
-
-        let mitigation_result = resistances.apply(&roll_result);
-        // 7 / 2 + 2 = 3.5 + 2 = 5.5 -> round down to 5
-        assert_eq!(mitigation_result.total, 5);
-        println!("{:?}", mitigation_result);
-    }
-
-    #[test]
-    fn damage_mitigation_immunity() {
-        let roll_result = DamageRollResult {
-            label: "Sword of Flame".to_string(),
-            components: vec![
-                create_damage_component_result(
-                    DamageType::Slashing,
-                    vec![3, 4],
-                    DieSize::D6,
-                    "Base damage".to_string(),
-                ),
-                create_damage_component_result(
-                    DamageType::Fire,
-                    vec![2],
-                    DieSize::D4,
-                    "Enchant".to_string(),
-                ),
-            ],
-            total: 9,
-        };
-
-        let mut resistances = DamageResistances {
-            effects: HashMap::new(),
-        };
-        resistances.effects.insert(
-            DamageType::Fire,
-            vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Ring of Fire Immunity".to_string()),
-                operation: MitigationOperation::Immunity,
-            }],
-        );
-
-        let mitigation_result = resistances.apply(&roll_result);
-        // 7 + 0 = 7
-        assert_eq!(mitigation_result.total, 7);
-        println!("{:?}", mitigation_result);
-    }
-
-    #[test]
-    fn damage_mitigation_vulnerability() {
-        let roll_result = DamageRollResult {
-            label: "Sword of Flame".to_string(),
-            components: vec![
-                create_damage_component_result(
-                    DamageType::Slashing,
-                    vec![3, 4],
-                    DieSize::D6,
-                    "Base damage".to_string(),
-                ),
-                create_damage_component_result(
-                    DamageType::Fire,
-                    vec![2],
-                    DieSize::D4,
-                    "Enchant".to_string(),
-                ),
-            ],
-            total: 9,
-        };
-
-        let mut resistances = DamageResistances {
-            effects: HashMap::new(),
-        };
-        resistances.effects.insert(
-            DamageType::Slashing,
-            vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Shield of Vulnerability".to_string()),
-                operation: MitigationOperation::Vulnerability,
-            }],
-        );
-
-        let mitigation_result = resistances.apply(&roll_result);
-        // 7 * 2 + 2 = 16
-        assert_eq!(mitigation_result.total, 16);
-        println!("{:?}", mitigation_result);
-    }
-
-    #[test]
-    fn damage_mitigation_flat_reduction() {
-        let roll_result = DamageRollResult {
-            label: "Sword of Flame".to_string(),
-            components: vec![
-                create_damage_component_result(
-                    DamageType::Slashing,
-                    vec![3, 4],
-                    DieSize::D6,
-                    "Base damage".to_string(),
-                ),
-                create_damage_component_result(
-                    DamageType::Fire,
-                    vec![2],
-                    DieSize::D4,
-                    "Enchant".to_string(),
-                ),
-            ],
-            total: 9,
-        };
-
-        let mut resistances = DamageResistances {
-            effects: HashMap::new(),
-        };
-        resistances.effects.insert(
-            DamageType::Slashing,
-            vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Shield of Flat Reduction".to_string()),
-                operation: MitigationOperation::FlatReduction(3),
-            }],
-        );
-
-        let mitigation_result = resistances.apply(&roll_result);
-        // 7 - 3 + 2 = 6
-        assert_eq!(mitigation_result.total, 6);
-        println!("{:?}", mitigation_result);
-    }
-
-    #[test]
-    fn damage_mitigation_multiple_effects() {
-        let roll_result = DamageRollResult {
-            label: "Sword of Flame".to_string(),
-            components: vec![
-                create_damage_component_result(
-                    DamageType::Slashing,
-                    vec![3, 4],
-                    DieSize::D6,
-                    "Base damage".to_string(),
-                ),
-                create_damage_component_result(
-                    DamageType::Fire,
-                    vec![2],
-                    DieSize::D4,
-                    "Enchant".to_string(),
-                ),
-            ],
-            total: 9,
-        };
-
-        let mut resistances = DamageResistances {
-            effects: HashMap::new(),
-        };
-        resistances.effects.insert(
-            DamageType::Slashing,
-            vec![
-                DamageMitigationEffect {
-                    source: ModifierSource::Item("Shield of Resistance".to_string()),
-                    operation: MitigationOperation::Resistance,
+                DamageComponentResult {
+                    damage_type: DamageType::Slashing,
+                    result: DiceSetRollResult {
+                        label: "Base damage".to_string(),
+                        rolls: vec![3, 4],
+                        die_size: DieSize::D6,
+                        modifiers: ModifierSet::new(),
+                        subtotal: 7,
+                    },
                 },
-                DamageMitigationEffect {
-                    source: ModifierSource::Item("Shield of Flat Reduction".to_string()),
-                    operation: MitigationOperation::FlatReduction(3),
+                DamageComponentResult {
+                    damage_type: DamageType::Fire,
+                    result: DiceSetRollResult {
+                        label: "Fire Enchant".to_string(),
+                        rolls: vec![2],
+                        die_size: DieSize::D4,
+                        modifiers: ModifierSet::new(),
+                        subtotal: 2,
+                    },
                 },
             ],
-        );
-
-        let mitigation_result = resistances.apply(&roll_result);
-        // Slashing: 7 - 3 / 2 = 2
-        // 2 Slashing + 2 Fire = 4
-        assert_eq!(mitigation_result.total, 4);
-        println!("{:?}", mitigation_result);
-    }
-
-    #[test]
-    fn damage_mitigation_multiple_types() {
-        let roll_result = DamageRollResult {
-            label: "Sword of Flame".to_string(),
-            components: vec![
-                create_damage_component_result(
-                    DamageType::Slashing,
-                    vec![3, 4],
-                    DieSize::D6,
-                    "Base damage".to_string(),
-                ),
-                create_damage_component_result(
-                    DamageType::Fire,
-                    vec![2],
-                    DieSize::D4,
-                    "Enchant".to_string(),
-                ),
-            ],
             total: 9,
-        };
-
-        let mut resistances = DamageResistances {
-            effects: HashMap::new(),
-        };
-        resistances.effects.insert(
-            DamageType::Slashing,
-            vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Shield of Resistance".to_string()),
-                operation: MitigationOperation::Resistance,
-            }],
-        );
-        resistances.effects.insert(
-            DamageType::Fire,
-            vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Ring of Fire Immunity".to_string()),
-                operation: MitigationOperation::Immunity,
-            }],
-        );
-
-        let mitigation_result = resistances.apply(&roll_result);
-        // Slashing: 7 / 2 = 3.5 -> round down to 3
-        // Fire: 2 * 0 = 0
-        assert_eq!(mitigation_result.total, 3);
-        println!("{:?}", mitigation_result);
-    }
-
-    #[test]
-    fn damage_mitigation_immunity_priority() {
-        let roll_result = DamageRollResult {
-            label: "Sword".to_string(),
-            components: vec![create_damage_component_result(
-                DamageType::Slashing,
-                vec![3, 4],
-                DieSize::D6,
-                "Base damage".to_string(),
-            )],
-            total: 7,
-        };
-
-        let mut resistances = DamageResistances {
-            effects: HashMap::new(),
-        };
-        resistances.effects.insert(
-            DamageType::Slashing,
-            vec![
-                DamageMitigationEffect {
-                    source: ModifierSource::Item("Shield of Resistance".to_string()),
-                    operation: MitigationOperation::Resistance,
-                },
-                DamageMitigationEffect {
-                    source: ModifierSource::Spell("Curse of Slashing".to_string()),
-                    operation: MitigationOperation::Vulnerability,
-                },
-                DamageMitigationEffect {
-                    source: ModifierSource::Item("Shield of Slashing Immunity".to_string()),
-                    operation: MitigationOperation::Immunity,
-                },
-            ],
-        );
-
-        let mitigation_result = resistances.apply(&roll_result);
-        // Slashing immunity takes priority
-        println!("{:?}", mitigation_result);
-        assert_eq!(mitigation_result.total, 0);
-        assert_eq!(mitigation_result.components.len(), 1);
-    }
-
-    fn create_damage_component_result(
-        damage_type: DamageType,
-        rolls: Vec<u32>,
-        die_size: DieSize,
-        label: String,
-    ) -> DamageComponentResult {
-        let total = rolls.iter().sum::<u32>() as i32;
-        DamageComponentResult {
-            damage_type,
-            result: DiceSetRollResult {
-                label,
-                rolls,
-                die_size,
-                modifiers: ModifierSet::new(),
-                subtotal: total,
-            },
         }
     }
 }

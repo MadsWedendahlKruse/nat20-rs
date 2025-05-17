@@ -117,21 +117,13 @@ impl Armor {
 
 #[cfg(test)]
 mod tests {
-    use crate::item::{equipment::equipment::EquipmentType, item::ItemRarity};
+    use crate::test_utils::fixtures;
 
     use super::*;
 
     #[test]
-    fn clothing() {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Clothes".to_string(),
-            "A test clothing item.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::Armor,
-        );
-        let armor = Armor::clothing(equipment);
+    fn clothing_stats() {
+        let armor = fixtures::armor::clothing();
         assert_eq!(armor.armor_type, ArmorType::Clothing);
         assert_eq!(armor.armor_class.total(), 10);
         assert_eq!(armor.max_dexterity_bonus, i32::MAX);
@@ -139,16 +131,8 @@ mod tests {
     }
 
     #[test]
-    fn light_armor() {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Leather Armor".to_string(),
-            "A test light armor item.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::Armor,
-        );
-        let armor = Armor::light(equipment, 12);
+    fn light_armor_stats() {
+        let armor = fixtures::armor::light_armor();
         assert_eq!(armor.armor_type, ArmorType::Light);
         assert_eq!(armor.armor_class.total(), 12);
         assert_eq!(armor.max_dexterity_bonus, i32::MAX);
@@ -156,16 +140,8 @@ mod tests {
     }
 
     #[test]
-    fn medium_armor() {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Chain Shirt".to_string(),
-            "A test medium armor item.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::Armor,
-        );
-        let armor = Armor::medium(equipment, 14, false);
+    fn medium_armor_stats() {
+        let armor = fixtures::armor::medium_armor();
         assert_eq!(armor.armor_type, ArmorType::Medium);
         assert_eq!(armor.armor_class.total(), 14);
         assert_eq!(armor.max_dexterity_bonus, 2);
@@ -173,16 +149,8 @@ mod tests {
     }
 
     #[test]
-    fn heavy_armor() {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Plate Armor".to_string(),
-            "A test heavy armor item.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::Armor,
-        );
-        let armor = Armor::heavy(equipment, 18);
+    fn heavy_armor_stats() {
+        let armor = fixtures::armor::heavy_armor();
         assert_eq!(armor.armor_type, ArmorType::Heavy);
         assert_eq!(armor.armor_class.total(), 18);
         assert_eq!(armor.max_dexterity_bonus, 0);

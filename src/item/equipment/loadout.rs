@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::combat::action::CombatAction;
 use crate::creature::character::Character;
 use crate::item::equipment::armor::Armor;
 use crate::item::equipment::equipment::*;
@@ -7,7 +8,7 @@ use crate::item::equipment::weapon::{Weapon, WeaponProperties, WeaponType};
 use crate::stats::d20_check::{execute_d20_check, D20CheckResult};
 use crate::stats::modifier::{ModifierSet, ModifierSource};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TryEquipError {
     InvalidSlot,
     SlotOccupied,
@@ -151,12 +152,12 @@ impl Loadout {
     pub fn attack_roll(
         &self,
         character: &Character,
-        weapon_type: WeaponType,
+        weapon_type: &WeaponType,
         hand: HandSlot,
     ) -> D20CheckResult {
         // TODO: Unarmed attacks
         let attack_roll = self
-            .weapon_in_hand(&weapon_type, hand)
+            .weapon_in_hand(weapon_type, hand)
             .unwrap()
             .attack_roll(character);
 
@@ -167,5 +168,226 @@ impl Loadout {
             |hook, character, check| (hook.pre_attack_roll)(character, check),
             |hook, character, result| (hook.post_attack_roll)(character, result),
         )
+    }
+
+    pub fn available_actions(&self) -> Vec<CombatAction> {
+        let mut actions = Vec::new();
+
+        for (hand, weapon) in self.melee_weapons.iter() {
+            if let Some(weapon) = weapon {
+                actions.push(CombatAction::WeaponAttack {
+                    weapon_type: weapon.weapon_type.clone(),
+                    hand: *hand,
+                });
+            }
+        }
+
+        for (hand, weapon) in self.ranged_weapons.iter() {
+            if let Some(weapon) = weapon {
+                actions.push(CombatAction::WeaponAttack {
+                    weapon_type: weapon.weapon_type.clone(),
+                    hand: *hand,
+                });
+            }
+        }
+
+        actions
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test_utils::fixtures;
+
+    use super::*;
+
+    #[test]
+    fn empty_loadout() {
+        let loadout = Loadout::new();
+        assert!(loadout.armor.is_none());
+        assert!(loadout.melee_weapons.is_empty());
+        assert!(loadout.ranged_weapons.is_empty());
+        assert!(loadout.equipment.is_empty());
+    }
+
+    #[test]
+    fn equip_unequip_armor() {
+        let mut loadout = Loadout::new();
+
+        let armor = fixtures::armor::heavy_armor();
+        let unequipped = loadout.equip_armor(armor);
+        assert!(unequipped.is_none());
+        assert!(loadout.armor.is_some());
+
+        let unequipped = loadout.unequip_armor();
+        assert!(unequipped.is_some());
+        assert!(loadout.armor.is_none());
+
+        let unequipped = loadout.unequip_armor();
+        assert!(unequipped.is_none());
+        assert!(loadout.armor.is_none());
+    }
+
+    #[test]
+    fn equip_armor_twice() {
+        let mut loadout = Loadout::new();
+
+        let armor1 = fixtures::armor::heavy_armor();
+        let unequipped1 = loadout.equip_armor(armor1);
+        assert!(unequipped1.is_none());
+        assert!(loadout.armor.is_some());
+
+        let armor2 = fixtures::armor::medium_armor();
+        let unequipped2 = loadout.equip_armor(armor2);
+        assert!(unequipped2.is_some());
+        assert!(loadout.armor.is_some());
+    }
+
+    #[test]
+    fn equip_unequip_item() {
+        let mut loadout = Loadout::new();
+
+        let item = fixtures::equipment::boots();
+        let unequipped = loadout.equip_item(GeneralEquipmentSlot::Boots, item);
+        assert!(unequipped.is_ok());
+        assert!(loadout.item_in_slot(GeneralEquipmentSlot::Boots).is_some());
+
+        let unequipped = loadout.unequip_item(GeneralEquipmentSlot::Boots);
+        assert!(unequipped.is_some());
+        assert!(loadout.item_in_slot(GeneralEquipmentSlot::Boots).is_none());
+
+        let unequipped = loadout.unequip_item(GeneralEquipmentSlot::Boots);
+        assert!(unequipped.is_none());
+        assert!(loadout.item_in_slot(GeneralEquipmentSlot::Boots).is_none());
+    }
+
+    #[test]
+    fn equip_item_twice() {
+        let mut loadout = Loadout::new();
+
+        let item1 = fixtures::equipment::boots();
+        let unequipped1 = loadout.equip_item(GeneralEquipmentSlot::Boots, item1);
+        assert!(unequipped1.unwrap().is_none());
+        assert!(loadout.item_in_slot(GeneralEquipmentSlot::Boots).is_some());
+
+        let item2 = fixtures::equipment::boots();
+        let unequipped2 = loadout.equip_item(GeneralEquipmentSlot::Boots, item2);
+        assert!(unequipped2.unwrap().is_some());
+        assert!(loadout.item_in_slot(GeneralEquipmentSlot::Boots).is_some());
+    }
+
+    #[test]
+    fn equip_unequip_weapon() {
+        let mut loadout = Loadout::new();
+
+        let weapon = fixtures::weapons::dagger_light();
+        let unequipped = loadout.equip_weapon(weapon, HandSlot::Main);
+        assert!(unequipped.is_ok());
+        assert!(loadout
+            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .is_some());
+
+        let unequipped = loadout.unequip_weapon(&WeaponType::Melee, HandSlot::Main);
+        assert!(unequipped.is_some());
+        assert!(loadout
+            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .is_none());
+
+        let unequipped = loadout.unequip_weapon(&WeaponType::Melee, HandSlot::Main);
+        assert!(unequipped.is_none());
+        assert!(loadout
+            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .is_none());
+    }
+
+    #[test]
+    fn equip_weapon_twice() {
+        let mut loadout = Loadout::new();
+
+        let weapon1 = fixtures::weapons::dagger_light();
+        let unequipped1 = loadout.equip_weapon(weapon1, HandSlot::Main);
+        assert_eq!(unequipped1.unwrap().len(), 0);
+        assert!(loadout
+            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .is_some());
+
+        let weapon2 = fixtures::weapons::dagger_light();
+        let unequipped2 = loadout.equip_weapon(weapon2, HandSlot::Main);
+        assert_eq!(unequipped2.unwrap().len(), 1);
+        assert!(loadout
+            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .is_some());
+    }
+
+    #[test]
+    fn equip_two_handed_weapon_should_unequip_other_hand() {
+        let mut loadout = Loadout::new();
+
+        let weapon_main_hand = fixtures::weapons::dagger_light();
+        let weapon_off_hand = fixtures::weapons::dagger_light();
+        for (hand, weapon) in HashMap::from([
+            (HandSlot::Main, weapon_main_hand),
+            (HandSlot::Off, weapon_off_hand),
+        ]) {
+            let unequipped = loadout.equip_weapon(weapon, hand);
+            assert!(unequipped.is_ok());
+            assert!(loadout.weapon_in_hand(&WeaponType::Melee, hand).is_some());
+        }
+
+        let weapon_two_handed = fixtures::weapons::greatsword_two_handed();
+        let unequipped = loadout.equip_weapon(weapon_two_handed, HandSlot::Main);
+        println!("{:?}", unequipped);
+        assert!(unequipped.is_ok());
+        assert_eq!(unequipped.unwrap().len(), 2);
+        assert!(loadout
+            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .is_some());
+        assert!(loadout
+            .weapon_in_hand(&WeaponType::Melee, HandSlot::Off)
+            .is_none());
+        assert!(loadout
+            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .unwrap()
+            .has_property(&WeaponProperties::TwoHanded));
+    }
+
+    #[test]
+    fn equip_in_wrong_slot() {
+        let mut loadout = Loadout::new();
+
+        let item = fixtures::equipment::boots();
+        let result = loadout.equip_item(GeneralEquipmentSlot::Headwear, item);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), TryEquipError::InvalidSlot);
+    }
+
+    #[test]
+    fn available_actions_no_weapons() {
+        // TODO: Should return unarmed attack
+        let loadout = Loadout::new();
+        let actions = loadout.available_actions();
+        assert_eq!(actions.len(), 0);
+    }
+
+    #[test]
+    fn available_actions_melee_and_ranged_weapon() {
+        let mut loadout = Loadout::new();
+
+        let weapon1 = fixtures::weapons::dagger_light();
+        loadout.equip_weapon(weapon1, HandSlot::Main).unwrap();
+
+        let weapon2 = fixtures::weapons::longbow();
+        loadout.equip_weapon(weapon2, HandSlot::Main).unwrap();
+
+        let actions = loadout.available_actions();
+        assert_eq!(actions.len(), 2);
+        assert!(actions.contains(&CombatAction::WeaponAttack {
+            weapon_type: WeaponType::Melee,
+            hand: HandSlot::Main,
+        }));
+        assert!(actions.contains(&CombatAction::WeaponAttack {
+            weapon_type: WeaponType::Ranged,
+            hand: HandSlot::Main,
+        }));
     }
 }

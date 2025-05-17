@@ -73,7 +73,7 @@ mod tests {
         let attack_roll =
             character
                 .loadout()
-                .attack_roll(&character, WeaponType::Melee, HandSlot::Main);
+                .attack_roll(&character, &WeaponType::Melee, HandSlot::Main);
         assert_eq!(attack_roll.advantage_tracker.roll_mode(), RollMode::Normal);
 
         // Advantage after equipping the ring
@@ -81,7 +81,7 @@ mod tests {
         let attack_roll =
             character
                 .loadout()
-                .attack_roll(&character, WeaponType::Melee, HandSlot::Main);
+                .attack_roll(&character, &WeaponType::Melee, HandSlot::Main);
         assert_eq!(
             attack_roll.advantage_tracker.roll_mode(),
             RollMode::Advantage
@@ -93,7 +93,7 @@ mod tests {
         let attack_roll =
             character
                 .loadout()
-                .attack_roll(&character, WeaponType::Melee, HandSlot::Main);
+                .attack_roll(&character, &WeaponType::Melee, HandSlot::Main);
         assert_eq!(attack_roll.advantage_tracker.roll_mode(), RollMode::Normal);
         println!("{:?}", attack_roll);
     }

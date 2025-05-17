@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ItemRarity {
     Common,
     Uncommon,
@@ -7,7 +7,7 @@ pub enum ItemRarity {
     Legendary,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Item {
     pub name: String,
     pub description: String,

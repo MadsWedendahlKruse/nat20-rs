@@ -21,8 +21,8 @@ mod tests {
         let character = Character::default();
 
         assert_eq!(character.name, "John Doe");
-        assert_eq!(character.max_hp, 10);
-        assert_eq!(character.current_hp, 10);
+        assert_eq!(character.max_hp(), 10);
+        assert_eq!(character.hp(), 10);
     }
 
     #[test]
@@ -51,16 +51,12 @@ mod tests {
     }
 
     #[test]
-    fn character_skill_modifier() {
-
-    }
+    fn character_skill_modifier() {}
 
     #[test]
     fn character_take_damage() {
         let mut character = Character::default();
-        character.max_hp = 20;
-        character.current_hp = 20;
-        assert_eq!(character.current_hp, 20);
+        assert_eq!(character.hp(), 20);
 
         character.resistances_mut().add_effect(
             DamageType::Fire,
@@ -88,14 +84,12 @@ mod tests {
         character.take_damage(&damage_roll_result);
         // Fire resistance halves the damage
         // 20 - (32 / 2) = 4
-        assert_eq!(character.current_hp, 4);
+        assert_eq!(character.hp(), 4);
     }
 
     #[test]
     fn character_heal() {
         let mut character = Character::default();
-        character.max_hp = 20;
-        character.current_hp = 20;
 
         let damage_roll_result = DamageRollResult {
             label: "Arrow".to_string(),
@@ -114,7 +108,7 @@ mod tests {
 
         character.take_damage(&damage_roll_result);
         character.heal(5);
-        assert_eq!(character.current_hp, 15);
+        assert_eq!(character.hp(), 15);
     }
 
     #[test]
@@ -140,49 +134,5 @@ mod tests {
 
         character.take_damage(&damage_roll_result);
         assert!(!character.is_alive());
-    }
-
-    #[test]
-    fn character_saving_throw_modifier() {
-        // TODO: Move test to SavingThrowSet
-
-        // let mut abilities = HashMap::new();
-        // let mut strength = AbilityScore::new(Ability::Strength, 16);
-        // strength
-        //     .modifiers
-        //     .add_modifier(ModifierSource::Item("Ring of Strength".to_string()), 2);
-        // abilities.insert(Ability::Strength, strength);
-
-        // let mut saving_throws = HashMap::new();
-        // let mut strength_saving_throw = D20Check::new(Proficiency::Proficient);
-        // strength_saving_throw.modifiers.add_modifier(
-        //     ModifierSource::Item("Strength Saving Throw Item".to_string()),
-        //     3,
-        // );
-        // saving_throws.insert(Ability::Strength, strength_saving_throw);
-
-        // let mut class_levels = HashMap::new();
-        // class_levels.insert(CharacterClass::Fighter, 5);
-
-        // let character = Character::new(
-        //     "Thorin",
-        //     class_levels,
-        //     20,
-        //     abilities,
-        //     HashMap::new(),
-        //     saving_throws,
-        //     DamageResistances::new(),
-        // );
-
-        // // 4 (ability) + 3 (item) + 3 (proficiency) = 10
-        // assert_eq!(
-        //     character.saving_throw_modifier(Ability::Strength).total(),
-        //     10
-        // );
-        // println!(
-        //     "Strength Saving Throw Modifier: {} = {:?}",
-        //     character.saving_throw_modifier(Ability::Strength).total(),
-        //     character.saving_throw_modifier(Ability::Strength)
-        // );
     }
 }
