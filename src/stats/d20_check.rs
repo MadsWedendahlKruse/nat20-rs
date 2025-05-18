@@ -4,6 +4,7 @@ use crate::stats::proficiency::Proficiency;
 
 use rand::Rng;
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::Hash;
 use strum::IntoEnumIterator;
 
@@ -71,6 +72,20 @@ pub struct D20Check {
     modifiers: ModifierSet,
     proficiency: Proficiency,
     advantage_tracker: AdvantageTracker,
+}
+
+impl fmt::Display for D20Check {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "1d20")?;
+        if self.proficiency != Proficiency::None {
+            write!(f, " + {}", self.proficiency)?;
+        }
+        if self.modifiers.is_empty() {
+            return Ok(());
+        }
+        write!(f, " {}", self.modifiers)?;
+        Ok(())
+    }
 }
 
 impl D20Check {
@@ -162,6 +177,32 @@ pub struct D20CheckResult {
     pub total: u32,
     pub is_crit: bool,
     pub is_crit_fail: bool,
+}
+
+impl fmt::Display for D20CheckResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} (1d20)", self.selected_roll)?;
+        if self.advantage_tracker.roll_mode() != RollMode::Normal {
+            write!(
+                f,
+                " ({}, {}, {:?})",
+                self.rolls[0],
+                self.rolls[1],
+                self.advantage_tracker.roll_mode()
+            )?;
+        }
+        if self.is_crit {
+            write!(f, " (Critical Success!)")?;
+        }
+        if self.is_crit_fail {
+            write!(f, " (Critical Failure!)")?;
+        }
+        if !self.modifier_breakdown.is_empty() {
+            write!(f, " {}", self.modifier_breakdown)?;
+        }
+        write!(f, " = {}", self.total)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -268,6 +309,7 @@ mod tests {
         check
             .modifiers
             .add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
+        println!("Check: {}", check);
         let result = check.perform(2);
 
         // 1d20 + 2 + 2
@@ -276,7 +318,7 @@ mod tests {
         assert!(result.total >= 5 && result.total <= 24);
         assert_eq!(result.rolls.len(), 1);
         assert_eq!(result.advantage_tracker.roll_mode(), RollMode::Normal);
-        println!("{:?}", result);
+        println!("Result: {}", result);
     }
 
     #[test]
@@ -302,7 +344,7 @@ mod tests {
             result.selected_roll,
             result.rolls.iter().max().unwrap().clone()
         );
-        println!("{:?}", result);
+        println!("Result: {}", result);
     }
 
     #[test]
@@ -325,7 +367,7 @@ mod tests {
             result.selected_roll,
             result.rolls.iter().min().unwrap().clone()
         );
-        println!("{:?}", result);
+        println!("Result: {}", result);
     }
 
     #[test]
@@ -347,6 +389,23 @@ mod tests {
         assert!(result.total >= 9 && result.total <= 28);
         assert_eq!(result.rolls.len(), 1);
         assert_eq!(result.advantage_tracker.roll_mode(), RollMode::Normal);
-        println!("{:?}", result);
+        println!("Result: {}", result);
+    }
+
+    #[test]
+    fn d20_check_critical_success() {
+        let mut check = D20Check::new(Proficiency::Proficient);
+        check
+            .modifiers
+            .add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
+        let mut result = check.perform(0);
+        while result.selected_roll != 20 {
+            // Simulate rolling again until we get a critical success
+            result = check.perform(0);
+        }
+
+        // Simulate a critical success by setting the selected roll to 20
+        assert!(result.is_crit);
+        println!("Result: {}", result);
     }
 }

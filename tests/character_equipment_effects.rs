@@ -67,7 +67,7 @@ mod tests {
         );
 
         let mut character = Character::default();
-        character.equip_weapon(weapon, HandSlot::Main);
+        let _ = character.equip_weapon(weapon, HandSlot::Main);
 
         // No advantage before equipping the ring
         let attack_roll =
@@ -77,7 +77,7 @@ mod tests {
         assert_eq!(attack_roll.advantage_tracker.roll_mode(), RollMode::Normal);
 
         // Advantage after equipping the ring
-        character.equip_item(GeneralEquipmentSlot::Ring(0), ring);
+        let _ = character.equip_item(GeneralEquipmentSlot::Ring(0), ring);
         let attack_roll =
             character
                 .loadout()

@@ -17,7 +17,7 @@ mod tests {
         let mut hero = fixtures::characters::hero();
         let mut goblin_warrior = fixtures::characters::goblin_warrior();
 
-        let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
+        let engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
 
         let initiative = engine.initiative_order();
         println!("=== Initiative Order ===");
@@ -40,7 +40,7 @@ mod tests {
         let hero_id = hero.id();
         let mut goblin_warrior = fixtures::characters::goblin_warrior();
 
-        let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
+        let engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
 
         // Check that hero is the current character (he has massive initiative for this test)
         assert!(engine.current_character().id() == hero_id);
@@ -97,12 +97,14 @@ mod tests {
         assert!(result.is_ok());
         let action_result = result.unwrap();
         println!("=== Action Result ===");
-        println!("{:?}", action_result);
+        println!("{}", action_result);
 
         let weapon_attack_result = match action_result {
             nat20_rs::combat::action::CombatActionResult::WeaponAttack {
                 target,
+                target_armor_class: _,
                 attack_roll_result,
+                damage_roll_result: _,
                 damage_result,
             } => {
                 assert_eq!(target, goblin_warrior_id);
@@ -117,7 +119,7 @@ mod tests {
         };
         assert_eq!(
             goblin_warrior.hp(),
-            goblin_warrior.max_hp() - weapon_attack_result.total
+            (goblin_warrior.max_hp() - weapon_attack_result.total).max(0)
         );
     }
 }

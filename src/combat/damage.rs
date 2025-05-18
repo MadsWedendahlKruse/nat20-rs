@@ -2,7 +2,7 @@ use crate::dice::dice::*;
 use crate::stats::modifier::{ModifierSet, ModifierSource};
 
 use std::collections::HashMap;
-use std::fmt;
+use std::fmt::{self};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DamageType {
@@ -44,10 +44,33 @@ impl DamageComponent {
     }
 }
 
-#[derive(Debug)]
+impl fmt::Display for DamageComponent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.dice_roll, self.damage_type)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct DamageComponentResult {
     pub result: DiceSetRollResult,
     pub damage_type: DamageType,
+}
+
+impl fmt::Display for DamageComponentResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {} ", self.result.subtotal, self.damage_type)?;
+        write!(
+            f,
+            "({} ({}d{})",
+            self.result.rolls.iter().sum::<u32>(),
+            self.result.rolls.len(),
+            self.result.die_size as u32,
+        )?;
+        if !self.result.modifiers.is_empty() {
+            write!(f, " {}", self.result.modifiers)?;
+        }
+        write!(f, ")")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -96,6 +119,16 @@ impl DamageRoll {
     }
 }
 
+impl fmt::Display for DamageRoll {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({})", self.primary)?;
+        for comp in &self.bonus {
+            write!(f, " + ({})", comp)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct DamageRollResult {
     pub label: String,
@@ -103,22 +136,13 @@ pub struct DamageRollResult {
     pub total: i32,
 }
 
-impl DamageRollResult {
-    fn display(&self) {
-        println!("== {} ==", self.label);
-        for comp in &self.components {
-            println!(
-                "{}: {} ({}d{}) + {:?} = {} {}",
-                comp.result.label,
-                comp.result.rolls.iter().sum::<u32>(),
-                comp.result.rolls.len(),
-                comp.result.die_size as u32,
-                comp.result.modifiers,
-                comp.result.subtotal,
-                comp.damage_type.to_string()
-            );
+impl fmt::Display for DamageRollResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.components[0])?;
+        for comp in &self.components[1..] {
+            write!(f, " + {}", comp)?;
         }
-        println!("Total Damage: {}", self.total);
+        write!(f, " = {}", self.total)
     }
 }
 
@@ -158,7 +182,7 @@ impl fmt::Display for MitigationOperation {
             MitigationOperation::Resistance => write!(f, "/ 2"),
             MitigationOperation::Vulnerability => write!(f, "* 2"),
             MitigationOperation::Immunity => write!(f, "* 0"),
-            MitigationOperation::FlatReduction(amount) => write!(f, "-{}", amount),
+            MitigationOperation::FlatReduction(amount) => write!(f, "- {}", amount),
         }
     }
 }
@@ -223,7 +247,7 @@ impl DamageResistances {
             total += value;
             components.push(DamageComponentMitigation {
                 damage_type: dtype,
-                original: comp.result.subtotal,
+                original: comp.result.clone(),
                 after_mods: value,
                 modifiers: applied_mods,
             });
@@ -236,25 +260,35 @@ impl DamageResistances {
 #[derive(Debug)]
 pub struct DamageComponentMitigation {
     pub damage_type: DamageType,
-    pub original: i32,
+    pub original: DiceSetRollResult,
     pub after_mods: i32,
+    /// Sorted by priority
     pub modifiers: Vec<DamageMitigationEffect>,
 }
 
 impl fmt::Display for DamageComponentMitigation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.original == self.after_mods {
-            return write!(f, "{}", self.original);
+        if self.original.subtotal == self.after_mods {
+            return write!(f, "{} {}", self.original.subtotal, self.damage_type);
         }
-        write!(f, "{}", self.after_mods)?;
-        for modif in &self.modifiers {
-            write!(
+        if self.after_mods == 0 {
+            return write!(
                 f,
-                " ({} {}) {:?}",
-                self.original, modif.operation, modif.source
-            )?;
+                "0 {} ({:?})",
+                self.damage_type,
+                MitigationOperation::Immunity
+            );
         }
-        return Ok(());
+        write!(f, "{} {} ", self.after_mods, self.damage_type)?;
+        let mut amount = self.original.subtotal.to_string();
+        for modifier in &self.modifiers {
+            let explanation = match modifier.operation {
+                MitigationOperation::FlatReduction(_) => format!("{}", modifier.source),
+                _ => format!("{:?}", modifier.operation),
+            };
+            amount = format!("({} {} ({}))", amount, modifier.operation, explanation);
+        }
+        write!(f, "{}", amount)
     }
 }
 
@@ -266,11 +300,11 @@ pub struct DamageMitigationResult {
 
 impl fmt::Display for DamageMitigationResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Damage Mitigation Result:\n")?;
-        for comp in &self.components {
-            write!(f, "{}", comp)?;
+        write!(f, "{}", self.components[0])?;
+        for comp in &self.components[1..] {
+            write!(f, " + {}", comp)?;
         }
-        write!(f, "Total Damage Mitigation: {}", self.total)
+        write!(f, " = {}", self.total)
     }
 }
 
@@ -284,13 +318,14 @@ mod tests {
 
     #[rstest]
     fn damage_roll_values(damage_roll: DamageRoll) {
+        println!("Roll: {}", damage_roll);
         let result = damage_roll.roll();
         assert_eq!(result.components.len(), 2);
         // 2d6 + 1d4 + 2 (str mod)
         // Min roll: 2 + 1 + 2 = 5
         // Max roll: 12 + 4 + 2 = 18
         assert!(result.total >= 5 && result.total <= 18);
-        result.display();
+        println!("Roll result:{}", result);
     }
 
     #[rstest]
@@ -309,7 +344,7 @@ mod tests {
         let mitigation_result = resistances.apply(&damage_roll_result);
         // 7 / 2 + 2 = 3.5 + 2 = 5.5 -> round down to 5
         assert_eq!(mitigation_result.total, 5);
-        println!("{:?}", mitigation_result);
+        println!("{}", mitigation_result);
     }
 
     #[rstest]
@@ -328,7 +363,7 @@ mod tests {
         let mitigation_result = resistances.apply(&damage_roll_result);
         // 7 + 0 = 7
         assert_eq!(mitigation_result.total, 7);
-        println!("{:?}", mitigation_result);
+        println!("{}", mitigation_result);
     }
 
     #[rstest]
@@ -347,7 +382,7 @@ mod tests {
         let mitigation_result = resistances.apply(&damage_roll_result);
         // 7 * 2 + 2 = 16
         assert_eq!(mitigation_result.total, 16);
-        println!("{:?}", mitigation_result);
+        println!("{}", mitigation_result);
     }
 
     #[rstest]
@@ -366,7 +401,7 @@ mod tests {
         let mitigation_result = resistances.apply(&damage_roll_result);
         // 7 - 3 + 2 = 6
         assert_eq!(mitigation_result.total, 6);
-        println!("{:?}", mitigation_result);
+        println!("{}", mitigation_result);
     }
 
     #[rstest]
@@ -392,7 +427,7 @@ mod tests {
         // Slashing: 7 - 3 / 2 = 2
         // 2 Slashing + 2 Fire = 4
         assert_eq!(mitigation_result.total, 4);
-        println!("{:?}", mitigation_result);
+        println!("{}", mitigation_result);
     }
 
     #[rstest]
@@ -419,7 +454,7 @@ mod tests {
         // Slashing: 7 / 2 = 3.5 -> round down to 3
         // Fire: 2 * 0 = 0
         assert_eq!(mitigation_result.total, 3);
-        println!("{:?}", mitigation_result);
+        println!("{}", mitigation_result);
     }
 
     #[rstest]
@@ -447,11 +482,37 @@ mod tests {
 
         let mitigation_result = resistances.apply(&damage_roll_result);
         // Slashing immunity takes priority
-        println!("{:?}", mitigation_result);
-        // 7 - 0 = 0 slashing
+        println!("{}", mitigation_result);
+        // 7 * 0 = 0 slashing
         // 0 slashing + 2 fire = 2
         assert_eq!(mitigation_result.total, 2);
         assert_eq!(mitigation_result.components.len(), 2);
+    }
+
+    #[rstest]
+    fn damage_mitigation_flat_reduction_and_resistance(damage_roll_result: DamageRollResult) {
+        let mut resistances = DamageResistances {
+            effects: HashMap::new(),
+        };
+        resistances.effects.insert(
+            DamageType::Slashing,
+            vec![
+                DamageMitigationEffect {
+                    source: ModifierSource::Item("Shield of Resistance".to_string()),
+                    operation: MitigationOperation::Resistance,
+                },
+                DamageMitigationEffect {
+                    source: ModifierSource::Item("Shield of Flat Reduction".to_string()),
+                    operation: MitigationOperation::FlatReduction(3),
+                },
+            ],
+        );
+
+        let mitigation_result = resistances.apply(&damage_roll_result);
+        // Slashing: (7 - 3) / 2 = 2
+        // 2 Slashing + 2 Fire = 4
+        assert_eq!(mitigation_result.total, 4);
+        println!("{}", mitigation_result);
     }
 
     #[fixture]

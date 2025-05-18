@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::combat::action::{CombatAction, CombatActionRequest, CombatActionResult};
-use crate::combat::damage;
 use crate::creature::character::Character;
 use crate::stats::d20_check::D20CheckResult;
 use crate::stats::skill::Skill;
@@ -96,7 +95,15 @@ impl<'c> CombatEngine<'c> {
         self.state = CombatState::ResolvingAction;
         // TODO: validate and resolve action
         // This is where you'd match on the action type and apply its logic
-        let result = match action {
+        let result = self.resolve_action(action);
+
+        // For now we just assume the action is resolved
+        self.state = CombatState::AwaitingAction;
+        Ok(result)
+    }
+
+    fn resolve_action(&mut self, action: CombatActionRequest) -> CombatActionResult {
+        match action {
             CombatActionRequest::WeaponAttack {
                 weapon_type,
                 hand,
@@ -104,28 +111,33 @@ impl<'c> CombatEngine<'c> {
             } => {
                 // Resolve the weapon attack action
                 let attacker = self.current_character();
-                let attack_roll = attacker
-                    .loadout()
-                    .attack_roll(&attacker, &weapon_type, hand);
+                let attack_roll_result =
+                    attacker
+                        .loadout()
+                        .attack_roll(&attacker, &weapon_type, hand);
                 let weapon = attacker
                     .loadout()
                     .weapon_in_hand(&weapon_type, hand)
                     .unwrap();
-                let damage_roll = weapon.damage_roll(&attacker, hand);
+                let damage_roll_result = weapon.damage_roll(&attacker, hand).roll();
 
                 let target_character = self.participants.get_mut(&target).unwrap();
                 let armor_class = target_character.loadout().armor_class(&target_character);
 
-                let damage_roll_result = if attack_roll.total >= (armor_class.total() as u32) {
-                    Some(target_character.take_damage(&damage_roll.roll()))
+                // TODO: Handle critical hits and misses
+
+                let damage_result = if attack_roll_result.total >= (armor_class.total() as u32) {
+                    Some(target_character.take_damage(&damage_roll_result))
                 } else {
                     None
                 };
 
                 CombatActionResult::WeaponAttack {
                     target: target_character.id(),
-                    attack_roll_result: attack_roll,
-                    damage_result: damage_roll_result,
+                    target_armor_class: armor_class,
+                    attack_roll_result,
+                    damage_roll_result,
+                    damage_result,
                 }
             }
 
@@ -134,10 +146,7 @@ impl<'c> CombatEngine<'c> {
             CombatActionRequest::Disengage => todo!(),
             CombatActionRequest::Help { target } => todo!(),
             CombatActionRequest::EndTurn => todo!(),
-        };
-        // For now we just assume the action is resolved
-        self.state = CombatState::AwaitingAction;
-        Ok(result)
+        }
     }
 
     pub fn end_turn(&mut self) {

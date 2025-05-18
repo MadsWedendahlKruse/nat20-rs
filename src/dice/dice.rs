@@ -1,6 +1,8 @@
+use std::fmt;
+
 use rand::Rng;
 
-use crate::stats::modifier::*;
+use crate::stats::modifier::ModifierSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DieSize {
@@ -61,13 +63,43 @@ impl DiceSetRoll {
     }
 }
 
-#[derive(Debug)]
+impl fmt::Display for DiceSetRoll {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.modifiers.is_empty() {
+            return write!(f, "{}d{}", self.dice.num_dice, self.dice.die_size as u32);
+        }
+        write!(
+            f,
+            "{}d{} {}",
+            self.dice.num_dice, self.dice.die_size as u32, self.modifiers
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct DiceSetRollResult {
     pub label: String,
     pub die_size: DieSize,
     pub rolls: Vec<u32>,
     pub modifiers: ModifierSet,
     pub subtotal: i32,
+}
+
+impl fmt::Display for DiceSetRollResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} ({}d{})",
+            self.rolls.iter().sum::<u32>(),
+            self.rolls.len(),
+            self.die_size as u32,
+        )?;
+        if self.modifiers.is_empty() {
+            write!(f, " = {}", self.subtotal)
+        } else {
+            write!(f, " {} = {}", self.modifiers, self.subtotal)
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -110,27 +142,19 @@ pub struct CompositeRollResult {
     pub total: i32,
 }
 
-impl CompositeRollResult {
-    pub fn display(&self) {
-        println!("== {} ==", self.label);
+impl fmt::Display for CompositeRollResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: ", self.label)?;
         for comp in &self.components {
-            println!(
-                "{}: {} ({}d{}) + {:?} = {}",
-                comp.label,
-                comp.rolls.iter().sum::<u32>(),
-                comp.rolls.len(),
-                comp.die_size as u32,
-                comp.modifiers,
-                comp.subtotal
-            );
+            write!(f, "{} ", comp)?;
         }
-        println!("Total: {}", self.total);
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::stats::ability::Ability;
+    use crate::stats::{ability::Ability, modifier::ModifierSource};
 
     use super::*;
 
@@ -146,6 +170,7 @@ mod tests {
             modifiers,
             label: "Test Dice".to_string(),
         };
+        println!("Rolling:\n{}", dice);
         let result = dice.roll();
 
         let expected_min = dice.min_roll();
@@ -158,8 +183,7 @@ mod tests {
             assert!(*roll >= 1 && *roll <= 6, "Roll out of bounds: {}", roll);
         }
         assert!(result.subtotal >= 5 && result.subtotal <= 15);
-        println!("Dice Roll Result:");
-        println!("{:?}", result);
+        println!("Dice Roll Result:\n{}", result);
     }
 
     #[test]
@@ -201,8 +225,6 @@ mod tests {
         assert_eq!(max_roll, 26);
 
         assert!(result.total >= 10 && result.total <= 31);
-        println!("{:?}", result);
-        println!("Composite Roll Result:");
-        result.display();
+        println!("{}", result);
     }
 }

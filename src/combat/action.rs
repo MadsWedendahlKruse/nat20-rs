@@ -1,10 +1,12 @@
+use std::fmt;
+
 use crate::{
     item::equipment::{equipment::HandSlot, weapon::WeaponType},
-    stats::d20_check::D20CheckResult,
+    stats::{d20_check::D20CheckResult, modifier::ModifierSet},
     utils::id::CharacterId,
 };
 
-use super::damage::DamageMitigationResult;
+use super::damage::{DamageMitigationResult, DamageRollResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CombatAction {
@@ -93,7 +95,9 @@ pub enum CombatActionRequest {
 pub enum CombatActionResult {
     WeaponAttack {
         target: CharacterId,
+        target_armor_class: ModifierSet,
         attack_roll_result: D20CheckResult,
+        damage_roll_result: DamageRollResult,
         damage_result: Option<DamageMitigationResult>,
     },
     UseItem {
@@ -106,4 +110,40 @@ pub enum CombatActionResult {
     Dodge,
     Disengage,
     EndTurn,
+}
+
+impl fmt::Display for CombatActionResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CombatActionResult::WeaponAttack {
+                target,
+                target_armor_class,
+                attack_roll_result,
+                damage_roll_result,
+                damage_result,
+            } => write!(
+                f,
+                "Target: {}\nTarget Armor Class: {} = {}\nAttack Roll: {}\nDamage Roll: {}\nDamage Result: {}",
+                target,
+                target_armor_class,
+                target_armor_class.total(),
+                attack_roll_result,
+                damage_roll_result,
+                if let Some(result) = damage_result {
+                    format!("{}", result)
+                } else {
+                    "Miss".to_string()
+                }
+            ),
+            CombatActionResult::UseItem { target, effect } => {
+                write!(f, "Use Item on {:?}: Effect: {}", target, effect)
+            }
+            CombatActionResult::Help { assisted } => {
+                write!(f, "Help action on {}", assisted)
+            }
+            CombatActionResult::Dodge => write!(f, "Dodge action"),
+            CombatActionResult::Disengage => write!(f, "Disengage action"),
+            CombatActionResult::EndTurn => write!(f, "End Turn action"),
+        }
+    }
 }
