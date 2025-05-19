@@ -21,8 +21,8 @@ mod tests {
         let character = Character::default();
 
         assert_eq!(character.name, "John Doe");
-        assert_eq!(character.max_hp(), 10);
-        assert_eq!(character.hp(), 10);
+        assert_eq!(character.max_hp(), 20);
+        assert_eq!(character.hp(), 20);
     }
 
     #[test]

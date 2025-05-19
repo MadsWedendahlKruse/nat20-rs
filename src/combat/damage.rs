@@ -92,20 +92,30 @@ impl DamageRoll {
     }
 
     pub fn roll(&self) -> DamageRollResult {
-        let mut components = Vec::new();
+        self.roll_internal(1)
+    }
+
+    pub fn roll_crit(&self, crit: bool) -> DamageRollResult {
+        if crit {
+            self.roll_internal(2)
+        } else {
+            self.roll_internal(1)
+        }
+    }
+
+    fn roll_internal(&self, repeat: u32) -> DamageRollResult {
+        let mut results = Vec::new();
         let mut total = 0;
 
-        let primary_result = self.primary.dice_roll.roll();
-        total += primary_result.subtotal;
-        components.push(DamageComponentResult {
-            damage_type: self.primary.damage_type,
-            result: primary_result,
-        });
+        let mut damage_components = self.bonus.clone();
+        damage_components.push(self.primary.clone());
 
-        for component in &self.bonus {
-            let result = component.dice_roll.roll();
+        for component in damage_components {
+            let mut component_dice_roll = component.dice_roll.clone();
+            component_dice_roll.dice.num_dice *= repeat;
+            let result = component_dice_roll.roll();
             total += result.subtotal;
-            components.push(DamageComponentResult {
+            results.push(DamageComponentResult {
                 damage_type: component.damage_type,
                 result,
             });
@@ -113,7 +123,7 @@ impl DamageRoll {
 
         DamageRollResult {
             label: self.label.clone(),
-            components,
+            components: results,
             total,
         }
     }
@@ -326,6 +336,18 @@ mod tests {
         // Max roll: 12 + 4 + 2 = 18
         assert!(result.total >= 5 && result.total <= 18);
         println!("Roll result:{}", result);
+    }
+
+    #[rstest]
+    fn damage_roll_crit(damage_roll: DamageRoll) {
+        println!("Roll: {}", damage_roll);
+        let result = damage_roll.roll_crit(true);
+        assert_eq!(result.components.len(), 2);
+        // 4d6 (2 * 2d6) + 2d4 (2 * 1d4) + 2 (str mod)
+        // Min roll: 4 + 2 + 2 = 8
+        // Max roll: 24 + 8 + 2 = 34
+        assert!(result.total >= 8 && result.total <= 34);
+        println!("Roll result: {}", result);
     }
 
     #[rstest]

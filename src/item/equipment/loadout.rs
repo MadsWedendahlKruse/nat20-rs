@@ -51,12 +51,25 @@ impl Loadout {
     pub fn armor_class(&self, character: &Character) -> ModifierSet {
         if let Some(armor) = &self.armor {
             armor.armor_class(character)
+            // TODO: Add armor class from other equipment or effects
         } else {
             // TODO: Not sure if this is the right way to handle unarmored characters
             let mut armor_class = ModifierSet::new();
             armor_class.add_modifier(ModifierSource::Custom("Unarmored".to_string()), 10);
             armor_class
         }
+    }
+
+    pub fn does_attack_hit(
+        &self,
+        character: &Character,
+        attack_roll_result: &D20CheckResult,
+    ) -> bool {
+        let armor_class = self.armor_class(character);
+        if attack_roll_result.is_crit_fail {
+            return false;
+        }
+        attack_roll_result.is_crit || attack_roll_result.total >= armor_class.total() as u32
     }
 
     pub fn equip_item(

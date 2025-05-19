@@ -119,14 +119,19 @@ impl<'c> CombatEngine<'c> {
                     .loadout()
                     .weapon_in_hand(&weapon_type, hand)
                     .unwrap();
-                let damage_roll_result = weapon.damage_roll(&attacker, hand).roll();
+                let damage_roll_result = weapon
+                    .damage_roll(&attacker, hand)
+                    // TODO: What if the target can't be critically hit?
+                    .roll_crit(attack_roll_result.is_crit);
 
                 let target_character = self.participants.get_mut(&target).unwrap();
                 let armor_class = target_character.loadout().armor_class(&target_character);
 
-                // TODO: Handle critical hits and misses
+                let attack_hit = target_character
+                    .loadout()
+                    .does_attack_hit(&target_character, &attack_roll_result);
 
-                let damage_result = if attack_roll_result.total >= (armor_class.total() as u32) {
+                let damage_result = if attack_hit {
                     Some(target_character.take_damage(&damage_roll_result))
                 } else {
                     None

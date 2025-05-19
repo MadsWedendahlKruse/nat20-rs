@@ -74,20 +74,6 @@ pub struct D20Check {
     advantage_tracker: AdvantageTracker,
 }
 
-impl fmt::Display for D20Check {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "1d20")?;
-        if self.proficiency != Proficiency::None {
-            write!(f, " + {}", self.proficiency)?;
-        }
-        if self.modifiers.is_empty() {
-            return Ok(());
-        }
-        write!(f, " {}", self.modifiers)?;
-        Ok(())
-    }
-}
-
 impl D20Check {
     pub fn new(proficiency: Proficiency) -> Self {
         Self {
@@ -164,6 +150,20 @@ impl D20Check {
             is_crit: selected_roll == 20,
             is_crit_fail: selected_roll == 1,
         }
+    }
+}
+
+impl fmt::Display for D20Check {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "1d20")?;
+        if self.proficiency != Proficiency::None {
+            write!(f, " + {}", self.proficiency)?;
+        }
+        if self.modifiers.is_empty() {
+            return Ok(());
+        }
+        write!(f, " {}", self.modifiers)?;
+        Ok(())
     }
 }
 
