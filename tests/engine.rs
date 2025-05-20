@@ -7,7 +7,7 @@ mod tests {
         combat::action::CombatAction,
         effects::effects::{Effect, EffectDuration},
         engine::engine::CombatEngine,
-        item::equipment::{equipment::HandSlot, weapon::WeaponType},
+        items::equipment::{equipment::HandSlot, weapon::WeaponType},
         stats::modifier::ModifierSource,
         test_utils::fixtures,
     };

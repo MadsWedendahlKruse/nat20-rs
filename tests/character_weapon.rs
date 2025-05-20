@@ -7,7 +7,7 @@ mod tests {
         combat::damage::{DamageComponent, DamageRoll, DamageType},
         creature::character::Character,
         dice::dice::{DiceSet, DiceSetRoll, DieSize},
-        item::{
+        items::{
             equipment::{
                 equipment::{EquipmentItem, EquipmentType, HandSlot},
                 weapon::{Weapon, WeaponCategory, WeaponProperties, WeaponType},

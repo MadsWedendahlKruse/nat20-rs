@@ -2,10 +2,10 @@ extern crate nat20_rs;
 
 mod tests {
     use nat20_rs::creature::character::*;
-    use nat20_rs::item::equipment::armor::Armor;
-    use nat20_rs::item::equipment::equipment::EquipmentItem;
-    use nat20_rs::item::equipment::equipment::EquipmentType;
-    use nat20_rs::item::item::ItemRarity;
+    use nat20_rs::items::equipment::armor::Armor;
+    use nat20_rs::items::equipment::equipment::EquipmentItem;
+    use nat20_rs::items::equipment::equipment::EquipmentType;
+    use nat20_rs::items::item::ItemRarity;
     use nat20_rs::stats::ability::*;
     use nat20_rs::stats::modifier::*;
 

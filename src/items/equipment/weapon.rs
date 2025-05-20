@@ -200,8 +200,8 @@ mod tests {
     use super::*;
     use crate::combat::damage::{DamageComponent, DamageType};
     use crate::dice::dice::{DiceSet, DiceSetRoll, DieSize};
-    use crate::item::equipment::equipment::{EquipmentItem, EquipmentType};
-    use crate::item::item::ItemRarity;
+    use crate::items::equipment::equipment::{EquipmentItem, EquipmentType};
+    use crate::items::item::ItemRarity;
     use crate::stats::modifier::ModifierSet;
 
     #[test]

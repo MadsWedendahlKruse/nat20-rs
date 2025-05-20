@@ -6,7 +6,7 @@ use crate::{
         damage::{DamageMitigationResult, DamageResistances, DamageRollResult},
     },
     effects::effects::Effect,
-    item::equipment::{
+    items::equipment::{
         armor::Armor,
         equipment::{EquipmentItem, GeneralEquipmentSlot, HandSlot},
         loadout::{Loadout, TryEquipError},

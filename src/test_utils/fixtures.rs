@@ -1,5 +1,5 @@
 pub mod armor {
-    use crate::item::{
+    use crate::items::{
         equipment::{
             armor::Armor,
             equipment::{EquipmentItem, EquipmentType},
@@ -62,7 +62,7 @@ pub mod weapons {
     use crate::{
         combat::damage::{DamageComponent, DamageRoll, DamageType},
         dice::dice::{DiceSet, DiceSetRoll, DieSize},
-        item::{
+        items::{
             equipment::{
                 equipment::{EquipmentItem, EquipmentType},
                 weapon::{Weapon, WeaponCategory, WeaponProperties},
@@ -183,7 +183,7 @@ pub mod weapons {
 }
 
 pub mod equipment {
-    use crate::item::{
+    use crate::items::{
         equipment::equipment::{EquipmentItem, EquipmentType},
         item::ItemRarity,
     };
@@ -216,7 +216,7 @@ pub mod characters {
 
     use crate::{
         creature::character::{Character, CharacterClass},
-        item::equipment::equipment::HandSlot,
+        items::equipment::equipment::HandSlot,
         stats::{
             ability::{Ability, AbilityScore},
             modifier::ModifierSource,

@@ -8,7 +8,7 @@ pub mod creature;
 pub mod dice;
 pub mod effects;
 pub mod engine;
-pub mod item;
+pub mod items;
 pub mod stats;
 pub mod test_utils;
 pub mod utils;

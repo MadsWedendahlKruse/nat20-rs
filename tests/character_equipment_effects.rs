@@ -11,7 +11,7 @@ mod tests {
             effects::{Effect, EffectDuration},
             hooks::SavingThrowHook,
         },
-        item::{
+        items::{
             equipment::{
                 armor::Armor,
                 equipment::{EquipmentItem, EquipmentType, GeneralEquipmentSlot, HandSlot},

@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::effects::effects::Effect;
-use crate::item::item::{Item, ItemRarity};
+use crate::items::item::{Item, ItemRarity};
 
 // Armor and weapons behave differently compared to other equipment, so they need special handling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

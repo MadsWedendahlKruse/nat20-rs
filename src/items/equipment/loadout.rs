@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use crate::combat::action::CombatAction;
 use crate::creature::character::Character;
-use crate::item::equipment::armor::Armor;
-use crate::item::equipment::equipment::*;
-use crate::item::equipment::weapon::{Weapon, WeaponProperties, WeaponType};
+use crate::items::equipment::armor::Armor;
+use crate::items::equipment::equipment::*;
+use crate::items::equipment::weapon::{Weapon, WeaponProperties, WeaponType};
 use crate::stats::d20_check::{execute_d20_check, D20CheckResult};
 use crate::stats::modifier::{ModifierSet, ModifierSource};
 

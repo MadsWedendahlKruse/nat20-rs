@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::{
-    item::equipment::{equipment::HandSlot, weapon::WeaponType},
+    items::equipment::{equipment::HandSlot, weapon::WeaponType},
     stats::{d20_check::D20CheckResult, modifier::ModifierSet},
     utils::id::CharacterId,
 };
