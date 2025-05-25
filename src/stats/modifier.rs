@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use std::fmt;
 
+use crate::utils::id::SpellId;
+
 use super::{ability::Ability, proficiency::Proficiency};
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum ModifierSource {
-    Spell(String),        // e.g. "Bless"
+    Spell(SpellId),       // e.g. "Bless"
     Item(String),         // e.g. "Belt of Strength"
     Condition(String),    // e.g. "Poisoned"
     ClassFeature(String), // e.g. "Rage"
@@ -18,7 +20,7 @@ pub enum ModifierSource {
 impl fmt::Display for ModifierSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ModifierSource::Spell(name) => write!(f, "Spell: {}", name),
+            ModifierSource::Spell(id) => write!(f, "Spell: {}", id),
             ModifierSource::Item(name) => write!(f, "Item: {}", name),
             ModifierSource::Condition(name) => write!(f, "Condition: {}", name),
             ModifierSource::ClassFeature(name) => write!(f, "Class Feature: {}", name),

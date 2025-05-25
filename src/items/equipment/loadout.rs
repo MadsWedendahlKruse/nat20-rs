@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::combat::action::CombatAction;
+use crate::combat::action::{CombatAction, CombatActionProvider};
 use crate::creature::character::Character;
 use crate::items::equipment::armor::Armor;
 use crate::items::equipment::equipment::*;
@@ -182,8 +182,10 @@ impl Loadout {
             |hook, character, result| (hook.post_attack_roll)(character, result),
         )
     }
+}
 
-    pub fn available_actions(&self) -> Vec<CombatAction> {
+impl CombatActionProvider for Loadout {
+    fn available_actions(&self) -> Vec<CombatAction> {
         let mut actions = Vec::new();
 
         for (hand, weapon) in self.melee_weapons.iter() {

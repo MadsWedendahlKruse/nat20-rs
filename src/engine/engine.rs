@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::combat::action::{CombatAction, CombatActionRequest, CombatActionResult};
+use crate::combat::action::{
+    CombatAction, CombatActionProvider, CombatActionRequest, CombatActionResult,
+};
+use crate::combat::damage::DamageSource;
 use crate::creature::character::Character;
 use crate::stats::d20_check::D20CheckResult;
 use crate::stats::skill::Skill;
@@ -93,8 +96,9 @@ impl<'c> CombatEngine<'c> {
         }
 
         self.state = CombatState::ResolvingAction;
-        // TODO: validate and resolve action
-        // This is where you'd match on the action type and apply its logic
+
+        // TODO: validate actions, e.g. for a melee weapon attack, the character must be adjacent to the target
+
         let result = self.resolve_action(action);
 
         // For now we just assume the action is resolved
@@ -127,15 +131,11 @@ impl<'c> CombatEngine<'c> {
                 let target_character = self.participants.get_mut(&target).unwrap();
                 let armor_class = target_character.loadout().armor_class(&target_character);
 
-                let attack_hit = target_character
-                    .loadout()
-                    .does_attack_hit(&target_character, &attack_roll_result);
-
-                let damage_result = if attack_hit {
-                    Some(target_character.take_damage(&damage_roll_result))
-                } else {
-                    None
+                let damage_source = DamageSource::Attack {
+                    attack_roll_result: attack_roll_result.clone(),
                 };
+                let damage_result =
+                    target_character.take_damage(&damage_roll_result, &damage_source);
 
                 CombatActionResult::WeaponAttack {
                     target: target_character.id(),
@@ -143,6 +143,40 @@ impl<'c> CombatEngine<'c> {
                     attack_roll_result,
                     damage_roll_result,
                     damage_result,
+                }
+            }
+
+            CombatActionRequest::CastSpell {
+                spell,
+                level,
+                targets,
+            } => {
+                // Get caster id first, then drop the immutable borrow before mutable borrow
+                let caster_id = self.current_character_id();
+                let spell_name = spell.clone();
+
+                // Scope block to drop immutable borrow before mutable borrow
+                let spell = {
+                    let caster = self.participants.get(&caster_id).unwrap();
+                    let spellbook = caster.spellbook();
+                    let spell = spellbook
+                        .get_spell(&spell_name)
+                        .expect("Spell not found in spellbook")
+                        .snapshot(caster, &level);
+                    spell
+                };
+
+                let mut spell_results = Vec::new();
+                for target in targets {
+                    let target_character = self.participants.get_mut(&target).unwrap();
+                    let spell_result = spell.cast(target_character);
+                    spell_results.push(spell_result);
+                }
+
+                // TODO: When/where do we consume the spell slot?
+
+                CombatActionResult::CastSpell {
+                    result: spell_results,
                 }
             }
 

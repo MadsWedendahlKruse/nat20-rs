@@ -2,7 +2,7 @@ use crate::{creature::character::Character, effects::hooks::SavingThrowHook};
 
 use super::{
     ability::Ability,
-    d20_check::{D20Check, D20CheckResult, D20CheckSet},
+    d20_check::{D20Check, D20CheckDC, D20CheckResult, D20CheckSet},
 };
 
 pub type SavingThrowSet = D20CheckSet<Ability, SavingThrowHook>;
@@ -36,3 +36,5 @@ pub fn create_saving_throw_set() -> SavingThrowSet {
         |k| k,
     )
 }
+
+pub type SavingThrowDC = D20CheckDC<Ability>;

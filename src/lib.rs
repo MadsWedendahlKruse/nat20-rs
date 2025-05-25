@@ -9,6 +9,7 @@ pub mod dice;
 pub mod effects;
 pub mod engine;
 pub mod items;
+pub mod spells;
 pub mod stats;
 pub mod test_utils;
 pub mod utils;

@@ -2,8 +2,9 @@ use std::fmt;
 
 use crate::{
     items::equipment::{equipment::HandSlot, weapon::WeaponType},
+    spells::spell::SpellResult,
     stats::{d20_check::D20CheckResult, modifier::ModifierSet},
-    utils::id::CharacterId,
+    utils::id::{CharacterId, SpellId},
 };
 
 use super::damage::{DamageMitigationResult, DamageRollResult};
@@ -15,16 +16,22 @@ pub enum CombatAction {
         weapon_type: WeaponType,
         hand: HandSlot,
     },
+    CastSpell {
+        id: SpellId,
+        level: u8, // Spell level for casting
+    },
     UseItem {
         item_name: String,
     },
     Dodge,
     Disengage,
     Help,
-    CastSpell {
-        spell_name: String,
-    },
     EndTurn,
+}
+
+pub trait CombatActionProvider {
+    fn available_actions(&self) -> Vec<CombatAction>;
+    // fn action_target_type(&self, action: &CombatAction) -> TargetType;
 }
 
 pub enum TargetType {
@@ -53,6 +60,13 @@ impl CombatAction {
                     target: targets[0],
                 })
             }
+            CombatAction::CastSpell { id, level } if targets.len() > 0 => {
+                Some(CombatActionRequest::CastSpell {
+                    spell: id.clone(),
+                    level: *level,
+                    targets,
+                })
+            }
             CombatAction::Help if targets.len() == 1 => {
                 Some(CombatActionRequest::Help { target: targets[0] })
             }
@@ -75,10 +89,11 @@ pub enum CombatActionRequest {
         hand: HandSlot,
         target: CharacterId,
     },
-    // CastSpell {
-    //     spell: Spell,
-    //     targets: Vec<CharacterId>,
-    // },
+    CastSpell {
+        spell: SpellId,
+        level: u8,
+        targets: Vec<CharacterId>,
+    },
     UseItem {
         item_name: String,
         target: Option<CharacterId>,
@@ -99,6 +114,9 @@ pub enum CombatActionResult {
         attack_roll_result: D20CheckResult,
         damage_roll_result: DamageRollResult,
         damage_result: Option<DamageMitigationResult>,
+    },
+    CastSpell {
+        result: Vec<SpellResult>,
     },
     UseItem {
         target: Option<CharacterId>,
@@ -123,7 +141,7 @@ impl fmt::Display for CombatActionResult {
                 damage_result,
             } => write!(
                 f,
-                "Target: {}\nTarget Armor Class: {} = {}\nAttack Roll: {}\nDamage Roll: {}\nDamage Result: {}",
+                "Target: {}\n\tTarget Armor Class: {} = {}\n\tAttack Roll: {}\n\tDamage Roll: {}\n\tDamage Result: {}",
                 target,
                 target_armor_class,
                 target_armor_class.total(),
@@ -135,6 +153,24 @@ impl fmt::Display for CombatActionResult {
                     "Miss".to_string()
                 }
             ),
+            CombatActionResult::CastSpell { result } => {
+                for spell_result in result {
+                    write!(f, "Target: {}\n", spell_result.target)?;
+                    if let Some(saving_throw) = &spell_result.saving_throw {
+                        write!(f, "\tSaving Throw: {}\n", saving_throw)?;
+                    }
+                    if let Some(damage_roll) = &spell_result.damage_roll {
+                        write!(f, "\tDamage Roll: {}\n", damage_roll)?;
+                    }
+                    if let Some(damage) = &spell_result.damage_result {
+                        write!(f, "\tDamage Result: {}\n", damage)?;
+                    }
+                    if let Some(healing) = &spell_result.healing {
+                        write!(f, "\tHealing: {}\n", healing)?;
+                    }
+                }
+                Ok(())
+            }
             CombatActionResult::UseItem { target, effect } => {
                 write!(f, "Use Item on {:?}: Effect: {}", target, effect)
             }

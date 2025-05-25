@@ -149,6 +149,7 @@ impl D20Check {
             total,
             is_crit: selected_roll == 20,
             is_crit_fail: selected_roll == 1,
+            success: None, // Success is determined later based on DC or other conditions
         }
     }
 }
@@ -167,7 +168,7 @@ impl fmt::Display for D20Check {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct D20CheckResult {
     pub advantage_tracker: AdvantageTracker,
     pub rolls: Vec<u32>,
@@ -177,6 +178,7 @@ pub struct D20CheckResult {
     pub total: u32,
     pub is_crit: bool,
     pub is_crit_fail: bool,
+    pub success: Option<bool>,
 }
 
 impl fmt::Display for D20CheckResult {
@@ -217,14 +219,14 @@ where
     ability_mapper: fn(K) -> Ability,
 }
 
-impl<K, H> D20CheckSet<K, H>
+impl<K, T> D20CheckSet<K, T>
 where
     K: Eq + Hash + IntoEnumIterator + Copy,
 {
     pub fn new(
-        get_hooks: fn(K, &Character) -> Vec<&H>,
-        apply_check_hook: fn(&H, &Character, &mut D20Check),
-        apply_result_hook: fn(&H, &Character, &mut D20CheckResult),
+        get_hooks: fn(K, &Character) -> Vec<&T>,
+        apply_check_hook: fn(&T, &Character, &mut D20Check),
+        apply_result_hook: fn(&T, &Character, &mut D20CheckResult),
         ability_mapper: fn(K) -> Ability,
     ) -> Self {
         let checks = K::iter()
@@ -276,14 +278,21 @@ where
             |hook, character, result| (self.apply_result_hook)(*hook, character, result),
         )
     }
+
+    pub fn check_dc(&self, dc: &D20CheckDC<K>, character: &Character) -> D20CheckResult {
+        let mut result = self.check(dc.key, character);
+        result.success = Some(result.total >= dc.dc);
+
+        result
+    }
 }
 
-pub fn execute_d20_check<E>(
+pub fn execute_d20_check<T>(
     mut check: D20Check,
     character: &Character,
-    hooks: &[E],
-    pre: impl Fn(&E, &Character, &mut D20Check),
-    post: impl Fn(&E, &Character, &mut D20CheckResult),
+    hooks: &[T],
+    pre: impl Fn(&T, &Character, &mut D20Check),
+    post: impl Fn(&T, &Character, &mut D20CheckResult),
 ) -> D20CheckResult {
     for hook in hooks {
         pre(hook, character, &mut check);
@@ -296,6 +305,15 @@ pub fn execute_d20_check<E>(
     }
 
     result
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct D20CheckDC<T>
+where
+    T: IntoEnumIterator + Copy + Eq + Hash,
+{
+    pub key: T,
+    pub dc: u32,
 }
 
 #[cfg(test)]

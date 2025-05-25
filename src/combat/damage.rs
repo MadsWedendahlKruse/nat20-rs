@@ -1,7 +1,11 @@
 use crate::dice::dice::*;
+use crate::spells::spell::{SpellFlag, SpellSnapshot};
+use crate::stats::d20_check::D20CheckResult;
 use crate::stats::modifier::{ModifierSet, ModifierSource};
+use crate::stats::saving_throw::SavingThrowDC;
+use crate::utils::id::SpellId;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{self};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -203,7 +207,7 @@ pub struct DamageMitigationEffect {
     pub operation: MitigationOperation,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DamageResistances {
     pub effects: HashMap<DamageType, Vec<DamageMitigationEffect>>,
 }
@@ -267,7 +271,7 @@ impl DamageResistances {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DamageComponentMitigation {
     pub damage_type: DamageType,
     pub original: DiceSetRollResult,
@@ -302,7 +306,7 @@ impl fmt::Display for DamageComponentMitigation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DamageMitigationResult {
     pub components: Vec<DamageComponentMitigation>,
     pub total: i32,
@@ -315,6 +319,51 @@ impl fmt::Display for DamageMitigationResult {
             write!(f, " + {}", comp)?;
         }
         write!(f, " = {}", self.total)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum DamageSource {
+    Attack {
+        attack_roll_result: D20CheckResult,
+    },
+    Spell {
+        spell_id: SpellId,
+        spell_flags: HashSet<SpellFlag>,
+        attack_roll_result: Option<D20CheckResult>,
+        saving_throw_dc: Option<SavingThrowDC>,
+    },
+}
+
+impl DamageSource {
+    pub fn spell(spell: &SpellSnapshot) -> Self {
+        Self::Spell {
+            spell_id: spell.id.clone(),
+            spell_flags: spell.flags.clone(),
+            attack_roll_result: None,
+            saving_throw_dc: None,
+        }
+    }
+
+    pub fn spell_with_attack_roll(
+        spell: &SpellSnapshot,
+        attack_roll_result: D20CheckResult,
+    ) -> Self {
+        Self::Spell {
+            spell_id: spell.id.clone(),
+            spell_flags: spell.flags.clone(),
+            attack_roll_result: Some(attack_roll_result),
+            saving_throw_dc: None,
+        }
+    }
+
+    pub fn spell_with_saving_throw(spell: &SpellSnapshot, saving_throw: SavingThrowDC) -> Self {
+        Self::Spell {
+            spell_id: spell.id.clone(),
+            spell_flags: spell.flags.clone(),
+            attack_roll_result: None,
+            saving_throw_dc: Some(saving_throw),
+        }
     }
 }
 

@@ -2,8 +2,11 @@ use std::collections::HashMap;
 
 use crate::{
     combat::{
-        action::CombatAction,
-        damage::{DamageMitigationResult, DamageResistances, DamageRollResult},
+        action::{CombatAction, CombatActionProvider},
+        damage::{
+            DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
+            DamageSource, MitigationOperation,
+        },
     },
     effects::effects::Effect,
     items::equipment::{
@@ -12,8 +15,10 @@ use crate::{
         loadout::{Loadout, TryEquipError},
         weapon::{Weapon, WeaponCategory, WeaponType},
     },
+    spells::{spell::SpellFlag, spellbook::Spellbook},
     stats::{
         ability::AbilityScoreSet,
+        modifier::ModifierSource,
         proficiency::Proficiency,
         saving_throw::{create_saving_throw_set, SavingThrowSet},
         skill::{create_skill_set, SkillSet},
@@ -46,6 +51,7 @@ pub struct Character {
     pub weapon_proficiencies: HashMap<WeaponCategory, Proficiency>,
     /// Equipped items
     loadout: Loadout,
+    spellbook: Spellbook,
     effects: Vec<Effect>,
 }
 
@@ -63,6 +69,7 @@ impl Character {
             resistances: DamageResistances::new(),
             weapon_proficiencies: HashMap::new(),
             loadout: Loadout::new(),
+            spellbook: Spellbook::new(),
             effects: Vec::new(),
         }
     }
@@ -106,10 +113,57 @@ impl Character {
         self.current_hp > 0
     }
 
-    pub fn take_damage(&mut self, damage_roll_result: &DamageRollResult) -> DamageMitigationResult {
-        let mitigation_result = self.resistances.apply(damage_roll_result);
+    pub fn take_damage(
+        &mut self,
+        damage_roll_result: &DamageRollResult,
+        damage_source: &DamageSource,
+    ) -> Option<DamageMitigationResult> {
+        let mut resistances = self.resistances().clone();
+
+        match damage_source {
+            DamageSource::Attack { attack_roll_result } => {
+                if !self.loadout().does_attack_hit(&self, attack_roll_result) {
+                    // If the attack misses, no damage is applied
+                    return None;
+                }
+            }
+
+            DamageSource::Spell {
+                spell_id,
+                spell_flags,
+                attack_roll_result,
+                saving_throw_dc,
+            } => {
+                if spell_flags.contains(&SpellFlag::SavingThrowHalfDamage) {
+                    if saving_throw_dc.is_none() {
+                        // If the spell requires a saving throw but no DC is provided, return None
+                        // TODO: This should probably be an error instead?
+                        return None;
+                    }
+
+                    let saving_throw_dc = saving_throw_dc.as_ref().unwrap();
+                    let saving_throw = self.saving_throws().check_dc(saving_throw_dc, &self);
+
+                    let success = saving_throw.success.is_some_and(|value| value);
+
+                    // If the saving throw is successful, apply half damage for every damage component
+                    if success {
+                        for component in &damage_roll_result.components {
+                            let mitigation_effect = DamageMitigationEffect {
+                                // TODO: Not sure if Ability source is correct here
+                                source: ModifierSource::Ability(saving_throw_dc.key.clone()),
+                                operation: MitigationOperation::Resistance,
+                            };
+                            resistances.add_effect(component.damage_type, mitigation_effect);
+                        }
+                    }
+                }
+            }
+        }
+
+        let mitigation_result = resistances.apply(damage_roll_result);
         self.current_hp = (self.current_hp - mitigation_result.total).max(0);
-        mitigation_result
+        Some(mitigation_result)
     }
 
     pub fn heal(&mut self, amount: i32) {
@@ -199,6 +253,14 @@ impl Character {
         unequipped_weapon
     }
 
+    pub fn spellbook(&self) -> &Spellbook {
+        &self.spellbook
+    }
+
+    pub fn spellbook_mut(&mut self) -> &mut Spellbook {
+        &mut self.spellbook
+    }
+
     pub fn resistances(&self) -> &DamageResistances {
         &self.resistances
     }
@@ -232,15 +294,19 @@ impl Character {
             self.remove_effect(effect);
         }
     }
+}
 
-    pub fn available_actions(&self) -> Vec<CombatAction> {
+impl CombatActionProvider for Character {
+    fn available_actions(&self) -> Vec<CombatAction> {
         let mut actions = Vec::new();
 
         for action in self.loadout.available_actions() {
             actions.push(action);
         }
 
-        // TODO: Spell actions
+        for action in self.spellbook.available_actions() {
+            actions.push(action);
+        }
 
         actions
     }

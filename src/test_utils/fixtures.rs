@@ -224,7 +224,7 @@ pub mod characters {
         },
     };
 
-    pub fn hero() -> Character {
+    pub fn hero_fighter() -> Character {
         let mut classes = HashMap::new();
         classes.insert(CharacterClass::Fighter, 5);
 
@@ -251,14 +251,45 @@ pub mod characters {
         character
     }
 
-    pub fn hero_initiative() -> Character {
-        let mut hero = hero();
+    pub fn hero_add_initiative(hero: &mut Character) {
         hero.skills_mut().add_modifier(
             Skill::Initiative,
             ModifierSource::Custom("Admin testing".to_string()),
             20,
         );
-        hero
+    }
+
+    pub fn hero_wizard() -> Character {
+        let mut classes = HashMap::new();
+        classes.insert(CharacterClass::Wizard, 5);
+
+        let mut character = Character::new("Hero Wizard", classes, 20);
+
+        let ability_scores = HashMap::from([
+            (Ability::Strength, 8),
+            (Ability::Dexterity, 14),
+            (Ability::Constitution, 16),
+            (Ability::Intelligence, 17),
+            (Ability::Wisdom, 12),
+            (Ability::Charisma, 10),
+        ]);
+
+        for (ability, score) in ability_scores {
+            character
+                .ability_scores_mut()
+                .set(ability, AbilityScore::new(ability, score));
+        }
+
+        character.equip_armor(super::armor::clothing());
+        // let _ = character.equip_weapon(super::weapons::rapier_finesse(), HandSlot::Main);
+
+        character.spellbook_mut().update_spell_slots(5);
+
+        character
+            .spellbook_mut()
+            .add_spell(super::spells::magic_missile());
+
+        character
     }
 
     pub fn goblin_warrior() -> Character {
@@ -286,5 +317,63 @@ pub mod characters {
         let _ = character.equip_weapon(super::weapons::dagger_light(), HandSlot::Main);
 
         character
+    }
+}
+
+pub mod spells {
+    use std::{collections::HashSet, sync::Arc};
+
+    use crate::{
+        combat::damage::{DamageRoll, DamageType},
+        dice::dice::DieSize,
+        spells::spell::{MagicSchool, Spell, SpellFlag, TargetingContext},
+        stats::modifier::ModifierSource,
+    };
+
+    pub fn magic_missile() -> Spell {
+        Spell::new(
+            "Magic Missile".to_string(),
+            1,
+            MagicSchool::Evocation,
+            Some(Arc::new(|_, _| {
+                let mut damage_roll = DamageRoll::new(
+                    1,
+                    DieSize::D4,
+                    DamageType::Force,
+                    "Magic Missile".to_string(),
+                );
+                damage_roll
+                    .primary
+                    .dice_roll
+                    .modifiers
+                    .add_modifier(ModifierSource::Spell("MAGIC_MISSILE".to_string()), 1);
+                damage_roll
+            })),
+            None,
+            Arc::new(|_, level| TargetingContext::Multiple(3 + (level - 1))),
+            HashSet::new(),
+        )
+    }
+
+    pub fn fireball() -> Spell {
+        Spell::new(
+            "Fireball".to_string(),
+            3,
+            MagicSchool::Evocation,
+            Some(Arc::new(|_, level| {
+                DamageRoll::new(
+                    8 + (*level as u32 - 3),
+                    DieSize::D6,
+                    DamageType::Fire,
+                    "Fireball".to_string(),
+                )
+            })),
+            None,
+            Arc::new(|_, _| TargetingContext::AreaOfEffect {
+                radius: 20,
+                centered_on_caster: false,
+            }),
+            HashSet::from([SpellFlag::SavingThrowHalfDamage]),
+        )
     }
 }

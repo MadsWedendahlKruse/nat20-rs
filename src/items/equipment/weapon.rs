@@ -34,7 +34,7 @@ pub enum WeaponProperties {
     /// (normal range, long range).
     /// Disadvantage on attack rolls beyond normal range.
     /// Can't attack beyond long range
-    /// TODO: Units? The rules use feet, but metric is superior.
+    /// TODO: Units? The rules use feet, but metric is (obviously ;)) superior.
     Range(u32, u32),
     Reach,
     Thrown,
