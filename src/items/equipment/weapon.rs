@@ -18,7 +18,7 @@ pub enum WeaponCategory {
     Martial,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum WeaponType {
     Melee,
     Ranged,

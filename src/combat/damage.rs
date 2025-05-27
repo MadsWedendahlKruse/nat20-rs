@@ -99,7 +99,7 @@ impl DamageRoll {
         self.roll_internal(1)
     }
 
-    pub fn roll_crit(&self, crit: bool) -> DamageRollResult {
+    pub fn roll_crit_damage(&self, crit: bool) -> DamageRollResult {
         if crit {
             self.roll_internal(2)
         } else {
@@ -390,7 +390,7 @@ mod tests {
     #[rstest]
     fn damage_roll_crit(damage_roll: DamageRoll) {
         println!("Roll: {}", damage_roll);
-        let result = damage_roll.roll_crit(true);
+        let result = damage_roll.roll_crit_damage(true);
         assert_eq!(result.components.len(), 2);
         // 4d6 (2 * 2d6) + 2d4 (2 * 1d4) + 2 (str mod)
         // Min roll: 4 + 2 + 2 = 8

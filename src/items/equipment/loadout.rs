@@ -19,8 +19,7 @@ pub enum TryEquipError {
 #[derive(Debug, Default)]
 pub struct Loadout {
     pub armor: Option<Armor>,
-    pub melee_weapons: HashMap<HandSlot, Option<Weapon>>,
-    pub ranged_weapons: HashMap<HandSlot, Option<Weapon>>,
+    weapons: HashMap<WeaponType, HashMap<HandSlot, Option<Weapon>>>,
     pub equipment: HashMap<GeneralEquipmentSlot, Option<EquipmentItem>>,
 }
 
@@ -28,8 +27,7 @@ impl Loadout {
     pub fn new() -> Self {
         Self {
             armor: None,
-            melee_weapons: HashMap::new(),
-            ranged_weapons: HashMap::new(),
+            weapons: HashMap::new(),
             equipment: HashMap::new(),
         }
     }
@@ -104,60 +102,48 @@ impl Loadout {
         hand: HandSlot,
     ) -> Result<Vec<Weapon>, TryEquipError> {
         let mut unequipped = Vec::new();
+        let weapon_type = weapon.weapon_type.clone();
 
-        if weapon.weapon_type != WeaponType::Melee && weapon.weapon_type != WeaponType::Ranged {
-            return Err(TryEquipError::WrongWeaponType);
-        }
-
-        if let Some(existing) = self.unequip_weapon(&weapon.weapon_type, hand) {
+        if let Some(existing) = self.unequip_weapon(&weapon_type, hand) {
             unequipped.push(existing);
         }
 
         if weapon.has_property(&WeaponProperties::TwoHanded) {
-            if let Some(existing) = self.unequip_weapon(&weapon.weapon_type, hand.other()) {
+            if let Some(existing) = self.unequip_weapon(&weapon_type, hand.other()) {
                 unequipped.push(existing);
             }
         }
 
-        self.weapon_map_mut(&weapon.weapon_type)
+        self.weapons
+            .entry(weapon_type)
+            .or_insert_with(HashMap::new)
             .insert(hand, Some(weapon));
         Ok(unequipped)
     }
 
     pub fn unequip_weapon(&mut self, weapon_type: &WeaponType, hand: HandSlot) -> Option<Weapon> {
-        if let Some(weapon) = self.weapon_map_mut(weapon_type).remove(&hand) {
+        if let Some(weapon) = self
+            .weapons
+            .get_mut(weapon_type)
+            .and_then(|w| w.remove(&hand))
+        {
             weapon
         } else {
             None
         }
     }
 
-    pub fn weapon_map(&self, weapon_type: &WeaponType) -> &HashMap<HandSlot, Option<Weapon>> {
-        match weapon_type {
-            WeaponType::Melee => &self.melee_weapons,
-            WeaponType::Ranged => &self.ranged_weapons,
-        }
-    }
-
-    pub fn weapon_map_mut(
-        &mut self,
-        weapon_type: &WeaponType,
-    ) -> &mut HashMap<HandSlot, Option<Weapon>> {
-        match weapon_type {
-            WeaponType::Melee => &mut self.melee_weapons,
-            WeaponType::Ranged => &mut self.ranged_weapons,
-        }
-    }
-
     pub fn weapon_in_hand(&self, weapon_type: &WeaponType, hand: HandSlot) -> Option<&Weapon> {
-        self.weapon_map(weapon_type)
-            .get(&hand)
+        self.weapons
+            .get(weapon_type)
+            .and_then(|w| w.get(&hand))
             .and_then(|w| w.as_ref())
     }
 
     pub fn has_weapon_in_hand(&self, weapon_type: &WeaponType, hand: HandSlot) -> bool {
-        self.weapon_map(weapon_type)
-            .get(&hand)
+        self.weapons
+            .get(weapon_type)
+            .and_then(|w| w.get(&hand))
             .map(|w| w.is_some())
             .unwrap_or(false)
     }
@@ -188,21 +174,14 @@ impl CombatActionProvider for Loadout {
     fn available_actions(&self) -> Vec<CombatAction> {
         let mut actions = Vec::new();
 
-        for (hand, weapon) in self.melee_weapons.iter() {
-            if let Some(weapon) = weapon {
-                actions.push(CombatAction::WeaponAttack {
-                    weapon_type: weapon.weapon_type.clone(),
-                    hand: *hand,
-                });
-            }
-        }
-
-        for (hand, weapon) in self.ranged_weapons.iter() {
-            if let Some(weapon) = weapon {
-                actions.push(CombatAction::WeaponAttack {
-                    weapon_type: weapon.weapon_type.clone(),
-                    hand: *hand,
-                });
+        for (weapon_type, weapon_map) in self.weapons.iter() {
+            for (hand, weapon) in weapon_map.iter() {
+                if weapon.is_some() {
+                    actions.push(CombatAction::WeaponAttack {
+                        weapon_type: weapon_type.clone(),
+                        hand: *hand,
+                    });
+                }
             }
         }
 
@@ -220,8 +199,7 @@ mod tests {
     fn empty_loadout() {
         let loadout = Loadout::new();
         assert!(loadout.armor.is_none());
-        assert!(loadout.melee_weapons.is_empty());
-        assert!(loadout.ranged_weapons.is_empty());
+        assert!(loadout.weapons.is_empty());
         assert!(loadout.equipment.is_empty());
     }
 

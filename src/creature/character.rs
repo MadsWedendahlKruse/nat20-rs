@@ -4,8 +4,8 @@ use crate::{
     combat::{
         action::{CombatAction, CombatActionProvider},
         damage::{
-            DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
-            DamageSource, MitigationOperation,
+            DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRoll,
+            DamageRollResult, DamageSource, MitigationOperation,
         },
     },
     effects::effects::Effect,
@@ -15,13 +15,17 @@ use crate::{
         loadout::{Loadout, TryEquipError},
         weapon::{Weapon, WeaponCategory, WeaponType},
     },
-    spells::{spell::SpellFlag, spellbook::Spellbook},
+    spells::{
+        spell::{SpellFlag, SpellSnapshot},
+        spellbook::Spellbook,
+    },
     stats::{
-        ability::AbilityScoreSet,
-        modifier::ModifierSource,
+        ability::{Ability, AbilityScoreSet},
+        d20_check::D20CheckResult,
+        modifier::{ModifierSet, ModifierSource},
         proficiency::Proficiency,
         saving_throw::{create_saving_throw_set, SavingThrowSet},
-        skill::{create_skill_set, SkillSet},
+        skill::{create_skill_set, Skill, SkillSet},
     },
     utils::id::CharacterId,
 };
@@ -134,6 +138,8 @@ impl Character {
                 attack_roll_result,
                 saving_throw_dc,
             } => {
+                // TODO: Spell attack rolls
+
                 if spell_flags.contains(&SpellFlag::SavingThrowHalfDamage) {
                     if saving_throw_dc.is_none() {
                         // If the spell requires a saving throw but no DC is provided, return None
@@ -142,7 +148,7 @@ impl Character {
                     }
 
                     let saving_throw_dc = saving_throw_dc.as_ref().unwrap();
-                    let saving_throw = self.saving_throws().check_dc(saving_throw_dc, &self);
+                    let saving_throw = self.saving_throw(saving_throw_dc.key);
 
                     let success = saving_throw.success.is_some_and(|value| value);
 
@@ -186,12 +192,20 @@ impl Character {
         &mut self.skills
     }
 
+    pub fn skill_check(&self, skill: Skill) -> D20CheckResult {
+        self.skills.check(skill, self)
+    }
+
     pub fn saving_throws(&self) -> &SavingThrowSet {
         &self.saving_throws
     }
 
     pub fn saving_throws_mut(&mut self) -> &mut SavingThrowSet {
         &mut self.saving_throws
+    }
+
+    pub fn saving_throw(&self, ability: Ability) -> D20CheckResult {
+        self.saving_throws.check(ability, self)
     }
 
     pub fn loadout(&self) -> &Loadout {
@@ -209,6 +223,10 @@ impl Character {
             self.remove_effects(armor.effects());
         }
         unequiped_armor
+    }
+
+    pub fn armor_class(&self) -> ModifierSet {
+        self.loadout.armor_class(self)
     }
 
     pub fn equip_item(
@@ -253,12 +271,36 @@ impl Character {
         unequipped_weapon
     }
 
+    pub fn attack_roll(&self, weapon_type: &WeaponType, hand: HandSlot) -> D20CheckResult {
+        self.loadout.attack_roll(self, weapon_type, hand)
+    }
+
+    pub fn damage_roll(&self, weapon_type: &WeaponType, hand: HandSlot) -> DamageRoll {
+        let weapon = self
+            .loadout
+            .weapon_in_hand(weapon_type, hand)
+            .expect("Weapon should be equipped in the specified hand");
+        weapon.damage_roll(self, hand)
+    }
+
     pub fn spellbook(&self) -> &Spellbook {
         &self.spellbook
     }
 
     pub fn spellbook_mut(&mut self) -> &mut Spellbook {
         &mut self.spellbook
+    }
+
+    pub fn update_spell_slots(&mut self) {
+        // TODO: Calculate caster level based on class levels
+        let caster_level = self.total_level();
+        self.spellbook.update_spell_slots(caster_level);
+    }
+
+    pub fn spell_snapshot(&self, spell_id: &str, level: u8) -> Option<SpellSnapshot> {
+        self.spellbook
+            .get_spell(spell_id)
+            .map(|spell| spell.snapshot(self, &level))
     }
 
     pub fn resistances(&self) -> &DamageResistances {

@@ -34,10 +34,7 @@ mod tests {
         assert_eq!(character.ability_scores().total(Ability::Strength), 19);
         // Calculate the expected saving throw modifier
         // 4 (ability) = 4
-        let saving_throw_modifiers = character
-            .saving_throws()
-            .check(Ability::Strength, &character)
-            .modifier_breakdown;
+        let saving_throw_modifiers = character.saving_throw(Ability::Strength).modifier_breakdown;
         print!(
             "Saving Throw Modifier: {} = {:?}",
             saving_throw_modifiers.total(),
@@ -61,10 +58,7 @@ mod tests {
         assert_eq!(character.ability_scores().total(Ability::Strength), 17);
         // Calculate the expected saving throw modifier
         // 3 (ability) + 2 (proficiency) = 5
-        let saving_throw_modifiers = character
-            .saving_throws()
-            .check(Ability::Strength, &character)
-            .modifier_breakdown;
+        let saving_throw_modifiers = character.saving_throw(Ability::Strength).modifier_breakdown;
         print!(
             "Saving Throw Modifier: {} = {:?}",
             saving_throw_modifiers.total(),
@@ -88,10 +82,7 @@ mod tests {
         assert_eq!(character.ability_scores().total(Ability::Strength), 17);
         // Calculate the expected saving throw modifier
         // 3 (ability) + 4 (proficiency) = 7
-        let saving_throw_modifiers = character
-            .saving_throws()
-            .check(Ability::Strength, &character)
-            .modifier_breakdown;
+        let saving_throw_modifiers = character.saving_throw(Ability::Strength).modifier_breakdown;
         print!(
             "Saving Throw Modifier: {} = {:?}",
             saving_throw_modifiers.total(),
@@ -123,9 +114,7 @@ mod tests {
         });
         character.add_effect(disadvantage_effect);
 
-        let result = character
-            .saving_throws()
-            .check(Ability::Strength, &character);
+        let result = character.saving_throw(Ability::Strength);
         assert!(result.advantage_tracker.roll_mode() == RollMode::Disadvantage);
     }
 }

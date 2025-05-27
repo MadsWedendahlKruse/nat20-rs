@@ -143,7 +143,7 @@ mod tests {
         character.equip_armor(armor);
 
         // Check if the skill modifier is applied
-        let stealth_check = character.skills().check(Skill::Stealth, &character);
+        let stealth_check = character.skill_check(Skill::Stealth);
         println!("{:?}", stealth_check);
         // 2 (proficient) + 2 (armor) = 4
         assert_eq!(4, stealth_check.total_modifier);
@@ -154,7 +154,7 @@ mod tests {
         assert_eq!(armor_name, "Armor of Sneaking");
 
         // Check if the skill modifier is removed
-        let stealth_check = character.skills().check(Skill::Stealth, &character);
+        let stealth_check = character.skill_check(Skill::Stealth);
         println!("{:?}", stealth_check);
         // 2 (proficient) + 0 (armor) = 2
         assert_eq!(2, stealth_check.total_modifier);
@@ -193,17 +193,13 @@ mod tests {
         character.equip_armor(armor);
 
         // Check if the advantage is applied
-        let constitution_saving_throw = character
-            .saving_throws()
-            .check(Ability::Constitution, &character);
+        let constitution_saving_throw = character.saving_throw(Ability::Constitution);
         assert!(constitution_saving_throw.advantage_tracker.roll_mode() == RollMode::Advantage);
 
         character.unequip_armor();
 
         // Check if the advantage is removed
-        let constitution_saving_throw = character
-            .saving_throws()
-            .check(Ability::Constitution, &character);
+        let constitution_saving_throw = character.saving_throw(Ability::Constitution);
         assert!(constitution_saving_throw.advantage_tracker.roll_mode() == RollMode::Normal);
     }
 }

@@ -62,7 +62,7 @@ impl CombatAction {
             }
             CombatAction::CastSpell { id, level } if targets.len() > 0 => {
                 Some(CombatActionRequest::CastSpell {
-                    spell: id.clone(),
+                    spell_id: id.clone(),
                     level: *level,
                     targets,
                 })
@@ -90,7 +90,7 @@ pub enum CombatActionRequest {
         target: CharacterId,
     },
     CastSpell {
-        spell: SpellId,
+        spell_id: SpellId,
         level: u8,
         targets: Vec<CharacterId>,
     },

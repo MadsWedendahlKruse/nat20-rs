@@ -44,7 +44,7 @@ impl<'c> CombatEngine<'c> {
             .participants
             .iter_mut()
             .map(|(uuid, character)| {
-                let roll = character.skills().check(Skill::Initiative, character);
+                let roll = character.skill_check(Skill::Initiative);
                 (uuid.clone(), roll)
             })
             .collect();
@@ -113,23 +113,16 @@ impl<'c> CombatEngine<'c> {
                 hand,
                 target,
             } => {
-                // Resolve the weapon attack action
+                // TODO: Something like a SpellResult, but for a weapon attack? WeaponSnapshot.attack(&Character)?
                 let attacker = self.current_character();
-                let attack_roll_result =
-                    attacker
-                        .loadout()
-                        .attack_roll(&attacker, &weapon_type, hand);
-                let weapon = attacker
-                    .loadout()
-                    .weapon_in_hand(&weapon_type, hand)
-                    .unwrap();
-                let damage_roll_result = weapon
-                    .damage_roll(&attacker, hand)
+                let attack_roll_result = attacker.attack_roll(&weapon_type, hand);
+                let damage_roll_result = attacker
+                    .damage_roll(&weapon_type, hand)
                     // TODO: What if the target can't be critically hit?
-                    .roll_crit(attack_roll_result.is_crit);
+                    .roll_crit_damage(attack_roll_result.is_crit);
 
                 let target_character = self.participants.get_mut(&target).unwrap();
-                let armor_class = target_character.loadout().armor_class(&target_character);
+                let armor_class = target_character.armor_class();
 
                 let damage_source = DamageSource::Attack {
                     attack_roll_result: attack_roll_result.clone(),
@@ -147,29 +140,17 @@ impl<'c> CombatEngine<'c> {
             }
 
             CombatActionRequest::CastSpell {
-                spell,
+                spell_id,
                 level,
                 targets,
             } => {
-                // Get caster id first, then drop the immutable borrow before mutable borrow
-                let caster_id = self.current_character_id();
-                let spell_name = spell.clone();
-
-                // Scope block to drop immutable borrow before mutable borrow
-                let spell = {
-                    let caster = self.participants.get(&caster_id).unwrap();
-                    let spellbook = caster.spellbook();
-                    let spell = spellbook
-                        .get_spell(&spell_name)
-                        .expect("Spell not found in spellbook")
-                        .snapshot(caster, &level);
-                    spell
-                };
+                let caster = self.current_character();
+                let spell_snapshot = caster.spell_snapshot(&spell_id, level).unwrap();
 
                 let mut spell_results = Vec::new();
                 for target in targets {
                     let target_character = self.participants.get_mut(&target).unwrap();
-                    let spell_result = spell.cast(target_character);
+                    let spell_result = spell_snapshot.cast(target_character);
                     spell_results.push(spell_result);
                 }
 

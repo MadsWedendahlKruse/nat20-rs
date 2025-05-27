@@ -118,7 +118,7 @@ mod tests {
 
         // Calculate the expected skill modifier
         // 2 (ability) + 2 (proficiency) = 4
-        let check_result = character.skills().check(Skill::Arcana, &character);
+        let check_result = character.skill_check(Skill::Arcana);
         let skill_modifiers = check_result.modifier_breakdown;
         print!(
             "Arcana Modifier: {} = {:?}",
