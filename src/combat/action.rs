@@ -153,21 +153,10 @@ impl fmt::Display for CombatActionResult {
                     "Miss".to_string()
                 }
             ),
+
             CombatActionResult::CastSpell { result } => {
                 for spell_result in result {
-                    write!(f, "Target: {}\n", spell_result.target)?;
-                    if let Some(saving_throw) = &spell_result.saving_throw {
-                        write!(f, "\tSaving Throw: {}\n", saving_throw)?;
-                    }
-                    if let Some(damage_roll) = &spell_result.damage_roll {
-                        write!(f, "\tDamage Roll: {}\n", damage_roll)?;
-                    }
-                    if let Some(damage) = &spell_result.damage_result {
-                        write!(f, "\tDamage Result: {}\n", damage)?;
-                    }
-                    if let Some(healing) = &spell_result.healing {
-                        write!(f, "\tHealing: {}\n", healing)?;
-                    }
+                    write!(f, "Spell Result: {}", spell_result)?;
                 }
                 Ok(())
             }

@@ -1,11 +1,10 @@
 use crate::dice::dice::*;
-use crate::spells::spell::{SpellFlag, SpellSnapshot};
+use crate::spells::spell::SpellKindSnapshot;
+use crate::stats::ability::{self, Ability};
 use crate::stats::d20_check::D20CheckResult;
 use crate::stats::modifier::{ModifierSet, ModifierSource};
-use crate::stats::saving_throw::SavingThrowDC;
-use crate::utils::id::SpellId;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::{self};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -143,7 +142,7 @@ impl fmt::Display for DamageRoll {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DamageRollResult {
     pub label: String,
     pub components: Vec<DamageComponentResult>,
@@ -324,47 +323,13 @@ impl fmt::Display for DamageMitigationResult {
 
 #[derive(Debug, Clone)]
 pub enum DamageSource {
-    Attack {
+    WeaponAttack {
         attack_roll_result: D20CheckResult,
+        damage_roll_result: DamageRollResult,
     },
     Spell {
-        spell_id: SpellId,
-        spell_flags: HashSet<SpellFlag>,
-        attack_roll_result: Option<D20CheckResult>,
-        saving_throw_dc: Option<SavingThrowDC>,
+        snapshot: SpellKindSnapshot,
     },
-}
-
-impl DamageSource {
-    pub fn spell(spell: &SpellSnapshot) -> Self {
-        Self::Spell {
-            spell_id: spell.id.clone(),
-            spell_flags: spell.flags.clone(),
-            attack_roll_result: None,
-            saving_throw_dc: None,
-        }
-    }
-
-    pub fn spell_with_attack_roll(
-        spell: &SpellSnapshot,
-        attack_roll_result: D20CheckResult,
-    ) -> Self {
-        Self::Spell {
-            spell_id: spell.id.clone(),
-            spell_flags: spell.flags.clone(),
-            attack_roll_result: Some(attack_roll_result),
-            saving_throw_dc: None,
-        }
-    }
-
-    pub fn spell_with_saving_throw(spell: &SpellSnapshot, saving_throw: SavingThrowDC) -> Self {
-        Self::Spell {
-            spell_id: spell.id.clone(),
-            spell_flags: spell.flags.clone(),
-            attack_roll_result: None,
-            saving_throw_dc: Some(saving_throw),
-        }
-    }
 }
 
 #[cfg(test)]

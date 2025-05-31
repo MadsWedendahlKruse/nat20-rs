@@ -1,12 +1,13 @@
-use std::{collections::HashSet, fmt, hash::Hash, sync::Arc};
+use std::{fmt, hash::Hash, sync::Arc};
 
 use crate::{
     combat::damage::{DamageMitigationResult, DamageRoll, DamageRollResult, DamageSource},
     creature::character::Character,
     dice::dice::{DiceSetRoll, DiceSetRollResult},
+    effects::effects::Effect,
     stats::{
         ability::Ability,
-        d20_check::D20CheckResult,
+        d20_check::{D20Check, D20CheckResult},
         modifier::{ModifierSet, ModifierSource},
         proficiency::Proficiency,
         saving_throw::SavingThrowDC,
@@ -37,50 +38,324 @@ pub enum TargetingContext {
     },
 }
 
+const BASE_SPELL_SAVE_DC: i32 = 8;
+
+fn spell_save_dc(caster: &Character, ability: Ability) -> ModifierSet {
+    let mut spell_save_dc = ModifierSet::new();
+    spell_save_dc.add_modifier(
+        ModifierSource::Custom("Base spell save DC".to_string()),
+        BASE_SPELL_SAVE_DC,
+    );
+    let spell_casting_modifier = caster.ability_scores().ability_modifier(ability).total();
+    spell_save_dc.add_modifier(ModifierSource::Ability(ability), spell_casting_modifier);
+    // TODO: Not sure if Proficiency is the correct modifier source here, since I don't think
+    // you can have e.g. Expertise in spell save DCs.
+    spell_save_dc.add_modifier(
+        ModifierSource::Proficiency(Proficiency::Proficient),
+        caster.proficiency_bonus() as i32,
+    );
+    spell_save_dc
+}
+
+fn spell_attack_roll(caster: &Character, ability: Ability) -> D20CheckResult {
+    let mut attack_roll = D20Check::new(Proficiency::Proficient);
+    let spell_casting_modifier = caster.ability_scores().ability_modifier(ability).total();
+    attack_roll.add_modifier(ModifierSource::Ability(ability), spell_casting_modifier);
+    attack_roll.roll_hooks(
+        caster,
+        &caster.effects(),
+        |hook, character, check| (hook.pre_attack_roll)(character, check),
+        |hook, character, result| (hook.post_attack_roll)(character, result),
+    )
+}
+
+#[derive(Clone)]
+pub enum SpellKind {
+    /// Spells that deal unconditional damage. Is this only Magic Missile?
+    Damage {
+        damage: Arc<dyn Fn(&Character, &u8) -> DamageRoll + Send + Sync>,
+    },
+    /// Spells that require an attack roll to hit a target, and deal damage on hit.
+    /// Some spells may have a damage roll on a failed attack roll (e.g. Acid Arrow)
+    AttackRoll {
+        damage: Arc<dyn Fn(&Character, &u8) -> DamageRoll + Send + Sync>,
+        damage_on_failure: Option<Arc<dyn Fn(&Character, &u8) -> DamageRoll + Send + Sync>>,
+    },
+    /// Spells that require a saving throw to avoid or reduce damage.
+    /// Most of the time, these spells will deal damage on a failed save,
+    /// and half damage on a successful save.
+    SavingThrowDamage {
+        saving_throw: Ability,
+        half_damage_on_save: bool,
+        damage: Arc<dyn Fn(&Character, &u8) -> DamageRoll + Send + Sync>,
+    },
+    /// Spells that require a saving throw to avoid or reduce an effect.
+    SavingThrowEffect {
+        saving_throw: Ability,
+        effect: Effect,
+    },
+    /// Spells that apply a beneficial effect to a target, and therefore do not require
+    /// an attack roll or saving throw (e.g. Bless, Shield of Faith).
+    BeneficialEffect { effect: Effect },
+    /// Spells that heal a target. These spells do not require an attack roll or saving throw.
+    /// They simply heal the target for a certain amount of hit points.
+    Healing {
+        heal: Arc<dyn Fn(&Character, &u8) -> DiceSetRoll + Send + Sync>,
+    },
+    /// Utility spells that do not deal damage or heal, but have some other effect.
+    /// These spells may include buffs, debuffs, or other effects that do not fit into the
+    /// other categories (e.g. teleportation, Knock, etc.).
+    Utility {
+        // E.g. Arcane Lock, Invisibility, etc.
+        // Add hooks or custom closures as needed
+    },
+    /// Custom spells can have any kind of effect, including damage, healing, or utility.
+    /// The closure should return a `SpellKindSnapshot` that describes the effect of the spell.
+    /// Please note that this should only be used for spells that don't fit into the
+    /// standard categories.
+    Custom(Arc<dyn Fn(&Character, &u8) -> SpellKindSnapshot + Send + Sync>),
+}
+
+impl SpellKind {
+    pub fn snapshot(
+        &self,
+        caster: &Character,
+        spell_level: &u8,
+        ability: Ability,
+    ) -> SpellKindSnapshot {
+        match self {
+            SpellKind::Damage { damage } => SpellKindSnapshot::Damage {
+                damage_roll: damage(caster, spell_level).roll(),
+            },
+
+            SpellKind::AttackRoll {
+                damage,
+                damage_on_failure,
+            } => {
+                let attack_roll = spell_attack_roll(caster, ability);
+                let is_crit = attack_roll.is_crit;
+                SpellKindSnapshot::AttackRoll {
+                    attack_roll,
+                    damage_roll: damage(caster, spell_level).roll_crit_damage(is_crit),
+                    damage_on_failure: damage_on_failure
+                        .as_ref()
+                        .map(|f| f(caster, spell_level).roll_crit_damage(is_crit)),
+                }
+            }
+
+            SpellKind::SavingThrowDamage {
+                saving_throw,
+                half_damage_on_save,
+                damage,
+            } => SpellKindSnapshot::SavingThrowDamage {
+                saving_throw: SavingThrowDC {
+                    key: *saving_throw,
+                    dc: spell_save_dc(caster, *saving_throw),
+                },
+                half_damage_on_save: *half_damage_on_save,
+                damage_roll: damage(caster, spell_level).roll(),
+            },
+
+            SpellKind::SavingThrowEffect {
+                saving_throw,
+                effect,
+            } => SpellKindSnapshot::SavingThrowEffect {
+                saving_throw: SavingThrowDC {
+                    key: *saving_throw,
+                    dc: spell_save_dc(caster, *saving_throw),
+                },
+                effect: effect.clone(),
+            },
+
+            SpellKind::BeneficialEffect { effect } => SpellKindSnapshot::BeneficialEffect {
+                effect: effect.clone(),
+            },
+
+            SpellKind::Healing { heal } => SpellKindSnapshot::Healing {
+                healing: heal(caster, spell_level).roll(),
+            },
+
+            SpellKind::Utility {} => SpellKindSnapshot::Utility,
+
+            SpellKind::Custom(effect) => effect(caster, spell_level),
+        }
+    }
+}
+
+impl fmt::Debug for SpellKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SpellKind::Damage { .. } => write!(f, "Damage"),
+            SpellKind::AttackRoll { .. } => write!(f, "AttackRoll"),
+            SpellKind::SavingThrowDamage { .. } => write!(f, "SavingThrowDamage"),
+            SpellKind::SavingThrowEffect { .. } => write!(f, "SavingThrowEffect"),
+            SpellKind::BeneficialEffect { .. } => write!(f, "BeneficialEffect"),
+            SpellKind::Healing { .. } => write!(f, "Healing"),
+            SpellKind::Utility { .. } => write!(f, "Utility"),
+            SpellKind::Custom(_) => write!(f, "Custom"),
+        }
+    }
+}
+
+/// To avoid the issue of not being able to borrow the caster immutably and the
+/// target mutably at the same time, we need to create a snapshot of the spell that
+/// has already taken into account the caster's stats and abilities. So all the rolls
+/// and checks should be precomputed in the snapshot (as results of the rolls),
+/// and the spell should be able to apply those results to the target when cast.
+#[derive(Debug, Clone)]
+pub enum SpellKindSnapshot {
+    Damage {
+        damage_roll: DamageRollResult,
+    },
+    AttackRoll {
+        attack_roll: D20CheckResult,
+        damage_roll: DamageRollResult,
+        damage_on_failure: Option<DamageRollResult>,
+    },
+    SavingThrowDamage {
+        saving_throw: SavingThrowDC,
+        half_damage_on_save: bool,
+        damage_roll: DamageRollResult,
+    },
+    SavingThrowEffect {
+        saving_throw: SavingThrowDC,
+        effect: Effect,
+    },
+    BeneficialEffect {
+        effect: Effect,
+    },
+    Healing {
+        healing: DiceSetRollResult,
+    },
+    Utility,
+    Custom {
+        damage_roll: DamageRollResult,
+        // TODO: Add more fields as needed for custom spells
+    },
+}
+
+#[derive(Debug)]
+pub enum SpellKindResult {
+    Damage {
+        damage_roll: DamageRollResult,
+        damage_taken: Option<DamageMitigationResult>,
+    },
+    AttackRoll {
+        attack_roll: D20CheckResult,
+        damage_roll: DamageRollResult,
+        damage_taken: Option<DamageMitigationResult>,
+    },
+    SavingThrowDamage {
+        saving_throw: SavingThrowDC,
+        half_damage_on_save: bool,
+        damage_roll: DamageRollResult,
+        damage_taken: Option<DamageMitigationResult>,
+    },
+    SavingThrowEffect {
+        saving_throw: SavingThrowDC,
+        effect: Effect,
+        applied: bool,
+    },
+    BeneficialEffect {
+        effect: Effect,
+        applied: bool,
+    },
+    Healing {
+        healing: DiceSetRollResult,
+    },
+    Utility,
+    Custom {
+        damage_roll: DamageRollResult,
+        damage_taken: Option<DamageMitigationResult>,
+    },
+}
+
 /// Represents the result of casting a spell on a single target. For spells that affect multiple targets,
 /// multiple `SpellResult` instances can be collected.
 #[derive(Debug)]
 pub struct SpellResult {
+    // TODO: What if the target isn't a Character, but e.g. an object? Like if you cast
+    // Knock on a door?
     pub target: CharacterId,
-    pub saving_throw: Option<D20CheckResult>,
-    pub damage_roll: Option<DamageRollResult>,
-    pub damage_result: Option<DamageMitigationResult>,
-    // pub conditions_applied: Option<String>,
-    pub healing: Option<DiceSetRollResult>,
+    pub result: SpellKindResult,
 }
 
-impl SpellResult {
-    pub fn new(target: CharacterId) -> Self {
-        Self {
-            target,
-            saving_throw: None,
-            damage_roll: None,
-            damage_result: None,
-            // conditions_applied: None,
-            healing: None,
+impl fmt::Display for SpellResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Target: {}\n", self.target)?;
+        match &self.result {
+            SpellKindResult::Damage {
+                damage_roll,
+                damage_taken,
+            } => {
+                write!(f, "\tDamage Roll: {}\n", damage_roll)?;
+                if let Some(damage_taken) = damage_taken {
+                    write!(f, "\tDamage Taken: {}\n", damage_taken)?;
+                }
+            }
+
+            SpellKindResult::AttackRoll {
+                attack_roll,
+                damage_roll,
+                damage_taken,
+            } => {
+                write!(f, "\tAttack Roll: {}\n", attack_roll)?;
+                write!(f, "\tDamage Roll: {}\n", damage_roll)?;
+                if let Some(damage_taken) = damage_taken {
+                    write!(f, "\tDamage Taken: {}\n", damage_taken)?;
+                }
+            }
+
+            SpellKindResult::SavingThrowDamage {
+                saving_throw,
+                half_damage_on_save,
+                damage_roll,
+                damage_taken,
+            } => {
+                write!(f, "\tSaving Throw: {}\n", saving_throw)?;
+                write!(f, "\tDamage Roll: {}\n", damage_roll)?;
+                // TODO: How do we know if the saving throw was successful?
+                if let Some(damage_taken) = damage_taken {
+                    write!(f, "\tDamage Taken: {}\n", damage_taken)?;
+                }
+            }
+
+            SpellKindResult::Healing { healing } => {
+                write!(f, "\tHealing: {}\n", healing)?;
+            }
+
+            SpellKindResult::BeneficialEffect { effect, applied } => {
+                // write!(f, "\tEffect: {}\n", effect)?;
+                write!(f, "\tApplied: {}\n", applied)?;
+            }
+
+            SpellKindResult::SavingThrowEffect {
+                saving_throw,
+                effect,
+                applied,
+            } => {
+                write!(f, "\tSaving Throw: {}\n", saving_throw)?;
+                // write!(f, "\tEffect: {}\n", effect)?;
+                write!(f, "\tApplied: {}\n", applied)?;
+            }
+
+            SpellKindResult::Utility {} => {
+                write!(f, "\tUtility spell with no specific result.\n")?;
+            }
+
+            SpellKindResult::Custom {
+                damage_roll,
+                damage_taken,
+            } => {
+                write!(f, "\tDamage Roll: {}\n", damage_roll)?;
+                if let Some(damage_taken) = damage_taken {
+                    write!(f, "\tDamage Taken: {}\n", damage_taken)?;
+                }
+            }
         }
-    }
-
-    pub fn set_damage(
-        &mut self,
-        damage_roll: DamageRollResult,
-        damage_result: DamageMitigationResult,
-    ) {
-        self.damage_roll = Some(damage_roll);
-        self.damage_result = Some(damage_result);
-    }
-
-    pub fn set_healing(&mut self, healing: DiceSetRollResult) {
-        self.healing = Some(healing);
+        Ok(())
     }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SpellFlag {
-    SavingThrowHalfDamage,
-}
-
-const BASE_SPELL_SAVE_DC: i32 = 8;
 
 #[derive(Clone)]
 pub struct Spell {
@@ -88,12 +363,9 @@ pub struct Spell {
     name: String,
     base_level: u8,
     school: MagicSchool,
-    damage: Option<Arc<dyn Fn(&Character, &u8) -> DamageRoll + Send + Sync>>,
-    healing: Option<Arc<dyn Fn(&Character, &u8) -> DiceSetRoll + Send + Sync>>,
+    kind: SpellKind,
     targeting: Arc<dyn Fn(&Character, &u8) -> TargetingContext + Send + Sync>,
-    // effect: Arc<dyn Fn(&Spell, &Character, &u8, &mut Character) -> SpellResult + Send + Sync>,
-    saving_throw_ability: Option<Ability>,
-    flags: HashSet<SpellFlag>,
+    spellcasting_ability: Option<Ability>,
 }
 
 impl Spell {
@@ -101,23 +373,18 @@ impl Spell {
         name: String,
         base_level: u8,
         school: MagicSchool,
-        damage: Option<Arc<dyn Fn(&Character, &u8) -> DamageRoll + Send + Sync>>,
-        healing: Option<Arc<dyn Fn(&Character, &u8) -> DiceSetRoll + Send + Sync>>,
+        kind: SpellKind,
         targeting: Arc<dyn Fn(&Character, &u8) -> TargetingContext + Send + Sync>,
-        // effect: Arc<dyn Fn(&Spell, &Character, &u8, &mut Character) -> SpellResult + Send + Sync>,
-        flags: HashSet<SpellFlag>,
     ) -> Self {
         Self {
             id: name.to_uppercase().replace(" ", "_").into(),
             name,
             base_level,
             school,
-            damage,
-            healing,
             targeting,
+            kind,
             // effect,
-            saving_throw_ability: None,
-            flags,
+            spellcasting_ability: None,
         }
     }
 
@@ -137,78 +404,52 @@ impl Spell {
         self.school
     }
 
-    fn damage_roll(&self, caster: &Character, level: &u8) -> Option<DamageRoll> {
-        self.damage.as_ref().map(|f| f(caster, level))
-    }
-
-    fn healing_roll(&self, caster: &Character, level: &u8) -> Option<DiceSetRoll> {
-        self.healing.as_ref().map(|f| f(caster, level))
-    }
-
     // pub fn cast(&self, caster: &Character, level: &u8, target: &mut Character) -> SpellResult {
     //     (self.effect)(self, caster, level, target)
     // }
 
-    pub fn saving_throw_ability(&self) -> Option<Ability> {
-        self.saving_throw_ability
+    pub fn spellcasting_ability(&self) -> Option<Ability> {
+        self.spellcasting_ability
     }
 
     /// This should be called when the spell is learned, so it can be set to spell casting ability
     /// of the class which learned the spell.
-    pub fn set_saving_throw_ability(&mut self, ability: Ability) {
-        self.saving_throw_ability = Some(ability);
+    pub fn set_spellcasting_ability(&mut self, ability: Ability) {
+        self.spellcasting_ability = Some(ability);
     }
 
-    pub fn spell_save_dc(&self, caster: &Character) -> ModifierSet {
-        let mut spell_save_dc = ModifierSet::new();
-        spell_save_dc.add_modifier(
-            ModifierSource::Custom("Base spell save DC".to_string()),
-            BASE_SPELL_SAVE_DC,
-        );
-        let spell_casting_modifier = caster
-            .ability_scores()
-            .ability_modifier(self.saving_throw_ability.unwrap())
-            .total();
-        spell_save_dc.add_modifier(
-            ModifierSource::Ability(self.saving_throw_ability.unwrap()),
-            spell_casting_modifier,
-        );
-        // TODO: Not sure if Proficiency is the correct modifier source here, since I don't think
-        // you can have e.g. Expertise in spell save DCs.
-        spell_save_dc.add_modifier(
-            ModifierSource::Proficiency(Proficiency::Proficient),
-            caster.proficiency_bonus(),
-        );
-        spell_save_dc
-    }
-
-    pub fn has_flag(&self, flag: SpellFlag) -> bool {
-        self.flags.contains(&flag)
-    }
-
-    pub fn flags(&self) -> &HashSet<SpellFlag> {
-        &self.flags
-    }
-
-    pub fn snapshot(&self, caster: &Character, level: &u8) -> SpellSnapshot {
-        SpellSnapshot {
+    pub fn snapshot(
+        &self,
+        caster: &Character,
+        spell_level: &u8,
+    ) -> Result<SpellSnapshot, SnapshotError> {
+        if spell_level < &self.base_level {
+            return Err(SnapshotError::DowncastingNotAllowed(
+                self.base_level,
+                *spell_level,
+            ));
+        }
+        if self.base_level == 0 && spell_level > &self.base_level {
+            return Err(SnapshotError::UpcastingCantripNotAllowed);
+        }
+        if self.spellcasting_ability.is_none() {
+            return Err(SnapshotError::SpellcastingAbilityNotSet);
+        }
+        // TODO: Something like BG3 Lightning Charges with Magic Missile would not work
+        // with this snapshotting, since each damage instance would add an effect to the
+        // caster, which would not be reflected in the snapshot.
+        // ---
+        // Might not be an issue anymore???
+        Ok(SpellSnapshot {
             id: self.id.clone(),
             name: self.name.clone(),
             base_level: self.base_level,
             school: self.school,
-            damage: self.damage_roll(caster, level),
-            healing: self.healing_roll(caster, level),
-            saving_throw: if self.saving_throw_ability.is_none() {
-                None
-            } else {
-                Some(SavingThrowDC {
-                    key: self.saving_throw_ability.unwrap(),
-                    dc: self.spell_save_dc(caster).total() as u32,
-                })
-            },
-            targeting_context: (self.targeting)(caster, level),
-            flags: self.flags.clone(),
-        }
+            kind: self
+                .kind
+                .snapshot(caster, spell_level, self.spellcasting_ability.unwrap()),
+            targeting_context: (self.targeting)(caster, spell_level),
+        })
     }
 }
 
@@ -219,7 +460,6 @@ impl fmt::Debug for Spell {
             .field("name", &self.name)
             .field("base_level", &self.base_level)
             .field("school", &self.school)
-            .field("flags", &self.flags)
             .finish()
     }
 }
@@ -230,39 +470,106 @@ pub struct SpellSnapshot {
     pub name: String,
     pub base_level: u8,
     pub school: MagicSchool,
-    pub damage: Option<DamageRoll>,
-    pub healing: Option<DiceSetRoll>,
-    pub saving_throw: Option<SavingThrowDC>,
+    pub kind: SpellKindSnapshot,
     pub targeting_context: TargetingContext,
-    pub flags: HashSet<SpellFlag>,
 }
 
 impl SpellSnapshot {
     pub fn cast(&self, target: &mut Character) -> SpellResult {
-        let mut spell_result = SpellResult::new(target.id());
-        // Apply damage or healing effects
-        if let Some(damage) = &self.damage {
-            let damage_roll = damage.roll();
-            let damage_result = target.take_damage(&damage_roll, &self.damage_source());
-            if let Some(damage_result) = damage_result {
-                spell_result.set_damage(damage_roll, damage_result);
+        let spell_kind_result = match &self.kind {
+            SpellKindSnapshot::Damage { damage_roll } => {
+                let damage_taken = target.take_damage(&self.damage_source());
+                SpellKindResult::Damage {
+                    damage_roll: damage_roll.clone(),
+                    damage_taken,
+                }
             }
+
+            SpellKindSnapshot::AttackRoll {
+                attack_roll,
+                damage_roll,
+                damage_on_failure,
+            } => {
+                let damage_taken = target.take_damage(&self.damage_source());
+
+                // TODO: How do we know if the attack roll was successful? i.e. what damage roll to use?
+
+                SpellKindResult::AttackRoll {
+                    attack_roll: attack_roll.clone(),
+                    damage_roll: damage_roll.clone(),
+                    damage_taken: damage_taken,
+                }
+            }
+
+            SpellKindSnapshot::SavingThrowDamage {
+                saving_throw,
+                half_damage_on_save,
+                damage_roll,
+            } => {
+                todo!()
+            }
+
+            SpellKindSnapshot::SavingThrowEffect {
+                saving_throw,
+                effect,
+            } => {
+                todo!()
+            }
+
+            SpellKindSnapshot::BeneficialEffect { effect } => {
+                // TODO: Isn't it just always going to be applied?
+                let applied = target.add_effect(effect.clone());
+                SpellKindResult::BeneficialEffect {
+                    effect: effect.clone(),
+                    applied: true,
+                }
+            }
+
+            SpellKindSnapshot::Healing { healing: heal } => {
+                todo!()
+            }
+
+            SpellKindSnapshot::Utility => {
+                todo!()
+            }
+
+            SpellKindSnapshot::Custom {
+                damage_roll: damage,
+            } => {
+                let damage_taken = target.take_damage(&self.damage_source());
+                SpellKindResult::Custom {
+                    damage_roll: damage.clone(),
+                    damage_taken,
+                }
+            }
+        };
+
+        SpellResult {
+            target: target.id(),
+            result: spell_kind_result,
         }
-        if let Some(healing) = &self.healing {
-            let healing_roll = healing.roll();
-            target.heal(healing_roll.subtotal);
-            spell_result.set_healing(healing_roll);
-        }
-        spell_result
     }
 
     fn damage_source(&self) -> DamageSource {
-        if let Some(saving_throw) = &self.saving_throw {
-            return DamageSource::spell_with_saving_throw(self, saving_throw.clone());
+        DamageSource::Spell {
+            snapshot: self.kind.clone(),
         }
-        // TODO: Handle attack roll
-        DamageSource::spell(self)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SnapshotError {
+    /// Downcasting a spell to a lower level is not allowed, e.g. Fireball is a 3rd level spell
+    /// and cannot be downcast to a 1st or 2nd level spell.
+    /// (base_level, requested_level)
+    DowncastingNotAllowed(u8, u8),
+    /// Cantrips cannot be upcast, so this error is returned when trying to upcast a cantrip.
+    /// This is not supposed to be allowed, so the option should not be presented to the player.
+    UpcastingCantripNotAllowed,
+    /// The spellcasting ability has not been set for this spell. This usually means it hasn't
+    /// been set by the class that learned the spell.
+    /// This is a programming error, so it should not happen in normal gameplay.
+    SpellcastingAbilityNotSet,
 }
 
 #[cfg(test)]
@@ -277,13 +584,11 @@ mod tests {
             "Abrakadabra".to_string(),
             1,
             MagicSchool::Conjuration,
-            None,
-            None,
+            SpellKind::Utility {},
             Arc::new(|_, _| TargetingContext::AreaOfEffect {
                 radius: 20,
                 centered_on_caster: true,
             }),
-            HashSet::new(),
         );
 
         assert_eq!(spell.name(), "Abrakadabra");
@@ -293,10 +598,9 @@ mod tests {
 
     #[test]
     fn spell_targeting() {
-        let spell = fixtures::spells::magic_missile();
-        let caster = fixtures::characters::hero_wizard();
-
-        let snapshot = spell.snapshot(&caster, &1);
+        let caster = fixtures::creatures::heroes::wizard();
+        let spell_id = fixtures::spells::magic_missile().id().clone();
+        let snapshot = caster.spell_snapshot(&spell_id, 1).unwrap().unwrap();
 
         match snapshot.targeting_context {
             TargetingContext::Multiple(count) => {
@@ -312,10 +616,11 @@ mod tests {
 
     #[test]
     fn spell_targeting_upcasting() {
-        let spell = fixtures::spells::magic_missile();
-        let caster = fixtures::characters::hero_wizard();
-
-        let snapshot = spell.snapshot(&caster, &3); // Upcasting to level 3
+        let caster = fixtures::creatures::heroes::wizard();
+        let spell_id = fixtures::spells::magic_missile().id().clone();
+        // Upcasting Magic Missile to level 3
+        // should increase the number of targets to 5.
+        let snapshot = caster.spell_snapshot(&spell_id, 3).unwrap().unwrap();
 
         match snapshot.targeting_context {
             TargetingContext::Multiple(count) => {
@@ -331,29 +636,27 @@ mod tests {
 
     #[test]
     fn spell_damage() {
-        let spell = fixtures::spells::fireball();
-        let caster = fixtures::characters::hero_wizard();
-        let level = 3;
+        let caster = fixtures::creatures::heroes::wizard();
+        let spell_id = fixtures::spells::fireball().id().clone();
+        let snapshot = caster.spell_snapshot(&spell_id, 3).unwrap().unwrap();
 
-        let snapshot = spell.snapshot(&caster, &level);
+        let damage_roll: &DamageRollResult = match &snapshot.kind {
+            SpellKindSnapshot::SavingThrowDamage { damage_roll, .. } => damage_roll,
+            _ => panic!("Expected Fireball to be a SavingThrowDamage spell"),
+        };
 
-        assert!(
-            snapshot.damage.is_some(),
-            "Expected Fireball to have a damage roll"
-        );
-
-        let damage_roll = snapshot.damage.unwrap();
         assert_eq!(
-            damage_roll.primary.damage_type,
+            damage_roll.components[0].damage_type,
             DamageType::Fire,
             "Expected Fireball damage roll to be Fire"
         );
         assert_eq!(
-            damage_roll.primary.dice_roll.dice.num_dice, 8,
+            damage_roll.components[0].result.rolls.len(),
+            8,
             "Expected Fireball to roll 8d6 at level 3"
         );
         assert_eq!(
-            damage_roll.primary.dice_roll.dice.die_size,
+            damage_roll.components[0].result.die_size,
             DieSize::D6,
             "Expected Fireball to roll 8d6 at level 3"
         );
@@ -361,31 +664,91 @@ mod tests {
 
     #[test]
     fn spell_damage_upcasting() {
-        let spell = fixtures::spells::fireball();
-        let caster = fixtures::characters::hero_wizard();
-        let level = 5;
+        let caster = fixtures::creatures::heroes::wizard();
+        let spell_id = fixtures::spells::fireball().id().clone();
+        let snapshot = caster.spell_snapshot(&spell_id, 5).unwrap().unwrap();
 
-        let snapshot = spell.snapshot(&caster, &level);
+        let damage_roll: &DamageRollResult = match &snapshot.kind {
+            SpellKindSnapshot::SavingThrowDamage { damage_roll, .. } => damage_roll,
+            _ => panic!("Expected Fireball to be a SavingThrowDamage spell"),
+        };
 
-        assert!(
-            snapshot.damage.is_some(),
-            "Expected Fireball to have a damage roll"
-        );
-
-        let damage_roll = snapshot.damage.unwrap();
         assert_eq!(
-            damage_roll.primary.damage_type,
+            damage_roll.components[0].damage_type,
             DamageType::Fire,
             "Expected Fireball damage roll to be Fire"
         );
         assert_eq!(
-            damage_roll.primary.dice_roll.dice.num_dice, 10,
+            damage_roll.components[0].result.rolls.len(),
+            10,
             "Expected Fireball to roll 10d6 at level 5"
         );
         assert_eq!(
-            damage_roll.primary.dice_roll.dice.die_size,
+            damage_roll.components[0].result.die_size,
             DieSize::D6,
             "Expected Fireball to roll 10d6 at level 5"
         );
+    }
+
+    #[test]
+    fn cantrip_upcasting() {
+        let caster = fixtures::creatures::heroes::warlock();
+        let spell_id = fixtures::spells::eldritch_blast().id().clone();
+
+        let result = caster.spell_snapshot(&spell_id, 3).unwrap();
+
+        assert!(
+            matches!(result, Err(SnapshotError::UpcastingCantripNotAllowed)),
+            "Expected upcasting a cantrip to return an error"
+        );
+    }
+
+    #[test]
+    fn spell_snapshot_downcasting() {
+        let caster = fixtures::creatures::heroes::wizard();
+        let spell_id = fixtures::spells::fireball().id().clone();
+
+        let result = caster.spell_snapshot(&spell_id, 2).unwrap();
+
+        assert!(
+            matches!(result, Err(SnapshotError::DowncastingNotAllowed(3, 2))),
+            "Expected downcasting Fireball to level 2 to return an error"
+        );
+    }
+
+    #[test]
+    fn spell_snapshot_spellcasting_ability_not_set() {
+        let caster = fixtures::creatures::heroes::warlock();
+        // Warlock doesn't know Magic Missile, so the spellcasting ability is not set
+        let spell = fixtures::spells::magic_missile();
+
+        // Create a snapshot without setting the spellcasting ability
+        let result = spell.snapshot(&caster, &1);
+
+        assert!(
+            matches!(result, Err(SnapshotError::SpellcastingAbilityNotSet)),
+            "Expected snapshot without spellcasting ability to return an error"
+        );
+    }
+
+    #[test]
+    fn cantrip_level_scaling() {
+        let caster = fixtures::creatures::heroes::warlock();
+        let spell_id = fixtures::spells::eldritch_blast().id().clone();
+
+        // Warlock is level 5, so Eldritch Blast should have two beams at this level
+        let snapshot = caster.spell_snapshot(&spell_id, 0).unwrap().unwrap();
+        assert_eq!(snapshot.base_level, 0, "Cantrip should have base level 0");
+
+        match snapshot.targeting_context {
+            TargetingContext::Multiple(count) => {
+                assert_eq!(
+                    count, 2,
+                    "Expected {} beams for Eldritch Blast at caster level 5, but got {}",
+                    2, count
+                );
+            }
+            _ => panic!("Expected Multiple targeting context for cantrip"),
+        }
     }
 }

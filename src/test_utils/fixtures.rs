@@ -211,7 +211,7 @@ pub mod equipment {
     }
 }
 
-pub mod characters {
+pub mod creatures {
     use std::collections::HashMap;
 
     use crate::{
@@ -224,110 +224,157 @@ pub mod characters {
         },
     };
 
-    pub fn hero_fighter() -> Character {
-        let mut classes = HashMap::new();
-        classes.insert(CharacterClass::Fighter, 5);
+    pub mod heroes {
+        use crate::test_utils::fixtures;
 
-        let mut character = Character::new("Hero", classes, 50);
+        use super::*;
 
-        let ability_scores = HashMap::from([
-            (Ability::Strength, 17),
-            (Ability::Dexterity, 14),
-            (Ability::Constitution, 16),
-            (Ability::Intelligence, 12),
-            (Ability::Wisdom, 10),
-            (Ability::Charisma, 8),
-        ]);
-
-        for (ability, score) in ability_scores {
-            character
-                .ability_scores_mut()
-                .set(ability, AbilityScore::new(ability, score));
+        pub fn add_initiative(hero: &mut Character) {
+            hero.skills_mut().add_modifier(
+                Skill::Initiative,
+                ModifierSource::Custom("Admin testing".to_string()),
+                20,
+            );
         }
 
-        character.equip_armor(super::armor::heavy_armor());
-        let _ = character.equip_weapon(super::weapons::greatsword_two_handed(), HandSlot::Main);
+        pub fn fighter() -> Character {
+            let mut classes = HashMap::new();
+            classes.insert(CharacterClass::Fighter, 5);
 
-        character
-    }
+            let mut character = Character::new("Hero", classes, 50);
 
-    pub fn hero_add_initiative(hero: &mut Character) {
-        hero.skills_mut().add_modifier(
-            Skill::Initiative,
-            ModifierSource::Custom("Admin testing".to_string()),
-            20,
-        );
-    }
+            let ability_scores = HashMap::from([
+                (Ability::Strength, 17),
+                (Ability::Dexterity, 14),
+                (Ability::Constitution, 16),
+                (Ability::Intelligence, 12),
+                (Ability::Wisdom, 10),
+                (Ability::Charisma, 8),
+            ]);
 
-    pub fn hero_wizard() -> Character {
-        let mut classes = HashMap::new();
-        classes.insert(CharacterClass::Wizard, 5);
+            for (ability, score) in ability_scores {
+                character
+                    .ability_scores_mut()
+                    .set(ability, AbilityScore::new(ability, score));
+            }
 
-        let mut character = Character::new("Hero Wizard", classes, 20);
+            character.equip_armor(fixtures::armor::heavy_armor());
+            let _ =
+                character.equip_weapon(fixtures::weapons::greatsword_two_handed(), HandSlot::Main);
 
-        let ability_scores = HashMap::from([
-            (Ability::Strength, 8),
-            (Ability::Dexterity, 14),
-            (Ability::Constitution, 16),
-            (Ability::Intelligence, 17),
-            (Ability::Wisdom, 12),
-            (Ability::Charisma, 10),
-        ]);
-
-        for (ability, score) in ability_scores {
             character
-                .ability_scores_mut()
-                .set(ability, AbilityScore::new(ability, score));
         }
 
-        character.equip_armor(super::armor::clothing());
-        // let _ = character.equip_weapon(super::weapons::rapier_finesse(), HandSlot::Main);
+        pub fn wizard() -> Character {
+            let mut classes = HashMap::new();
+            classes.insert(CharacterClass::Wizard, 5);
 
-        character.spellbook_mut().update_spell_slots(5);
+            let mut character = Character::new("Hero Wizard", classes, 20);
 
-        character
-            .spellbook_mut()
-            .add_spell(super::spells::magic_missile());
+            let ability_scores = HashMap::from([
+                (Ability::Strength, 8),
+                (Ability::Dexterity, 14),
+                (Ability::Constitution, 16),
+                (Ability::Intelligence, 17),
+                (Ability::Wisdom, 12),
+                (Ability::Charisma, 10),
+            ]);
 
-        character
-    }
+            for (ability, score) in ability_scores {
+                character
+                    .ability_scores_mut()
+                    .set(ability, AbilityScore::new(ability, score));
+            }
 
-    pub fn goblin_warrior() -> Character {
-        let mut classes = HashMap::new();
-        classes.insert(CharacterClass::Fighter, 1);
+            character.equip_armor(fixtures::armor::clothing());
 
-        let mut character = Character::new("Goblin Warrior", classes, 10);
+            character.spellbook_mut().update_spell_slots(5);
 
-        let ability_scores = HashMap::from([
-            (Ability::Strength, 8),
-            (Ability::Dexterity, 15),
-            (Ability::Constitution, 10),
-            (Ability::Intelligence, 10),
-            (Ability::Wisdom, 8),
-            (Ability::Charisma, 8),
-        ]);
-
-        for (ability, score) in ability_scores {
+            // TODO: Spellcasting ability should be set automatically based on class
             character
-                .ability_scores_mut()
-                .set(ability, AbilityScore::new(ability, score));
+                .spellbook_mut()
+                .add_spell(fixtures::spells::magic_missile(), Ability::Intelligence);
+            character
+                .spellbook_mut()
+                .add_spell(fixtures::spells::fireball(), Ability::Intelligence);
+
+            character
         }
 
-        character.equip_armor(super::armor::medium_armor());
-        let _ = character.equip_weapon(super::weapons::dagger_light(), HandSlot::Main);
+        pub fn warlock() -> Character {
+            let mut classes = HashMap::new();
+            classes.insert(CharacterClass::Warlock, 5);
 
-        character
+            let mut character = Character::new("Hero Warlock", classes, 20);
+
+            let ability_scores = HashMap::from([
+                (Ability::Strength, 8),
+                (Ability::Dexterity, 14),
+                (Ability::Constitution, 16),
+                (Ability::Intelligence, 12),
+                (Ability::Wisdom, 10),
+                (Ability::Charisma, 17),
+            ]);
+
+            for (ability, score) in ability_scores {
+                character
+                    .ability_scores_mut()
+                    .set(ability, AbilityScore::new(ability, score));
+            }
+
+            character.equip_armor(fixtures::armor::clothing());
+
+            character.spellbook_mut().update_spell_slots(5);
+            character
+                .spellbook_mut()
+                .add_spell(fixtures::spells::eldritch_blast(), Ability::Charisma);
+
+            character
+        }
+    }
+
+    pub mod monsters {
+        use crate::test_utils::fixtures;
+
+        use super::*;
+
+        pub fn goblin_warrior() -> Character {
+            let mut classes = HashMap::new();
+            classes.insert(CharacterClass::Fighter, 1);
+
+            let mut character = Character::new("Goblin Warrior", classes, 10);
+
+            let ability_scores = HashMap::from([
+                (Ability::Strength, 8),
+                (Ability::Dexterity, 15),
+                (Ability::Constitution, 10),
+                (Ability::Intelligence, 10),
+                (Ability::Wisdom, 8),
+                (Ability::Charisma, 8),
+            ]);
+
+            for (ability, score) in ability_scores {
+                character
+                    .ability_scores_mut()
+                    .set(ability, AbilityScore::new(ability, score));
+            }
+
+            character.equip_armor(fixtures::armor::medium_armor());
+            let _ = character.equip_weapon(fixtures::weapons::dagger_light(), HandSlot::Main);
+
+            character
+        }
     }
 }
 
 pub mod spells {
-    use std::{collections::HashSet, sync::Arc};
+    use std::sync::Arc;
 
     use crate::{
         combat::damage::{DamageRoll, DamageType},
         dice::dice::DieSize,
-        spells::spell::{MagicSchool, Spell, SpellFlag, TargetingContext},
-        stats::modifier::ModifierSource,
+        spells::spell::{MagicSchool, Spell, SpellKind, TargetingContext},
+        stats::{ability::Ability, modifier::ModifierSource},
     };
 
     pub fn magic_missile() -> Spell {
@@ -335,23 +382,25 @@ pub mod spells {
             "Magic Missile".to_string(),
             1,
             MagicSchool::Evocation,
-            Some(Arc::new(|_, _| {
-                let mut damage_roll = DamageRoll::new(
-                    1,
-                    DieSize::D4,
-                    DamageType::Force,
-                    "Magic Missile".to_string(),
-                );
-                damage_roll
-                    .primary
-                    .dice_roll
-                    .modifiers
-                    .add_modifier(ModifierSource::Spell("MAGIC_MISSILE".to_string()), 1);
-                damage_roll
-            })),
-            None,
-            Arc::new(|_, level| TargetingContext::Multiple(3 + (level - 1))),
-            HashSet::new(),
+            SpellKind::Damage {
+                damage: Arc::new(|_, _| {
+                    // TODO: Damage roll hooks? e.g. Empowered Evocation
+                    let mut damage_roll = DamageRoll::new(
+                        1,
+                        DieSize::D4,
+                        DamageType::Force,
+                        "Magic Missile".to_string(),
+                    );
+                    damage_roll
+                        .primary
+                        .dice_roll
+                        .modifiers
+                        .add_modifier(ModifierSource::Spell("MAGIC_MISSILE".to_string()), 1);
+
+                    damage_roll
+                }),
+            },
+            Arc::new(|_, spell_level| TargetingContext::Multiple(3 + (spell_level - 1))),
         )
     }
 
@@ -360,20 +409,51 @@ pub mod spells {
             "Fireball".to_string(),
             3,
             MagicSchool::Evocation,
-            Some(Arc::new(|_, level| {
-                DamageRoll::new(
-                    8 + (*level as u32 - 3),
-                    DieSize::D6,
-                    DamageType::Fire,
-                    "Fireball".to_string(),
-                )
-            })),
-            None,
+            SpellKind::SavingThrowDamage {
+                saving_throw: Ability::Dexterity,
+                half_damage_on_save: true,
+                damage: Arc::new(|_, spell_level| {
+                    DamageRoll::new(
+                        8 + (*spell_level as u32 - 3),
+                        DieSize::D6,
+                        DamageType::Fire,
+                        "Fireball".to_string(),
+                    )
+                }),
+            },
             Arc::new(|_, _| TargetingContext::AreaOfEffect {
                 radius: 20,
                 centered_on_caster: false,
             }),
-            HashSet::from([SpellFlag::SavingThrowHalfDamage]),
+        )
+    }
+
+    pub fn eldritch_blast() -> Spell {
+        Spell::new(
+            "Eldritch Blast".to_string(),
+            0, // Cantrip
+            MagicSchool::Evocation,
+            SpellKind::AttackRoll {
+                damage: Arc::new(|_, _| {
+                    DamageRoll::new(
+                        1,
+                        DieSize::D10,
+                        DamageType::Force,
+                        "Eldritch Blast".to_string(),
+                    )
+                }),
+                damage_on_failure: None,
+            },
+            Arc::new(|caster, _| {
+                let caster_level = caster.total_level();
+                // TODO: Could also do something more general purpose for cantrips
+                TargetingContext::Multiple(match caster_level {
+                    1..=4 => 1,
+                    5..=10 => 2,
+                    11..=16 => 3,
+                    _ => 4, // Level 17+ can hit up to 4 targets
+                })
+            }),
         )
     }
 }

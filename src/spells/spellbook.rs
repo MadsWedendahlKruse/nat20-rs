@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use crate::{
     combat::action::{CombatAction, CombatActionProvider},
+    stats::ability::Ability,
     utils::id::SpellId,
 };
 
-use super::spell::Spell;
+use super::spell::{self, Spell};
 
 #[derive(Debug, Clone)]
 pub struct Spellbook {
@@ -25,7 +26,8 @@ impl Spellbook {
         }
     }
 
-    pub fn add_spell(&mut self, spell: Spell) {
+    pub fn add_spell(&mut self, mut spell: Spell, spellcasting_ability: Ability) {
+        spell.set_spellcasting_ability(spellcasting_ability);
         self.spells.insert(spell.id().clone(), spell);
     }
 

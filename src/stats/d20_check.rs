@@ -17,19 +17,19 @@ pub enum RollMode {
     Disadvantage,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AdvantageType {
     Advantage,
     Disadvantage,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AdvantageSource {
     pub kind: AdvantageType,
     pub source: ModifierSource,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct AdvantageTracker {
     sources: Vec<AdvantageSource>,
 }
@@ -67,7 +67,7 @@ impl AdvantageTracker {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct D20Check {
     modifiers: ModifierSet,
     proficiency: Proficiency,
@@ -115,10 +115,11 @@ impl D20Check {
         self.proficiency = proficiency;
     }
 
-    pub fn perform(&mut self, proficiency_bonus: i32) -> D20CheckResult {
-        self.add_modifier(
+    pub fn roll(&self, proficiency_bonus: u32) -> D20CheckResult {
+        let mut modifiers = self.modifiers.clone();
+        modifiers.add_modifier(
             ModifierSource::Proficiency(self.proficiency),
-            self.proficiency.bonus(proficiency_bonus),
+            self.proficiency.bonus(proficiency_bonus) as i32,
         );
 
         let mut rng = rand::rng();
@@ -137,20 +138,46 @@ impl D20Check {
             RollMode::Disadvantage => roll1.min(roll2),
         } as u32;
 
-        let total_modifier = self.modifiers.total();
+        let total_modifier = modifiers.total();
         let total = selected_roll + total_modifier.max(0) as u32;
+
+        // TODO: Add support for effects lowering the critical threshold
+        let crit_threshold = 20;
+        let is_crit = selected_roll >= crit_threshold;
 
         D20CheckResult {
             advantage_tracker: self.advantage_tracker.clone(),
             rolls,
             selected_roll,
-            modifier_breakdown: self.modifiers.clone(),
+            modifier_breakdown: modifiers.clone(),
             total_modifier,
             total,
-            is_crit: selected_roll == 20,
+            is_crit,
             is_crit_fail: selected_roll == 1,
-            success: None, // Success is determined later based on DC or other conditions
+            // We can already now say the check is a success if it's a crit
+            success: is_crit,
         }
+    }
+
+    pub fn roll_hooks<T>(
+        &self,
+        character: &Character,
+        hooks: &[T],
+        pre: impl Fn(&T, &Character, &mut D20Check),
+        post: impl Fn(&T, &Character, &mut D20CheckResult),
+    ) -> D20CheckResult {
+        let mut check = self.clone();
+        for hook in hooks {
+            pre(hook, character, &mut check);
+        }
+
+        let mut result = check.roll(character.proficiency_bonus());
+
+        for hook in hooks {
+            post(hook, character, &mut result);
+        }
+
+        result
     }
 }
 
@@ -178,7 +205,7 @@ pub struct D20CheckResult {
     pub total: u32,
     pub is_crit: bool,
     pub is_crit_fail: bool,
-    pub success: Option<bool>,
+    pub success: bool,
 }
 
 impl fmt::Display for D20CheckResult {
@@ -270,8 +297,7 @@ where
             ability_scores.ability_modifier(ability).total(),
         );
 
-        execute_d20_check(
-            d20,
+        d20.roll_hooks(
             character,
             &(self.get_hooks)(key, character),
             |hook, character, check| (self.apply_check_hook)(*hook, character, check),
@@ -281,39 +307,28 @@ where
 
     pub fn check_dc(&self, dc: &D20CheckDC<K>, character: &Character) -> D20CheckResult {
         let mut result = self.check(dc.key, character);
-        result.success = Some(result.total >= dc.dc);
+        result.success |= result.total >= dc.dc.total() as u32;
+        result.success &= !result.is_crit_fail; // Critical failure cannot be a success
 
         result
     }
 }
 
-pub fn execute_d20_check<T>(
-    mut check: D20Check,
-    character: &Character,
-    hooks: &[T],
-    pre: impl Fn(&T, &Character, &mut D20Check),
-    post: impl Fn(&T, &Character, &mut D20CheckResult),
-) -> D20CheckResult {
-    for hook in hooks {
-        pre(hook, character, &mut check);
-    }
-
-    let mut result = check.perform(character.proficiency_bonus());
-
-    for hook in hooks {
-        post(hook, character, &mut result);
-    }
-
-    result
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct D20CheckDC<T>
 where
     T: IntoEnumIterator + Copy + Eq + Hash,
 {
     pub key: T,
-    pub dc: u32,
+    pub dc: ModifierSet,
+}
+
+impl fmt::Display for D20CheckDC<Ability> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "DC {}", self.dc)?;
+        write!(f, " {}", self.key)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -328,7 +343,7 @@ mod tests {
             .modifiers
             .add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
         println!("Check: {}", check);
-        let result = check.perform(2);
+        let result = check.roll(2);
 
         // 1d20 + 2 + 2
         // Min: 1 + 2 + 2 = 5
@@ -349,7 +364,7 @@ mod tests {
             AdvantageType::Advantage,
             ModifierSource::Item("Lucky Charm".to_string()),
         );
-        let result = check.perform(0);
+        let result = check.roll(0);
 
         // 1d20 + 2
         // Min: 1 + 2 = 3
@@ -372,7 +387,7 @@ mod tests {
             AdvantageType::Disadvantage,
             ModifierSource::Item("Cursed Ring".to_string()),
         );
-        let result = check.perform(4);
+        let result = check.roll(4);
 
         // 1d20
         // Min: 1 + 8 = 9
@@ -399,7 +414,7 @@ mod tests {
             AdvantageType::Disadvantage,
             ModifierSource::Item("Cursed Ring".to_string()),
         );
-        let result = check.perform(4);
+        let result = check.roll(4);
 
         // 1d20
         // Min: 1 + 8 = 9
@@ -416,10 +431,10 @@ mod tests {
         check
             .modifiers
             .add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
-        let mut result = check.perform(0);
+        let mut result = check.roll(0);
         while result.selected_roll != 20 {
             // Simulate rolling again until we get a critical success
-            result = check.perform(0);
+            result = check.roll(0);
         }
 
         // Simulate a critical success by setting the selected roll to 20

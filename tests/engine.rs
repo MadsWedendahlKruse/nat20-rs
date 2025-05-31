@@ -8,15 +8,15 @@ mod tests {
         effects::effects::{Effect, EffectDuration},
         engine::engine::CombatEngine,
         items::equipment::{equipment::HandSlot, weapon::WeaponType},
-        spells::spell::TargetingContext,
+        spells::spell::{SpellKindResult, TargetingContext},
         stats::modifier::ModifierSource,
         test_utils::fixtures,
     };
 
     #[test]
     fn initiative_order() {
-        let mut hero = fixtures::characters::hero_fighter();
-        let mut goblin_warrior = fixtures::characters::goblin_warrior();
+        let mut hero = fixtures::creatures::heroes::fighter();
+        let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
 
         let engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
 
@@ -37,10 +37,10 @@ mod tests {
 
     #[test]
     fn available_actions() {
-        let mut hero = fixtures::characters::hero_fighter();
-        fixtures::characters::hero_add_initiative(&mut hero);
+        let mut hero = fixtures::creatures::heroes::fighter();
+        fixtures::creatures::heroes::add_initiative(&mut hero);
         let hero_id = hero.id();
-        let mut goblin_warrior = fixtures::characters::goblin_warrior();
+        let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
 
         let engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
 
@@ -62,8 +62,8 @@ mod tests {
 
     #[test]
     fn weapon_attack() {
-        let mut hero = fixtures::characters::hero_fighter();
-        fixtures::characters::hero_add_initiative(&mut hero);
+        let mut hero = fixtures::creatures::heroes::fighter();
+        fixtures::creatures::heroes::add_initiative(&mut hero);
         let hero_id = hero.id();
         // Make sure the hero hits the goblin warrior
         let mut test_effect = Effect::new(
@@ -75,7 +75,7 @@ mod tests {
         });
         hero.add_effect(test_effect);
 
-        let mut goblin_warrior = fixtures::characters::goblin_warrior();
+        let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
         let goblin_warrior_id = goblin_warrior.id();
 
         let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
@@ -128,11 +128,11 @@ mod tests {
 
     #[test]
     fn cast_spell() {
-        let mut hero = fixtures::characters::hero_wizard();
-        fixtures::characters::hero_add_initiative(&mut hero);
+        let mut hero = fixtures::creatures::heroes::wizard();
+        fixtures::creatures::heroes::add_initiative(&mut hero);
         let hero_id = hero.id();
 
-        let mut goblin_warrior = fixtures::characters::goblin_warrior();
+        let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
         let goblin_warrior_id = goblin_warrior.id();
 
         let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
@@ -159,15 +159,11 @@ mod tests {
             "Expected to find Magic Missile action in available actions"
         );
 
-        let spell = {
-            let caster = engine.current_character();
-            let spellbook = caster.spellbook();
-            let spell = spellbook
-                .get_spell(&spell_id)
-                .expect("Spell not found in spellbook")
-                .snapshot(caster, &spell_level);
-            spell
-        };
+        let spell = engine
+            .current_character()
+            .spell_snapshot(spell_id, spell_level)
+            .unwrap()
+            .unwrap();
 
         let targeting_context = spell.targeting_context;
         let mut targets = Vec::new();
@@ -207,10 +203,30 @@ mod tests {
             _ => panic!("Expected a CastSpell result, but got: {:?}", action_result),
         };
 
+        assert!(
+            !spell_result.is_empty(),
+            "Expected spell result to not be empty"
+        );
+
         let total_damage: i32 = spell_result
             .iter()
-            .map(|r| r.damage_result.as_ref().unwrap().total)
+            .map(|r| match &r.result {
+                SpellKindResult::Damage {
+                    damage_roll: _,
+                    damage_taken,
+                } => {
+                    if let Some(damage) = damage_taken {
+                        return damage.total;
+                    }
+                    0
+                }
+                _ => panic!("Expected a Damage spell result, but got: {:?}", r.result),
+            })
             .sum();
+        assert!(
+            total_damage > 0,
+            "Expected total damage to be greater than 0"
+        );
 
         assert_eq!(
             goblin_warrior.hp(),

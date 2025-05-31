@@ -19,6 +19,7 @@ pub enum EffectDuration {
 
 #[derive(Clone)]
 pub struct Effect {
+    // TODO: ID? Name?
     source: ModifierSource,
     duration: EffectDuration,
     // TODO: description?

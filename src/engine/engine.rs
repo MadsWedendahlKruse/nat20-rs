@@ -113,7 +113,6 @@ impl<'c> CombatEngine<'c> {
                 hand,
                 target,
             } => {
-                // TODO: Something like a SpellResult, but for a weapon attack? WeaponSnapshot.attack(&Character)?
                 let attacker = self.current_character();
                 let attack_roll_result = attacker.attack_roll(&weapon_type, hand);
                 let damage_roll_result = attacker
@@ -124,11 +123,11 @@ impl<'c> CombatEngine<'c> {
                 let target_character = self.participants.get_mut(&target).unwrap();
                 let armor_class = target_character.armor_class();
 
-                let damage_source = DamageSource::Attack {
+                let damage_source = DamageSource::WeaponAttack {
                     attack_roll_result: attack_roll_result.clone(),
+                    damage_roll_result: damage_roll_result.clone(),
                 };
-                let damage_result =
-                    target_character.take_damage(&damage_roll_result, &damage_source);
+                let damage_result = target_character.take_damage(&damage_source);
 
                 CombatActionResult::WeaponAttack {
                     target: target_character.id(),
@@ -145,7 +144,8 @@ impl<'c> CombatEngine<'c> {
                 targets,
             } => {
                 let caster = self.current_character();
-                let spell_snapshot = caster.spell_snapshot(&spell_id, level).unwrap();
+                // TODO: What if the caster doesn't have the spell?
+                let spell_snapshot = caster.spell_snapshot(&spell_id, level).unwrap().unwrap();
 
                 let mut spell_results = Vec::new();
                 for target in targets {

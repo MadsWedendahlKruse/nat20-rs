@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, fmt, hash::Hash};
 
 use super::modifier::{ModifierSet, ModifierSource};
 
@@ -12,6 +12,12 @@ pub enum Ability {
     Intelligence,
     Wisdom,
     Charisma,
+}
+
+impl fmt::Display for Ability {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug, Clone)]

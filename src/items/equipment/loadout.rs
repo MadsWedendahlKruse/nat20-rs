@@ -5,7 +5,7 @@ use crate::creature::character::Character;
 use crate::items::equipment::armor::Armor;
 use crate::items::equipment::equipment::*;
 use crate::items::equipment::weapon::{Weapon, WeaponProperties, WeaponType};
-use crate::stats::d20_check::{execute_d20_check, D20CheckResult};
+use crate::stats::d20_check::D20CheckResult;
 use crate::stats::modifier::{ModifierSet, ModifierSource};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -160,8 +160,7 @@ impl Loadout {
             .unwrap()
             .attack_roll(character);
 
-        execute_d20_check(
-            attack_roll,
+        attack_roll.roll_hooks(
             character,
             &character.effects(),
             |hook, character, check| (hook.pre_attack_roll)(character, check),

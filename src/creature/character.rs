@@ -16,7 +16,7 @@ use crate::{
         weapon::{Weapon, WeaponCategory, WeaponType},
     },
     spells::{
-        spell::{SpellFlag, SpellSnapshot},
+        spell::{SnapshotError, SpellKindSnapshot, SpellSnapshot},
         spellbook::Spellbook,
     },
     stats::{
@@ -36,6 +36,7 @@ pub enum CharacterClass {
     Rogue,
     Wizard,
     Cleric,
+    Warlock,
     // Add more as needed
 }
 
@@ -94,7 +95,7 @@ impl Character {
         self.class_levels.values().copied().sum()
     }
 
-    pub fn proficiency_bonus(&self) -> i32 {
+    pub fn proficiency_bonus(&self) -> u32 {
         match self.total_level() {
             1..=4 => 2,
             5..=8 => 3,
@@ -117,56 +118,86 @@ impl Character {
         self.current_hp > 0
     }
 
-    pub fn take_damage(
-        &mut self,
-        damage_roll_result: &DamageRollResult,
-        damage_source: &DamageSource,
-    ) -> Option<DamageMitigationResult> {
-        let mut resistances = self.resistances().clone();
+    pub fn take_damage(&mut self, damage_source: &DamageSource) -> Option<DamageMitigationResult> {
+        let mut resistances = self.resistances.clone();
 
         match damage_source {
-            DamageSource::Attack { attack_roll_result } => {
+            DamageSource::WeaponAttack {
+                attack_roll_result,
+                damage_roll_result,
+            } => {
                 if !self.loadout().does_attack_hit(&self, attack_roll_result) {
                     // If the attack misses, no damage is applied
                     return None;
                 }
+                self.take_damage_internal(damage_roll_result, &resistances)
             }
 
-            DamageSource::Spell {
-                spell_id,
-                spell_flags,
-                attack_roll_result,
-                saving_throw_dc,
-            } => {
-                // TODO: Spell attack rolls
-
-                if spell_flags.contains(&SpellFlag::SavingThrowHalfDamage) {
-                    if saving_throw_dc.is_none() {
-                        // If the spell requires a saving throw but no DC is provided, return None
-                        // TODO: This should probably be an error instead?
-                        return None;
+            DamageSource::Spell { snapshot } => {
+                match &snapshot {
+                    SpellKindSnapshot::Damage { damage_roll } => {
+                        return self.take_damage_internal(damage_roll, &resistances);
                     }
 
-                    let saving_throw_dc = saving_throw_dc.as_ref().unwrap();
-                    let saving_throw = self.saving_throw(saving_throw_dc.key);
-
-                    let success = saving_throw.success.is_some_and(|value| value);
-
-                    // If the saving throw is successful, apply half damage for every damage component
-                    if success {
-                        for component in &damage_roll_result.components {
-                            let mitigation_effect = DamageMitigationEffect {
-                                // TODO: Not sure if Ability source is correct here
-                                source: ModifierSource::Ability(saving_throw_dc.key.clone()),
-                                operation: MitigationOperation::Resistance,
-                            };
-                            resistances.add_effect(component.damage_type, mitigation_effect);
+                    SpellKindSnapshot::AttackRoll {
+                        attack_roll,
+                        damage_roll: damage,
+                        damage_on_failure,
+                    } => {
+                        if !self.loadout().does_attack_hit(self, attack_roll) {
+                            if let Some(damage_on_failure) = damage_on_failure {
+                                return self.take_damage_internal(damage_on_failure, &resistances);
+                            }
+                            return None;
                         }
+                        self.take_damage_internal(damage, &resistances)
+                    }
+
+                    SpellKindSnapshot::SavingThrowDamage {
+                        saving_throw,
+                        half_damage_on_save,
+                        damage_roll,
+                    } => {
+                        let check_result = self.saving_throws.check_dc(saving_throw, self);
+                        if check_result.success {
+                            if *half_damage_on_save {
+                                // Apply half damage on successful save
+                                for component in damage_roll.components.iter() {
+                                    resistances.add_effect(
+                                        component.damage_type,
+                                        DamageMitigationEffect {
+                                            // TODO: Not sure if this is the best source
+                                            source: ModifierSource::Ability(saving_throw.key),
+                                            operation: MitigationOperation::Resistance,
+                                        },
+                                    );
+                                }
+                                return self.take_damage_internal(&damage_roll, &resistances);
+                            }
+                            // No damage on successful save
+                            return None;
+                        }
+                        self.take_damage_internal(damage_roll, &resistances)
+                    }
+
+                    SpellKindSnapshot::Custom { damage_roll } => {
+                        return self.take_damage_internal(damage_roll, &resistances);
+                    }
+
+                    _ => {
+                        // TODO: Handle this in a more graceful way
+                        panic!("Character::take_damage called with unsupported spell snapshot type: {:?}", snapshot);
                     }
                 }
             }
         }
+    }
 
+    fn take_damage_internal(
+        &mut self,
+        damage_roll_result: &DamageRollResult,
+        resistances: &DamageResistances,
+    ) -> Option<DamageMitigationResult> {
         let mitigation_result = resistances.apply(damage_roll_result);
         self.current_hp = (self.current_hp - mitigation_result.total).max(0);
         Some(mitigation_result)
@@ -297,7 +328,11 @@ impl Character {
         self.spellbook.update_spell_slots(caster_level);
     }
 
-    pub fn spell_snapshot(&self, spell_id: &str, level: u8) -> Option<SpellSnapshot> {
+    pub fn spell_snapshot(
+        &self,
+        spell_id: &str,
+        level: u8,
+    ) -> Option<Result<SpellSnapshot, SnapshotError>> {
         self.spellbook
             .get_spell(spell_id)
             .map(|spell| spell.snapshot(self, &level))

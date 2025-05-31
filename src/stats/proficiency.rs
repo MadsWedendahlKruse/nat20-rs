@@ -18,8 +18,8 @@ impl Proficiency {
         }
     }
 
-    pub fn bonus(&self, proficiency_bonus: i32) -> i32 {
-        (self.multiplier() * proficiency_bonus as f32).floor() as i32
+    pub fn bonus(&self, proficiency_bonus: u32) -> u32 {
+        (self.multiplier() * proficiency_bonus as f32).floor() as u32
     }
 }
 
