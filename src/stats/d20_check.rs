@@ -139,6 +139,7 @@ impl D20Check {
         } as u32;
 
         let total_modifier = modifiers.total();
+        // TODO: For some reason this is clamped to zero, so negative modifiers are not applied
         let total = selected_roll + total_modifier.max(0) as u32;
 
         // TODO: Add support for effects lowering the critical threshold

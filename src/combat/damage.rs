@@ -1,11 +1,13 @@
-use crate::dice::dice::*;
-use crate::spells::spell::SpellKindSnapshot;
-use crate::stats::ability::{self, Ability};
-use crate::stats::d20_check::D20CheckResult;
-use crate::stats::modifier::{ModifierSet, ModifierSource};
+use std::{collections::HashMap, fmt};
 
-use std::collections::HashMap;
-use std::fmt::{self};
+use crate::{
+    dice::dice::{DiceSet, DiceSetRoll, DiceSetRollResult, DieSize},
+    spells::spell::SpellKindSnapshot,
+    stats::{
+        d20_check::D20CheckResult,
+        modifier::{ModifierSet, ModifierSource},
+    },
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DamageType {

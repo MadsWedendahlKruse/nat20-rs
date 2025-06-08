@@ -215,7 +215,7 @@ pub mod creatures {
     use std::collections::HashMap;
 
     use crate::{
-        creature::character::{Character, CharacterClass},
+        creature::{character::Character, level_up::PredefinedChoiceProvider},
         items::equipment::equipment::HandSlot,
         stats::{
             ability::{Ability, AbilityScore},
@@ -224,8 +224,27 @@ pub mod creatures {
         },
     };
 
+    fn apply_level_up_selection(
+        hero: &mut Character,
+        levels: u8,
+        choice_provider: &mut PredefinedChoiceProvider,
+    ) {
+        for _ in 0..levels {
+            let mut level_up_session = hero.level_up();
+            level_up_session
+                .advance(choice_provider)
+                .expect("Level-up failed");
+        }
+    }
+
     pub mod heroes {
-        use crate::test_utils::fixtures;
+        use crate::{
+            creature::{
+                classes::class::{ClassName, SubclassName},
+                level_up::{LevelUpSelection, PredefinedChoiceProvider},
+            },
+            test_utils::fixtures,
+        };
 
         use super::*;
 
@@ -238,10 +257,22 @@ pub mod creatures {
         }
 
         pub fn fighter() -> Character {
-            let mut classes = HashMap::new();
-            classes.insert(CharacterClass::Fighter, 5);
-
-            let mut character = Character::new("Hero", classes, 50);
+            let mut character = Character::new("Johnny Fighter");
+            apply_level_up_selection(
+                &mut character,
+                5,
+                &mut PredefinedChoiceProvider::new(vec![
+                    LevelUpSelection::Class(ClassName::Fighter),
+                    LevelUpSelection::Class(ClassName::Fighter),
+                    LevelUpSelection::Class(ClassName::Fighter),
+                    LevelUpSelection::Subclass(SubclassName {
+                        class: ClassName::Fighter,
+                        name: "Champion".to_string(),
+                    }),
+                    LevelUpSelection::Class(ClassName::Fighter),
+                    LevelUpSelection::Class(ClassName::Fighter),
+                ]),
+            );
 
             let ability_scores = HashMap::from([
                 (Ability::Strength, 17),
@@ -266,10 +297,22 @@ pub mod creatures {
         }
 
         pub fn wizard() -> Character {
-            let mut classes = HashMap::new();
-            classes.insert(CharacterClass::Wizard, 5);
-
-            let mut character = Character::new("Hero Wizard", classes, 20);
+            let mut character = Character::new("Jimmy Wizard");
+            apply_level_up_selection(
+                &mut character,
+                5,
+                &mut PredefinedChoiceProvider::new(vec![
+                    LevelUpSelection::Class(ClassName::Wizard),
+                    LevelUpSelection::Class(ClassName::Wizard),
+                    LevelUpSelection::Class(ClassName::Wizard),
+                    LevelUpSelection::Subclass(SubclassName {
+                        class: ClassName::Wizard,
+                        name: "Evoker".to_string(),
+                    }),
+                    LevelUpSelection::Class(ClassName::Wizard),
+                    LevelUpSelection::Class(ClassName::Wizard),
+                ]),
+            );
 
             let ability_scores = HashMap::from([
                 (Ability::Strength, 8),
@@ -302,10 +345,22 @@ pub mod creatures {
         }
 
         pub fn warlock() -> Character {
-            let mut classes = HashMap::new();
-            classes.insert(CharacterClass::Warlock, 5);
-
-            let mut character = Character::new("Hero Warlock", classes, 20);
+            let mut character = Character::new("Bobby Warlock");
+            apply_level_up_selection(
+                &mut character,
+                5,
+                &mut PredefinedChoiceProvider::new(vec![
+                    LevelUpSelection::Class(ClassName::Warlock),
+                    LevelUpSelection::Class(ClassName::Warlock),
+                    LevelUpSelection::Class(ClassName::Warlock),
+                    LevelUpSelection::Subclass(SubclassName {
+                        class: ClassName::Warlock,
+                        name: "Fiend Patron".to_string(),
+                    }),
+                    LevelUpSelection::Class(ClassName::Warlock),
+                    LevelUpSelection::Class(ClassName::Warlock),
+                ]),
+            );
 
             let ability_scores = HashMap::from([
                 (Ability::Strength, 8),
@@ -334,15 +389,23 @@ pub mod creatures {
     }
 
     pub mod monsters {
-        use crate::test_utils::fixtures;
+        use crate::{
+            creature::{classes::class::ClassName, level_up::LevelUpSelection},
+            test_utils::fixtures,
+        };
 
         use super::*;
 
         pub fn goblin_warrior() -> Character {
-            let mut classes = HashMap::new();
-            classes.insert(CharacterClass::Fighter, 1);
-
-            let mut character = Character::new("Goblin Warrior", classes, 10);
+            let mut character = Character::new("Goblin Warrior");
+            // TODO: Not sure how to handle monster level-ups yet
+            apply_level_up_selection(
+                &mut character,
+                1,
+                &mut PredefinedChoiceProvider::new(vec![LevelUpSelection::Class(
+                    ClassName::Fighter,
+                )]),
+            );
 
             let ability_scores = HashMap::from([
                 (Ability::Strength, 8),

@@ -8,6 +8,10 @@ use crate::{
             DamageRollResult, DamageSource, MitigationOperation,
         },
     },
+    creature::{
+        classes::class::{Class, SubclassName},
+        level_up::{LevelUpError, LevelUpSession},
+    },
     effects::effects::Effect,
     items::equipment::{
         armor::Armor,
@@ -15,6 +19,7 @@ use crate::{
         loadout::{Loadout, TryEquipError},
         weapon::{Weapon, WeaponCategory, WeaponType},
     },
+    registry::classes::CLASS_REGISTRY,
     spells::{
         spell::{SnapshotError, SpellKindSnapshot, SpellSnapshot},
         spellbook::Spellbook,
@@ -30,44 +35,47 @@ use crate::{
     utils::id::CharacterId,
 };
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum CharacterClass {
-    Fighter,
-    Rogue,
-    Wizard,
-    Cleric,
-    Warlock,
-    // Add more as needed
-}
+use super::{
+    classes::{
+        class::{ClassName, SpellcastingProgression},
+        resources::Resource,
+    },
+    level_up::{LevelUpChoice, LevelUpSelection},
+};
 
 #[derive(Debug)]
 pub struct Character {
     id: CharacterId,
     pub name: String,
-    pub class_levels: HashMap<CharacterClass, u8>,
-    max_hp: i32,
-    current_hp: i32,
+    classes: HashMap<ClassName, u8>,
+    subclasses: HashMap<ClassName, SubclassName>,
+    latest_class: Option<ClassName>, // The class that was most recently leveled up
+    max_hp: u32,
+    current_hp: u32,
     ability_scores: AbilityScoreSet,
     skills: SkillSet,
     saving_throws: SavingThrowSet,
     resistances: DamageResistances,
     // TODO: Might have to make this more granular later (not just martial/simple)
-    // TODO: Should it just be a bool? Not sure if you can have expertise in a weapon
+    // TODO: Should it just be a bool (or a set even)? Not sure if you can have expertise in a weapon
     pub weapon_proficiencies: HashMap<WeaponCategory, Proficiency>,
     /// Equipped items
     loadout: Loadout,
     spellbook: Spellbook,
+    resources: HashMap<String, Resource>,
     effects: Vec<Effect>,
 }
 
 impl Character {
-    pub fn new(name: &str, class_levels: HashMap<CharacterClass, u8>, max_hp: i32) -> Self {
+    pub fn new(name: &str) -> Self {
         Self {
             id: CharacterId::new_v4(),
             name: name.to_string(),
-            class_levels,
-            max_hp,
-            current_hp: max_hp,
+            classes: HashMap::new(),
+            subclasses: HashMap::new(),
+            latest_class: None,
+            max_hp: 0,
+            current_hp: 0,
             ability_scores: AbilityScoreSet::new(),
             skills: create_skill_set(),
             saving_throws: create_saving_throw_set(),
@@ -75,6 +83,7 @@ impl Character {
             weapon_proficiencies: HashMap::new(),
             loadout: Loadout::new(),
             spellbook: Spellbook::new(),
+            resources: HashMap::new(),
             effects: Vec::new(),
         }
     }
@@ -87,12 +96,123 @@ impl Character {
         &self.name
     }
 
-    pub fn add_class_level(&mut self, class: CharacterClass, levels: u8) {
-        *self.class_levels.entry(class).or_insert(0) += levels;
+    pub fn level_up(&mut self) -> LevelUpSession {
+        LevelUpSession::new(self)
+    }
+
+    pub fn resolve_level_up_choice(
+        &mut self,
+        choice: LevelUpChoice,
+        selection: LevelUpSelection,
+    ) -> Result<Vec<LevelUpChoice>, LevelUpError> {
+        let mut choices = Vec::new();
+
+        match (&choice, &selection) {
+            (LevelUpChoice::Class(classes), LevelUpSelection::Class(class_name)) => {
+                if !classes.contains(&class_name) {
+                    return Err(LevelUpError::InvalidSelection { choice, selection });
+                }
+
+                if let Some(class) = CLASS_REGISTRY.get(&class_name) {
+                    // TODO: Do this at the end when subclass, feats etc. are selected
+
+                    // 2: Adjust Hit Points and Hit Point Dice
+                    self.update_hp(class);
+
+                    // 3: Record New Class Features
+                    choices.extend(self.increment_class_level(&class));
+
+                    // 4: Adjust Proficiency Bonus
+                    // This is handled by the `proficiency_bonus` method, so we don't need to do anything here.
+
+                    // 5: Adjust Ability Modifiers
+                    // TODO: This would happen when choosing certain Feats (choice mechanism?)
+                } else {
+                    return Err(LevelUpError::RegistryMissing(*class_name));
+                }
+            }
+
+            (LevelUpChoice::Subclass(subclasses), LevelUpSelection::Subclass(subclass_name)) => {
+                // Sanity check
+                if !subclasses.contains(&subclass_name) {
+                    return Err(LevelUpError::InvalidSelection { choice, selection });
+                }
+
+                self.subclasses
+                    .insert(subclass_name.class.clone(), subclass_name.clone());
+
+                // TODO: Subclass choices
+            }
+
+            _ => {
+                return Err(LevelUpError::ChoiceSelectionMismatch { choice, selection });
+            }
+        }
+
+        Ok(choices)
+    }
+
+    pub fn apply_latest_level(&mut self) {
+        if let Some(class_name) = &self.latest_class {
+            if let Some(class) = CLASS_REGISTRY.get(class_name) {
+                self.apply_class_level(class);
+            } else {
+                panic!("Tried to apply level for unknown class: {:?}", class_name);
+            }
+        } else {
+            panic!("No latest class set for level up");
+        }
+    }
+
+    fn apply_class_level(&mut self, class: &Class) {
+        let level = *self
+            .classes
+            .get(&class.name)
+            .unwrap_or_else(|| panic!("Class {} not found in character's classes", class.name));
+
+        let subclass_name = self
+            .subclass(&class.name)
+            .unwrap_or(&SubclassName {
+                class: class.name.clone(),
+                name: String::new(),
+            })
+            .clone();
+
+        for effect in class.effects_by_level(level, &subclass_name.name) {
+            self.add_effect(effect.clone());
+        }
+
+        for resource in class.resources_by_level(level, &subclass_name.name) {
+            self.resources
+                .entry(resource.kind.clone())
+                .and_modify(|r| {
+                    r.add_uses(resource.max_uses).unwrap();
+                })
+                .or_insert(resource);
+        }
     }
 
     pub fn total_level(&self) -> u8 {
-        self.class_levels.values().copied().sum()
+        self.classes.iter().map(|(_, level)| *level).sum()
+    }
+
+    fn increment_class_level(&mut self, class: &Class) -> Vec<LevelUpChoice> {
+        let level = *self.classes.get(&class.name).unwrap_or(&0) + 1;
+
+        // Add or update the class level
+        if level == 1 {
+            // If it's the first level, add the class to the list
+            self.classes.insert(class.name.clone(), level);
+        } else {
+            // If it's an existing class, update its level
+            if let Some(existing_level) = self.classes.get_mut(&class.name) {
+                *existing_level = level;
+            }
+        }
+
+        self.latest_class = Some(class.name.clone());
+
+        class.level_up_choices(level)
     }
 
     pub fn proficiency_bonus(&self) -> u32 {
@@ -106,16 +226,62 @@ impl Character {
         }
     }
 
-    pub fn max_hp(&self) -> i32 {
+    pub fn classes(&self) -> &HashMap<ClassName, u8> {
+        &self.classes
+    }
+
+    pub fn subclass(&self, class_name: &ClassName) -> Option<&SubclassName> {
+        self.subclasses.get(class_name)
+    }
+
+    pub fn spellcaster_levels(&self) -> u8 {
+        let mut spellcaster_levels = 0;
+        for (class_name, levels) in &self.classes {
+            if let Some(class) = CLASS_REGISTRY.get(&class_name) {
+                let spellcasting_progression = class.spellcasting_progression(
+                    // TODO: Not entirely sure why it's necessary to do it like this
+                    self.subclass(class_name)
+                        .as_deref()
+                        .map_or("", |v| v.name.as_str()),
+                );
+                spellcaster_levels += match spellcasting_progression {
+                    SpellcastingProgression::None => 0,
+                    SpellcastingProgression::Full => *levels,
+                    SpellcastingProgression::Half => (*levels) / 2,
+                    SpellcastingProgression::Third => (*levels) / 3,
+                };
+            }
+        }
+        spellcaster_levels
+    }
+
+    pub fn max_hp(&self) -> u32 {
         self.max_hp
     }
 
-    pub fn hp(&self) -> i32 {
+    pub fn hp(&self) -> u32 {
         self.current_hp
     }
 
     pub fn is_alive(&self) -> bool {
         self.current_hp > 0
+    }
+
+    fn update_hp(&mut self, class: &Class) {
+        // TODO: Lot of type casting back and forth here
+        let hp_bonus = if self.total_level() == 1 {
+            class.hit_die as u32
+        } else {
+            class.hp_per_level as u32
+        };
+        let con_mod = self
+            .ability_scores
+            .get(Ability::Constitution)
+            .ability_modifier()
+            .total();
+        let hp_increase = (hp_bonus as i32 + con_mod).max(1) as u32;
+        self.max_hp += hp_increase;
+        self.current_hp += hp_increase;
     }
 
     pub fn take_damage(&mut self, damage_source: &DamageSource) -> Option<DamageMitigationResult> {
@@ -199,11 +365,11 @@ impl Character {
         resistances: &DamageResistances,
     ) -> Option<DamageMitigationResult> {
         let mitigation_result = resistances.apply(damage_roll_result);
-        self.current_hp = (self.current_hp - mitigation_result.total).max(0);
+        self.current_hp = (self.current_hp as i32 - mitigation_result.total).max(0) as u32;
         Some(mitigation_result)
     }
 
-    pub fn heal(&mut self, amount: i32) {
+    pub fn heal(&mut self, amount: u32) {
         self.current_hp = (self.current_hp + amount).min(self.max_hp);
     }
 
@@ -391,6 +557,6 @@ impl CombatActionProvider for Character {
 
 impl Default for Character {
     fn default() -> Self {
-        Character::new("John Doe", HashMap::new(), 20)
+        Character::new("John Doe")
     }
 }

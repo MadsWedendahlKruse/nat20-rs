@@ -38,37 +38,6 @@ pub enum TargetingContext {
     },
 }
 
-const BASE_SPELL_SAVE_DC: i32 = 8;
-
-fn spell_save_dc(caster: &Character, ability: Ability) -> ModifierSet {
-    let mut spell_save_dc = ModifierSet::new();
-    spell_save_dc.add_modifier(
-        ModifierSource::Custom("Base spell save DC".to_string()),
-        BASE_SPELL_SAVE_DC,
-    );
-    let spell_casting_modifier = caster.ability_scores().ability_modifier(ability).total();
-    spell_save_dc.add_modifier(ModifierSource::Ability(ability), spell_casting_modifier);
-    // TODO: Not sure if Proficiency is the correct modifier source here, since I don't think
-    // you can have e.g. Expertise in spell save DCs.
-    spell_save_dc.add_modifier(
-        ModifierSource::Proficiency(Proficiency::Proficient),
-        caster.proficiency_bonus() as i32,
-    );
-    spell_save_dc
-}
-
-fn spell_attack_roll(caster: &Character, ability: Ability) -> D20CheckResult {
-    let mut attack_roll = D20Check::new(Proficiency::Proficient);
-    let spell_casting_modifier = caster.ability_scores().ability_modifier(ability).total();
-    attack_roll.add_modifier(ModifierSource::Ability(ability), spell_casting_modifier);
-    attack_roll.roll_hooks(
-        caster,
-        &caster.effects(),
-        |hook, character, check| (hook.pre_attack_roll)(character, check),
-        |hook, character, result| (hook.post_attack_roll)(character, result),
-    )
-}
-
 #[derive(Clone)]
 pub enum SpellKind {
     /// Spells that deal unconditional damage. Is this only Magic Missile?
@@ -195,6 +164,37 @@ impl fmt::Debug for SpellKind {
             SpellKind::Custom(_) => write!(f, "Custom"),
         }
     }
+}
+
+const BASE_SPELL_SAVE_DC: i32 = 8;
+
+fn spell_save_dc(caster: &Character, ability: Ability) -> ModifierSet {
+    let mut spell_save_dc = ModifierSet::new();
+    spell_save_dc.add_modifier(
+        ModifierSource::Custom("Base spell save DC".to_string()),
+        BASE_SPELL_SAVE_DC,
+    );
+    let spell_casting_modifier = caster.ability_scores().ability_modifier(ability).total();
+    spell_save_dc.add_modifier(ModifierSource::Ability(ability), spell_casting_modifier);
+    // TODO: Not sure if Proficiency is the correct modifier source here, since I don't think
+    // you can have e.g. Expertise in spell save DCs.
+    spell_save_dc.add_modifier(
+        ModifierSource::Proficiency(Proficiency::Proficient),
+        caster.proficiency_bonus() as i32,
+    );
+    spell_save_dc
+}
+
+fn spell_attack_roll(caster: &Character, ability: Ability) -> D20CheckResult {
+    let mut attack_roll = D20Check::new(Proficiency::Proficient);
+    let spell_casting_modifier = caster.ability_scores().ability_modifier(ability).total();
+    attack_roll.add_modifier(ModifierSource::Ability(ability), spell_casting_modifier);
+    attack_roll.roll_hooks(
+        caster,
+        &caster.effects(),
+        |hook, character, check| (hook.pre_attack_roll)(character, check),
+        |hook, character, result| (hook.post_attack_roll)(character, result),
+    )
 }
 
 /// To avoid the issue of not being able to borrow the caster immutably and the
@@ -400,6 +400,10 @@ impl Spell {
         self.base_level
     }
 
+    pub fn is_cantrip(&self) -> bool {
+        self.base_level == 0
+    }
+
     pub fn school(&self) -> MagicSchool {
         self.school
     }
@@ -429,7 +433,7 @@ impl Spell {
                 *spell_level,
             ));
         }
-        if self.base_level == 0 && spell_level > &self.base_level {
+        if self.is_cantrip() && spell_level > &self.base_level {
             return Err(SnapshotError::UpcastingCantripNotAllowed);
         }
         if self.spellcasting_ability.is_none() {
@@ -735,6 +739,7 @@ mod tests {
     fn cantrip_level_scaling() {
         let caster = fixtures::creatures::heroes::warlock();
         let spell_id = fixtures::spells::eldritch_blast().id().clone();
+        assert_eq!(caster.total_level(), 5, "Expected Warlock to be level 5");
 
         // Warlock is level 5, so Eldritch Blast should have two beams at this level
         let snapshot = caster.spell_snapshot(&spell_id, 0).unwrap().unwrap();

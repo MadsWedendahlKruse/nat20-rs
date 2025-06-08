@@ -160,6 +160,8 @@ impl Loadout {
             .unwrap()
             .attack_roll(character);
 
+        // TODO: How do we handle something like Fighting Style Archery, which modifies the attack roll for only ranged weapons?
+
         attack_roll.roll_hooks(
             character,
             &character.effects(),

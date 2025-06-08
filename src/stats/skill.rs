@@ -11,13 +11,32 @@ use strum::EnumIter;
 
 #[derive(EnumIter, Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum Skill {
-    Acrobatics,
+    // --- Strength ---
     Athletics,
+    // --- Dexterity ---
+    Acrobatics,
+    SleightOfHand,
     Stealth,
+    // --- Intelligence ---
     Arcana,
     History,
+    Investigation,
+    Nature,
+    Religion,
+    // --- Wisdom ---
+    AnimalHandling,
+    Insight,
+    Medicine,
+    Perception,
+    Survival,
+    // --- Charisma ---
+    Deception,
+    Intimidation,
+    Performance,
+    Persuasion,
+    // --- Other ---
+    // Not technically a skill, but it behaves like one
     Initiative,
-    // Add more as needed
 }
 
 #[macro_export]
@@ -32,11 +51,29 @@ macro_rules! skill_ability_map {
 }
 
 skill_ability_map! {
+    Athletics => Strength,
+
     Acrobatics => Dexterity,
-    Athletics  => Strength,
-    Stealth    => Dexterity,
-    Arcana     => Intelligence,
-    History    => Intelligence,
+    SleightOfHand => Dexterity,
+    Stealth => Dexterity,
+
+    Arcana => Intelligence,
+    History => Intelligence,
+    Investigation => Intelligence,
+    Nature => Intelligence,
+    Religion => Intelligence,
+
+    AnimalHandling => Wisdom,
+    Insight => Wisdom,
+    Medicine => Wisdom,
+    Perception => Wisdom,
+    Survival => Wisdom,
+
+    Deception => Charisma,
+    Intimidation => Charisma,
+    Performance => Charisma,
+    Persuasion => Charisma,
+
     Initiative => Dexterity,
 }
 

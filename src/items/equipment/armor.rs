@@ -16,7 +16,7 @@ use crate::{
 
 use super::equipment::EquipmentItem;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ArmorType {
     Clothing,
     Light,

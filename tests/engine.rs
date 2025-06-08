@@ -122,7 +122,7 @@ mod tests {
         };
         assert_eq!(
             goblin_warrior.hp(),
-            (goblin_warrior.max_hp() - damage_result.total).max(0)
+            (goblin_warrior.max_hp() as i32 - damage_result.total).max(0) as u32
         );
     }
 
@@ -230,7 +230,7 @@ mod tests {
 
         assert_eq!(
             goblin_warrior.hp(),
-            (goblin_warrior.max_hp() - total_damage).max(0)
+            (goblin_warrior.max_hp() as i32 - total_damage).max(0) as u32
         );
     }
 }
