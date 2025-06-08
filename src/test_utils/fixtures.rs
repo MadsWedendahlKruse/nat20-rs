@@ -60,8 +60,8 @@ pub mod weapons {
     use std::collections::HashSet;
 
     use crate::{
-        combat::damage::{DamageComponent, DamageRoll, DamageType},
-        dice::dice::{DiceSet, DiceSetRoll, DieSize},
+        combat::damage::DamageType,
+        dice::dice::{DiceSet, DieSize},
         items::{
             equipment::{
                 equipment::{EquipmentItem, EquipmentType},
@@ -69,7 +69,6 @@ pub mod weapons {
             },
             item::ItemRarity,
         },
-        stats::modifier::ModifierSet,
     };
 
     pub fn dagger_light() -> Weapon {
@@ -85,7 +84,9 @@ pub mod weapons {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Light]),
-            create_damage_roll(1, DieSize::D4, "Dagger", DamageType::Piercing),
+            1,
+            DieSize::D4,
+            DamageType::Piercing,
         )
     }
 
@@ -102,7 +103,9 @@ pub mod weapons {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
-            create_damage_roll(1, DieSize::D8, "Rapier", DamageType::Piercing),
+            1,
+            DieSize::D8,
+            DamageType::Piercing,
         )
     }
 
@@ -123,7 +126,9 @@ pub mod weapons {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Versatile(dice_set_two_handed)]),
-            create_damage_roll(1, DieSize::D6, "Trident", DamageType::Piercing),
+            1,
+            DieSize::D6,
+            DamageType::Piercing,
         )
     }
 
@@ -140,7 +145,9 @@ pub mod weapons {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::TwoHanded]),
-            create_damage_roll(2, DieSize::D6, "Greatsword", DamageType::Slashing),
+            2,
+            DieSize::D6,
+            DamageType::Slashing,
         )
     }
 
@@ -157,28 +164,10 @@ pub mod weapons {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Range(10, 40)]),
-            create_damage_roll(1, DieSize::D8, "Longbow", DamageType::Piercing),
+            1,
+            DieSize::D8,
+            DamageType::Piercing,
         )
-    }
-
-    fn create_damage_roll(
-        num_dice: u32,
-        die_size: DieSize,
-        label: &str,
-        damage_type: DamageType,
-    ) -> DamageRoll {
-        DamageRoll {
-            primary: DamageComponent {
-                dice_roll: DiceSetRoll {
-                    dice: DiceSet { num_dice, die_size },
-                    modifiers: ModifierSet::new(),
-                    label: label.to_string(),
-                },
-                damage_type,
-            },
-            bonus: Vec::new(),
-            label: label.to_string(),
-        }
     }
 }
 
@@ -215,7 +204,10 @@ pub mod creatures {
     use std::collections::HashMap;
 
     use crate::{
-        creature::{character::Character, level_up::PredefinedChoiceProvider},
+        creature::{
+            character::Character,
+            level_up::{LevelUpSelection, PredefinedChoiceProvider},
+        },
         items::equipment::equipment::HandSlot,
         stats::{
             ability::{Ability, AbilityScore},
@@ -225,14 +217,16 @@ pub mod creatures {
     };
 
     fn apply_level_up_selection(
-        hero: &mut Character,
+        character: &mut Character,
         levels: u8,
-        choice_provider: &mut PredefinedChoiceProvider,
+        responses: Vec<LevelUpSelection>,
     ) {
+        let mut choice_provider =
+            PredefinedChoiceProvider::new(character.name().to_string(), responses);
         for _ in 0..levels {
-            let mut level_up_session = hero.level_up();
+            let mut level_up_session = character.level_up();
             level_up_session
-                .advance(choice_provider)
+                .advance(&mut choice_provider)
                 .expect("Level-up failed");
         }
     }
@@ -241,8 +235,9 @@ pub mod creatures {
         use crate::{
             creature::{
                 classes::class::{ClassName, SubclassName},
-                level_up::{LevelUpSelection, PredefinedChoiceProvider},
+                level_up::LevelUpSelection,
             },
+            registry,
             test_utils::fixtures,
         };
 
@@ -261,8 +256,11 @@ pub mod creatures {
             apply_level_up_selection(
                 &mut character,
                 5,
-                &mut PredefinedChoiceProvider::new(vec![
+                vec![
                     LevelUpSelection::Class(ClassName::Fighter),
+                    LevelUpSelection::Effect(
+                        registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                    ),
                     LevelUpSelection::Class(ClassName::Fighter),
                     LevelUpSelection::Class(ClassName::Fighter),
                     LevelUpSelection::Subclass(SubclassName {
@@ -271,7 +269,7 @@ pub mod creatures {
                     }),
                     LevelUpSelection::Class(ClassName::Fighter),
                     LevelUpSelection::Class(ClassName::Fighter),
-                ]),
+                ],
             );
 
             let ability_scores = HashMap::from([
@@ -301,7 +299,7 @@ pub mod creatures {
             apply_level_up_selection(
                 &mut character,
                 5,
-                &mut PredefinedChoiceProvider::new(vec![
+                vec![
                     LevelUpSelection::Class(ClassName::Wizard),
                     LevelUpSelection::Class(ClassName::Wizard),
                     LevelUpSelection::Class(ClassName::Wizard),
@@ -311,7 +309,7 @@ pub mod creatures {
                     }),
                     LevelUpSelection::Class(ClassName::Wizard),
                     LevelUpSelection::Class(ClassName::Wizard),
-                ]),
+                ],
             );
 
             let ability_scores = HashMap::from([
@@ -349,7 +347,7 @@ pub mod creatures {
             apply_level_up_selection(
                 &mut character,
                 5,
-                &mut PredefinedChoiceProvider::new(vec![
+                vec![
                     LevelUpSelection::Class(ClassName::Warlock),
                     LevelUpSelection::Class(ClassName::Warlock),
                     LevelUpSelection::Class(ClassName::Warlock),
@@ -359,7 +357,7 @@ pub mod creatures {
                     }),
                     LevelUpSelection::Class(ClassName::Warlock),
                     LevelUpSelection::Class(ClassName::Warlock),
-                ]),
+                ],
             );
 
             let ability_scores = HashMap::from([
@@ -391,6 +389,7 @@ pub mod creatures {
     pub mod monsters {
         use crate::{
             creature::{classes::class::ClassName, level_up::LevelUpSelection},
+            registry,
             test_utils::fixtures,
         };
 
@@ -402,9 +401,12 @@ pub mod creatures {
             apply_level_up_selection(
                 &mut character,
                 1,
-                &mut PredefinedChoiceProvider::new(vec![LevelUpSelection::Class(
-                    ClassName::Fighter,
-                )]),
+                vec![
+                    LevelUpSelection::Class(ClassName::Fighter),
+                    LevelUpSelection::Effect(
+                        registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                    ),
+                ],
             );
 
             let ability_scores = HashMap::from([
@@ -434,7 +436,7 @@ pub mod spells {
     use std::sync::Arc;
 
     use crate::{
-        combat::damage::{DamageRoll, DamageType},
+        combat::damage::{DamageRoll, DamageSource, DamageType},
         dice::dice::DieSize,
         spells::spell::{MagicSchool, Spell, SpellKind, TargetingContext},
         stats::{ability::Ability, modifier::ModifierSource},
@@ -452,6 +454,7 @@ pub mod spells {
                         1,
                         DieSize::D4,
                         DamageType::Force,
+                        DamageSource::Spell,
                         "Magic Missile".to_string(),
                     );
                     damage_roll
@@ -480,6 +483,7 @@ pub mod spells {
                         8 + (*spell_level as u32 - 3),
                         DieSize::D6,
                         DamageType::Fire,
+                        DamageSource::Spell,
                         "Fireball".to_string(),
                     )
                 }),
@@ -502,6 +506,7 @@ pub mod spells {
                         1,
                         DieSize::D10,
                         DamageType::Force,
+                        DamageSource::Spell,
                         "Eldritch Blast".to_string(),
                     )
                 }),

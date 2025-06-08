@@ -4,7 +4,7 @@ mod tests {
     use std::{collections::HashSet, sync::Arc};
 
     use nat20_rs::{
-        combat::damage::{DamageRoll, DamageType},
+        combat::damage::DamageType,
         creature::character::Character,
         dice::dice::DieSize,
         effects::{
@@ -26,21 +26,12 @@ mod tests {
             proficiency::Proficiency,
             skill::Skill,
         },
+        utils::id::EffectId,
     };
 
     #[test]
     fn character_pre_attack_roll_effect() {
         // Create a ring that grants advantage on attack rolls
-        let mut advantage_effect = Effect::new(
-            ModifierSource::Item("Ring of Advantage".to_string()),
-            EffectDuration::Persistent,
-        );
-        advantage_effect.pre_attack_roll = Arc::new(|_, d20_check| {
-            d20_check.advantage_tracker_mut().add(
-                AdvantageType::Advantage,
-                ModifierSource::Item("Ring of Advantage".to_string()),
-            );
-        });
         let mut ring = EquipmentItem::new(
             "Ring of Advantage".to_string(),
             "A ring that grants advantage on attack rolls.".to_string(),
@@ -49,6 +40,17 @@ mod tests {
             ItemRarity::Uncommon,
             EquipmentType::Ring,
         );
+        let mut advantage_effect = Effect::new(
+            EffectId::from_str("effect.ring_of_advantage"),
+            ModifierSource::Item("Ring of Advantage".to_string()),
+            EffectDuration::Persistent,
+        );
+        advantage_effect.pre_attack_roll = Arc::new(|_, attack_roll| {
+            attack_roll.d20_check.advantage_tracker_mut().add(
+                AdvantageType::Advantage,
+                ModifierSource::Item("Ring of Advantage".to_string()),
+            );
+        });
         ring.add_effect(advantage_effect);
 
         // Create a weapon for the character
@@ -63,7 +65,9 @@ mod tests {
             ),
             WeaponCategory::Martial,
             HashSet::new(),
-            DamageRoll::new(1, DieSize::D8, DamageType::Slashing, "Sword".to_string()),
+            1,
+            DieSize::D8,
+            DamageType::Slashing,
         );
 
         let mut character = Character::default();
@@ -74,16 +78,27 @@ mod tests {
             character
                 .loadout()
                 .attack_roll(&character, &WeaponType::Melee, HandSlot::Main);
-        assert_eq!(attack_roll.advantage_tracker.roll_mode(), RollMode::Normal);
+        assert_eq!(
+            attack_roll.roll_result.advantage_tracker.roll_mode(),
+            RollMode::Normal
+        );
 
         // Advantage after equipping the ring
         let _ = character.equip_item(GeneralEquipmentSlot::Ring(0), ring);
+        println!(
+            "Equipped ring: {:?}",
+            character
+                .loadout()
+                .equipment
+                .get(&GeneralEquipmentSlot::Ring(0))
+        );
+        println!("Effects: {:?}", character.effects());
         let attack_roll =
             character
                 .loadout()
                 .attack_roll(&character, &WeaponType::Melee, HandSlot::Main);
         assert_eq!(
-            attack_roll.advantage_tracker.roll_mode(),
+            attack_roll.roll_result.advantage_tracker.roll_mode(),
             RollMode::Advantage
         );
         println!("{:?}", attack_roll);
@@ -94,7 +109,10 @@ mod tests {
             character
                 .loadout()
                 .attack_roll(&character, &WeaponType::Melee, HandSlot::Main);
-        assert_eq!(attack_roll.advantage_tracker.roll_mode(), RollMode::Normal);
+        assert_eq!(
+            attack_roll.roll_result.advantage_tracker.roll_mode(),
+            RollMode::Normal
+        );
         println!("{:?}", attack_roll);
     }
 
@@ -118,7 +136,11 @@ mod tests {
             EquipmentType::Armor,
         );
 
-        let mut armor_effect = Effect::new(modifier_source.clone(), EffectDuration::Persistent);
+        let mut armor_effect = Effect::new(
+            EffectId::from_str("effect.armor_of_sneaking"),
+            modifier_source.clone(),
+            EffectDuration::Persistent,
+        );
 
         // Create a modifier source for each closure (pre_hook and post_hook)
         // to avoid borrowing the same variable multiple times
@@ -176,7 +198,11 @@ mod tests {
             EquipmentType::Armor,
         );
 
-        let mut armor_effect = Effect::new(modifier_source.clone(), EffectDuration::Persistent);
+        let mut armor_effect = Effect::new(
+            EffectId::from_str("effect.armor_of_resilience"),
+            modifier_source.clone(),
+            EffectDuration::Persistent,
+        );
 
         let mut saving_throw_hook = SavingThrowHook::new(Ability::Constitution);
         saving_throw_hook.check_hook = Arc::new(move |_, d20_check| {
@@ -184,7 +210,7 @@ mod tests {
                 .advantage_tracker_mut()
                 .add(AdvantageType::Advantage, modifier_source.clone());
         });
-        armor_effect.saving_throw_hook = Some(saving_throw_hook);
+        armor_effect.on_saving_throw = Some(saving_throw_hook);
 
         equipment.add_effect(armor_effect);
 

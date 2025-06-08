@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::combat::action::{CombatAction, CombatActionProvider};
+use crate::combat::damage::AttackRollResult;
 use crate::creature::character::Character;
 use crate::items::equipment::armor::Armor;
 use crate::items::equipment::equipment::*;
@@ -48,8 +49,11 @@ impl Loadout {
 
     pub fn armor_class(&self, character: &Character) -> ModifierSet {
         if let Some(armor) = &self.armor {
-            armor.armor_class(character)
-            // TODO: Add armor class from other equipment or effects
+            let mut armor_class = armor.armor_class(character);
+            for effect in character.effects() {
+                (effect.on_armor_class)(&character, &mut armor_class);
+            }
+            armor_class
         } else {
             // TODO: Not sure if this is the right way to handle unarmored characters
             let mut armor_class = ModifierSet::new();
@@ -141,11 +145,23 @@ impl Loadout {
     }
 
     pub fn has_weapon_in_hand(&self, weapon_type: &WeaponType, hand: HandSlot) -> bool {
-        self.weapons
-            .get(weapon_type)
-            .and_then(|w| w.get(&hand))
-            .map(|w| w.is_some())
-            .unwrap_or(false)
+        self.weapon_in_hand(weapon_type, hand).is_some()
+    }
+
+    pub fn wielding_weapon_with_both_hands(&self, weapon_type: &WeaponType) -> bool {
+        if let Some(main_hand_weapon) = self.weapon_in_hand(weapon_type, HandSlot::Main) {
+            // Check that:
+            // 1. The main hand weapon is two-handed or versatile.
+            // 2. The off hand is empty
+            // (Instead of checking for a specific Versatile(DiceSet), just check for any Versatile property)
+            return (main_hand_weapon.has_property(&WeaponProperties::TwoHanded)
+                || main_hand_weapon
+                    .properties
+                    .iter()
+                    .any(|p| matches!(p, WeaponProperties::Versatile(_))))
+                && !self.has_weapon_in_hand(weapon_type, HandSlot::Off);
+        }
+        false
     }
 
     pub fn attack_roll(
@@ -153,7 +169,7 @@ impl Loadout {
         character: &Character,
         weapon_type: &WeaponType,
         hand: HandSlot,
-    ) -> D20CheckResult {
+    ) -> AttackRollResult {
         // TODO: Unarmed attacks
         let attack_roll = self
             .weapon_in_hand(weapon_type, hand)
@@ -162,12 +178,7 @@ impl Loadout {
 
         // TODO: How do we handle something like Fighting Style Archery, which modifies the attack roll for only ranged weapons?
 
-        attack_roll.roll_hooks(
-            character,
-            &character.effects(),
-            |hook, character, check| (hook.pre_attack_roll)(character, check),
-            |hook, character, result| (hook.post_attack_roll)(character, result),
-        )
+        attack_roll.roll(character)
     }
 }
 

@@ -1,10 +1,15 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use crate::{
+    creature::character::Character,
     dice::dice::{DiceSet, DiceSetRoll, DiceSetRollResult, DieSize},
+    items::equipment::weapon::{Weapon, WeaponProperties, WeaponType},
     spells::spell::SpellKindSnapshot,
     stats::{
-        d20_check::D20CheckResult,
+        d20_check::{D20Check, D20CheckResult},
         modifier::{ModifierSet, ModifierSource},
     },
 };
@@ -79,20 +84,42 @@ impl fmt::Display for DamageComponentResult {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum DamageSource {
+    // TODO: Could also just use the entire weapon instead? Would be a lot of cloning unless
+    // we introduce a lifetime for a reference
+    Weapon(WeaponType, HashSet<WeaponProperties>),
+    Spell,
+}
+
+impl DamageSource {
+    pub fn from_weapon(weapon: &Weapon) -> Self {
+        Self::Weapon(weapon.weapon_type.clone(), weapon.properties.clone())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DamageRoll {
     /// Separate the primary so we know where to apply e.g. ability modifiers
     pub primary: DamageComponent,
     pub bonus: Vec<DamageComponent>,
+    pub source: DamageSource,
     pub label: String,
 }
 
 impl DamageRoll {
     // TODO: There's too many labels everywhere
-    pub fn new(num_dice: u32, die_size: DieSize, damage_type: DamageType, label: String) -> Self {
+    pub fn new(
+        num_dice: u32,
+        die_size: DieSize,
+        damage_type: DamageType,
+        source: DamageSource,
+        label: String,
+    ) -> Self {
         Self {
             label: label.clone(),
             primary: DamageComponent::new(num_dice, die_size, damage_type, label),
             bonus: Vec::new(),
+            source,
         }
     }
 
@@ -112,8 +139,8 @@ impl DamageRoll {
         let mut results = Vec::new();
         let mut total = 0;
 
-        let mut damage_components = self.bonus.clone();
-        damage_components.push(self.primary.clone());
+        let mut damage_components = vec![self.primary.clone()];
+        damage_components.extend(self.bonus.iter().cloned());
 
         for component in damage_components {
             let mut component_dice_roll = component.dice_roll.clone();
@@ -130,6 +157,7 @@ impl DamageRoll {
             label: self.label.clone(),
             components: results,
             total,
+            source: self.source.clone(),
         }
     }
 }
@@ -149,6 +177,7 @@ pub struct DamageRollResult {
     pub label: String,
     pub components: Vec<DamageComponentResult>,
     pub total: i32,
+    pub source: DamageSource,
 }
 
 impl fmt::Display for DamageRollResult {
@@ -324,14 +353,48 @@ impl fmt::Display for DamageMitigationResult {
 }
 
 #[derive(Debug, Clone)]
-pub enum DamageSource {
-    WeaponAttack {
-        attack_roll_result: D20CheckResult,
-        damage_roll_result: DamageRollResult,
-    },
-    Spell {
-        snapshot: SpellKindSnapshot,
-    },
+pub struct AttackRoll {
+    pub d20_check: D20Check,
+    pub source: DamageSource,
+}
+
+#[derive(Debug, Clone)]
+pub struct AttackRollResult {
+    pub roll_result: D20CheckResult,
+    pub source: DamageSource,
+}
+
+impl fmt::Display for AttackRollResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.roll_result)
+    }
+}
+
+impl AttackRoll {
+    pub fn roll(&self, character: &Character) -> AttackRollResult {
+        let mut attack_roll = self.clone();
+
+        for effect in character.effects().iter() {
+            (effect.pre_attack_roll)(character, &mut attack_roll);
+        }
+
+        let mut result = AttackRollResult {
+            roll_result: attack_roll.d20_check.roll(character.proficiency_bonus()),
+            source: self.source.clone(),
+        };
+
+        for effect in character.effects().iter() {
+            (effect.post_attack_roll)(character, &mut result);
+        }
+
+        result
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum DamageEventResult {
+    WeaponAttack(AttackRollResult, DamageRollResult),
+    Spell(SpellKindSnapshot),
 }
 
 #[cfg(test)]
@@ -581,6 +644,7 @@ mod tests {
                 ),
                 damage_type: DamageType::Fire,
             }],
+            source: DamageSource::Weapon(WeaponType::Melee, HashSet::new()),
         }
     }
 
@@ -611,6 +675,7 @@ mod tests {
                 },
             ],
             total: 9,
+            source: DamageSource::Weapon(WeaponType::Melee, HashSet::new()),
         }
     }
 }

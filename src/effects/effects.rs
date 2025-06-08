@@ -1,14 +1,16 @@
 use std::{fmt::Debug, sync::Arc};
 
 use crate::{
+    combat::damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
     creature::character::Character,
-    stats::{
-        d20_check::{D20Check, D20CheckResult},
-        modifier::ModifierSource,
+    effects::hooks::{
+        ArmorClassHook, AttackRollHook, AttackRollResultHook, DamageRollHook, DamageRollResultHook,
     },
+    stats::modifier::{ModifierSet, ModifierSource},
+    utils::id::EffectId,
 };
 
-use super::hooks::{D20CheckHook, D20CheckResultHook, EffectHook, SavingThrowHook, SkillCheckHook};
+use super::hooks::{EffectHook, SavingThrowHook, SkillCheckHook};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EffectDuration {
@@ -19,7 +21,7 @@ pub enum EffectDuration {
 
 #[derive(Clone)]
 pub struct Effect {
-    // TODO: ID? Name?
+    pub id: EffectId,
     source: ModifierSource,
     duration: EffectDuration,
     // TODO: description?
@@ -29,28 +31,36 @@ pub struct Effect {
     // the effect is removed from the character?
     // pub on_expire: EffectHook,
     pub on_unapply: EffectHook,
-    pub skill_check_hook: Option<SkillCheckHook>,
-    pub saving_throw_hook: Option<SavingThrowHook>,
-    pub pre_attack_roll: D20CheckHook,
-    pub post_attack_roll: D20CheckResultHook,
+    // These use Option because they need a key for the skill or saving throw, which
+    // we don't have when constructing the effect.
+    pub on_skill_check: Option<SkillCheckHook>,
+    pub on_saving_throw: Option<SavingThrowHook>,
+    pub pre_attack_roll: AttackRollHook,
+    pub post_attack_roll: AttackRollResultHook,
+    pub on_armor_class: ArmorClassHook,
+    pub pre_damage_roll: DamageRollHook,
+    pub post_damage_roll: DamageRollResultHook,
 }
 
 impl Effect {
-    pub fn new(source: ModifierSource, duration: EffectDuration) -> Self {
+    pub fn new(id: EffectId, source: ModifierSource, duration: EffectDuration) -> Self {
         let noop = Arc::new(|_: &mut Character| {}) as EffectHook;
-        let noop_d20 = Arc::new(|_: &Character, _: &mut D20Check| {}) as D20CheckHook;
-        let noop_d20_result =
-            Arc::new(|_: &Character, _: &mut D20CheckResult| {}) as D20CheckResultHook;
 
         Self {
+            id,
             source,
             duration,
             on_apply: noop.clone(),
             on_unapply: noop.clone(),
-            skill_check_hook: None,
-            saving_throw_hook: None,
-            pre_attack_roll: noop_d20.clone(),
-            post_attack_roll: noop_d20_result.clone(),
+            on_skill_check: None,
+            on_saving_throw: None,
+            pre_attack_roll: Arc::new(|_: &Character, _: &mut AttackRoll| {}) as AttackRollHook,
+            post_attack_roll: Arc::new(|_: &Character, _: &mut AttackRollResult| {})
+                as AttackRollResultHook,
+            on_armor_class: Arc::new(|_: &Character, _: &mut ModifierSet| {}) as ArmorClassHook,
+            pre_damage_roll: Arc::new(|_: &Character, _: &mut DamageRoll| {}) as DamageRollHook,
+            post_damage_roll: Arc::new(|_: &Character, _: &mut DamageRollResult| {})
+                as DamageRollResultHook,
         }
     }
 
@@ -65,11 +75,11 @@ impl Effect {
 
 impl Debug for Effect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Effect {{ source: {:?}, duration: {:?} }}",
-            self.source, self.duration
-        )
+        f.debug_struct("Effect")
+            .field("id", &self.id)
+            .field("source", &self.source)
+            .field("duration", &self.duration)
+            .finish()
     }
 }
 

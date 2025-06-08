@@ -11,7 +11,7 @@ pub fn get_saving_throw_hooks(ability: Ability, character: &Character) -> Vec<&S
     character
         .effects()
         .iter()
-        .filter_map(|e| e.saving_throw_hook.as_ref())
+        .filter_map(|e| e.on_saving_throw.as_ref())
         .filter(|hook| hook.key == ability)
         .collect()
 }

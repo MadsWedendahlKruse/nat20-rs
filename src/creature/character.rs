@@ -4,8 +4,8 @@ use crate::{
     combat::{
         action::{CombatAction, CombatActionProvider},
         damage::{
-            DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRoll,
-            DamageRollResult, DamageSource, MitigationOperation,
+            AttackRollResult, DamageEventResult, DamageMitigationEffect, DamageMitigationResult,
+            DamageResistances, DamageRoll, DamageRollResult, MitigationOperation,
         },
     },
     creature::{
@@ -19,7 +19,7 @@ use crate::{
         loadout::{Loadout, TryEquipError},
         weapon::{Weapon, WeaponCategory, WeaponType},
     },
-    registry::classes::CLASS_REGISTRY,
+    registry::{classes::CLASS_REGISTRY, effects::EFFECT_REGISTRY},
     spells::{
         spell::{SnapshotError, SpellKindSnapshot, SpellSnapshot},
         spellbook::Spellbook,
@@ -114,26 +114,14 @@ impl Character {
                 }
 
                 if let Some(class) = CLASS_REGISTRY.get(&class_name) {
-                    // TODO: Do this at the end when subclass, feats etc. are selected
-
-                    // 2: Adjust Hit Points and Hit Point Dice
                     self.update_hp(class);
-
-                    // 3: Record New Class Features
                     choices.extend(self.increment_class_level(&class));
-
-                    // 4: Adjust Proficiency Bonus
-                    // This is handled by the `proficiency_bonus` method, so we don't need to do anything here.
-
-                    // 5: Adjust Ability Modifiers
-                    // TODO: This would happen when choosing certain Feats (choice mechanism?)
                 } else {
-                    return Err(LevelUpError::RegistryMissing(*class_name));
+                    return Err(LevelUpError::RegistryMissing(class_name.to_string()));
                 }
             }
 
             (LevelUpChoice::Subclass(subclasses), LevelUpSelection::Subclass(subclass_name)) => {
-                // Sanity check
                 if !subclasses.contains(&subclass_name) {
                     return Err(LevelUpError::InvalidSelection { choice, selection });
                 }
@@ -142,6 +130,18 @@ impl Character {
                     .insert(subclass_name.class.clone(), subclass_name.clone());
 
                 // TODO: Subclass choices
+            }
+
+            (LevelUpChoice::Effect(effects), LevelUpSelection::Effect(effect_id)) => {
+                if !effects.contains(&effect_id) {
+                    return Err(LevelUpError::InvalidSelection { choice, selection });
+                }
+
+                if let Some(effect) = EFFECT_REGISTRY.get(effect_id) {
+                    self.add_effect(effect.clone());
+                } else {
+                    return Err(LevelUpError::RegistryMissing(effect_id.to_string()));
+                }
             }
 
             _ => {
@@ -284,25 +284,28 @@ impl Character {
         self.current_hp += hp_increase;
     }
 
-    pub fn take_damage(&mut self, damage_source: &DamageSource) -> Option<DamageMitigationResult> {
+    pub fn take_damage(
+        &mut self,
+        damage_source: &DamageEventResult,
+    ) -> Option<DamageMitigationResult> {
         let mut resistances = self.resistances.clone();
 
         match damage_source {
-            DamageSource::WeaponAttack {
-                attack_roll_result,
-                damage_roll_result,
-            } => {
-                if !self.loadout().does_attack_hit(&self, attack_roll_result) {
+            DamageEventResult::WeaponAttack(attack_roll_result, damage_roll_result) => {
+                if !self
+                    .loadout()
+                    .does_attack_hit(&self, &attack_roll_result.roll_result)
+                {
                     // If the attack misses, no damage is applied
                     return None;
                 }
                 self.take_damage_internal(damage_roll_result, &resistances)
             }
 
-            DamageSource::Spell { snapshot } => {
+            DamageEventResult::Spell(snapshot) => {
                 match &snapshot {
                     SpellKindSnapshot::Damage { damage_roll } => {
-                        return self.take_damage_internal(damage_roll, &resistances);
+                        return self.take_damage_internal(&damage_roll, &resistances);
                     }
 
                     SpellKindSnapshot::AttackRoll {
@@ -310,13 +313,16 @@ impl Character {
                         damage_roll: damage,
                         damage_on_failure,
                     } => {
-                        if !self.loadout().does_attack_hit(self, attack_roll) {
+                        if !self
+                            .loadout()
+                            .does_attack_hit(self, &attack_roll.roll_result)
+                        {
                             if let Some(damage_on_failure) = damage_on_failure {
-                                return self.take_damage_internal(damage_on_failure, &resistances);
+                                return self.take_damage_internal(&damage_on_failure, &resistances);
                             }
                             return None;
                         }
-                        self.take_damage_internal(damage, &resistances)
+                        self.take_damage_internal(&damage, &resistances)
                     }
 
                     SpellKindSnapshot::SavingThrowDamage {
@@ -324,7 +330,7 @@ impl Character {
                         half_damage_on_save,
                         damage_roll,
                     } => {
-                        let check_result = self.saving_throws.check_dc(saving_throw, self);
+                        let check_result = self.saving_throws.check_dc(&saving_throw, self);
                         if check_result.success {
                             if *half_damage_on_save {
                                 // Apply half damage on successful save
@@ -468,7 +474,7 @@ impl Character {
         unequipped_weapon
     }
 
-    pub fn attack_roll(&self, weapon_type: &WeaponType, hand: HandSlot) -> D20CheckResult {
+    pub fn attack_roll(&self, weapon_type: &WeaponType, hand: HandSlot) -> AttackRollResult {
         self.loadout.attack_roll(self, weapon_type, hand)
     }
 

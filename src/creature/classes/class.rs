@@ -60,6 +60,10 @@ pub struct ClassBase {
     /// Passive effects that are always active for the class or subclass.
     pub effects_by_level: HashMap<u8, Vec<Effect>>,
     pub resources_by_level: HashMap<u8, Vec<Resource>>,
+    /// Class specific choices that can be made at each level.
+    /// For example, a Fighter might choose a fighting style at level 1.
+    /// TODO: Include subclass choices?
+    pub choices_by_level: HashMap<u8, Vec<LevelUpChoice>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,16 +88,62 @@ pub struct Class {
     /// Saving throw proficiencies granted at level 1 (e.g. STR + CON for Fighter)
     pub saving_throw_proficiencies: [Ability; 2],
 
-    /// At which level the character picks a subclass (typically level 3).
-    pub subclass_level: u8,
     pub subclasses: HashMap<SubclassName, Subclass>,
-
-    pub feat_levels: HashSet<u8>,
 
     pub base: ClassBase,
 }
 
 impl Class {
+    pub fn new(
+        name: ClassName,
+        hit_die: DieSize,
+        hp_per_level: u8,
+        saving_throw_proficiencies: [Ability; 2],
+        subclass_level: u8,
+        subclasses: HashMap<SubclassName, Subclass>,
+        feat_levels: HashSet<u8>,
+        skill_proficiencies: HashSet<Skill>,
+        skill_choices: u8,
+        armor_proficiencies: HashSet<ArmorType>,
+        weapon_proficiencies: HashSet<WeaponCategory>,
+        spellcasting: SpellcastingProgression,
+        effects_by_level: HashMap<u8, Vec<Effect>>,
+        resources_by_level: HashMap<u8, Vec<Resource>>,
+        mut choices_by_level: HashMap<u8, Vec<LevelUpChoice>>,
+    ) -> Self {
+        choices_by_level
+            .entry(subclass_level)
+            .or_default()
+            .push(LevelUpChoice::Subclass(
+                subclasses.keys().cloned().collect(),
+            ));
+
+        for level in feat_levels.iter() {
+            // TODO: Implement feat selection
+            // choices_by_level.entry(*level)
+            //     .or_default()
+            //     .push(LevelUpChoice::feat_selection());
+        }
+
+        Self {
+            name,
+            hit_die,
+            hp_per_level,
+            saving_throw_proficiencies,
+            subclasses,
+            base: ClassBase {
+                skill_proficiencies,
+                skill_choices,
+                armor_proficiencies,
+                weapon_proficiencies,
+                spellcasting,
+                effects_by_level,
+                resources_by_level,
+                choices_by_level,
+            },
+        }
+    }
+
     pub fn subclass(&self, subclass_name: &str) -> Option<&Subclass> {
         self.subclasses.get(&SubclassName {
             class: self.name,
@@ -141,19 +191,11 @@ impl Class {
     }
 
     pub fn level_up_choices(&self, level: u8) -> Vec<LevelUpChoice> {
-        let mut choices = Vec::new();
-
-        if level == self.subclass_level {
-            choices.push(LevelUpChoice::subclass(self.name));
-        }
-
-        if self.feat_levels.contains(&level) {
-            // choices.push(LevelUpChoice::feat_selection());
-        }
-
-        // TODO: Pick new spells etc.
-
-        choices
+        self.base
+            .choices_by_level
+            .get(&level)
+            .cloned()
+            .unwrap_or_default()
     }
 }
 

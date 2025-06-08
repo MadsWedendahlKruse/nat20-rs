@@ -1,13 +1,16 @@
 use std::{fmt, hash::Hash, sync::Arc};
 
 use crate::{
-    combat::damage::{DamageMitigationResult, DamageRoll, DamageRollResult, DamageSource},
+    combat::damage::{
+        AttackRoll, AttackRollResult, DamageEventResult, DamageMitigationResult, DamageRoll,
+        DamageRollResult, DamageSource,
+    },
     creature::character::Character,
     dice::dice::{DiceSetRoll, DiceSetRollResult},
     effects::effects::Effect,
     stats::{
         ability::Ability,
-        d20_check::{D20Check, D20CheckResult},
+        d20_check::D20Check,
         modifier::{ModifierSet, ModifierSource},
         proficiency::Proficiency,
         saving_throw::SavingThrowDC,
@@ -102,7 +105,7 @@ impl SpellKind {
                 damage_on_failure,
             } => {
                 let attack_roll = spell_attack_roll(caster, ability);
-                let is_crit = attack_roll.is_crit;
+                let is_crit = attack_roll.roll_result.is_crit;
                 SpellKindSnapshot::AttackRoll {
                     attack_roll,
                     damage_roll: damage(caster, spell_level).roll_crit_damage(is_crit),
@@ -185,16 +188,17 @@ fn spell_save_dc(caster: &Character, ability: Ability) -> ModifierSet {
     spell_save_dc
 }
 
-fn spell_attack_roll(caster: &Character, ability: Ability) -> D20CheckResult {
-    let mut attack_roll = D20Check::new(Proficiency::Proficient);
+fn spell_attack_roll(caster: &Character, ability: Ability) -> AttackRollResult {
+    let mut roll = D20Check::new(Proficiency::Proficient);
     let spell_casting_modifier = caster.ability_scores().ability_modifier(ability).total();
-    attack_roll.add_modifier(ModifierSource::Ability(ability), spell_casting_modifier);
-    attack_roll.roll_hooks(
-        caster,
-        &caster.effects(),
-        |hook, character, check| (hook.pre_attack_roll)(character, check),
-        |hook, character, result| (hook.post_attack_roll)(character, result),
-    )
+    roll.add_modifier(ModifierSource::Ability(ability), spell_casting_modifier);
+
+    let attack_roll = AttackRoll {
+        d20_check: roll,
+        source: DamageSource::Spell,
+    };
+
+    attack_roll.roll(caster)
 }
 
 /// To avoid the issue of not being able to borrow the caster immutably and the
@@ -208,7 +212,7 @@ pub enum SpellKindSnapshot {
         damage_roll: DamageRollResult,
     },
     AttackRoll {
-        attack_roll: D20CheckResult,
+        attack_roll: AttackRollResult,
         damage_roll: DamageRollResult,
         damage_on_failure: Option<DamageRollResult>,
     },
@@ -241,7 +245,7 @@ pub enum SpellKindResult {
         damage_taken: Option<DamageMitigationResult>,
     },
     AttackRoll {
-        attack_roll: D20CheckResult,
+        attack_roll: AttackRollResult,
         damage_roll: DamageRollResult,
         damage_taken: Option<DamageMitigationResult>,
     },
@@ -554,10 +558,8 @@ impl SpellSnapshot {
         }
     }
 
-    fn damage_source(&self) -> DamageSource {
-        DamageSource::Spell {
-            snapshot: self.kind.clone(),
-        }
+    fn damage_source(&self) -> DamageEventResult {
+        DamageEventResult::Spell(self.kind.clone())
     }
 }
 

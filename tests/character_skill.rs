@@ -16,6 +16,7 @@ mod tests {
             proficiency::Proficiency,
             skill::Skill,
         },
+        utils::id::EffectId,
     };
 
     #[test]
@@ -97,10 +98,11 @@ mod tests {
         );
 
         let mut arcana_effect = Effect::new(
+            EffectId::from_str("effect.ring_of_arcana"),
             ModifierSource::Item("Ring of Arcana".to_string()),
             EffectDuration::Persistent,
         );
-        arcana_effect.skill_check_hook = Some(SkillCheckHook {
+        arcana_effect.on_skill_check = Some(SkillCheckHook {
             key: Skill::Arcana,
             check_hook: Arc::new(|_, d20_check| {
                 d20_check.advantage_tracker_mut().add(

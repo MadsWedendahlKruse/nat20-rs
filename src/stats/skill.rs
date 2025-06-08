@@ -83,7 +83,7 @@ pub fn get_skill_hooks(skill: Skill, character: &Character) -> Vec<&SkillCheckHo
     character
         .effects()
         .iter()
-        .filter_map(|e| e.skill_check_hook.as_ref())
+        .filter_map(|e| e.on_skill_check.as_ref())
         .filter(|hook| hook.key == skill)
         .collect()
 }

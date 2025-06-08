@@ -1,9 +1,10 @@
 use std::fmt;
 
 use crate::{
+    combat::damage::AttackRollResult,
     items::equipment::{equipment::HandSlot, weapon::WeaponType},
     spells::spell::SpellResult,
-    stats::{d20_check::D20CheckResult, modifier::ModifierSet},
+    stats::modifier::ModifierSet,
     utils::id::{CharacterId, SpellId},
 };
 
@@ -111,7 +112,7 @@ pub enum CombatActionResult {
     WeaponAttack {
         target: CharacterId,
         target_armor_class: ModifierSet,
-        attack_roll_result: D20CheckResult,
+        attack_roll_result: AttackRollResult,
         damage_roll_result: DamageRollResult,
         damage_result: Option<DamageMitigationResult>,
     },

@@ -4,9 +4,9 @@ mod tests {
     use std::collections::HashSet;
 
     use nat20_rs::{
-        combat::damage::{DamageComponent, DamageRoll, DamageType},
+        combat::damage::DamageType,
         creature::character::Character,
-        dice::dice::{DiceSet, DiceSetRoll, DieSize},
+        dice::dice::{DiceSet, DieSize},
         items::{
             equipment::{
                 equipment::{EquipmentItem, EquipmentType, HandSlot},
@@ -16,7 +16,7 @@ mod tests {
         },
         stats::{
             ability::{Ability, AbilityScore},
-            modifier::{ModifierSet, ModifierSource},
+            modifier::ModifierSource,
             proficiency::Proficiency,
         },
     };
@@ -31,12 +31,13 @@ mod tests {
             ItemRarity::Common,
             EquipmentType::MeleeWeapon,
         );
-        let damage_roll = create_damage_roll(1, DieSize::D8, "Rapier", DamageType::Piercing);
         let weapon = Weapon::new(
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
-            damage_roll,
+            1,
+            DieSize::D8,
+            DamageType::Piercing,
         );
 
         let mut character = Character::default();
@@ -92,7 +93,9 @@ mod tests {
                 WeaponProperties::Versatile(dice_set_two_handed),
                 WeaponProperties::Enchantment(1),
             ]),
-            create_damage_roll(1, DieSize::D6, "Trident One-Handed", DamageType::Piercing),
+            1,
+            DieSize::D6,
+            DamageType::Piercing,
         );
 
         let mut character = Character::default();
@@ -125,7 +128,9 @@ mod tests {
             equipment,
             WeaponCategory::Simple,
             HashSet::from([WeaponProperties::Light]),
-            create_damage_roll(1, DieSize::D4, "Dagger", DamageType::Piercing),
+            1,
+            DieSize::D4,
+            DamageType::Piercing,
         );
         let unequipped_weapons = character.equip_weapon(dagger, HandSlot::Off).unwrap();
         // Check that nothing was unequipped and the character has a weapon in their hand
@@ -180,7 +185,9 @@ mod tests {
             ),
             WeaponCategory::Simple,
             HashSet::from([WeaponProperties::Light]),
-            create_damage_roll(1, DieSize::D4, "Dagger", DamageType::Piercing),
+            1,
+            DieSize::D4,
+            DamageType::Piercing,
         );
         let trident = Weapon::new(
             EquipmentItem::new(
@@ -199,7 +206,9 @@ mod tests {
                 }),
                 WeaponProperties::Enchantment(1),
             ]),
-            create_damage_roll(1, DieSize::D6, "Trident One-Handed", DamageType::Piercing),
+            1,
+            DieSize::D6,
+            DamageType::Piercing,
         );
 
         let mut character = Character::default();
@@ -227,7 +236,9 @@ mod tests {
             ),
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::TwoHanded]),
-            create_damage_roll(2, DieSize::D6, "Greatsword", DamageType::Slashing),
+            2,
+            DieSize::D6,
+            DamageType::Slashing,
         );
         let unequipped_weapons = character.equip_weapon(greatsword, HandSlot::Main).unwrap();
         // Check that both weapons were unequipped
@@ -255,7 +266,9 @@ mod tests {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
-            create_damage_roll(1, DieSize::D8, "Longsword", DamageType::Slashing),
+            1,
+            DieSize::D8,
+            DamageType::Slashing,
         );
 
         let mut character = Character::default();
@@ -270,39 +283,22 @@ mod tests {
         // Check that the attack roll uses Dexterity modifier
         let attack_roll = weapon.attack_roll(&mut character);
         assert!(attack_roll
+            .d20_check
             .modifiers()
             .get(&ModifierSource::Ability(Ability::Dexterity))
             .is_some());
         // Check that the attack roll does not have a proficiency modifier
         assert!(attack_roll
+            .d20_check
             .modifiers()
             .get(&ModifierSource::Proficiency(Proficiency::Proficient))
             .is_none());
         // Check that the attack roll does not have an enchantment modifier
         assert!(attack_roll
+            .d20_check
             .modifiers()
             .get(&ModifierSource::Item("Enchantment".to_string()))
             .is_none());
         println!("{:?}", attack_roll);
-    }
-
-    fn create_damage_roll(
-        num_dice: u32,
-        die_size: DieSize,
-        label: &str,
-        damage_type: DamageType,
-    ) -> DamageRoll {
-        DamageRoll {
-            primary: DamageComponent {
-                dice_roll: DiceSetRoll {
-                    dice: DiceSet { num_dice, die_size },
-                    modifiers: ModifierSet::new(),
-                    label: label.to_string(),
-                },
-                damage_type,
-            },
-            bonus: Vec::new(),
-            label: label.to_string(),
-        }
     }
 }

@@ -11,6 +11,7 @@ mod tests {
         spells::spell::{SpellKindResult, TargetingContext},
         stats::modifier::ModifierSource,
         test_utils::fixtures,
+        utils::id::EffectId,
     };
 
     #[test]
@@ -67,11 +68,14 @@ mod tests {
         let hero_id = hero.id();
         // Make sure the hero hits the goblin warrior
         let mut test_effect = Effect::new(
+            EffectId::from_str("effect.test_effect"),
             ModifierSource::Custom("Test Effect".to_string()),
             EffectDuration::Persistent,
         );
-        test_effect.pre_attack_roll = Arc::new(|_, d20_check| {
-            d20_check.add_modifier(ModifierSource::Custom("Test Effect".to_string()), 20);
+        test_effect.pre_attack_roll = Arc::new(|_, attack_roll| {
+            attack_roll
+                .d20_check
+                .add_modifier(ModifierSource::Custom("Test Effect".to_string()), 20);
         });
         hero.add_effect(test_effect);
 
@@ -111,7 +115,7 @@ mod tests {
                 damage_result,
             } => {
                 assert_eq!(target, goblin_warrior_id);
-                assert!(attack_roll_result.total > 0);
+                assert!(attack_roll_result.roll_result.total > 0);
                 assert!(damage_result.is_some());
                 damage_result.unwrap()
             }

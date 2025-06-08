@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use crate::{
-    combat::damage::DamageRoll,
+    combat::damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
     creature::character::Character,
-    dice::dice::DiceSet,
+    dice::dice::{DiceSet, DieSize},
     effects::effects::Effect,
     stats::{
         ability::Ability, d20_check::D20Check, modifier::ModifierSource, proficiency::Proficiency,
@@ -71,7 +71,9 @@ impl Weapon {
         equipment: EquipmentItem,
         category: WeaponCategory,
         properties: HashSet<WeaponProperties>,
-        damage_roll: DamageRoll,
+        num_dice: u32,
+        die_size: DieSize,
+        damage_type: DamageType,
     ) -> Self {
         let weapon_type = match equipment.kind {
             EquipmentType::MeleeWeapon => WeaponType::Melee,
@@ -82,6 +84,13 @@ impl Weapon {
             WeaponType::Melee => Ability::Strength,
             WeaponType::Ranged => Ability::Dexterity,
         };
+        let damage_roll = DamageRoll::new(
+            num_dice,
+            die_size,
+            damage_type,
+            DamageSource::Weapon(weapon_type.clone(), properties.clone()),
+            equipment.item.name.clone(),
+        );
         Self {
             equipment,
             category,
@@ -100,7 +109,7 @@ impl Weapon {
         self.properties.contains(property)
     }
 
-    pub fn attack_roll(&self, character: &Character) -> D20Check {
+    pub fn attack_roll(&self, character: &Character) -> AttackRoll {
         let mut attack_roll = D20Check::new(
             character
                 .weapon_proficiencies
@@ -123,7 +132,10 @@ impl Weapon {
             );
         }
 
-        attack_roll
+        AttackRoll {
+            d20_check: attack_roll,
+            source: DamageSource::from_weapon(self),
+        }
     }
 
     pub fn damage_roll(&self, character: &Character, hand: HandSlot) -> DamageRoll {
@@ -198,11 +210,10 @@ impl Weapon {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::combat::damage::{DamageComponent, DamageType};
-    use crate::dice::dice::{DiceSet, DiceSetRoll, DieSize};
+    use crate::combat::damage::DamageType;
+    use crate::dice::dice::DieSize;
     use crate::items::equipment::equipment::{EquipmentItem, EquipmentType};
     use crate::items::item::ItemRarity;
-    use crate::stats::modifier::ModifierSet;
 
     #[test]
     fn create_weapon() {
@@ -214,26 +225,13 @@ mod tests {
             ItemRarity::Common,
             EquipmentType::MeleeWeapon,
         );
-        let damage_roll = DamageRoll {
-            primary: DamageComponent {
-                dice_roll: DiceSetRoll {
-                    dice: DiceSet {
-                        num_dice: 1,
-                        die_size: DieSize::D8,
-                    },
-                    modifiers: ModifierSet::new(),
-                    label: "Longsword".to_string(),
-                },
-                damage_type: DamageType::Slashing,
-            },
-            bonus: Vec::new(),
-            label: "Longsword".to_string(),
-        };
         let weapon = Weapon::new(
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse, WeaponProperties::Enchantment(1)]),
-            damage_roll,
+            1,
+            DieSize::D8,
+            DamageType::Slashing,
         );
 
         assert_eq!(weapon.equipment.item.name, "Longsword");
@@ -259,26 +257,13 @@ mod tests {
                 ItemRarity::Common,
                 EquipmentType::Armor, // Incorrect type
             );
-            let damage_roll = DamageRoll {
-                primary: DamageComponent {
-                    dice_roll: DiceSetRoll {
-                        dice: DiceSet {
-                            num_dice: 1,
-                            die_size: DieSize::D8,
-                        },
-                        modifiers: ModifierSet::new(),
-                        label: "Longsword".to_string(),
-                    },
-                    damage_type: DamageType::Slashing,
-                },
-                bonus: Vec::new(),
-                label: "Longsword".to_string(),
-            };
             Weapon::new(
                 equipment,
                 WeaponCategory::Martial,
                 HashSet::from([WeaponProperties::Finesse]),
-                damage_roll,
+                1,
+                DieSize::D8,
+                DamageType::Slashing,
             );
         });
         assert!(result.is_err());

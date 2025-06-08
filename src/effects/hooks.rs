@@ -1,17 +1,24 @@
 use std::{fmt, sync::Arc};
 
 use crate::{
+    combat::damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
     creature::character::Character,
     stats::{
         ability::Ability,
         d20_check::{D20Check, D20CheckResult},
+        modifier::ModifierSet,
         skill::Skill,
     },
 };
 
 pub type EffectHook = Arc<dyn Fn(&mut Character) + Send + Sync>;
+pub type AttackRollHook = Arc<dyn Fn(&Character, &mut AttackRoll) + Send + Sync>;
+pub type AttackRollResultHook = Arc<dyn Fn(&Character, &mut AttackRollResult) + Send + Sync>;
 pub type D20CheckHook = Arc<dyn Fn(&Character, &mut D20Check) + Send + Sync>;
 pub type D20CheckResultHook = Arc<dyn Fn(&Character, &mut D20CheckResult) + Send + Sync>;
+pub type ArmorClassHook = Arc<dyn Fn(&Character, &mut ModifierSet) + Send + Sync>;
+pub type DamageRollHook = Arc<dyn Fn(&Character, &mut DamageRoll) + Send + Sync>;
+pub type DamageRollResultHook = Arc<dyn Fn(&Character, &mut DamageRollResult) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct D20CheckHooks<K> {

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::combat::action::{
     CombatAction, CombatActionProvider, CombatActionRequest, CombatActionResult,
 };
-use crate::combat::damage::DamageSource;
+use crate::combat::damage::DamageEventResult;
 use crate::creature::character::Character;
 use crate::stats::d20_check::D20CheckResult;
 use crate::stats::skill::Skill;
@@ -118,15 +118,15 @@ impl<'c> CombatEngine<'c> {
                 let damage_roll_result = attacker
                     .damage_roll(&weapon_type, hand)
                     // TODO: What if the target can't be critically hit?
-                    .roll_crit_damage(attack_roll_result.is_crit);
+                    .roll_crit_damage(attack_roll_result.roll_result.is_crit);
 
                 let target_character = self.participants.get_mut(&target).unwrap();
                 let armor_class = target_character.armor_class();
 
-                let damage_source = DamageSource::WeaponAttack {
-                    attack_roll_result: attack_roll_result.clone(),
-                    damage_roll_result: damage_roll_result.clone(),
-                };
+                let damage_source = DamageEventResult::WeaponAttack(
+                    attack_roll_result.clone(),
+                    damage_roll_result.clone(),
+                );
                 let damage_result = target_character.take_damage(&damage_source);
 
                 CombatActionResult::WeaponAttack {

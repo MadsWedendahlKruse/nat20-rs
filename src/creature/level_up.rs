@@ -10,6 +10,7 @@ use strum::IntoEnumIterator;
 use crate::{
     creature::{character::Character, classes::class::SubclassName},
     registry::classes::CLASS_REGISTRY,
+    utils::id::{CharacterId, EffectId},
 };
 
 use super::classes::class::ClassName;
@@ -18,6 +19,7 @@ use super::classes::class::ClassName;
 pub enum LevelUpChoice {
     Class(Vec<ClassName>),
     Subclass(Vec<SubclassName>),
+    Effect(Vec<EffectId>),
     // FeatSelection(Vec<FeatOption>),
     // AbilityScoreImprovement(u8), // u8 = number of points to distribute
     // AbilityPointSelection(Vec<Ability>),
@@ -46,6 +48,7 @@ impl LevelUpChoice {
 pub enum LevelUpSelection {
     Class(ClassName),
     Subclass(SubclassName),
+    Effect(EffectId),
     // Feat(FeatOption),
     // AbilityScoreImprovement(u8), // u8 = number of points to distribute
     // AbilityPoint(Ability),
@@ -63,7 +66,7 @@ pub enum LevelUpError {
         choice: LevelUpChoice,
         selection: LevelUpSelection,
     },
-    RegistryMissing(ClassName),
+    RegistryMissing(String),
     // TODO: Add more error variants as needed
 }
 pub struct LevelUpSession<'a> {
@@ -89,13 +92,7 @@ impl<'a> LevelUpSession<'a> {
         self.character.apply_latest_level();
         Ok(())
     }
-
-    pub fn finished(&self) -> bool {
-        // TODO: Might not be relevant since advance uses a while loop
-        self.pending.is_empty()
-    }
 }
-
 pub trait ChoiceProvider {
     fn provide(&mut self, choice: &LevelUpChoice) -> LevelUpSelection;
 }
@@ -106,27 +103,45 @@ impl ChoiceProvider for CliChoiceProvider {
     fn provide(&mut self, choice: &LevelUpChoice) -> LevelUpSelection {
         match choice {
             LevelUpChoice::Class(classes) => {
-                println!("\nChoose a class:");
-                for (i, class) in classes.iter().enumerate() {
-                    println!("  [{:>2}] {}", i + 1, class);
-                }
-                let idx = Self::read_index(classes.len());
+                let idx = Self::select_from_list("Choose a class:", classes, |class| {
+                    format!("{}", class)
+                });
                 LevelUpSelection::Class(classes[idx].clone())
             }
 
             LevelUpChoice::Subclass(subclasses) => {
-                println!("\nChoose a subclass:");
-                for (i, sub) in subclasses.iter().enumerate() {
-                    println!("  [{:>2}] {} ({})", i + 1, sub.name, sub.class);
-                }
-                let idx = Self::read_index(subclasses.len());
+                let idx = Self::select_from_list("Choose a subclass:", subclasses, |sub| {
+                    format!("{} ({})", sub.name, sub.class)
+                });
                 LevelUpSelection::Subclass(subclasses[idx].clone())
-            } // …
+            }
+
+            LevelUpChoice::Effect(effects) => {
+                let idx = Self::select_from_list("Choose an effect:", effects, |effect| {
+                    format!("{}", effect)
+                });
+                LevelUpSelection::Effect(effects[idx].clone())
+            }
+
+            _ => {
+                todo!("Implement CLI choice provider for other LevelUpChoice variants");
+            }
         }
     }
 }
 
 impl CliChoiceProvider {
+    fn select_from_list<T, F>(prompt: &str, items: &[T], display: F) -> usize
+    where
+        F: Fn(&T) -> String,
+    {
+        println!("\n{}", prompt);
+        for (i, item) in items.iter().enumerate() {
+            println!("  [{:>2}] {}", i + 1, display(item));
+        }
+        Self::read_index(items.len())
+    }
+
     fn read_index(max: usize) -> usize {
         loop {
             print!("Enter choice (1-{}): ", max);
@@ -149,12 +164,14 @@ impl CliChoiceProvider {
 /// A provider that hands out selections from a predefined list.
 /// Useful for testing or when you want to simulate a specific sequence of choices.
 pub struct PredefinedChoiceProvider {
+    character: String,
     responses: VecDeque<LevelUpSelection>,
 }
 
 impl PredefinedChoiceProvider {
-    pub fn new(responses: Vec<LevelUpSelection>) -> Self {
+    pub fn new(character: String, responses: Vec<LevelUpSelection>) -> Self {
         Self {
+            character,
             responses: responses.into(),
         }
     }
@@ -163,8 +180,9 @@ impl PredefinedChoiceProvider {
 impl ChoiceProvider for PredefinedChoiceProvider {
     fn provide(&mut self, _choice: &LevelUpChoice) -> LevelUpSelection {
         // We have to mutate, so wrap in RefCell or make `provide` take &mut self:
-        self.responses
-            .pop_front()
-            .expect("ran out of mock responses")
+        self.responses.pop_front().expect(&format!(
+            "Ran out of predefined responses when leveling up {}",
+            self.character
+        ))
     }
 }

@@ -12,6 +12,7 @@ use crate::{
         modifier::{ModifierSet, ModifierSource},
         skill::Skill,
     },
+    utils::id::EffectId,
 };
 
 use super::equipment::EquipmentItem;
@@ -48,8 +49,11 @@ impl Armor {
         armor_class_modifiers.add_modifier(modifier_source.clone(), armor_class);
 
         if stealth_disadvantage {
-            let mut stealth_disadvantage_effect =
-                Effect::new(modifier_source.clone(), EffectDuration::Persistent);
+            let mut stealth_disadvantage_effect = Effect::new(
+                EffectId::from_str("effect.armor.stealth_disadvantage"),
+                modifier_source.clone(),
+                EffectDuration::Persistent,
+            );
 
             let mut skill_check_hook = SkillCheckHook::new(Skill::Stealth);
             skill_check_hook.check_hook = Arc::new(move |_, d20_check| {
@@ -58,7 +62,7 @@ impl Armor {
                     .add(AdvantageType::Disadvantage, modifier_source.clone());
             });
 
-            stealth_disadvantage_effect.skill_check_hook = Some(skill_check_hook);
+            stealth_disadvantage_effect.on_skill_check = Some(skill_check_hook);
 
             equipment.add_effect(stealth_disadvantage_effect);
         }

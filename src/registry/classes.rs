@@ -1,14 +1,13 @@
-// TODO: Not sure if this is the best file name or if it's even a good idea to have a separate file for this.
-
 use std::{
     collections::{HashMap, HashSet},
     sync::LazyLock,
 };
 
 use crate::{
-    creature::classes::class::SubclassName,
+    creature::{classes::class::SubclassName, level_up::LevelUpChoice},
     dice::dice::DieSize,
     items::equipment::{armor::ArmorType, weapon::WeaponCategory},
+    registry,
     stats::{ability::Ability, skill::Skill},
 };
 
@@ -33,16 +32,16 @@ pub static CLASS_REGISTRY: LazyLock<HashMap<ClassName, Class>> = LazyLock::new(|
     ])
 });
 
-static FIGHTER: LazyLock<Class> = LazyLock::new(|| Class {
-    name: ClassName::Fighter,
-    hit_die: DieSize::D10,
-    hp_per_level: 6,
-    saving_throw_proficiencies: [Ability::Strength, Ability::Constitution],
-    subclass_level: 3,
-    subclasses: HashMap::from([(CHAMPION.name.clone(), CHAMPION.to_owned())]),
-    feat_levels: HashSet::from([4, 6, 8, 12, 14, 16]),
-    base: ClassBase {
-        skill_proficiencies: HashSet::from([
+static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
+    Class::new(
+        ClassName::Fighter,
+        DieSize::D10,
+        6,
+        [Ability::Strength, Ability::Constitution],
+        3,
+        HashMap::from([(CHAMPION.name.clone(), CHAMPION.to_owned())]),
+        HashSet::from([4, 6, 8, 12, 14, 16]),
+        HashSet::from([
             Skill::Acrobatics,
             Skill::AnimalHandling,
             Skill::Athletics,
@@ -52,16 +51,21 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| Class {
             Skill::Perception,
             Skill::Survival,
         ]),
-        skill_choices: 2,
-        armor_proficiencies: HashSet::from([ArmorType::Light, ArmorType::Medium, ArmorType::Heavy]),
-        weapon_proficiencies: HashSet::from([WeaponCategory::Simple, WeaponCategory::Martial]),
-        spellcasting: SpellcastingProgression::None,
-        effects_by_level: HashMap::from([
-            // TODO: Fighting style at level 1? This requires a choice mechanism, so maybe it's not an effect?
-            (1, vec![]),
-        ]),
-        resources_by_level: HashMap::new(),
-    },
+        2,
+        HashSet::from([ArmorType::Light, ArmorType::Medium, ArmorType::Heavy]),
+        HashSet::from([WeaponCategory::Simple, WeaponCategory::Martial]),
+        SpellcastingProgression::None,
+        HashMap::new(),
+        HashMap::new(),
+        HashMap::from([(
+            1,
+            vec![LevelUpChoice::Effect(vec![
+                registry::effects::FIGHTING_STYLE_ARCHERY_ID.clone(),
+                registry::effects::FIGHTING_STYLE_DEFENSE_ID.clone(),
+                registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+            ])],
+        )]),
+    )
 });
 
 static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
@@ -80,19 +84,20 @@ static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
             (3, vec![]),
         ]),
         resources_by_level: HashMap::new(),
+        choices_by_level: HashMap::new(),
     },
 });
 
-static WARLOCK: LazyLock<Class> = LazyLock::new(|| Class {
-    name: ClassName::Warlock,
-    hit_die: DieSize::D8,
-    hp_per_level: 5,
-    saving_throw_proficiencies: [Ability::Wisdom, Ability::Charisma],
-    subclass_level: 3,
-    subclasses: HashMap::from([(FIEND_PATRON.name.clone(), FIEND_PATRON.to_owned())]),
-    feat_levels: HashSet::from([4, 8, 12, 16, 19]),
-    base: ClassBase {
-        skill_proficiencies: HashSet::from([
+static WARLOCK: LazyLock<Class> = LazyLock::new(|| {
+    Class::new(
+        ClassName::Warlock,
+        DieSize::D8,
+        5,
+        [Ability::Wisdom, Ability::Charisma],
+        3,
+        HashMap::from([(FIEND_PATRON.name.clone(), FIEND_PATRON.to_owned())]),
+        HashSet::from([4, 8, 12, 16, 19]),
+        HashSet::from([
             Skill::Arcana,
             Skill::Deception,
             Skill::History,
@@ -101,13 +106,14 @@ static WARLOCK: LazyLock<Class> = LazyLock::new(|| Class {
             Skill::Nature,
             Skill::Religion,
         ]),
-        skill_choices: 2,
-        armor_proficiencies: HashSet::from([ArmorType::Light]),
-        weapon_proficiencies: HashSet::from([WeaponCategory::Simple]),
-        spellcasting: SpellcastingProgression::Third,
-        effects_by_level: HashMap::new(),
-        resources_by_level: HashMap::new(),
-    },
+        2,
+        HashSet::from([ArmorType::Light]),
+        HashSet::from([WeaponCategory::Simple]),
+        SpellcastingProgression::Third,
+        HashMap::new(),
+        HashMap::new(),
+        HashMap::new(),
+    )
 });
 
 static FIEND_PATRON: LazyLock<Subclass> = LazyLock::new(|| Subclass {
@@ -126,19 +132,20 @@ static FIEND_PATRON: LazyLock<Subclass> = LazyLock::new(|| Subclass {
             (6, vec![]),
         ]),
         resources_by_level: HashMap::new(),
+        choices_by_level: HashMap::new(),
     },
 });
 
-static WIZARD: LazyLock<Class> = LazyLock::new(|| Class {
-    name: ClassName::Wizard,
-    hit_die: DieSize::D6,
-    hp_per_level: 4,
-    saving_throw_proficiencies: [Ability::Intelligence, Ability::Wisdom],
-    subclass_level: 3,
-    subclasses: HashMap::from([(EVOKER.name.clone(), EVOKER.to_owned())]),
-    feat_levels: HashSet::from([4, 8, 12, 16, 19]),
-    base: ClassBase {
-        skill_proficiencies: HashSet::from([
+static WIZARD: LazyLock<Class> = LazyLock::new(|| {
+    Class::new(
+        ClassName::Wizard,
+        DieSize::D6,
+        4,
+        [Ability::Intelligence, Ability::Wisdom],
+        3,
+        HashMap::from([(EVOKER.name.clone(), EVOKER.to_owned())]),
+        HashSet::from([4, 8, 12, 16, 19]),
+        HashSet::from([
             Skill::Arcana,
             Skill::History,
             Skill::Insight,
@@ -146,13 +153,14 @@ static WIZARD: LazyLock<Class> = LazyLock::new(|| Class {
             Skill::Medicine,
             Skill::Religion,
         ]),
-        skill_choices: 2,
-        armor_proficiencies: HashSet::from([ArmorType::Light]),
-        weapon_proficiencies: HashSet::from([WeaponCategory::Simple]),
-        spellcasting: SpellcastingProgression::Full,
-        effects_by_level: HashMap::new(),
-        resources_by_level: HashMap::new(),
-    },
+        2,
+        HashSet::from([ArmorType::Light]),
+        HashSet::from([WeaponCategory::Simple]),
+        SpellcastingProgression::Full,
+        HashMap::new(),
+        HashMap::new(),
+        HashMap::new(),
+    )
 });
 
 static EVOKER: LazyLock<Subclass> = LazyLock::new(|| Subclass {
@@ -175,5 +183,6 @@ static EVOKER: LazyLock<Subclass> = LazyLock::new(|| Subclass {
             (6, vec![]),
         ]),
         resources_by_level: HashMap::new(),
+        choices_by_level: HashMap::new(),
     },
 });
