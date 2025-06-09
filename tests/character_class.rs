@@ -59,17 +59,24 @@ mod tests {
                 name: "Champion".to_string()
             })
         );
-        assert!(character.effects().contains(
-            &registry::effects::EFFECT_REGISTRY
-                .get(&registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID)
-                .unwrap()
-        ));
+
+        assert_eq!(character.effects().len(), 2);
+        for effect_id in [
+            &registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID,
+            &registry::effects::IMPROVED_CRITICAL_ID,
+        ] {
+            assert!(character
+                .effects()
+                .contains(&registry::effects::EFFECT_REGISTRY.get(&effect_id).unwrap()));
+        }
+
         for skill in [Skill::Athletics, Skill::Perception] {
             assert_eq!(
                 character.skills().get(skill).proficiency(),
                 &Proficiency::Proficient
             );
         }
+
         for ability in [Ability::Strength, Ability::Constitution] {
             assert_eq!(
                 character.saving_throws().get(ability).proficiency(),

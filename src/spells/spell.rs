@@ -193,10 +193,7 @@ fn spell_attack_roll(caster: &Character, ability: Ability) -> AttackRollResult {
     let spell_casting_modifier = caster.ability_scores().ability_modifier(ability).total();
     roll.add_modifier(ModifierSource::Ability(ability), spell_casting_modifier);
 
-    let attack_roll = AttackRoll {
-        d20_check: roll,
-        source: DamageSource::Spell,
-    };
+    let attack_roll = AttackRoll::new(roll, DamageSource::Spell);
 
     attack_roll.roll(caster)
 }

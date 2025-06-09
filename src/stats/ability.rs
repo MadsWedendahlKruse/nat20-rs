@@ -1,7 +1,5 @@
 use std::{collections::HashMap, fmt, hash::Hash};
 
-use crate::stats::modifier;
-
 use super::modifier::{ModifierSet, ModifierSource};
 
 use strum::{EnumIter, IntoEnumIterator};

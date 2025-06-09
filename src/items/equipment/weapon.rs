@@ -132,10 +132,7 @@ impl Weapon {
             );
         }
 
-        AttackRoll {
-            d20_check: attack_roll,
-            source: DamageSource::from_weapon(self),
-        }
+        AttackRoll::new(attack_roll, DamageSource::from_weapon(self))
     }
 
     pub fn damage_roll(&self, character: &Character, hand: HandSlot) -> DamageRoll {

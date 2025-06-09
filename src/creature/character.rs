@@ -31,7 +31,7 @@ use crate::{
         d20_check::{D20CheckResult, RollMode},
         modifier::{ModifierSet, ModifierSource},
         proficiency::Proficiency,
-        saving_throw::{self, create_saving_throw_set, SavingThrowSet},
+        saving_throw::{create_saving_throw_set, SavingThrowSet},
         skill::{create_skill_set, Skill, SkillSet},
     },
     utils::id::CharacterId,
@@ -205,8 +205,13 @@ impl Character {
             })
             .clone();
 
-        for effect in class.effects_by_level(level, &subclass_name.name) {
-            self.add_effect(effect.clone());
+        for effect_id in class.effects_by_level(level, &subclass_name.name) {
+            self.add_effect(
+                EFFECT_REGISTRY
+                    .get(&effect_id)
+                    .expect("Effect not found in registry")
+                    .clone(),
+            );
         }
 
         for resource in class.resources_by_level(level, &subclass_name.name) {

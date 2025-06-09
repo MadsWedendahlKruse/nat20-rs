@@ -124,27 +124,25 @@ impl D20Check {
 
         let mut rng = rand::rng();
         // Technically inefficient to always roll two dice, but it's probably not a big deal
-        let roll1 = rng.random_range(1..=20);
-        let roll2 = rng.random_range(1..=20);
+        let roll1 = rng.random_range(1..=20) as u8;
+        let roll2 = rng.random_range(1..=20) as u8;
 
         let roll_mode = self.advantage_tracker.roll_mode();
         let rolls = match roll_mode {
             RollMode::Normal => vec![roll1],
-            _ => vec![roll1 as u32, roll2 as u32],
+            _ => vec![roll1, roll2],
         };
         let selected_roll = match roll_mode {
             RollMode::Normal => roll1,
             RollMode::Advantage => roll1.max(roll2),
             RollMode::Disadvantage => roll1.min(roll2),
-        } as u32;
+        };
 
         let total_modifier = modifiers.total();
         // TODO: For some reason this is clamped to zero, so negative modifiers are not applied
-        let total = selected_roll + total_modifier.max(0) as u32;
+        let total = selected_roll as u32 + total_modifier.max(0) as u32;
 
-        // TODO: Add support for effects lowering the critical threshold
-        let crit_threshold = 20;
-        let is_crit = selected_roll >= crit_threshold;
+        let is_crit = selected_roll == 20;
 
         D20CheckResult {
             advantage_tracker: self.advantage_tracker.clone(),
@@ -211,8 +209,8 @@ impl fmt::Display for D20Check {
 #[derive(Debug, Clone)]
 pub struct D20CheckResult {
     pub advantage_tracker: AdvantageTracker,
-    pub rolls: Vec<u32>,
-    pub selected_roll: u32,
+    pub rolls: Vec<u8>,
+    pub selected_roll: u8,
     pub modifier_breakdown: ModifierSet,
     pub total_modifier: i32,
     pub total: u32,

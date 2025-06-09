@@ -6,7 +6,7 @@ use crate::{
     utils::id::SpellId,
 };
 
-use super::spell::{self, Spell};
+use super::spell::Spell;
 
 #[derive(Debug, Clone)]
 pub struct Spellbook {

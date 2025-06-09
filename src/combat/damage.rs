@@ -371,6 +371,7 @@ impl fmt::Display for DamageMitigationResult {
 pub struct AttackRoll {
     pub d20_check: D20Check,
     pub source: DamageSource,
+    crit_threshold: u8, // Default critical threshold is 20
 }
 
 #[derive(Debug, Clone)]
@@ -381,11 +382,28 @@ pub struct AttackRollResult {
 
 impl fmt::Display for AttackRollResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // TODO: Include source information?
         write!(f, "{}", self.roll_result)
     }
 }
 
 impl AttackRoll {
+    pub fn new(d20_check: D20Check, source: DamageSource) -> Self {
+        Self {
+            d20_check,
+            source,
+            crit_threshold: 20,
+        }
+    }
+
+    pub fn reduce_crit_threshold(&mut self, amount: u8) {
+        if amount > self.crit_threshold {
+            self.crit_threshold = 1; // Minimum crit threshold is 1
+        } else {
+            self.crit_threshold -= amount;
+        }
+    }
+
     pub fn roll(&self, character: &Character) -> AttackRollResult {
         let mut attack_roll = self.clone();
 
@@ -393,8 +411,13 @@ impl AttackRoll {
             (effect.pre_attack_roll)(character, &mut attack_roll);
         }
 
+        let mut roll_result = attack_roll.d20_check.roll(character.proficiency_bonus());
+        if roll_result.selected_roll >= attack_roll.crit_threshold {
+            roll_result.is_crit = true;
+        }
+
         let mut result = AttackRollResult {
-            roll_result: attack_roll.d20_check.roll(character.proficiency_bonus()),
+            roll_result,
             source: self.source.clone(),
         };
 
@@ -416,7 +439,14 @@ pub enum DamageEventResult {
 mod tests {
     use rstest::{fixture, rstest};
 
-    use crate::stats::{ability::Ability, modifier::ModifierSet, modifier::ModifierSource};
+    use crate::{
+        items::equipment::equipment::HandSlot,
+        stats::{
+            ability::Ability,
+            modifier::{ModifierSet, ModifierSource},
+        },
+        test_utils::fixtures,
+    };
 
     use super::*;
 
@@ -629,6 +659,29 @@ mod tests {
         // 2 Slashing + 2 Fire = 4
         assert_eq!(mitigation_result.total, 4);
         println!("{}", mitigation_result);
+    }
+
+    #[test]
+    fn attack_roll_crit_threshold() {
+        // Fighter is level 5 Champion, so crit threshold is 19 (Improved Critical)
+        let character = fixtures::creatures::heroes::fighter();
+
+        let mut attack_roll_result = character.attack_roll(&WeaponType::Melee, HandSlot::Main);
+        while attack_roll_result.roll_result.selected_roll != 19 {
+            // Keep rolling until we get a 19 (could also check for 20, but that's always a crit, so doesn't
+            // really test the reduced crit threshold)
+            attack_roll_result = character.attack_roll(&WeaponType::Melee, HandSlot::Main);
+        }
+
+        assert_eq!(attack_roll_result.roll_result.selected_roll, 19);
+        assert!(attack_roll_result.roll_result.is_crit);
+        assert_eq!(
+            attack_roll_result.source,
+            DamageSource::Weapon(
+                WeaponType::Melee,
+                HashSet::from([WeaponProperties::TwoHanded])
+            )
+        );
     }
 
     #[fixture]

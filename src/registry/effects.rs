@@ -29,6 +29,7 @@ pub static EFFECT_REGISTRY: LazyLock<HashMap<EffectId, Effect>> = LazyLock::new(
             FIGHTING_STYLE_GREAT_WEAPON_FIGHTING.id.clone(),
             FIGHTING_STYLE_GREAT_WEAPON_FIGHTING.clone(),
         ),
+        (IMPROVED_CRITICAL_ID.clone(), IMPROVED_CRITICAL.clone()),
     ])
 });
 
@@ -132,6 +133,21 @@ static FIGHTING_STYLE_GREAT_WEAPON_FIGHTING: LazyLock<Effect> = LazyLock::new(||
                 }
             }
         }
+    });
+    effect
+});
+
+pub static IMPROVED_CRITICAL_ID: LazyLock<EffectId> =
+    LazyLock::new(|| EffectId::from_str("effect.fighter.champion.improved_critical"));
+
+static IMPROVED_CRITICAL: LazyLock<Effect> = LazyLock::new(|| {
+    let mut effect = Effect::new(
+        IMPROVED_CRITICAL_ID.clone(),
+        ModifierSource::ClassFeature("Improved Critical".to_string()),
+        EffectDuration::Persistent,
+    );
+    effect.pre_attack_roll = Arc::new(|_, attack_roll| {
+        attack_roll.reduce_crit_threshold(1);
     });
     effect
 });

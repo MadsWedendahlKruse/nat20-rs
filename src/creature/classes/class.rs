@@ -8,9 +8,9 @@ use strum::EnumIter;
 use crate::{
     creature::level_up::LevelUpChoice,
     dice::dice::DieSize,
-    effects::effects::Effect,
     items::equipment::{armor::ArmorType, weapon::WeaponCategory},
     stats::{ability::Ability, skill::Skill},
+    utils::id::EffectId,
 };
 
 use super::resources::Resource;
@@ -58,7 +58,7 @@ pub struct ClassBase {
     // TODO
     // pub features_by_level: HashMap<u8, Vec<ClassFeature>>,
     /// Passive effects that are always active for the class or subclass.
-    pub effects_by_level: HashMap<u8, Vec<Effect>>,
+    pub effects_by_level: HashMap<u8, Vec<EffectId>>,
     pub resources_by_level: HashMap<u8, Vec<Resource>>,
     /// Class specific choices that can be made at each level.
     /// For example, a Fighter might choose a fighting style at level 1.
@@ -110,7 +110,7 @@ impl Class {
         armor_proficiencies: HashSet<ArmorType>,
         weapon_proficiencies: HashSet<WeaponCategory>,
         spellcasting: SpellcastingProgression,
-        effects_by_level: HashMap<u8, Vec<Effect>>,
+        effects_by_level: HashMap<u8, Vec<EffectId>>,
         resources_by_level: HashMap<u8, Vec<Resource>>,
         mut choices_by_level: HashMap<u8, Vec<LevelUpChoice>>,
     ) -> Self {
@@ -176,7 +176,7 @@ impl Class {
         SpellcastingProgression::None
     }
 
-    pub fn effects_by_level(&self, level: u8, subclass_name: &str) -> Vec<Effect> {
+    pub fn effects_by_level(&self, level: u8, subclass_name: &str) -> Vec<EffectId> {
         let subclass_map = self
             .subclass(subclass_name)
             .map(|subclass| &subclass.base.effects_by_level);
