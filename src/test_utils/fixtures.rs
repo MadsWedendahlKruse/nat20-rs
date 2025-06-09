@@ -462,6 +462,7 @@ pub mod spells {
     use crate::{
         combat::damage::{DamageRoll, DamageSource, DamageType},
         dice::dice::DieSize,
+        resources::action_economy::ActionResource,
         spells::spell::{MagicSchool, Spell, SpellKind, TargetingContext},
         stats::{ability::Ability, modifier::ModifierSource},
     };
@@ -490,6 +491,7 @@ pub mod spells {
                     damage_roll
                 }),
             },
+            ActionResource::Action,
             Arc::new(|_, spell_level| TargetingContext::Multiple(3 + (spell_level - 1))),
         )
     }
@@ -512,6 +514,7 @@ pub mod spells {
                     )
                 }),
             },
+            ActionResource::Action,
             Arc::new(|_, _| TargetingContext::AreaOfEffect {
                 radius: 20,
                 centered_on_caster: false,
@@ -536,6 +539,7 @@ pub mod spells {
                 }),
                 damage_on_failure: None,
             },
+            ActionResource::Action,
             Arc::new(|caster, _| {
                 let caster_level = caster.total_level();
                 // TODO: Could also do something more general purpose for cantrips

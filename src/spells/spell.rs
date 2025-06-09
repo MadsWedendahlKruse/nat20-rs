@@ -8,6 +8,7 @@ use crate::{
     creature::character::Character,
     dice::dice::{DiceSetRoll, DiceSetRollResult},
     effects::effects::Effect,
+    resources::action_economy::ActionResource,
     stats::{
         ability::Ability,
         d20_check::D20Check,
@@ -365,6 +366,7 @@ pub struct Spell {
     base_level: u8,
     school: MagicSchool,
     kind: SpellKind,
+    action_cost: ActionResource,
     targeting: Arc<dyn Fn(&Character, &u8) -> TargetingContext + Send + Sync>,
     spellcasting_ability: Option<Ability>,
 }
@@ -375,6 +377,7 @@ impl Spell {
         base_level: u8,
         school: MagicSchool,
         kind: SpellKind,
+        action_cost: ActionResource,
         targeting: Arc<dyn Fn(&Character, &u8) -> TargetingContext + Send + Sync>,
     ) -> Self {
         Self {
@@ -384,7 +387,7 @@ impl Spell {
             school,
             targeting,
             kind,
-            // effect,
+            action_cost,
             spellcasting_ability: None,
         }
     }
@@ -456,6 +459,10 @@ impl Spell {
             targeting_context: (self.targeting)(caster, spell_level),
         })
     }
+
+    pub fn action_cost(&self) -> ActionResource {
+        self.action_cost
+    }
 }
 
 impl fmt::Debug for Spell {
@@ -465,6 +472,8 @@ impl fmt::Debug for Spell {
             .field("name", &self.name)
             .field("base_level", &self.base_level)
             .field("school", &self.school)
+            .field("kind", &self.kind)
+            .field("action_cost", &self.action_cost)
             .finish()
     }
 }
@@ -588,6 +597,7 @@ mod tests {
             1,
             MagicSchool::Conjuration,
             SpellKind::Utility {},
+            ActionResource::Action,
             Arc::new(|_, _| TargetingContext::AreaOfEffect {
                 radius: 20,
                 centered_on_caster: true,

@@ -10,6 +10,7 @@ pub mod effects;
 pub mod engine;
 pub mod items;
 pub mod registry;
+pub mod resources;
 pub mod spells;
 pub mod stats;
 pub mod test_utils;

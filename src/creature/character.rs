@@ -22,6 +22,7 @@ use crate::{
         weapon::{Weapon, WeaponCategory, WeaponType},
     },
     registry::{classes::CLASS_REGISTRY, effects::EFFECT_REGISTRY},
+    resources::{action_economy::ActionEconomy, resources::Resource},
     spells::{
         spell::{SnapshotError, SpellKindSnapshot, SpellSnapshot},
         spellbook::Spellbook,
@@ -38,10 +39,7 @@ use crate::{
 };
 
 use super::{
-    classes::{
-        class::{ClassName, SpellcastingProgression},
-        resources::Resource,
-    },
+    classes::class::{ClassName, SpellcastingProgression},
     level_up::{LevelUpChoice, LevelUpSelection},
 };
 
@@ -66,6 +64,7 @@ pub struct Character {
     spellbook: Spellbook,
     resources: HashMap<String, Resource>,
     effects: Vec<Effect>,
+    action_economy: ActionEconomy,
 }
 
 impl Character {
@@ -87,6 +86,7 @@ impl Character {
             spellbook: Spellbook::new(),
             resources: HashMap::new(),
             effects: Vec::new(),
+            action_economy: ActionEconomy::default(),
         }
     }
 
@@ -216,9 +216,9 @@ impl Character {
 
         for resource in class.resources_by_level(level, &subclass_name.name) {
             self.resources
-                .entry(resource.kind.clone())
+                .entry(resource.kind().to_string())
                 .and_modify(|r| {
-                    r.add_uses(resource.max_uses).unwrap();
+                    r.add_uses(resource.max_uses()).unwrap();
                 })
                 .or_insert(resource);
         }
@@ -586,6 +586,14 @@ impl Character {
         for effect in effects {
             self.remove_effect(effect);
         }
+    }
+
+    pub fn action_economy(&self) -> &ActionEconomy {
+        &self.action_economy
+    }
+
+    pub fn action_economy_mut(&mut self) -> &mut ActionEconomy {
+        &mut self.action_economy
     }
 }
 

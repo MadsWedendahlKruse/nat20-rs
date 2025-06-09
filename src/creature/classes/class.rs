@@ -9,11 +9,10 @@ use crate::{
     creature::level_up::LevelUpChoice,
     dice::dice::DieSize,
     items::equipment::{armor::ArmorType, weapon::WeaponCategory},
+    resources::resources::Resource,
     stats::{ability::Ability, skill::Skill},
     utils::id::EffectId,
 };
-
-use super::resources::Resource;
 
 // TODO: Better name
 // TODO: Classes are an enum, but subclasses are just a string?
