@@ -223,15 +223,21 @@ pub mod creatures {
     ) {
         let mut choice_provider =
             PredefinedChoiceProvider::new(character.name().to_string(), responses);
-        for _ in 0..levels {
+        for level in 1..=levels {
             let mut level_up_session = character.level_up();
             level_up_session
                 .advance(&mut choice_provider)
-                .expect("Level-up failed");
+                .expect(&format!(
+                    "Failed to apply level {} for {}",
+                    level,
+                    character.name()
+                ));
         }
     }
 
     pub mod heroes {
+        use std::collections::HashSet;
+
         use crate::{
             creature::{
                 classes::class::{ClassName, SubclassName},
@@ -261,6 +267,10 @@ pub mod creatures {
                     LevelUpSelection::Effect(
                         registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                     ),
+                    LevelUpSelection::SkillProficiency(HashSet::from([
+                        Skill::Athletics,
+                        Skill::Perception,
+                    ])),
                     LevelUpSelection::Class(ClassName::Fighter),
                     LevelUpSelection::Class(ClassName::Fighter),
                     LevelUpSelection::Subclass(SubclassName {
@@ -301,6 +311,10 @@ pub mod creatures {
                 5,
                 vec![
                     LevelUpSelection::Class(ClassName::Wizard),
+                    LevelUpSelection::SkillProficiency(HashSet::from([
+                        Skill::Arcana,
+                        Skill::History,
+                    ])),
                     LevelUpSelection::Class(ClassName::Wizard),
                     LevelUpSelection::Class(ClassName::Wizard),
                     LevelUpSelection::Subclass(SubclassName {
@@ -349,6 +363,10 @@ pub mod creatures {
                 5,
                 vec![
                     LevelUpSelection::Class(ClassName::Warlock),
+                    LevelUpSelection::SkillProficiency(HashSet::from([
+                        Skill::Arcana,
+                        Skill::Deception,
+                    ])),
                     LevelUpSelection::Class(ClassName::Warlock),
                     LevelUpSelection::Class(ClassName::Warlock),
                     LevelUpSelection::Subclass(SubclassName {
@@ -387,6 +405,8 @@ pub mod creatures {
     }
 
     pub mod monsters {
+        use std::collections::HashSet;
+
         use crate::{
             creature::{classes::class::ClassName, level_up::LevelUpSelection},
             registry,
@@ -406,6 +426,10 @@ pub mod creatures {
                     LevelUpSelection::Effect(
                         registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                     ),
+                    LevelUpSelection::SkillProficiency(HashSet::from([
+                        Skill::Acrobatics,
+                        Skill::Survival,
+                    ])),
                 ],
             );
 

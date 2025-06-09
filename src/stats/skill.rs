@@ -1,4 +1,4 @@
-use std::hash::Hash;
+use std::{fmt, hash::Hash};
 
 use crate::{creature::character::Character, effects::hooks::SkillCheckHook};
 
@@ -37,6 +37,12 @@ pub enum Skill {
     // --- Other ---
     // Not technically a skill, but it behaves like one
     Initiative,
+}
+
+impl fmt::Display for Skill {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[macro_export]

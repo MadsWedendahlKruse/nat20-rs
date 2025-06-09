@@ -301,6 +301,21 @@ impl DamageResistances {
     }
 }
 
+impl fmt::Display for DamageResistances {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.effects.is_empty() {
+            return write!(f, "No resistances");
+        }
+        for (dtype, effects) in &self.effects {
+            write!(f, "{}: ", dtype)?;
+            for effect in effects {
+                write!(f, "{}, ", effect.operation)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DamageComponentMitigation {
     pub damage_type: DamageType,

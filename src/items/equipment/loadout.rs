@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::combat::action::{CombatAction, CombatActionProvider};
 use crate::combat::damage::AttackRollResult;
@@ -198,6 +199,45 @@ impl CombatActionProvider for Loadout {
         }
 
         actions
+    }
+}
+
+impl fmt::Display for Loadout {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Loadout:\n")?;
+
+        if self.weapons.is_empty() {
+            write!(f, "\tNo weapons equipped\n")?;
+        } else {
+            for (weapon_type, weapon_map) in &self.weapons {
+                write!(f, "\t{:?} Weapon(s):\n", weapon_type)?;
+                for (hand, weapon) in weapon_map {
+                    if let Some(w) = weapon {
+                        write!(f, "\t\t{} in {:?} hand\n", w.name(), hand)?;
+                    }
+                }
+            }
+        }
+
+        if let Some(armor) = &self.armor {
+            write!(f, "\tArmor: {}\n", armor.equipment.item.name)?;
+        } else {
+            write!(f, "\tNo armor equipped\n")?;
+        }
+
+        if self.equipment.is_empty() {
+            write!(f, "\tNo equipment items equipped\n")?;
+        } else {
+            for (slot, item) in &self.equipment {
+                if let Some(equip_item) = item {
+                    write!(f, "\t{:?}: {}\n", slot, equip_item.item.name)?;
+                } else {
+                    write!(f, "\t{:?}: None\n", slot)?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

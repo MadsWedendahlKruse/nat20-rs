@@ -40,6 +40,7 @@ mod tests {
     fn available_actions() {
         let mut hero = fixtures::creatures::heroes::fighter();
         fixtures::creatures::heroes::add_initiative(&mut hero);
+        println!("{}", hero);
         let hero_id = hero.id();
         let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
 

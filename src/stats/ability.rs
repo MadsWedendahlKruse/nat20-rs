@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fmt, hash::Hash};
 
+use crate::stats::modifier;
+
 use super::modifier::{ModifierSet, ModifierSource};
 
 use strum::{EnumIter, IntoEnumIterator};
@@ -54,6 +56,26 @@ impl AbilityScore {
 
     pub fn total(&self) -> i32 {
         self.base + self.modifiers.total()
+    }
+}
+
+impl fmt::Display for AbilityScore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let modifier = self.ability_modifier().total();
+        let sign = if modifier >= 0 { "+" } else { "-" };
+        write!(
+            f,
+            "{}: {} ({}{})",
+            self.ability,
+            self.total(),
+            sign,
+            modifier.abs()
+        )?;
+        if self.modifiers.is_empty() {
+            return Ok(());
+        }
+        write!(f, " ({} {})", self.base, self.modifiers)?;
+        Ok(())
     }
 }
 

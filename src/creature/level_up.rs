@@ -1,7 +1,7 @@
 // TODO: Not sure if it's the best way to store this in a separate file, but character is already too big
 
 use std::{
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     io::{self, Write},
 };
 
@@ -10,7 +10,8 @@ use strum::IntoEnumIterator;
 use crate::{
     creature::{character::Character, classes::class::SubclassName},
     registry::classes::CLASS_REGISTRY,
-    utils::id::{CharacterId, EffectId},
+    stats::skill::Skill,
+    utils::id::EffectId,
 };
 
 use super::classes::class::ClassName;
@@ -20,11 +21,27 @@ pub enum LevelUpChoice {
     Class(Vec<ClassName>),
     Subclass(Vec<SubclassName>),
     Effect(Vec<EffectId>),
+    SkillProficiency(HashSet<Skill>, u8),
     // FeatSelection(Vec<FeatOption>),
     // AbilityScoreImprovement(u8), // u8 = number of points to distribute
     // AbilityPointSelection(Vec<Ability>),
     // SpellSelection(SpellcastingClass, Vec<SpellOption>),
     // etc.
+}
+
+impl LevelUpChoice {
+    pub fn name(&self) -> &'static str {
+        match self {
+            LevelUpChoice::Class(_) => "Class",
+            LevelUpChoice::Subclass(_) => "Subclass",
+            LevelUpChoice::Effect(_) => "Effect",
+            LevelUpChoice::SkillProficiency(_, _) => "SkillProficiency",
+            // LevelUpChoice::FeatSelection(_) => "FeatSelection",
+            // LevelUpChoice::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
+            // LevelUpChoice::AbilityPointSelection(_) => "AbilityPointSelection",
+            // LevelUpChoice::SpellSelection(_, _) => "SpellSelection",
+        }
+    }
 }
 
 impl LevelUpChoice {
@@ -49,11 +66,27 @@ pub enum LevelUpSelection {
     Class(ClassName),
     Subclass(SubclassName),
     Effect(EffectId),
+    SkillProficiency(HashSet<Skill>),
     // Feat(FeatOption),
     // AbilityScoreImprovement(u8), // u8 = number of points to distribute
     // AbilityPoint(Ability),
     // Spell(SpellcastingClass, SpellOption),
     // etc.
+}
+
+impl LevelUpSelection {
+    pub fn name(&self) -> &'static str {
+        match self {
+            LevelUpSelection::Class(_) => "Class",
+            LevelUpSelection::Subclass(_) => "Subclass",
+            LevelUpSelection::Effect(_) => "Effect",
+            LevelUpSelection::SkillProficiency(_) => "SkillProficiency",
+            // LevelUpSelection::Feat(_) => "Feat",
+            // LevelUpSelection::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
+            // LevelUpSelection::AbilityPoint(_) => "AbilityPoint",
+            // LevelUpSelection::Spell(_, _) => "Spell",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -123,6 +156,16 @@ impl ChoiceProvider for CliChoiceProvider {
                 LevelUpSelection::Effect(effects[idx].clone())
             }
 
+            LevelUpChoice::SkillProficiency(skills, num_choices) => {
+                let selected = Self::select_multiple(
+                    &format!("Select {} skill(s) to gain proficiency in:", num_choices),
+                    skills,
+                    *num_choices,
+                    |skill| format!("{:?}", skill),
+                );
+                LevelUpSelection::SkillProficiency(selected)
+            }
+
             _ => {
                 todo!("Implement CLI choice provider for other LevelUpChoice variants");
             }
@@ -140,6 +183,34 @@ impl CliChoiceProvider {
             println!("  [{:>2}] {}", i + 1, display(item));
         }
         Self::read_index(items.len())
+    }
+
+    fn select_multiple<T, F>(
+        prompt: &str,
+        items: &HashSet<T>,
+        num_choices: u8,
+        display: F,
+    ) -> HashSet<T>
+    where
+        T: Clone + std::hash::Hash + Eq,
+        F: Fn(&T) -> String,
+    {
+        let mut selected = HashSet::new();
+        let items_vec: Vec<_> = items.iter().collect();
+        println!("\n{}", prompt);
+        for (i, item) in items_vec.iter().enumerate() {
+            println!("  [{:>2}] {}", i + 1, display(item));
+        }
+
+        while selected.len() < num_choices as usize {
+            let idx = Self::read_index(items_vec.len());
+            if selected.insert(items_vec[idx].clone()) {
+                println!("Selected: {}", display(items_vec[idx]));
+            } else {
+                println!("Already selected: {}", display(items_vec[idx]));
+            }
+        }
+        selected
     }
 
     fn read_index(max: usize) -> usize {

@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
+
+use strum::IntoEnumIterator;
 
 use crate::{
     combat::{
@@ -25,11 +27,11 @@ use crate::{
         spellbook::Spellbook,
     },
     stats::{
-        ability::{Ability, AbilityScoreSet},
-        d20_check::D20CheckResult,
+        ability::{Ability, AbilityScore, AbilityScoreSet},
+        d20_check::{D20CheckResult, RollMode},
         modifier::{ModifierSet, ModifierSource},
         proficiency::Proficiency,
-        saving_throw::{create_saving_throw_set, SavingThrowSet},
+        saving_throw::{self, create_saving_throw_set, SavingThrowSet},
         skill::{create_skill_set, Skill, SkillSet},
     },
     utils::id::CharacterId,
@@ -114,7 +116,6 @@ impl Character {
                 }
 
                 if let Some(class) = CLASS_REGISTRY.get(&class_name) {
-                    self.update_hp(class);
                     choices.extend(self.increment_class_level(&class));
                 } else {
                     return Err(LevelUpError::RegistryMissing(class_name.to_string()));
@@ -144,7 +145,33 @@ impl Character {
                 }
             }
 
+            (
+                LevelUpChoice::SkillProficiency(skills, num_choices),
+                LevelUpSelection::SkillProficiency(selected_skills),
+            ) => {
+                if selected_skills.len() != *num_choices as usize {
+                    return Err(LevelUpError::InvalidSelection { choice, selection });
+                }
+
+                for skill in selected_skills {
+                    if !skills.contains(&skill) {
+                        return Err(LevelUpError::InvalidSelection { choice, selection });
+                    }
+                    // TODO: Expertise handling
+                    self.skills.set_proficiency(*skill, Proficiency::Proficient);
+                }
+            }
+
             _ => {
+                // If the choice and selection are called the same, and we made it here,
+                // it's probably just because it hasn't been implemented yet
+                if choice.name() == selection.name() {
+                    todo!(
+                        "Implement choice: {:?} with selection: {:?}",
+                        choice,
+                        selection
+                    );
+                }
                 return Err(LevelUpError::ChoiceSelectionMismatch { choice, selection });
             }
         }
@@ -190,6 +217,11 @@ impl Character {
                 })
                 .or_insert(resource);
         }
+
+        for saving_throw in class.saving_throw_proficiencies {
+            self.saving_throws
+                .set_proficiency(saving_throw, Proficiency::Proficient);
+        }
     }
 
     pub fn total_level(&self) -> u8 {
@@ -203,12 +235,19 @@ impl Character {
         if level == 1 {
             // If it's the first level, add the class to the list
             self.classes.insert(class.name.clone(), level);
+            // Set default ability scores
+            for (ability, score) in class.default_abilities.iter() {
+                self.ability_scores
+                    .set(*ability, AbilityScore::new(*ability, *score));
+            }
         } else {
             // If it's an existing class, update its level
             if let Some(existing_level) = self.classes.get_mut(&class.name) {
                 *existing_level = level;
             }
         }
+
+        self.update_hp(class);
 
         self.latest_class = Some(class.name.clone());
 
@@ -564,5 +603,72 @@ impl CombatActionProvider for Character {
 impl Default for Character {
     fn default() -> Self {
         Character::new("John Doe")
+    }
+}
+
+impl fmt::Display for Character {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Character: {}\n", self.name)?;
+        write!(f, "ID: {}\n", self.id)?;
+        write!(
+            f,
+            "Classes: {}\n",
+            self.classes
+                .keys()
+                .map(|class| format!("Level {} {}", self.classes[class], class))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )?;
+        write!(f, "HP: {}/{}\n", self.current_hp, self.max_hp)?;
+
+        write!(f, "Ability Scores:\n")?;
+        for (_, score) in self.ability_scores.scores.iter() {
+            write!(f, "\t{}\n", score)?;
+        }
+
+        write!(f, "Skills:\n")?;
+        for skill in Skill::iter() {
+            let stats = self.skills.get(skill);
+            if stats.modifiers().is_empty()
+                && stats.advantage_tracker().roll_mode() == RollMode::Normal
+                && *stats.proficiency() == Proficiency::None
+            {
+                continue; // Skip skills with no modifiers
+            }
+            write!(
+                f,
+                "\t{}: {}\n",
+                skill,
+                stats.format(self.proficiency_bonus())
+            )?;
+        }
+
+        write!(f, "Saving Throws:\n")?;
+        for ability in Ability::iter() {
+            let stats = self.saving_throws.get(ability);
+            if stats.modifiers().is_empty()
+                && stats.advantage_tracker().roll_mode() == RollMode::Normal
+                && *stats.proficiency() == Proficiency::None
+            {
+                continue; // Skip saving throws with no modifiers
+            }
+            write!(
+                f,
+                "\t{}: {}\n",
+                ability,
+                stats.format(self.proficiency_bonus())
+            )?;
+        }
+
+        write!(f, "Resistances: {}\n", self.resistances)?;
+
+        write!(f, "Weapon Proficiencies:\n")?;
+        for weapon_type in self.weapon_proficiencies.iter() {
+            write!(f, "\t{:?}\n", weapon_type.0)?;
+        }
+
+        write!(f, "{}", self.loadout)?;
+
+        Ok(())
     }
 }

@@ -85,6 +85,8 @@ pub struct Class {
     pub hit_die: DieSize,
     pub hp_per_level: u8,
 
+    pub default_abilities: HashMap<Ability, i32>,
+
     /// Saving throw proficiencies granted at level 1 (e.g. STR + CON for Fighter)
     pub saving_throw_proficiencies: [Ability; 2],
 
@@ -98,6 +100,7 @@ impl Class {
         name: ClassName,
         hit_die: DieSize,
         hp_per_level: u8,
+        default_abilities: HashMap<Ability, i32>,
         saving_throw_proficiencies: [Ability; 2],
         subclass_level: u8,
         subclasses: HashMap<SubclassName, Subclass>,
@@ -111,6 +114,16 @@ impl Class {
         resources_by_level: HashMap<u8, Vec<Resource>>,
         mut choices_by_level: HashMap<u8, Vec<LevelUpChoice>>,
     ) -> Self {
+        // Add skill proficiencies
+        choices_by_level
+            .entry(1)
+            .or_default()
+            .push(LevelUpChoice::SkillProficiency(
+                skill_proficiencies.clone(),
+                skill_choices,
+            ));
+
+        // Add subclass choices
         choices_by_level
             .entry(subclass_level)
             .or_default()
@@ -118,6 +131,7 @@ impl Class {
                 subclasses.keys().cloned().collect(),
             ));
 
+        // Add feat selections
         for level in feat_levels.iter() {
             // TODO: Implement feat selection
             // choices_by_level.entry(*level)
@@ -129,6 +143,7 @@ impl Class {
             name,
             hit_die,
             hp_per_level,
+            default_abilities,
             saving_throw_proficiencies,
             subclasses,
             base: ClassBase {

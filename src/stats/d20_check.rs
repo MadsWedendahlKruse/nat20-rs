@@ -180,6 +180,18 @@ impl D20Check {
 
         result
     }
+
+    pub fn format(&self, proficiency_bonus: u32) -> String {
+        let mut result = format!(
+            "+{} ({})",
+            self.proficiency.bonus(proficiency_bonus),
+            self.proficiency
+        );
+        if !self.modifiers.is_empty() {
+            result += &format!(" {}", self.modifiers);
+        }
+        result
+    }
 }
 
 impl fmt::Display for D20Check {
@@ -269,11 +281,11 @@ where
         }
     }
 
-    fn get(&self, key: K) -> &D20Check {
+    pub fn get(&self, key: K) -> &D20Check {
         self.checks.get(&key).unwrap()
     }
 
-    fn get_mut(&mut self, key: K) -> &mut D20Check {
+    pub fn get_mut(&mut self, key: K) -> &mut D20Check {
         self.checks.get_mut(&key).unwrap()
     }
 
