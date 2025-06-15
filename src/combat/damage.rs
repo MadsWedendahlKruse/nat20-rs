@@ -7,7 +7,6 @@ use crate::{
     creature::character::Character,
     dice::dice::{DiceSet, DiceSetRoll, DiceSetRollResult, DieSize},
     items::equipment::weapon::{Weapon, WeaponProperties, WeaponType},
-    spells::spell::SpellKindSnapshot,
     stats::{
         d20_check::{D20Check, D20CheckResult},
         modifier::{ModifierSet, ModifierSource},
@@ -83,6 +82,8 @@ impl fmt::Display for DamageComponentResult {
     }
 }
 
+/// This is used in the attack roll hook so we e.g. only apply Fighting Style
+/// Archery when making a ranged attack
 #[derive(Debug, Clone, PartialEq)]
 pub enum DamageSource {
     // TODO: Could also just use the entire weapon instead? Would be a lot of cloning unless
@@ -429,23 +430,19 @@ impl AttackRoll {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum DamageEventResult {
-    WeaponAttack(AttackRollResult, DamageRollResult),
-    Spell(SpellKindSnapshot),
-}
-
 #[cfg(test)]
 mod tests {
     use rstest::{fixture, rstest};
 
     use crate::{
+        actions::action::{ActionContext, ActionKind, ActionProvider},
         items::equipment::equipment::HandSlot,
         stats::{
             ability::Ability,
             modifier::{ModifierSet, ModifierSource},
         },
         test_utils::fixtures,
+        utils::id::SpellId,
     };
 
     use super::*;
@@ -616,7 +613,7 @@ mod tests {
                     operation: MitigationOperation::Resistance,
                 },
                 DamageMitigationEffect {
-                    source: ModifierSource::Spell("Curse of Slashing".to_string()),
+                    source: ModifierSource::Spell(SpellId::from_str("Curse of Slashing")),
                     operation: MitigationOperation::Vulnerability,
                 },
                 DamageMitigationEffect {
@@ -666,11 +663,33 @@ mod tests {
         // Fighter is level 5 Champion, so crit threshold is 19 (Improved Critical)
         let character = fixtures::creatures::heroes::fighter();
 
-        let mut attack_roll_result = character.attack_roll(&WeaponType::Melee, HandSlot::Main);
+        // TODO: This is a pretty crazy complicated way to get the attack roll
+        let binding = character.available_actions();
+        let attack_action = binding
+            .iter()
+            .find(|(action, context)| {
+                matches!(action.kind, ActionKind::AttackRollDamage { .. })
+                    && context
+                        == &ActionContext::Weapon {
+                            weapon_type: WeaponType::Melee,
+                            hand: HandSlot::Main,
+                        }
+            })
+            .unwrap();
+
+        let attack_roll = match &attack_action.0.kind {
+            ActionKind::AttackRollDamage { attack_roll, .. } => {
+                attack_roll(&character, &attack_action.1.clone())
+            }
+            _ => panic!("Expected AttackRollDamage action"),
+        };
+
+        // TODO: This is a pretty hacky way to test this
+        let mut attack_roll_result = attack_roll.roll(&character);
         while attack_roll_result.roll_result.selected_roll != 19 {
             // Keep rolling until we get a 19 (could also check for 20, but that's always a crit, so doesn't
             // really test the reduced crit threshold)
-            attack_roll_result = character.attack_roll(&WeaponType::Melee, HandSlot::Main);
+            attack_roll_result = attack_roll.roll(&character);
         }
 
         assert_eq!(attack_roll_result.roll_result.selected_roll, 19);

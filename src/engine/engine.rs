@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
-use crate::combat::action::{
-    CombatAction, CombatActionProvider, CombatActionRequest, CombatActionResult,
-};
-use crate::combat::damage::DamageEventResult;
+use crate::actions::action::{Action, ActionContext, ActionProvider, ActionResult};
 use crate::creature::character::Character;
+use crate::resources::resources::ResourceError;
 use crate::stats::d20_check::D20CheckResult;
 use crate::stats::skill::Skill;
 use crate::utils::id::CharacterId;
@@ -75,7 +73,7 @@ impl<'c> CombatEngine<'c> {
             .unwrap()
     }
 
-    pub fn available_actions(&self) -> Vec<CombatAction> {
+    pub fn available_actions(&self) -> Vec<(&Action, ActionContext)> {
         self.current_character().available_actions()
     }
 
@@ -89,8 +87,13 @@ impl<'c> CombatEngine<'c> {
 
     pub fn submit_action(
         &mut self,
-        action: CombatActionRequest,
-    ) -> Result<CombatActionResult, String> {
+        action: &Action,
+        action_context: &ActionContext,
+        // TODO: Targets have to determined before submitting the action
+        // e.g. for Fireball, the targets are determined by the asking the engine
+        // which characters are within the area of effect
+        targets: Vec<CharacterId>,
+    ) -> Result<Vec<ActionResult>, String> {
         if self.state != CombatState::AwaitingAction {
             return Err("Engine is not ready for an action submission".into());
         }
@@ -99,74 +102,57 @@ impl<'c> CombatEngine<'c> {
 
         // TODO: validate actions, e.g. for a melee weapon attack, the character must be adjacent to the target
 
-        let result = self.resolve_action(action);
+        // TODO: Assume action is valid
+        // TODO: Resrouce might error? Should probably check resources as part of the validation
+        // Spend resources, e.g. action points, spell slots, etc.
+        let _ = self.spend_resources(action, action_context);
+
+        let mut results = Vec::new();
+        for target in &targets {
+            results.push(self.resolve_action(action, action_context, *target));
+        }
 
         // For now we just assume the action is resolved
         self.state = CombatState::AwaitingAction;
-        Ok(result)
+        Ok(results)
     }
 
-    fn resolve_action(&mut self, action: CombatActionRequest) -> CombatActionResult {
-        match action {
-            CombatActionRequest::WeaponAttack {
-                weapon_type,
-                hand,
-                target,
-            } => {
-                let attacker = self.current_character();
-                let attack_roll_result = attacker.attack_roll(&weapon_type, hand);
-                let damage_roll_result = attacker
-                    .damage_roll(&weapon_type, hand)
-                    // TODO: What if the target can't be critically hit?
-                    .roll_crit_damage(attack_roll_result.roll_result.is_crit);
-
-                let target_character = self.participants.get_mut(&target).unwrap();
-                let armor_class = target_character.armor_class();
-
-                let damage_source = DamageEventResult::WeaponAttack(
-                    attack_roll_result.clone(),
-                    damage_roll_result.clone(),
-                );
-                let damage_result = target_character.take_damage(&damage_source);
-
-                CombatActionResult::WeaponAttack {
-                    target: target_character.id(),
-                    target_armor_class: armor_class,
-                    attack_roll_result,
-                    damage_roll_result,
-                    damage_result,
-                }
+    fn spend_resources(
+        &mut self,
+        action: &Action,
+        action_context: &ActionContext,
+    ) -> Result<(), ResourceError> {
+        let character = self.current_character_mut();
+        for (resource, amount) in &action.resource_cost {
+            if let Some(resource) = character.resource_mut(resource) {
+                resource.spend(*amount)?;
             }
-
-            CombatActionRequest::CastSpell {
-                spell_id,
-                level,
-                targets,
-            } => {
-                let caster = self.current_character();
-                // TODO: What if the caster doesn't have the spell?
-                let spell_snapshot = caster.spell_snapshot(&spell_id, level).unwrap().unwrap();
-
-                let mut spell_results = Vec::new();
-                for target in targets {
-                    let target_character = self.participants.get_mut(&target).unwrap();
-                    let spell_result = spell_snapshot.cast(target_character);
-                    spell_results.push(spell_result);
-                }
-
-                // TODO: When/where do we consume the spell slot?
-
-                CombatActionResult::CastSpell {
-                    result: spell_results,
-                }
-            }
-
-            CombatActionRequest::UseItem { item_name, target } => todo!(),
-            CombatActionRequest::Dodge => todo!(),
-            CombatActionRequest::Disengage => todo!(),
-            CombatActionRequest::Help { target } => todo!(),
-            CombatActionRequest::EndTurn => todo!(),
         }
+        // TODO: Not really a fan of this special treatment for spell slots
+        match action_context {
+            ActionContext::Spell { level } => {
+                character.spellbook_mut().use_spell_slot(*level);
+            }
+            _ => {
+                // Other action contexts might not require resource spending
+            }
+        }
+        Ok(())
+    }
+
+    fn resolve_action(
+        &mut self,
+        action: &Action,
+        action_context: &ActionContext,
+        target_id: CharacterId,
+    ) -> ActionResult {
+        let character = self.current_character();
+        let action_snapshot = action.snapshot(character, action_context);
+        let target = self
+            .participants
+            .get_mut(&target_id)
+            .expect("Target character not found in participants");
+        action_snapshot.apply_to_character(target)
     }
 
     pub fn end_turn(&mut self) {

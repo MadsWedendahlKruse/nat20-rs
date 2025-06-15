@@ -457,14 +457,19 @@ pub mod creatures {
 }
 
 pub mod spells {
-    use std::sync::Arc;
+    use std::{collections::HashMap, sync::Arc};
 
     use crate::{
+        actions::action::{
+            ActionContext, ActionKind, AreaShape, TargetType, TargetingContext, TargetingKind,
+        },
         combat::damage::{DamageRoll, DamageSource, DamageType},
         dice::dice::DieSize,
-        resources::action_economy::ActionResource,
-        spells::spell::{MagicSchool, Spell, SpellKind, TargetingContext},
+        math::point::Point,
+        registry,
+        spells::spell::{MagicSchool, Spell},
         stats::{ability::Ability, modifier::ModifierSource},
+        utils::id::SpellId,
     };
 
     pub fn magic_missile() -> Spell {
@@ -472,7 +477,7 @@ pub mod spells {
             "Magic Missile".to_string(),
             1,
             MagicSchool::Evocation,
-            SpellKind::Damage {
+            ActionKind::UnconditionalDamage {
                 damage: Arc::new(|_, _| {
                     // TODO: Damage roll hooks? e.g. Empowered Evocation
                     let mut damage_roll = DamageRoll::new(
@@ -486,13 +491,26 @@ pub mod spells {
                         .primary
                         .dice_roll
                         .modifiers
-                        .add_modifier(ModifierSource::Spell("MAGIC_MISSILE".to_string()), 1);
+                        .add_modifier(ModifierSource::Spell(SpellId::from_str("MAGIC_MISSILE")), 1);
 
                     damage_roll
                 }),
             },
-            ActionResource::Action,
-            Arc::new(|_, spell_level| TargetingContext::Multiple(3 + (spell_level - 1))),
+            HashMap::from([(registry::resources::ACTION.clone(), 1)]),
+            Arc::new(|_, action_context| {
+                let spell_level = match action_context {
+                    ActionContext::Spell { level } => *level,
+                    // TODO: Better error message? Replace other places too
+                    _ => panic!("Invalid action context"),
+                };
+                TargetingContext {
+                    kind: TargetingKind::Multiple {
+                        max_targets: 3 + (spell_level - 1),
+                    },
+                    range: 120,
+                    valid_target_types: vec![TargetType::Character],
+                }
+            }),
         )
     }
 
@@ -501,12 +519,18 @@ pub mod spells {
             "Fireball".to_string(),
             3,
             MagicSchool::Evocation,
-            SpellKind::SavingThrowDamage {
-                saving_throw: Ability::Dexterity,
+            ActionKind::SavingThrowDamage {
+                saving_throw: Arc::new(|caster, _| {
+                    Spell::spell_save_dc(caster, Ability::Dexterity)
+                }),
                 half_damage_on_save: true,
-                damage: Arc::new(|_, spell_level| {
+                damage: Arc::new(|_, action_context| {
+                    let spell_level = match action_context {
+                        ActionContext::Spell { level } => *level,
+                        _ => panic!("Invalid action context"),
+                    };
                     DamageRoll::new(
-                        8 + (*spell_level as u32 - 3),
+                        8 + (spell_level as u32 - 3),
                         DieSize::D6,
                         DamageType::Fire,
                         DamageSource::Spell,
@@ -514,10 +538,20 @@ pub mod spells {
                     )
                 }),
             },
-            ActionResource::Action,
-            Arc::new(|_, _| TargetingContext::AreaOfEffect {
-                radius: 20,
-                centered_on_caster: false,
+            HashMap::from([(registry::resources::ACTION.clone(), 1)]),
+            Arc::new(|_, _| TargetingContext {
+                kind: TargetingKind::Area {
+                    shape: AreaShape::Sphere { radius: 20 },
+                    // TODO: What do we do here?
+                    origin: Point {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 0.0,
+                    },
+                },
+                range: 150,
+                // TODO: Can also hit objects
+                valid_target_types: vec![TargetType::Character],
             }),
         )
     }
@@ -527,7 +561,10 @@ pub mod spells {
             "Eldritch Blast".to_string(),
             0, // Cantrip
             MagicSchool::Evocation,
-            SpellKind::AttackRoll {
+            ActionKind::AttackRollDamage {
+                attack_roll: Arc::new(|caster, _| {
+                    Spell::spell_attack_roll(caster, Ability::Charisma)
+                }),
                 damage: Arc::new(|_, _| {
                     DamageRoll::new(
                         1,
@@ -539,16 +576,21 @@ pub mod spells {
                 }),
                 damage_on_failure: None,
             },
-            ActionResource::Action,
+            HashMap::from([(registry::resources::ACTION.clone(), 1)]),
             Arc::new(|caster, _| {
                 let caster_level = caster.total_level();
-                // TODO: Could also do something more general purpose for cantrips
-                TargetingContext::Multiple(match caster_level {
-                    1..=4 => 1,
-                    5..=10 => 2,
-                    11..=16 => 3,
-                    _ => 4, // Level 17+ can hit up to 4 targets
-                })
+                TargetingContext {
+                    kind: TargetingKind::Multiple {
+                        max_targets: match caster_level {
+                            1..=4 => 1,
+                            5..=10 => 2,
+                            11..=16 => 3,
+                            _ => 4, // Level 17+ can hit up to 4 targets
+                        },
+                    },
+                    range: 120,
+                    valid_target_types: vec![TargetType::Character],
+                }
             }),
         )
     }

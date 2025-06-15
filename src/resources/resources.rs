@@ -16,32 +16,45 @@
 //     // add more as needed
 // }
 
+use crate::utils::id::ResourceId;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum RechargeRule {
-    OnTurn,
-    OnShortRest,
-    OnLongRest,
-    OnAnyRest,
-    // TODO: Daily is the same as long rest?
-    Daily,
-    None,
+    OnTurn = 0,
+    OnAnyRest = 1,
+    OnShortRest = 2,
+    OnLongRest = 3,
+    Daily = 4,
+    Never = 5,
+}
+
+impl RechargeRule {
+    /// Returns the hierarchy level of the recharge rule.
+    pub fn hierarchy(&self) -> u8 {
+        *self as u8
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Resource {
-    kind: String,
+    kind: ResourceId,
     max_uses: u8,
     current_uses: u8,
     recharge: RechargeRule,
 }
 
 impl Resource {
-    pub fn new(kind: &str, max_uses: u8, recharge: RechargeRule) -> Result<Self, ResourceError> {
+    pub fn new(
+        kind: ResourceId,
+        max_uses: u8,
+        recharge: RechargeRule,
+    ) -> Result<Self, ResourceError> {
         if max_uses == 0 {
             return Err(ResourceError::ZeroMaxUses);
         }
         Ok(Self {
-            kind: kind.to_string(),
+            kind,
             max_uses,
             current_uses: max_uses,
             recharge,
@@ -68,11 +81,9 @@ impl Resource {
     }
 
     pub fn recharge(&mut self, rest_type: RechargeRule) {
-        if self.recharge == rest_type
-            || (self.recharge == RechargeRule::OnAnyRest
-                && (rest_type == RechargeRule::OnShortRest
-                    || rest_type == RechargeRule::OnLongRest))
-        {
+        // If the rest type is higher or equal to the resource's recharge rule,
+        // recharge the resource.
+        if rest_type.hierarchy() >= self.recharge.hierarchy() {
             self.recharge_internal();
         }
     }
@@ -111,6 +122,17 @@ impl Resource {
         self.remove_uses(1)
     }
 
+    pub fn set_max_uses(&mut self, max_uses: u8) -> Result<(), ResourceError> {
+        if max_uses == 0 {
+            return Err(ResourceError::ZeroMaxUses);
+        }
+        if max_uses < self.current_uses {
+            self.current_uses = max_uses;
+        }
+        self.max_uses = max_uses;
+        Ok(())
+    }
+
     pub fn max_uses(&self) -> u8 {
         self.max_uses
     }
@@ -119,7 +141,7 @@ impl Resource {
         self.current_uses
     }
 
-    pub fn kind(&self) -> &str {
+    pub fn kind(&self) -> &ResourceId {
         &self.kind
     }
 
@@ -131,14 +153,14 @@ impl Resource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResourceError {
     InsufficientResources {
-        kind: String,
+        kind: ResourceId,
         needed: u8,
         available: u8,
     },
     InvalidResourceKind(String),
     ZeroMaxUses,
     NegativeMaxUses {
-        kind: String,
+        kind: ResourceId,
         reduction: u8,
         max_uses: u8,
     },
@@ -151,7 +173,7 @@ mod tests {
     #[test]
     fn test_spend_success() {
         let mut res = Resource {
-            kind: "Ki Point".to_string(),
+            kind: ResourceId::from_str("Ki Point"),
             max_uses: 3,
             current_uses: 3,
             recharge: RechargeRule::OnShortRest,
@@ -163,7 +185,7 @@ mod tests {
     #[test]
     fn test_spend_insufficient() {
         let mut res = Resource {
-            kind: "Rage".to_string(),
+            kind: ResourceId::from_str("Rage"),
             max_uses: 2,
             current_uses: 1,
             recharge: RechargeRule::OnLongRest,
@@ -175,7 +197,7 @@ mod tests {
                 needed,
                 available,
             } => {
-                assert_eq!(kind, "Rage");
+                assert_eq!(kind, ResourceId::from_str("Rage"));
                 assert_eq!(needed, 2);
                 assert_eq!(available, 1);
             }
@@ -186,7 +208,7 @@ mod tests {
     #[test]
     fn test_recharge() {
         let mut res = Resource {
-            kind: "Bardic Inspiration".to_string(),
+            kind: ResourceId::from_str("Bardic Inspiration"),
             max_uses: 5,
             current_uses: 2,
             recharge: RechargeRule::OnLongRest,
@@ -198,7 +220,7 @@ mod tests {
     #[test]
     fn test_is_empty() {
         let res = Resource {
-            kind: "Channel Divinity".to_string(),
+            kind: ResourceId::from_str("Channel Divinity"),
             max_uses: 1,
             current_uses: 0,
             recharge: RechargeRule::OnShortRest,
@@ -209,7 +231,7 @@ mod tests {
     #[test]
     fn test_add_uses() {
         let mut res = Resource {
-            kind: "Wild Shape".to_string(),
+            kind: ResourceId::from_str("Wild Shape"),
             max_uses: 2,
             current_uses: 2,
             recharge: RechargeRule::OnShortRest,
@@ -222,7 +244,7 @@ mod tests {
     #[test]
     fn test_remove_uses_success() {
         let mut res = Resource {
-            kind: "Sorcery Point".to_string(),
+            kind: ResourceId::from_str("Sorcery Point"),
             max_uses: 4,
             current_uses: 4,
             recharge: RechargeRule::OnLongRest,
@@ -235,7 +257,7 @@ mod tests {
     #[test]
     fn test_remove_uses_too_many() {
         let mut res = Resource {
-            kind: "Lay On Hands".to_string(),
+            kind: ResourceId::from_str("Lay On Hands"),
             max_uses: 1,
             current_uses: 1,
             recharge: RechargeRule::OnLongRest,
@@ -247,7 +269,7 @@ mod tests {
                 reduction,
                 max_uses,
             } => {
-                assert_eq!(kind, "Lay On Hands");
+                assert_eq!(kind, ResourceId::from_str("Lay On Hands"));
                 assert_eq!(reduction, 2);
                 assert_eq!(max_uses, 1);
             }
@@ -258,7 +280,7 @@ mod tests {
     #[test]
     fn test_add_and_remove_single_use() {
         let mut res = Resource {
-            kind: "Superiority Die".to_string(),
+            kind: ResourceId::from_str("Superiority Die"),
             max_uses: 3,
             current_uses: 3,
             recharge: RechargeRule::OnShortRest,
@@ -275,7 +297,7 @@ mod tests {
     #[test]
     fn test_recharge_on_short_rest() {
         let mut res = Resource {
-            kind: "Ki Point".to_string(),
+            kind: ResourceId::from_str("Ki Point"),
             max_uses: 3,
             current_uses: 1,
             recharge: RechargeRule::OnShortRest,
@@ -287,7 +309,7 @@ mod tests {
     #[test]
     fn test_recharge_on_long_rest() {
         let mut res = Resource {
-            kind: "Arcane Recovery".to_string(),
+            kind: ResourceId::from_str("Arcane Recovery"),
             max_uses: 2,
             current_uses: 0,
             recharge: RechargeRule::OnLongRest,
@@ -299,7 +321,7 @@ mod tests {
     #[test]
     fn test_recharge_on_any_rest() {
         let mut res = Resource {
-            kind: "Channel Oath".to_string(),
+            kind: ResourceId::from_str("Channel Oath"),
             max_uses: 1,
             current_uses: 0,
             recharge: RechargeRule::OnAnyRest,
@@ -312,5 +334,77 @@ mod tests {
 
         res.recharge(RechargeRule::OnLongRest);
         assert_eq!(res.current_uses, 1);
+    }
+
+    #[test]
+    fn test_recharge_rule_hierarchy_order() {
+        assert!(RechargeRule::OnAnyRest.hierarchy() > RechargeRule::OnTurn.hierarchy());
+        assert!(RechargeRule::OnShortRest.hierarchy() > RechargeRule::OnAnyRest.hierarchy());
+        assert!(RechargeRule::OnLongRest.hierarchy() > RechargeRule::OnShortRest.hierarchy());
+        assert!(RechargeRule::Daily.hierarchy() > RechargeRule::OnLongRest.hierarchy());
+        assert!(RechargeRule::Never.hierarchy() > RechargeRule::Daily.hierarchy());
+    }
+
+    #[test]
+    fn test_recharge_rule_hierarchy_equality() {
+        assert_eq!(RechargeRule::OnTurn.hierarchy(), 0);
+        assert_eq!(RechargeRule::OnAnyRest.hierarchy(), 1);
+        assert_eq!(RechargeRule::OnShortRest.hierarchy(), 2);
+        assert_eq!(RechargeRule::OnLongRest.hierarchy(), 3);
+        assert_eq!(RechargeRule::Daily.hierarchy(), 4);
+        assert_eq!(RechargeRule::Never.hierarchy(), 5);
+    }
+
+    #[test]
+    fn test_resource_recharge_respects_hierarchy() {
+        let mut res = Resource {
+            kind: ResourceId::from_str("Test Resource"),
+            max_uses: 2,
+            current_uses: 0,
+            recharge: RechargeRule::OnShortRest,
+        };
+        // Should recharge on short rest
+        res.recharge(RechargeRule::OnShortRest);
+        assert_eq!(res.current_uses, 2);
+
+        // Use up resource
+        res.spend(2).unwrap();
+        assert_eq!(res.current_uses, 0);
+
+        // Should recharge on long rest (higher in hierarchy)
+        res.recharge(RechargeRule::OnLongRest);
+        assert_eq!(res.current_uses, 2);
+
+        // Use up resource again
+        res.spend(2).unwrap();
+        assert_eq!(res.current_uses, 0);
+
+        // Should recharge on daily (highest in hierarchy)
+        res.recharge(RechargeRule::Daily);
+        assert_eq!(res.current_uses, 2);
+
+        // Use up resource again
+        res.spend(2).unwrap();
+        assert_eq!(res.current_uses, 0);
+
+        // Should NOT recharge on turn (lower in hierarchy)
+        res.recharge(RechargeRule::OnTurn);
+        assert_eq!(res.current_uses, 0);
+    }
+
+    #[test]
+    fn test_resource_recharge_rule_never() {
+        let mut res = Resource {
+            kind: ResourceId::from_str("No Recharge"),
+            max_uses: 1,
+            current_uses: 0,
+            recharge: RechargeRule::Never,
+        };
+        res.recharge(RechargeRule::OnShortRest);
+        assert_eq!(res.current_uses, 0);
+        res.recharge(RechargeRule::OnLongRest);
+        assert_eq!(res.current_uses, 0);
+        res.recharge(RechargeRule::Daily);
+        assert_eq!(res.current_uses, 0);
     }
 }

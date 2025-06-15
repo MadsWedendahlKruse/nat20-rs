@@ -15,7 +15,7 @@ mod tests {
             modifier::ModifierSource,
             proficiency::Proficiency,
         },
-        utils::id::EffectId,
+        utils::id::{EffectId, SpellId},
     };
 
     #[test]
@@ -99,18 +99,18 @@ mod tests {
         character
             .ability_scores_mut()
             .set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
+        let source = ModifierSource::Spell(SpellId::from_str("Curse of Weakness"));
         let mut disadvantage_effect = Effect::new(
             EffectId::from_str("effect.curse_of_weakness"),
-            ModifierSource::Spell("Curse of Weakness".to_string()),
+            source.clone(),
             EffectDuration::Temporary(2),
         );
         disadvantage_effect.on_saving_throw = Some(SavingThrowHook {
             key: Ability::Strength,
             check_hook: Arc::new(move |_, d20_check| {
-                d20_check.advantage_tracker_mut().add(
-                    AdvantageType::Disadvantage,
-                    ModifierSource::Spell("Curse of Weakness".to_string()),
-                );
+                d20_check
+                    .advantage_tracker_mut()
+                    .add(AdvantageType::Disadvantage, source.clone());
             }),
             result_hook: Arc::new(|_, _| {}),
         });

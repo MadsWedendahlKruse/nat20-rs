@@ -3,12 +3,10 @@ use std::{collections::HashMap, fmt};
 use strum::IntoEnumIterator;
 
 use crate::{
-    combat::{
-        action::{CombatAction, CombatActionProvider},
-        damage::{
-            AttackRollResult, DamageEventResult, DamageMitigationEffect, DamageMitigationResult,
-            DamageResistances, DamageRoll, DamageRollResult, MitigationOperation,
-        },
+    actions::action::{Action, ActionContext, ActionKindSnapshot, ActionProvider},
+    combat::damage::{
+        AttackRollResult, DamageMitigationEffect, DamageMitigationResult, DamageResistances,
+        DamageRoll, DamageRollResult, MitigationOperation,
     },
     creature::{
         classes::class::{Class, SubclassName},
@@ -21,21 +19,18 @@ use crate::{
         loadout::{Loadout, TryEquipError},
         weapon::{Weapon, WeaponCategory, WeaponType},
     },
-    registry::{classes::CLASS_REGISTRY, effects::EFFECT_REGISTRY},
-    resources::{action_economy::ActionEconomy, resources::Resource},
-    spells::{
-        spell::{SnapshotError, SpellKindSnapshot, SpellSnapshot},
-        spellbook::Spellbook,
-    },
+    registry::{self, classes::CLASS_REGISTRY, effects::EFFECT_REGISTRY},
+    resources::resources::{RechargeRule, Resource},
+    spells::{spell::SnapshotError, spellbook::Spellbook},
     stats::{
         ability::{Ability, AbilityScore, AbilityScoreSet},
-        d20_check::{D20CheckResult, RollMode},
+        d20_check::{D20CheckDC, D20CheckResult, RollMode},
         modifier::{ModifierSet, ModifierSource},
         proficiency::Proficiency,
         saving_throw::{create_saving_throw_set, SavingThrowSet},
         skill::{create_skill_set, Skill, SkillSet},
     },
-    utils::id::CharacterId,
+    utils::id::{CharacterId, ResourceId, SpellId},
 };
 
 use super::{
@@ -62,13 +57,25 @@ pub struct Character {
     /// Equipped items
     loadout: Loadout,
     spellbook: Spellbook,
-    resources: HashMap<String, Resource>,
+    resources: HashMap<ResourceId, Resource>,
     effects: Vec<Effect>,
-    action_economy: ActionEconomy,
 }
 
 impl Character {
     pub fn new(name: &str) -> Self {
+        // TODO: Not sure this is the best place to put this?
+        // By default everyone has one action, bonus action and reaction
+        let mut resources = HashMap::new();
+        for resource in [
+            registry::resources::ACTION.clone(),
+            registry::resources::BONUS_ACTION.clone(),
+            registry::resources::REACTION.clone(),
+        ] {
+            resources.insert(
+                resource.clone(),
+                Resource::new(resource, 1, RechargeRule::OnTurn).unwrap(),
+            );
+        }
         Self {
             id: CharacterId::new_v4(),
             name: name.to_string(),
@@ -84,9 +91,8 @@ impl Character {
             weapon_proficiencies: HashMap::new(),
             loadout: Loadout::new(),
             spellbook: Spellbook::new(),
-            resources: HashMap::new(),
+            resources,
             effects: Vec::new(),
-            action_economy: ActionEconomy::default(),
         }
     }
 
@@ -216,9 +222,9 @@ impl Character {
 
         for resource in class.resources_by_level(level, &subclass_name.name) {
             self.resources
-                .entry(resource.kind().to_string())
+                .entry(resource.kind().clone())
                 .and_modify(|r| {
-                    r.add_uses(resource.max_uses()).unwrap();
+                    r.set_max_uses(resource.max_uses()).unwrap();
                 })
                 .or_insert(resource);
         }
@@ -279,7 +285,7 @@ impl Character {
     }
 
     pub fn spellcaster_levels(&self) -> u8 {
-        let mut spellcaster_levels = 0;
+        let mut spellcaster_levels = 0.0;
         for (class_name, levels) in &self.classes {
             if let Some(class) = CLASS_REGISTRY.get(&class_name) {
                 let spellcasting_progression = class.spellcasting_progression(
@@ -289,14 +295,14 @@ impl Character {
                         .map_or("", |v| v.name.as_str()),
                 );
                 spellcaster_levels += match spellcasting_progression {
-                    SpellcastingProgression::None => 0,
-                    SpellcastingProgression::Full => *levels,
-                    SpellcastingProgression::Half => (*levels) / 2,
-                    SpellcastingProgression::Third => (*levels) / 3,
+                    SpellcastingProgression::None => 0.0,
+                    SpellcastingProgression::Full => *levels as f32,
+                    SpellcastingProgression::Half => (*levels as f32) / 2.0,
+                    SpellcastingProgression::Third => (*levels as f32) / 3.0,
                 };
             }
         }
-        spellcaster_levels
+        spellcaster_levels as u8
     }
 
     pub fn max_hp(&self) -> u32 {
@@ -328,83 +334,75 @@ impl Character {
         self.current_hp += hp_increase;
     }
 
+    // TODO: This should return some more information, like for an attack roll
+    // what was the armor class it rolled against, or for a saving throw,
+    // what did the target roll, etc.
     pub fn take_damage(
         &mut self,
-        damage_source: &DamageEventResult,
+        damage_source: &ActionKindSnapshot,
     ) -> Option<DamageMitigationResult> {
         let mut resistances = self.resistances.clone();
 
         match damage_source {
-            DamageEventResult::WeaponAttack(attack_roll_result, damage_roll_result) => {
-                if !self
-                    .loadout()
-                    .does_attack_hit(&self, &attack_roll_result.roll_result)
-                {
-                    // If the attack misses, no damage is applied
-                    return None;
-                }
-                self.take_damage_internal(damage_roll_result, &resistances)
+            ActionKindSnapshot::UnconditionalDamage { damage_roll } => {
+                return self.take_damage_internal(damage_roll, &resistances);
             }
 
-            DamageEventResult::Spell(snapshot) => {
-                match &snapshot {
-                    SpellKindSnapshot::Damage { damage_roll } => {
+            ActionKindSnapshot::AttackRollDamage {
+                attack_roll,
+                damage_roll,
+                damage_on_failure,
+            } => {
+                if !self
+                    .loadout()
+                    .does_attack_hit(&self, &attack_roll.roll_result)
+                {
+                    if let Some(damage_on_failure) = damage_on_failure {
+                        return self.take_damage_internal(&damage_on_failure, &resistances);
+                    }
+                    return None;
+                }
+                self.take_damage_internal(damage_roll, &resistances)
+            }
+
+            ActionKindSnapshot::SavingThrowDamage {
+                saving_throw,
+                half_damage_on_save,
+                damage_roll,
+            } => {
+                let check_result = self.saving_throws.check_dc(&saving_throw, self);
+                if check_result.success {
+                    if *half_damage_on_save {
+                        // Apply half damage on successful save
+                        for component in damage_roll.components.iter() {
+                            resistances.add_effect(
+                                component.damage_type,
+                                DamageMitigationEffect {
+                                    // TODO: Not sure if this is the best source
+                                    source: ModifierSource::Ability(saving_throw.key),
+                                    operation: MitigationOperation::Resistance,
+                                },
+                            );
+                        }
                         return self.take_damage_internal(&damage_roll, &resistances);
                     }
-
-                    SpellKindSnapshot::AttackRoll {
-                        attack_roll,
-                        damage_roll: damage,
-                        damage_on_failure,
-                    } => {
-                        if !self
-                            .loadout()
-                            .does_attack_hit(self, &attack_roll.roll_result)
-                        {
-                            if let Some(damage_on_failure) = damage_on_failure {
-                                return self.take_damage_internal(&damage_on_failure, &resistances);
-                            }
-                            return None;
-                        }
-                        self.take_damage_internal(&damage, &resistances)
-                    }
-
-                    SpellKindSnapshot::SavingThrowDamage {
-                        saving_throw,
-                        half_damage_on_save,
-                        damage_roll,
-                    } => {
-                        let check_result = self.saving_throws.check_dc(&saving_throw, self);
-                        if check_result.success {
-                            if *half_damage_on_save {
-                                // Apply half damage on successful save
-                                for component in damage_roll.components.iter() {
-                                    resistances.add_effect(
-                                        component.damage_type,
-                                        DamageMitigationEffect {
-                                            // TODO: Not sure if this is the best source
-                                            source: ModifierSource::Ability(saving_throw.key),
-                                            operation: MitigationOperation::Resistance,
-                                        },
-                                    );
-                                }
-                                return self.take_damage_internal(&damage_roll, &resistances);
-                            }
-                            // No damage on successful save
-                            return None;
-                        }
-                        self.take_damage_internal(damage_roll, &resistances)
-                    }
-
-                    SpellKindSnapshot::Custom { damage_roll } => {
-                        return self.take_damage_internal(damage_roll, &resistances);
-                    }
-
-                    _ => {
-                        // TODO: Handle this in a more graceful way
-                        panic!("Character::take_damage called with unsupported spell snapshot type: {:?}", snapshot);
-                    }
+                    // No damage on successful save
+                    return None;
                 }
+                self.take_damage_internal(damage_roll, &resistances)
+            }
+
+            // TODO: Not sure how to handle composite actions yet
+            // ActionKindSnapshot::Composite { actions } => {
+            //     for action in actions {
+            //         self.take_damage(action);
+            //     }
+            // }
+            _ => {
+                panic!(
+                    "Character::take_damage called with unsupported damage source (action snapshot): {:?}",
+                    damage_source
+                );
             }
         }
     }
@@ -453,6 +451,10 @@ impl Character {
 
     pub fn saving_throw(&self, ability: Ability) -> D20CheckResult {
         self.saving_throws.check(ability, self)
+    }
+
+    pub fn saving_throw_dc(&self, dc: &D20CheckDC<Ability>) -> D20CheckResult {
+        self.saving_throws.check_dc(dc, self)
     }
 
     pub fn loadout(&self) -> &Loadout {
@@ -518,18 +520,6 @@ impl Character {
         unequipped_weapon
     }
 
-    pub fn attack_roll(&self, weapon_type: &WeaponType, hand: HandSlot) -> AttackRollResult {
-        self.loadout.attack_roll(self, weapon_type, hand)
-    }
-
-    pub fn damage_roll(&self, weapon_type: &WeaponType, hand: HandSlot) -> DamageRoll {
-        let weapon = self
-            .loadout
-            .weapon_in_hand(weapon_type, hand)
-            .expect("Weapon should be equipped in the specified hand");
-        weapon.damage_roll(self, hand)
-    }
-
     pub fn spellbook(&self) -> &Spellbook {
         &self.spellbook
     }
@@ -539,16 +529,15 @@ impl Character {
     }
 
     pub fn update_spell_slots(&mut self) {
-        // TODO: Calculate caster level based on class levels
-        let caster_level = self.total_level();
+        let caster_level = self.spellcaster_levels();
         self.spellbook.update_spell_slots(caster_level);
     }
 
     pub fn spell_snapshot(
         &self,
-        spell_id: &str,
+        spell_id: &SpellId,
         level: u8,
-    ) -> Option<Result<SpellSnapshot, SnapshotError>> {
+    ) -> Option<Result<ActionKindSnapshot, SnapshotError>> {
         self.spellbook
             .get_spell(spell_id)
             .map(|spell| spell.snapshot(self, &level))
@@ -588,17 +577,27 @@ impl Character {
         }
     }
 
-    pub fn action_economy(&self) -> &ActionEconomy {
-        &self.action_economy
+    pub fn resources(&self) -> &HashMap<ResourceId, Resource> {
+        &self.resources
     }
 
-    pub fn action_economy_mut(&mut self) -> &mut ActionEconomy {
-        &mut self.action_economy
+    pub fn resource(&self, kind: &ResourceId) -> Option<&Resource> {
+        self.resources.get(kind)
+    }
+
+    pub fn resource_mut(&mut self, kind: &ResourceId) -> Option<&mut Resource> {
+        self.resources.get_mut(kind)
+    }
+
+    pub fn recharge_resources(&mut self, recharge_rule: &RechargeRule) {
+        for resource in self.resources.values_mut() {
+            resource.recharge(*recharge_rule);
+        }
     }
 }
 
-impl CombatActionProvider for Character {
-    fn available_actions(&self) -> Vec<CombatAction> {
+impl ActionProvider for Character {
+    fn available_actions(&self) -> Vec<(&Action, ActionContext)> {
         let mut actions = Vec::new();
 
         for action in self.loadout.available_actions() {

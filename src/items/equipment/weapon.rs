@@ -1,13 +1,21 @@
-use std::collections::HashSet;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use crate::{
+    actions::action::{
+        Action, ActionContext, ActionKind, TargetType, TargetingContext, TargetingKind,
+    },
     combat::damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
     creature::character::Character,
     dice::dice::{DiceSet, DieSize},
     effects::effects::Effect,
+    registry,
     stats::{
         ability::Ability, d20_check::D20Check, modifier::ModifierSource, proficiency::Proficiency,
     },
+    utils::id::ActionId,
 };
 
 use super::equipment::{EquipmentItem, EquipmentType, HandSlot};
@@ -45,6 +53,7 @@ pub enum WeaponProperties {
 }
 
 // These are really extra abilities, so might have to handle them differently
+// TODO: Handle these as weapon_actions
 // pub enum MasteryProperty {
 //     Cleave,
 //     Graze,
@@ -64,6 +73,7 @@ pub struct Weapon {
     pub properties: HashSet<WeaponProperties>,
     pub damage_roll: DamageRoll,
     ability: Ability,
+    weapon_actions: Vec<Action>,
 }
 
 impl Weapon {
@@ -74,6 +84,7 @@ impl Weapon {
         num_dice: u32,
         die_size: DieSize,
         damage_type: DamageType,
+        // weapon_actions: Vec<Action>,
     ) -> Self {
         let weapon_type = match equipment.kind {
             EquipmentType::MeleeWeapon => WeaponType::Melee,
@@ -91,6 +102,43 @@ impl Weapon {
             DamageSource::Weapon(weapon_type.clone(), properties.clone()),
             equipment.item.name.clone(),
         );
+        let weapon_actions = vec![Action {
+            id: ActionId::from_str(equipment.item.name.clone() + "_attack"),
+            kind: ActionKind::AttackRollDamage {
+                // TODO: Some of this seems a bit circular?
+                attack_roll: Arc::new(|character: &Character, action_context: &ActionContext| {
+                    let (weapon_type, hand) = match action_context {
+                        ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
+                        _ => panic!("Action context must be Weapon"),
+                    };
+                    character
+                        .loadout()
+                        .weapon_in_hand(weapon_type, *hand)
+                        .unwrap()
+                        .attack_roll(character)
+                }),
+                damage: Arc::new(|character: &Character, action_context: &ActionContext| {
+                    let (weapon_type, hand) = match action_context {
+                        ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
+                        _ => panic!("Action context must be Weapon"),
+                    };
+                    character
+                        .loadout()
+                        .weapon_in_hand(weapon_type, *hand)
+                        .unwrap()
+                        .damage_roll(character, *hand)
+                }),
+                damage_on_failure: None,
+            },
+            targeting: Arc::new(|_character: &Character, _action_context: &ActionContext| {
+                TargetingContext {
+                    kind: TargetingKind::Single,
+                    range: 5,
+                    valid_target_types: vec![TargetType::Character],
+                }
+            }),
+            resource_cost: HashMap::from([(registry::resources::ACTION.clone(), 1)]),
+        }];
         Self {
             equipment,
             category,
@@ -98,6 +146,7 @@ impl Weapon {
             properties,
             damage_roll,
             ability,
+            weapon_actions,
         }
     }
 
@@ -202,6 +251,10 @@ impl Weapon {
     pub fn effects(&self) -> &Vec<Effect> {
         self.equipment.effects()
     }
+
+    pub fn weapon_actions(&self) -> &Vec<Action> {
+        &self.weapon_actions
+    }
 }
 
 #[cfg(test)]
@@ -211,6 +264,8 @@ mod tests {
     use crate::dice::dice::DieSize;
     use crate::items::equipment::equipment::{EquipmentItem, EquipmentType};
     use crate::items::item::ItemRarity;
+    use crate::stats::ability::AbilityScore;
+    use crate::test_utils::fixtures;
 
     #[test]
     fn create_weapon() {
@@ -268,5 +323,118 @@ mod tests {
             result.unwrap_err().downcast_ref::<&str>(),
             Some(&"Invalid weapon type")
         );
+    }
+
+    #[test]
+    fn weapon_has_property() {
+        let equipment = EquipmentItem::new(
+            "Dagger".to_string(),
+            "A small dagger".to_string(),
+            1.0,
+            1,
+            ItemRarity::Common,
+            EquipmentType::MeleeWeapon,
+        );
+        let weapon = Weapon::new(
+            equipment,
+            WeaponCategory::Simple,
+            HashSet::from([WeaponProperties::Finesse, WeaponProperties::Light]),
+            1,
+            DieSize::D4,
+            DamageType::Piercing,
+        );
+        assert!(weapon.has_property(&WeaponProperties::Finesse));
+        assert!(weapon.has_property(&WeaponProperties::Light));
+        assert!(!weapon.has_property(&WeaponProperties::Heavy));
+    }
+
+    #[test]
+    fn weapon_enchantment_property() {
+        let equipment = EquipmentItem::new(
+            "Magic Sword".to_string(),
+            "A sword with enchantment".to_string(),
+            3.0,
+            1,
+            ItemRarity::Uncommon,
+            EquipmentType::MeleeWeapon,
+        );
+        let weapon = Weapon::new(
+            equipment,
+            WeaponCategory::Martial,
+            HashSet::from([WeaponProperties::Enchantment(2)]),
+            1,
+            DieSize::D6,
+            DamageType::Slashing,
+        );
+        assert_eq!(weapon.enchantment(), 2);
+    }
+
+    #[test]
+    fn weapon_determine_ability_finesse() {
+        let equipment = EquipmentItem::new(
+            "Rapier".to_string(),
+            "A finesse weapon".to_string(),
+            2.5,
+            1,
+            ItemRarity::Common,
+            EquipmentType::MeleeWeapon,
+        );
+        let weapon = Weapon::new(
+            equipment,
+            WeaponCategory::Martial,
+            HashSet::from([WeaponProperties::Finesse]),
+            1,
+            DieSize::D8,
+            DamageType::Piercing,
+        );
+        let mut character = fixtures::creatures::heroes::fighter();
+        character.ability_scores_mut().set(
+            Ability::Dexterity,
+            AbilityScore::new(Ability::Dexterity, 20),
+        );
+        assert_eq!(weapon.determine_ability(&character), Ability::Dexterity);
+    }
+
+    #[test]
+    fn weapon_name_and_effects() {
+        let equipment = EquipmentItem::new(
+            "Warhammer".to_string(),
+            "A heavy warhammer".to_string(),
+            8.0,
+            1,
+            ItemRarity::Rare,
+            EquipmentType::MeleeWeapon,
+        );
+        let weapon = Weapon::new(
+            equipment,
+            WeaponCategory::Martial,
+            HashSet::new(),
+            1,
+            DieSize::D10,
+            DamageType::Bludgeoning,
+        );
+        assert_eq!(weapon.name(), "Warhammer");
+        assert!(weapon.effects().is_empty());
+    }
+
+    #[test]
+    fn weapon_actions_exist() {
+        let equipment = EquipmentItem::new(
+            "Shortbow".to_string(),
+            "A ranged weapon".to_string(),
+            2.0,
+            1,
+            ItemRarity::Common,
+            EquipmentType::RangedWeapon,
+        );
+        let weapon = Weapon::new(
+            equipment,
+            WeaponCategory::Simple,
+            HashSet::new(),
+            1,
+            DieSize::D6,
+            DamageType::Piercing,
+        );
+        assert!(!weapon.weapon_actions().is_empty());
     }
 }

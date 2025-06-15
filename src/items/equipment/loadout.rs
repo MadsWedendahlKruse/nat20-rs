@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::combat::action::{CombatAction, CombatActionProvider};
+use crate::actions::action::{Action, ActionContext, ActionProvider};
 use crate::combat::damage::AttackRollResult;
 use crate::creature::character::Character;
 use crate::items::equipment::armor::Armor;
-use crate::items::equipment::equipment::*;
 use crate::items::equipment::weapon::{Weapon, WeaponProperties, WeaponType};
+use crate::items::equipment::{equipment::*, weapon};
 use crate::stats::d20_check::D20CheckResult;
 use crate::stats::modifier::{ModifierSet, ModifierSource};
+use crate::utils::id::ActionId;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TryEquipError {
@@ -183,17 +184,23 @@ impl Loadout {
     }
 }
 
-impl CombatActionProvider for Loadout {
-    fn available_actions(&self) -> Vec<CombatAction> {
+impl ActionProvider for Loadout {
+    fn available_actions(&self) -> Vec<(&Action, ActionContext)> {
         let mut actions = Vec::new();
 
         for (weapon_type, weapon_map) in self.weapons.iter() {
-            for (hand, weapon) in weapon_map.iter() {
-                if weapon.is_some() {
-                    actions.push(CombatAction::WeaponAttack {
-                        weapon_type: weapon_type.clone(),
-                        hand: *hand,
-                    });
+            for (hand, weapon_opt) in weapon_map.iter() {
+                if let Some(weapon) = weapon_opt {
+                    let weapon_actions = weapon.weapon_actions();
+                    for action in weapon_actions {
+                        actions.push((
+                            action,
+                            ActionContext::Weapon {
+                                weapon_type: weapon_type.clone(),
+                                hand: *hand,
+                            },
+                        ));
+                    }
                 }
             }
         }
@@ -426,13 +433,19 @@ mod tests {
 
         let actions = loadout.available_actions();
         assert_eq!(actions.len(), 2);
-        assert!(actions.contains(&CombatAction::WeaponAttack {
-            weapon_type: WeaponType::Melee,
-            hand: HandSlot::Main,
-        }));
-        assert!(actions.contains(&CombatAction::WeaponAttack {
-            weapon_type: WeaponType::Ranged,
-            hand: HandSlot::Main,
-        }));
+        for action in actions {
+            match action.1 {
+                ActionContext::Weapon { weapon_type, hand } => {
+                    if weapon_type == WeaponType::Melee {
+                        assert_eq!(hand, HandSlot::Main);
+                    } else if weapon_type == WeaponType::Ranged {
+                        assert_eq!(hand, HandSlot::Main);
+                    } else {
+                        panic!("Unexpected weapon type: {:?}", weapon_type);
+                    }
+                }
+                _ => panic!("Unexpected action context: {:?}", action.1),
+            }
+        }
     }
 }

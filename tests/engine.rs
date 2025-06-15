@@ -1,17 +1,17 @@
 extern crate nat20_rs;
 
 mod tests {
-    use std::sync::Arc;
+    use std::{sync::Arc, vec};
 
     use nat20_rs::{
-        combat::action::{CombatAction, CombatActionResult},
+        actions::action::{Action, ActionContext, ActionKind, ActionKindResult, TargetingKind},
         effects::effects::{Effect, EffectDuration},
         engine::engine::CombatEngine,
         items::equipment::{equipment::HandSlot, weapon::WeaponType},
-        spells::spell::{SpellKindResult, TargetingContext},
+        registry,
         stats::modifier::ModifierSource,
         test_utils::fixtures,
-        utils::id::EffectId,
+        utils::id::{ActionId, EffectId, SpellId},
     };
 
     #[test]
@@ -56,9 +56,13 @@ mod tests {
         }
 
         assert!(!actions.is_empty());
-        assert!(actions.contains(&CombatAction::WeaponAttack {
-            weapon_type: WeaponType::Melee,
-            hand: HandSlot::Main
+        assert!(actions.iter().any(|(action, context)| {
+            matches!(action.kind, ActionKind::AttackRollDamage { .. })
+                && context
+                    == &ActionContext::Weapon {
+                        weapon_type: WeaponType::Melee,
+                        hand: HandSlot::Main,
+                    }
         }));
     }
 
@@ -88,46 +92,57 @@ mod tests {
         // Check that hero is the current character (he has massive initiative for this test)
         assert!(engine.current_character().id() == hero_id);
 
-        let actions = engine.available_actions();
-        assert!(actions.contains(&CombatAction::WeaponAttack {
-            weapon_type: WeaponType::Melee,
-            hand: HandSlot::Main
-        }));
+        let (action, context) = choose_action(&engine, |action, context| {
+            matches!(action.kind, ActionKind::AttackRollDamage { .. })
+                && context
+                    == &ActionContext::Weapon {
+                        weapon_type: WeaponType::Melee,
+                        hand: HandSlot::Main,
+                    }
+        });
 
-        let action = actions[0].clone();
         println!("=== Action ===");
         println!("{:?}", action);
 
-        let action_request = action.request_with_targets(vec![goblin_warrior_id]);
-        assert!(action_request.is_some());
+        let targeting_context = (action.targeting)(engine.current_character(), &context);
+        // TODO: Check the targeting context is correct and populates the target list
+        println!("=== Targeting Context ===");
+        println!("{:?}", targeting_context);
+        assert!(targeting_context.kind == TargetingKind::Single);
 
-        let result = engine.submit_action(action_request.unwrap());
-        assert!(result.is_ok());
-        let action_result = result.unwrap();
+        let action_result = engine.submit_action(&action, &context, vec![goblin_warrior_id]);
+
+        assert_eq!(
+            engine
+                .current_character()
+                .resource(&registry::resources::ACTION)
+                .unwrap()
+                .current_uses(),
+            0,
+            "Expected attack to cost an action"
+        );
+        assert!(action_result.is_ok());
+        let action_result = action_result.unwrap();
+        assert!(
+            action_result.len() == 1,
+            "Expected exactly one action result"
+        );
+        let action_result = action_result.get(0).unwrap();
+
         println!("=== Action Result ===");
         println!("{}", action_result);
 
-        let damage_result = match action_result {
-            nat20_rs::combat::action::CombatActionResult::WeaponAttack {
-                target,
-                target_armor_class: _,
-                attack_roll_result,
-                damage_roll_result: _,
-                damage_result,
-            } => {
-                assert_eq!(target, goblin_warrior_id);
-                assert!(attack_roll_result.roll_result.total > 0);
-                assert!(damage_result.is_some());
-                damage_result.unwrap()
-            }
+        let damage = match &action_result.result {
+            ActionKindResult::AttackRollDamage { damage_roll, .. } => damage_roll,
             _ => panic!(
-                "Expected a WeaponAttack result, but got: {:?}",
+                "Expected an AttackRollDamage result, but got: {:?}",
                 action_result
             ),
         };
+
         assert_eq!(
             goblin_warrior.hp(),
-            (goblin_warrior.max_hp() as i32 - damage_result.total).max(0) as u32
+            (goblin_warrior.max_hp() as i32 - damage.total).max(0) as u32
         );
     }
 
@@ -151,91 +166,104 @@ mod tests {
             println!("{:?}", action);
         }
 
-        let spell_id = "MAGIC_MISSILE";
+        let spell_id: SpellId = SpellId::from_str("MAGIC_MISSILE");
         let spell_level = 2;
 
-        let spell_action = CombatAction::CastSpell {
-            id: spell_id.to_string(),
-            level: spell_level,
+        let (action, context) = choose_action(&engine, |action, context| {
+            action.id == ActionId::from_str(spell_id.to_string())
+                && context == &ActionContext::Spell { level: spell_level }
+        });
+
+        println!("=== Action ===");
+        println!("{:?}", (&action, &context));
+
+        let targeting_context = (action.targeting)(engine.current_character(), &context);
+        let num_targets = match targeting_context.kind {
+            TargetingKind::Multiple { max_targets } => max_targets,
+            _ => panic!("Unexpected targeting kind: {:?}", targeting_context.kind),
         };
 
-        assert!(
-            actions.contains(&spell_action),
-            "Expected to find Magic Missile action in available actions"
-        );
-
-        let spell = engine
-            .current_character()
-            .spell_snapshot(spell_id, spell_level)
-            .unwrap()
-            .unwrap();
-
-        let targeting_context = spell.targeting_context;
+        // Level 2 Magic Missile should have 4 missiles
+        assert_eq!(num_targets, 4, "Expected Magic Missile to have 4 missiles");
         let mut targets = Vec::new();
-        match targeting_context {
-            TargetingContext::Multiple(count) => {
-                assert!(
-                    count == 3 + 1,
-                    "Expected {} targets for level {} Magic Missile, but got {}",
-                    3 + 1, // Magic Missile always hits 3 targets at level 1
-                    spell_level,
-                    count,
-                );
-                for _ in 0..count {
-                    targets.push(goblin_warrior_id);
-                }
-            }
-            _ => panic!(
-                "Expected a spell with multiple targets, but got: {:?}",
-                targeting_context
-            ),
+        for _ in 0..num_targets {
+            targets.push(goblin_warrior_id);
         }
 
-        println!("=== Chosen Action ===");
-        println!("{:?}", spell_action);
+        let spell_slots = engine
+            .current_character()
+            .spellbook()
+            .spell_slots_for_level(spell_level);
 
-        let action_request = spell_action.request_with_targets(targets);
-        assert!(action_request.is_some());
+        let action_result = engine.submit_action(&action, &context, targets);
 
-        let result = engine.submit_action(action_request.unwrap());
-        assert!(result.is_ok());
-        let action_result = result.unwrap();
-        println!("=== Action Result ===");
-        println!("{}", action_result);
+        assert!(action_result.is_ok());
+        let action_result = action_result.unwrap();
 
-        let spell_result = match action_result {
-            CombatActionResult::CastSpell { result } => result,
-            _ => panic!("Expected a CastSpell result, but got: {:?}", action_result),
-        };
-
-        assert!(
-            !spell_result.is_empty(),
-            "Expected spell result to not be empty"
+        assert_eq!(
+            engine
+                .current_character()
+                .spellbook()
+                .spell_slots_for_level(spell_level),
+            &spell_slots - 1,
+            "Expected one spell slot to be used for casting Magic Missile"
         );
-
-        let total_damage: i32 = spell_result
+        assert_eq!(
+            engine
+                .current_character()
+                .resource(&registry::resources::ACTION)
+                .unwrap()
+                .current_uses(),
+            0,
+            "Expected spell to cost an action"
+        );
+        assert_eq!(
+            action_result.len(),
+            4,
+            "Expected exactly four action results for Magic Missile"
+        );
+        let total_damage: i32 = action_result
             .iter()
-            .map(|r| match &r.result {
-                SpellKindResult::Damage {
-                    damage_roll: _,
-                    damage_taken,
-                } => {
-                    if let Some(damage) = damage_taken {
-                        return damage.total;
-                    }
-                    0
+            .map(|result| {
+                if let ActionKindResult::UnconditionalDamage { damage_roll, .. } = &result.result {
+                    damage_roll.total
+                } else {
+                    panic!(
+                        "Expected a UnconditionalDamage result, but got: {:?}",
+                        result
+                    );
                 }
-                _ => panic!("Expected a Damage spell result, but got: {:?}", r.result),
             })
             .sum();
         assert!(
             total_damage > 0,
-            "Expected total damage to be greater than 0"
+            "Expected total damage to be greater than 0, but got: {}",
+            total_damage
         );
-
         assert_eq!(
             goblin_warrior.hp(),
-            (goblin_warrior.max_hp() as i32 - total_damage).max(0) as u32
+            (goblin_warrior.max_hp() as i32 - total_damage).max(0) as u32,
+            "Expected Goblin Warrior's HP to be reduced by the total damage dealt"
         );
+
+        println!("=== Action Result ===");
+        for result in action_result {
+            println!("{}", result);
+        }
+    }
+
+    // TODO: Cloning the action is not the most efficient way to do this,
+    // but it makes it a whole lot easier to use
+    fn choose_action(
+        engine: &CombatEngine,
+        predicate: impl Fn(&Action, &ActionContext) -> bool,
+    ) -> (Action, ActionContext) {
+        let actions = engine.available_actions();
+        let (action, context) = actions
+            .iter()
+            .find(|(action, context)| predicate(action, context))
+            .unwrap()
+            .clone();
+        (action.clone(), context.clone())
     }
 }

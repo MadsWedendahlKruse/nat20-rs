@@ -105,12 +105,12 @@ mod tests {
     fn modifiers() {
         let mut modifiers = ModifierSet::new();
         modifiers.add_modifier(ModifierSource::Item("Belt of Strength".to_string()), 4);
-        modifiers.add_modifier(ModifierSource::Spell("Bless".to_string()), 1);
+        modifiers.add_modifier(ModifierSource::Spell(SpellId::from_str("BLESS")), 1);
 
         assert_eq!(modifiers.modifiers.len(), 2);
         assert_eq!(modifiers.total(), 5);
 
-        modifiers.remove_modifier(&ModifierSource::Spell("Bless".to_string()));
+        modifiers.remove_modifier(&ModifierSource::Spell(SpellId::from_str("BLESS")));
         assert_eq!(modifiers.modifiers.len(), 1);
         assert_eq!(modifiers.total(), 4);
         println!("Modifiers breakdown: {}", modifiers);
