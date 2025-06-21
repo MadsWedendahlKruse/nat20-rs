@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::actions::action::{Action, ActionContext, ActionProvider, ActionResult};
 use crate::creature::character::Character;
+use crate::engine;
 use crate::resources::resources::ResourceError;
 use crate::stats::d20_check::D20CheckResult;
 use crate::stats::skill::Skill;
@@ -105,39 +106,23 @@ impl<'c> CombatEngine<'c> {
         // TODO: Assume action is valid
         // TODO: Resrouce might error? Should probably check resources as part of the validation
         // Spend resources, e.g. action points, spell slots, etc.
-        let _ = self.spend_resources(action, action_context);
+        let snapshots = action.perform(self.current_character_mut(), action_context, targets.len());
 
-        let mut results = Vec::new();
-        for target in &targets {
-            results.push(self.resolve_action(action, action_context, *target));
-        }
+        let results: Vec<_> = targets
+            .into_iter()
+            .zip(snapshots)
+            .map(|(target_id, action_snapshot)| {
+                let target = self
+                    .participants
+                    .get_mut(&target_id)
+                    .expect("Target character not found in participants");
+                action_snapshot.apply_to_character(target)
+            })
+            .collect();
 
         // For now we just assume the action is resolved
         self.state = CombatState::AwaitingAction;
         Ok(results)
-    }
-
-    fn spend_resources(
-        &mut self,
-        action: &Action,
-        action_context: &ActionContext,
-    ) -> Result<(), ResourceError> {
-        let character = self.current_character_mut();
-        for (resource, amount) in &action.resource_cost {
-            if let Some(resource) = character.resource_mut(resource) {
-                resource.spend(*amount)?;
-            }
-        }
-        // TODO: Not really a fan of this special treatment for spell slots
-        match action_context {
-            ActionContext::Spell { level } => {
-                character.spellbook_mut().use_spell_slot(*level);
-            }
-            _ => {
-                // Other action contexts might not require resource spending
-            }
-        }
-        Ok(())
     }
 
     fn resolve_action(

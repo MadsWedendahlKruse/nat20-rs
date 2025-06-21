@@ -11,7 +11,7 @@ use crate::{
     items::equipment::{armor::ArmorType, weapon::WeaponCategory},
     resources::resources::Resource,
     stats::{ability::Ability, skill::Skill},
-    utils::id::EffectId,
+    utils::id::{ActionId, EffectId},
 };
 
 // TODO: Better name
@@ -63,6 +63,8 @@ pub struct ClassBase {
     /// For example, a Fighter might choose a fighting style at level 1.
     /// TODO: Include subclass choices?
     pub choices_by_level: HashMap<u8, Vec<LevelUpChoice>>,
+    /// Actions that are available at each level.
+    pub actions_by_level: HashMap<u8, Vec<ActionId>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,6 +114,7 @@ impl Class {
         effects_by_level: HashMap<u8, Vec<EffectId>>,
         resources_by_level: HashMap<u8, Vec<Resource>>,
         mut choices_by_level: HashMap<u8, Vec<LevelUpChoice>>,
+        actions_by_level: HashMap<u8, Vec<ActionId>>,
     ) -> Self {
         // Add skill proficiencies
         choices_by_level
@@ -154,6 +157,7 @@ impl Class {
                 effects_by_level,
                 resources_by_level,
                 choices_by_level,
+                actions_by_level,
             },
         }
     }
@@ -187,6 +191,13 @@ impl Class {
             .subclass(subclass_name)
             .map(|subclass| &subclass.base.resources_by_level);
         self.merge_by_level(level, &self.base.resources_by_level, subclass_map)
+    }
+
+    pub fn actions_by_level(&self, level: u8, subclass_name: &str) -> Vec<ActionId> {
+        let subclass_map = self
+            .subclass(subclass_name)
+            .map(|subclass| &subclass.base.actions_by_level);
+        self.merge_by_level(level, &self.base.actions_by_level, subclass_map)
     }
 
     fn merge_by_level<T: Clone>(

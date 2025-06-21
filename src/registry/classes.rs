@@ -73,6 +73,7 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
                 registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
             ])],
         )]),
+        HashMap::from([(2, vec![registry::actions::ACTION_SURGE_ID.clone()])]),
     )
 });
 
@@ -93,6 +94,7 @@ static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
         ]),
         resources_by_level: HashMap::new(),
         choices_by_level: HashMap::new(),
+        actions_by_level: HashMap::new(),
     },
 });
 
@@ -129,6 +131,7 @@ static WARLOCK: LazyLock<Class> = LazyLock::new(|| {
         HashMap::new(),
         HashMap::new(),
         HashMap::new(),
+        HashMap::new(),
     )
 });
 
@@ -149,6 +152,7 @@ static FIEND_PATRON: LazyLock<Subclass> = LazyLock::new(|| Subclass {
         ]),
         resources_by_level: HashMap::new(),
         choices_by_level: HashMap::new(),
+        actions_by_level: HashMap::new(),
     },
 });
 
@@ -184,6 +188,7 @@ static WIZARD: LazyLock<Class> = LazyLock::new(|| {
         HashMap::new(),
         HashMap::new(),
         HashMap::new(),
+        HashMap::new(),
     )
 });
 
@@ -208,5 +213,6 @@ static EVOKER: LazyLock<Subclass> = LazyLock::new(|| Subclass {
         ]),
         resources_by_level: HashMap::new(),
         choices_by_level: HashMap::new(),
+        actions_by_level: HashMap::new(),
     },
 });

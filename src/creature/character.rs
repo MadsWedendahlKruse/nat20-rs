@@ -5,14 +5,14 @@ use strum::IntoEnumIterator;
 use crate::{
     actions::action::{Action, ActionContext, ActionKindSnapshot, ActionProvider},
     combat::damage::{
-        AttackRollResult, DamageMitigationEffect, DamageMitigationResult, DamageResistances,
-        DamageRoll, DamageRollResult, MitigationOperation,
+        DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
+        MitigationOperation,
     },
     creature::{
         classes::class::{Class, SubclassName},
         level_up::{LevelUpError, LevelUpSession},
     },
-    effects::effects::Effect,
+    effects::{self, effects::Effect},
     items::equipment::{
         armor::Armor,
         equipment::{EquipmentItem, GeneralEquipmentSlot, HandSlot},
@@ -59,6 +59,7 @@ pub struct Character {
     spellbook: Spellbook,
     resources: HashMap<ResourceId, Resource>,
     effects: Vec<Effect>,
+    actions: Vec<(Action, ActionContext)>,
 }
 
 impl Character {
@@ -93,6 +94,8 @@ impl Character {
             spellbook: Spellbook::new(),
             resources,
             effects: Vec::new(),
+            // TODO: Default actions like jump, dash, help, etc.
+            actions: Vec::new(),
         }
     }
 
@@ -232,6 +235,14 @@ impl Character {
         for saving_throw in class.saving_throw_proficiencies {
             self.saving_throws
                 .set_proficiency(saving_throw, Proficiency::Proficient);
+        }
+
+        for action_id in class.actions_by_level(level, &subclass_name.name) {
+            if let Some((action, context)) = registry::actions::ACTION_REGISTRY.get(&action_id) {
+                self.actions.push((action.clone(), context.clone()));
+            } else {
+                panic!("Action {} not found in registry", action_id);
+            }
         }
     }
 
@@ -594,11 +605,38 @@ impl Character {
             resource.recharge(*recharge_rule);
         }
     }
+
+    pub fn on_turn_start(&mut self) {
+        for resource in self.resources.values_mut() {
+            resource.recharge(RechargeRule::OnTurn);
+        }
+
+        for effect in &mut self.effects {
+            effect.increment_turns();
+        }
+
+        // Collect expired effects first to avoid double mutable borrow
+        let expired_effects: Vec<_> = self
+            .effects
+            .iter()
+            .filter(|e| e.is_expired())
+            .cloned()
+            .collect();
+        for effect in &expired_effects {
+            (effect.on_unapply)(self);
+        }
+        self.effects.retain(|effect| !effect.is_expired());
+    }
 }
 
 impl ActionProvider for Character {
+    // TODO: Can we cache this?
     fn available_actions(&self) -> Vec<(&Action, ActionContext)> {
         let mut actions = Vec::new();
+
+        for (action, context) in &self.actions {
+            actions.push((action, context.clone()));
+        }
 
         for action in self.loadout.available_actions() {
             actions.push(action);

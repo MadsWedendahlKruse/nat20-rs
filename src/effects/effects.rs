@@ -15,8 +15,20 @@ use super::hooks::{EffectHook, SavingThrowHook, SkillCheckHook};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EffectDuration {
     Instant,
-    Temporary(usize),
     Persistent,
+    Temporary {
+        duration: u8,      // Number of turns the effect lasts
+        turns_elapsed: u8, // Number of turns that have passed since the effect was applied
+    },
+}
+
+impl EffectDuration {
+    pub fn temporary(duration: u8) -> Self {
+        Self::Temporary {
+            duration,
+            turns_elapsed: 0,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -64,11 +76,24 @@ impl Effect {
         }
     }
 
-    pub fn is_expired(&self, turn: usize) -> bool {
+    pub fn increment_turns(&mut self) {
+        if let EffectDuration::Temporary {
+            duration: _,
+            ref mut turns_elapsed,
+        } = self.duration
+        {
+            *turns_elapsed += 1;
+        }
+    }
+
+    pub fn is_expired(&self) -> bool {
         match self.duration {
             EffectDuration::Instant => true,
-            EffectDuration::Temporary(duration) => turn >= duration,
             EffectDuration::Persistent => false,
+            EffectDuration::Temporary {
+                duration,
+                turns_elapsed,
+            } => turns_elapsed >= duration,
         }
     }
 }

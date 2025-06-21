@@ -12,6 +12,8 @@ use crate::{
     dice::dice::{DiceSetRoll, DiceSetRollResult},
     items::equipment::{equipment::HandSlot, weapon::WeaponType},
     math::point::Point,
+    registry,
+    resources::resources::ResourceError,
     stats::saving_throw::SavingThrowDC,
     utils::id::{ActionId, CharacterId, EffectId, ResourceId},
 };
@@ -409,10 +411,18 @@ impl ActionKindSnapshot {
                 applied: !target.saving_throw_dc(saving_throw).success,
             },
 
-            ActionKindSnapshot::BeneficialEffect { effect } => ActionKindResult::BeneficialEffect {
-                effect: effect.clone(),
-                applied: true, // TODO: Beneficial effects are always applied?
-            },
+            ActionKindSnapshot::BeneficialEffect { effect } => {
+                target.add_effect(
+                    registry::effects::EFFECT_REGISTRY
+                        .get(&effect)
+                        .unwrap()
+                        .clone(),
+                );
+                ActionKindResult::BeneficialEffect {
+                    effect: effect.clone(),
+                    applied: true, // TODO: Beneficial effects are always applied?
+                }
+            }
 
             ActionKindSnapshot::Healing { healing } => {
                 target.heal(healing.subtotal as u32);
@@ -445,6 +455,42 @@ impl ActionKindSnapshot {
 impl Action {
     pub fn snapshot(&self, character: &Character, context: &ActionContext) -> ActionKindSnapshot {
         self.kind.snapshot(character, context)
+    }
+
+    pub fn perform(
+        &self,
+        performer: &mut Character,
+        context: &ActionContext,
+        num_snapshots: usize,
+    ) -> Vec<ActionKindSnapshot> {
+        // TODO: Resource might error?
+        let _ = self.spend_resources(performer, context);
+        let snapshots = (0..num_snapshots)
+            .map(|_| self.snapshot(performer, context))
+            .collect();
+        snapshots
+    }
+
+    fn spend_resources(
+        &self,
+        performer: &mut Character,
+        context: &ActionContext,
+    ) -> Result<(), ResourceError> {
+        for (resource, amount) in &self.resource_cost {
+            if let Some(resource) = performer.resource_mut(resource) {
+                resource.spend(*amount)?;
+            }
+        }
+        // TODO: Not really a fan of this special treatment for spell slots
+        match context {
+            ActionContext::Spell { level } => {
+                performer.spellbook_mut().use_spell_slot(*level);
+            }
+            _ => {
+                // Other action contexts might not require resource spending
+            }
+        }
+        Ok(())
     }
 }
 

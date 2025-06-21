@@ -264,6 +264,6 @@ mod tests {
             .find(|(action, context)| predicate(action, context))
             .unwrap()
             .clone();
-        (action.clone(), context.clone())
+        (action.clone(), context)
     }
 }

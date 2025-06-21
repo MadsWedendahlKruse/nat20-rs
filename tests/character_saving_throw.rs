@@ -103,7 +103,7 @@ mod tests {
         let mut disadvantage_effect = Effect::new(
             EffectId::from_str("effect.curse_of_weakness"),
             source.clone(),
-            EffectDuration::Temporary(2),
+            EffectDuration::temporary(2),
         );
         disadvantage_effect.on_saving_throw = Some(SavingThrowHook {
             key: Ability::Strength,

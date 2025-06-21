@@ -11,26 +11,52 @@ use crate::{
         equipment::HandSlot,
         weapon::{WeaponProperties, WeaponType},
     },
+    registry,
     stats::modifier::ModifierSource,
     utils::id::EffectId,
 };
 
 pub static EFFECT_REGISTRY: LazyLock<HashMap<EffectId, Effect>> = LazyLock::new(|| {
     HashMap::from([
+        (ACTION_SURGE_ID.clone(), ACTION_SURGE.to_owned()),
         (
             FIGHTING_STYLE_ARCHERY.id.clone(),
-            FIGHTING_STYLE_ARCHERY.clone(),
+            FIGHTING_STYLE_ARCHERY.to_owned(),
         ),
         (
             FIGHTING_STYLE_DEFENSE.id.clone(),
-            FIGHTING_STYLE_DEFENSE.clone(),
+            FIGHTING_STYLE_DEFENSE.to_owned(),
         ),
         (
             FIGHTING_STYLE_GREAT_WEAPON_FIGHTING.id.clone(),
-            FIGHTING_STYLE_GREAT_WEAPON_FIGHTING.clone(),
+            FIGHTING_STYLE_GREAT_WEAPON_FIGHTING.to_owned(),
         ),
-        (IMPROVED_CRITICAL_ID.clone(), IMPROVED_CRITICAL.clone()),
+        (IMPROVED_CRITICAL_ID.clone(), IMPROVED_CRITICAL.to_owned()),
     ])
+});
+
+pub static ACTION_SURGE_ID: LazyLock<EffectId> =
+    LazyLock::new(|| EffectId::from_str("effect.fighter.action_surge"));
+
+static ACTION_SURGE: LazyLock<Effect> = LazyLock::new(|| {
+    let mut effect = Effect::new(
+        ACTION_SURGE_ID.clone(),
+        ModifierSource::ClassFeature(ACTION_SURGE_ID.to_string()),
+        EffectDuration::temporary(1),
+    );
+    effect.on_apply = Arc::new(|character| {
+        let _ = character
+            .resource_mut(&registry::resources::ACTION)
+            .unwrap()
+            .add_use();
+    });
+    effect.on_unapply = Arc::new(|character| {
+        let _ = character
+            .resource_mut(&registry::resources::ACTION)
+            .unwrap()
+            .remove_use();
+    });
+    effect
 });
 
 // TODO: In the SRD fighting styles are a specific type of Feat, but I don't think that's necessary
@@ -107,16 +133,16 @@ static FIGHTING_STYLE_GREAT_WEAPON_FIGHTING: LazyLock<Effect> = LazyLock::new(||
             // 1. The main hand weapon is two-handed or versatile.
             // 2. The off hand is empty
             // (Instead of checking for a specific Versatile(DiceSet), just check for any Versatile property)
-            let both_hands = (main_hand_weapon.has_property(&WeaponProperties::TwoHanded)
-                || main_hand_weapon
-                    .properties
-                    .iter()
-                    .any(|p| matches!(p, WeaponProperties::Versatile(_))))
-                && !character
-                    .loadout()
-                    .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Off);
+            let is_two_handed = main_hand_weapon.has_property(&WeaponProperties::TwoHanded);
+            let is_versatile = main_hand_weapon
+                .properties
+                .iter()
+                .any(|p| matches!(p, WeaponProperties::Versatile(_)));
+            let has_offhand_weapon = character
+                .loadout()
+                .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Off);
 
-            if !both_hands {
+            if !(is_two_handed || is_versatile) && !has_offhand_weapon {
                 return;
             }
 
