@@ -15,4 +15,14 @@ macro_rules! resource {
     };
 }
 
-resource!(ACTION, BONUS_ACTION, REACTION);
+resource!(
+    // --- DEFAULT RESOURCES ---
+    ACTION,
+    BONUS_ACTION,
+    REACTION,
+    // --- CLASS RESOURCES ---
+    // - FIGHTER -
+    // Action Surge can be used twice per short rest at level 17. The easiest
+    // way to model the charges is to add it as a resource
+    ACTION_SURGE,
+);

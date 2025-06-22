@@ -3,7 +3,10 @@ use std::{collections::HashMap, fmt};
 use strum::IntoEnumIterator;
 
 use crate::{
-    actions::action::{Action, ActionContext, ActionKindSnapshot, ActionProvider},
+    actions::{
+        action::{Action, ActionContext, ActionKindSnapshot, ActionProvider},
+        targeting::TargetingContext,
+    },
     combat::damage::{
         DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
         MitigationOperation,
@@ -12,7 +15,7 @@ use crate::{
         classes::class::{Class, SubclassName},
         level_up::{LevelUpError, LevelUpSession},
     },
-    effects::{self, effects::Effect},
+    effects::effects::Effect,
     items::equipment::{
         armor::Armor,
         equipment::{EquipmentItem, GeneralEquipmentSlot, HandSlot},
@@ -21,7 +24,7 @@ use crate::{
     },
     registry::{self, classes::CLASS_REGISTRY, effects::EFFECT_REGISTRY},
     resources::resources::{RechargeRule, Resource},
-    spells::{spell::SnapshotError, spellbook::Spellbook},
+    spells::spellbook::Spellbook,
     stats::{
         ability::{Ability, AbilityScore, AbilityScoreSet},
         d20_check::{D20CheckDC, D20CheckResult, RollMode},
@@ -30,7 +33,7 @@ use crate::{
         saving_throw::{create_saving_throw_set, SavingThrowSet},
         skill::{create_skill_set, Skill, SkillSet},
     },
-    utils::id::{CharacterId, ResourceId, SpellId},
+    utils::id::{ActionId, CharacterId, ResourceId},
 };
 
 use super::{
@@ -59,7 +62,9 @@ pub struct Character {
     spellbook: Spellbook,
     resources: HashMap<ResourceId, Resource>,
     effects: Vec<Effect>,
-    actions: Vec<(Action, ActionContext)>,
+    actions: HashMap<ActionId, Vec<ActionContext>>,
+    /// Actions that are currently on cooldown
+    cooldowns: HashMap<ActionId, (bool, RechargeRule)>,
 }
 
 impl Character {
@@ -95,7 +100,8 @@ impl Character {
             resources,
             effects: Vec::new(),
             // TODO: Default actions like jump, dash, help, etc.
-            actions: Vec::new(),
+            actions: HashMap::new(),
+            cooldowns: HashMap::new(),
         }
     }
 
@@ -238,8 +244,11 @@ impl Character {
         }
 
         for action_id in class.actions_by_level(level, &subclass_name.name) {
-            if let Some((action, context)) = registry::actions::ACTION_REGISTRY.get(&action_id) {
-                self.actions.push((action.clone(), context.clone()));
+            if let Some((_, context)) = registry::actions::ACTION_REGISTRY.get(&action_id) {
+                self.actions
+                    .entry(action_id.clone())
+                    .or_default()
+                    .push(context.clone());
             } else {
                 panic!("Action {} not found in registry", action_id);
             }
@@ -270,6 +279,8 @@ impl Character {
         }
 
         self.update_hp(class);
+
+        self.update_spell_slots();
 
         self.latest_class = Some(class.name.clone());
 
@@ -544,16 +555,6 @@ impl Character {
         self.spellbook.update_spell_slots(caster_level);
     }
 
-    pub fn spell_snapshot(
-        &self,
-        spell_id: &SpellId,
-        level: u8,
-    ) -> Option<Result<ActionKindSnapshot, SnapshotError>> {
-        self.spellbook
-            .get_spell(spell_id)
-            .map(|spell| spell.snapshot(self, &level))
-    }
-
     pub fn resistances(&self) -> &DamageResistances {
         &self.resistances
     }
@@ -600,16 +601,18 @@ impl Character {
         self.resources.get_mut(kind)
     }
 
-    pub fn recharge_resources(&mut self, recharge_rule: &RechargeRule) {
+    pub fn recharge(&mut self, rest_type: &RechargeRule) {
         for resource in self.resources.values_mut() {
-            resource.recharge(*recharge_rule);
+            resource.recharge(rest_type);
         }
+
+        self.cooldowns.retain(|_, (is_on_cooldown, recharge_rule)| {
+            !recharge_rule.is_recharged_by(rest_type) && *is_on_cooldown
+        });
     }
 
     pub fn on_turn_start(&mut self) {
-        for resource in self.resources.values_mut() {
-            resource.recharge(RechargeRule::OnTurn);
-        }
+        self.recharge(&RechargeRule::OnTurn);
 
         for effect in &mut self.effects {
             effect.increment_turns();
@@ -627,24 +630,69 @@ impl Character {
         }
         self.effects.retain(|effect| !effect.is_expired());
     }
+
+    pub fn perform_action(
+        &mut self,
+        action_id: &ActionId,
+        context: &ActionContext,
+        num_snapshots: usize,
+    ) -> Vec<ActionKindSnapshot> {
+        // TODO: Handle missing action
+        let action = self
+            .find_action(action_id)
+            .expect("Action not found in character's actions or registry");
+        if let Some(cooldown) = action.cooldown {
+            self.cooldowns.insert(action_id.clone(), (true, cooldown));
+        }
+        action.perform(self, &context, num_snapshots)
+    }
+
+    pub fn targeting_context(
+        &self,
+        action_id: &ActionId,
+        context: &ActionContext,
+    ) -> TargetingContext {
+        // TODO: Handle missing action
+        self.find_action(action_id).unwrap().targeting()(self, context)
+    }
+
+    // I haven't found a way to avoid cloning the action when performing it, so
+    // I guess we might as well just return the action itself here
+    fn find_action(&self, action_id: &ActionId) -> Option<Action> {
+        // Start by checking if the action exists in the character's actions
+        if self.actions.contains_key(action_id) {
+            if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id) {
+                return Some(action.clone());
+            }
+        }
+        // If not found, check the spellbook
+        if let Some(action) = self.spellbook.get_action(action_id) {
+            return Some(action.clone());
+        }
+        // Finally, check the loadout
+        // if let Some(action) = self.loadout.get_action(action_id) {
+        //     return Some(action.clone());
+        // }
+        None
+    }
+
+    pub fn is_on_cooldown(&self, action_id: &ActionId) -> Option<(bool, &RechargeRule)> {
+        if let Some((_, recharge_rule)) = self.cooldowns.get(action_id) {
+            Some((true, recharge_rule))
+        } else {
+            None
+        }
+    }
 }
 
 impl ActionProvider for Character {
     // TODO: Can we cache this?
-    fn available_actions(&self) -> Vec<(&Action, ActionContext)> {
-        let mut actions = Vec::new();
+    fn actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+        let mut actions = self.actions.clone();
 
-        for (action, context) in &self.actions {
-            actions.push((action, context.clone()));
-        }
+        actions.extend(self.spellbook.actions());
 
-        for action in self.loadout.available_actions() {
-            actions.push(action);
-        }
-
-        for action in self.spellbook.available_actions() {
-            actions.push(action);
-        }
+        actions.extend(self.loadout.actions());
 
         actions
     }

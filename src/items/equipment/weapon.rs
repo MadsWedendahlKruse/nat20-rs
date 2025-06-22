@@ -4,8 +4,9 @@ use std::{
 };
 
 use crate::{
-    actions::action::{
-        Action, ActionContext, ActionKind, TargetType, TargetingContext, TargetingKind,
+    actions::{
+        action::{Action, ActionContext, ActionKind},
+        targeting::{TargetType, TargetingContext, TargetingKind},
     },
     combat::damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
     creature::character::Character,
@@ -103,7 +104,7 @@ impl Weapon {
             equipment.item.name.clone(),
         );
         let weapon_actions = vec![Action {
-            id: ActionId::from_str(equipment.item.name.clone() + "_attack"),
+            id: registry::actions::WEAPON_MELEE_ATTACK_ID.clone(),
             kind: ActionKind::AttackRollDamage {
                 // TODO: Some of this seems a bit circular?
                 attack_roll: Arc::new(|character: &Character, action_context: &ActionContext| {
@@ -138,6 +139,7 @@ impl Weapon {
                 }
             }),
             resource_cost: HashMap::from([(registry::resources::ACTION.clone(), 1)]),
+            cooldown: None,
         }];
         Self {
             equipment,

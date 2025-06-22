@@ -3,14 +3,19 @@ use std::collections::HashMap;
 use crate::{
     actions::action::{Action, ActionContext, ActionProvider},
     stats::ability::Ability,
-    utils::id::SpellId,
+    utils::id::{ActionId, SpellId},
 };
 
 use super::spell::Spell;
 
 #[derive(Debug, Clone)]
 pub struct Spellbook {
-    spells: HashMap<SpellId, Spell>,
+    /// Store spells by their SpellId for quick access.
+    spells_by_spell_id: HashMap<SpellId, Spell>,
+    /// Store the ID of the spell's action for quick access.
+    /// This is primarily used when submitting actions in the combat engine,
+    /// which is done using ActionId.
+    spells_by_action_id: HashMap<ActionId, SpellId>,
     /// Spell slots available for each spell level.
     /// The key is the spell level (1-9), and the value is the number of slots available.
     /// Spell slots could be treated as a resource, but that really overcomplicates things.
@@ -21,7 +26,8 @@ pub struct Spellbook {
 impl Spellbook {
     pub fn new() -> Self {
         Self {
-            spells: HashMap::new(),
+            spells_by_spell_id: HashMap::new(),
+            spells_by_action_id: HashMap::new(),
             max_spell_slots: HashMap::new(),
             current_spell_slots: HashMap::new(),
         }
@@ -29,23 +35,42 @@ impl Spellbook {
 
     pub fn add_spell(&mut self, mut spell: Spell, spellcasting_ability: Ability) {
         spell.set_spellcasting_ability(spellcasting_ability);
-        self.spells.insert(spell.id().clone(), spell);
+        let spell_id = spell.id().clone();
+        let action_id = spell.action().id().clone();
+        self.spells_by_spell_id.insert(spell_id.clone(), spell);
+        self.spells_by_action_id.insert(action_id, spell_id);
     }
 
     pub fn remove_spell(&mut self, spell_id: &SpellId) -> Option<Spell> {
-        self.spells.remove(spell_id)
+        self.spells_by_spell_id.remove(spell_id)
     }
 
     pub fn get_spell(&self, spell_id: &SpellId) -> Option<&Spell> {
-        self.spells.get(spell_id)
+        self.spells_by_spell_id.get(spell_id)
+    }
+
+    pub fn get_spell_by_action_id(&self, action_id: &ActionId) -> Option<&Spell> {
+        self.spells_by_action_id
+            .get(action_id)
+            .and_then(|spell_id| self.spells_by_spell_id.get(spell_id))
+    }
+
+    pub fn get_action(&self, action_id: &ActionId) -> Option<&Action> {
+        self.spells_by_action_id
+            .get(action_id)
+            .and_then(|spell_id| {
+                self.spells_by_spell_id
+                    .get(spell_id)
+                    .map(|spell| spell.action())
+            })
     }
 
     pub fn has_spell(&self, spell_id: &SpellId) -> bool {
-        self.spells.contains_key(spell_id)
+        self.spells_by_spell_id.contains_key(spell_id)
     }
 
     pub fn all_spells(&self) -> Vec<SpellId> {
-        self.spells.keys().cloned().collect()
+        self.spells_by_spell_id.keys().cloned().collect()
     }
 
     pub fn spell_slots(&self) -> &HashMap<u8, u8> {
@@ -135,15 +160,15 @@ impl Spellbook {
 }
 
 impl ActionProvider for Spellbook {
-    fn available_actions(&self) -> Vec<(&Action, ActionContext)> {
-        let mut actions = Vec::new();
-        for spell in self.spells.values() {
+    fn actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+        let mut actions = HashMap::new();
+        for spell in self.spells_by_spell_id.values() {
             let available_slots = self.available_spell_slots_for_base_level(spell.base_level());
-            for (level, slots) in available_slots {
-                if slots > 0 {
-                    actions.push((spell.action(), ActionContext::Spell { level }));
-                }
-            }
+            let contexts = available_slots
+                .iter()
+                .map(|(level, _)| ActionContext::Spell { level: *level })
+                .collect();
+            actions.insert(spell.action().id().clone(), contexts);
         }
         actions
     }

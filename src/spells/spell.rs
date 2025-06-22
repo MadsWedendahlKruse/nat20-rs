@@ -1,7 +1,10 @@
 use std::{collections::HashMap, fmt, hash::Hash, sync::Arc};
 
 use crate::{
-    actions::action::{Action, ActionContext, ActionKind, ActionKindSnapshot, TargetingContext},
+    actions::{
+        action::{Action, ActionContext, ActionKind, ActionKindSnapshot},
+        targeting::TargetingContext,
+    },
     combat::damage::{AttackRoll, DamageSource},
     creature::character::Character,
     stats::{
@@ -24,8 +27,6 @@ pub enum MagicSchool {
     Necromancy,
     Transmutation,
 }
-
-// TODO: Not sure where to put these functions
 
 #[derive(Clone)]
 pub struct Spell {
@@ -58,6 +59,7 @@ impl Spell {
                 kind,
                 resource_cost,
                 targeting,
+                cooldown: None,
             },
             spellcasting_ability: None,
         }
@@ -119,7 +121,7 @@ impl Spell {
         // caster, which would not be reflected in the snapshot.
         // ---
         // Might not be an issue anymore???
-        Ok(self.action.kind.snapshot(
+        Ok(self.action.kind().snapshot(
             caster,
             &ActionContext::Spell {
                 level: *spell_level,
@@ -167,7 +169,7 @@ impl fmt::Debug for Spell {
             .field("base_level", &self.base_level)
             .field("school", &self.school)
             .field("action", &self.action)
-            .field("action_cost", &self.action.resource_cost)
+            .field("action_cost", &self.action.resource_cost())
             .finish()
     }
 }

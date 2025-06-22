@@ -22,17 +22,22 @@ use crate::utils::id::ResourceId;
 #[repr(u8)]
 pub enum RechargeRule {
     OnTurn = 0,
-    OnAnyRest = 1,
-    OnShortRest = 2,
-    OnLongRest = 3,
-    Daily = 4,
-    Never = 5,
+    OnShortRest = 1,
+    OnLongRest = 2,
+    Daily = 3,
+    Never = 4,
 }
 
 impl RechargeRule {
     /// Returns the hierarchy level of the recharge rule.
     pub fn hierarchy(&self) -> u8 {
         *self as u8
+    }
+
+    /// Checks if this recharge rule is recharged by another rule.
+    /// For example, `OnShortRest` is also recharged by `OnLongRest`.
+    pub fn is_recharged_by(&self, other: &RechargeRule) -> bool {
+        other.hierarchy() >= self.hierarchy()
     }
 }
 
@@ -80,10 +85,10 @@ impl Resource {
         self.current_uses = self.max_uses;
     }
 
-    pub fn recharge(&mut self, rest_type: RechargeRule) {
+    pub fn recharge(&mut self, rest_type: &RechargeRule) {
         // If the rest type is higher or equal to the resource's recharge rule,
         // recharge the resource.
-        if rest_type.hierarchy() >= self.recharge.hierarchy() {
+        if self.recharge.is_recharged_by(rest_type) {
             self.recharge_internal();
         }
     }
@@ -302,7 +307,7 @@ mod tests {
             current_uses: 1,
             recharge: RechargeRule::OnShortRest,
         };
-        res.recharge(RechargeRule::OnShortRest);
+        res.recharge(&RechargeRule::OnShortRest);
         assert_eq!(res.current_uses, 3);
     }
 
@@ -314,7 +319,7 @@ mod tests {
             current_uses: 0,
             recharge: RechargeRule::OnLongRest,
         };
-        res.recharge(RechargeRule::OnLongRest);
+        res.recharge(&RechargeRule::OnLongRest);
         assert_eq!(res.current_uses, 2);
     }
 
@@ -324,22 +329,21 @@ mod tests {
             kind: ResourceId::from_str("Channel Oath"),
             max_uses: 1,
             current_uses: 0,
-            recharge: RechargeRule::OnAnyRest,
+            recharge: RechargeRule::OnShortRest,
         };
-        res.recharge(RechargeRule::OnShortRest);
+        res.recharge(&RechargeRule::OnShortRest);
         assert_eq!(res.current_uses, 1);
 
         res.spend(1).unwrap(); // Use it up
         assert!(res.is_empty());
 
-        res.recharge(RechargeRule::OnLongRest);
+        res.recharge(&RechargeRule::OnLongRest);
         assert_eq!(res.current_uses, 1);
     }
 
     #[test]
     fn test_recharge_rule_hierarchy_order() {
-        assert!(RechargeRule::OnAnyRest.hierarchy() > RechargeRule::OnTurn.hierarchy());
-        assert!(RechargeRule::OnShortRest.hierarchy() > RechargeRule::OnAnyRest.hierarchy());
+        assert!(RechargeRule::OnShortRest.hierarchy() > RechargeRule::OnTurn.hierarchy());
         assert!(RechargeRule::OnLongRest.hierarchy() > RechargeRule::OnShortRest.hierarchy());
         assert!(RechargeRule::Daily.hierarchy() > RechargeRule::OnLongRest.hierarchy());
         assert!(RechargeRule::Never.hierarchy() > RechargeRule::Daily.hierarchy());
@@ -348,11 +352,10 @@ mod tests {
     #[test]
     fn test_recharge_rule_hierarchy_equality() {
         assert_eq!(RechargeRule::OnTurn.hierarchy(), 0);
-        assert_eq!(RechargeRule::OnAnyRest.hierarchy(), 1);
-        assert_eq!(RechargeRule::OnShortRest.hierarchy(), 2);
-        assert_eq!(RechargeRule::OnLongRest.hierarchy(), 3);
-        assert_eq!(RechargeRule::Daily.hierarchy(), 4);
-        assert_eq!(RechargeRule::Never.hierarchy(), 5);
+        assert_eq!(RechargeRule::OnShortRest.hierarchy(), 1);
+        assert_eq!(RechargeRule::OnLongRest.hierarchy(), 2);
+        assert_eq!(RechargeRule::Daily.hierarchy(), 3);
+        assert_eq!(RechargeRule::Never.hierarchy(), 4);
     }
 
     #[test]
@@ -364,7 +367,7 @@ mod tests {
             recharge: RechargeRule::OnShortRest,
         };
         // Should recharge on short rest
-        res.recharge(RechargeRule::OnShortRest);
+        res.recharge(&RechargeRule::OnShortRest);
         assert_eq!(res.current_uses, 2);
 
         // Use up resource
@@ -372,7 +375,7 @@ mod tests {
         assert_eq!(res.current_uses, 0);
 
         // Should recharge on long rest (higher in hierarchy)
-        res.recharge(RechargeRule::OnLongRest);
+        res.recharge(&RechargeRule::OnLongRest);
         assert_eq!(res.current_uses, 2);
 
         // Use up resource again
@@ -380,7 +383,7 @@ mod tests {
         assert_eq!(res.current_uses, 0);
 
         // Should recharge on daily (highest in hierarchy)
-        res.recharge(RechargeRule::Daily);
+        res.recharge(&RechargeRule::Daily);
         assert_eq!(res.current_uses, 2);
 
         // Use up resource again
@@ -388,7 +391,7 @@ mod tests {
         assert_eq!(res.current_uses, 0);
 
         // Should NOT recharge on turn (lower in hierarchy)
-        res.recharge(RechargeRule::OnTurn);
+        res.recharge(&RechargeRule::OnTurn);
         assert_eq!(res.current_uses, 0);
     }
 
@@ -400,11 +403,11 @@ mod tests {
             current_uses: 0,
             recharge: RechargeRule::Never,
         };
-        res.recharge(RechargeRule::OnShortRest);
+        res.recharge(&RechargeRule::OnShortRest);
         assert_eq!(res.current_uses, 0);
-        res.recharge(RechargeRule::OnLongRest);
+        res.recharge(&RechargeRule::OnLongRest);
         assert_eq!(res.current_uses, 0);
-        res.recharge(RechargeRule::Daily);
+        res.recharge(&RechargeRule::Daily);
         assert_eq!(res.current_uses, 0);
     }
 }

@@ -4,7 +4,10 @@ mod tests {
     use std::{sync::Arc, vec};
 
     use nat20_rs::{
-        actions::action::{Action, ActionContext, ActionKind, ActionKindResult, TargetingKind},
+        actions::{
+            action::{Action, ActionContext, ActionKind, ActionKindResult},
+            targeting::TargetingKind,
+        },
         effects::effects::{Effect, EffectDuration},
         engine::engine::CombatEngine,
         items::equipment::{equipment::HandSlot, weapon::WeaponType},
@@ -56,14 +59,7 @@ mod tests {
         }
 
         assert!(!actions.is_empty());
-        assert!(actions.iter().any(|(action, context)| {
-            matches!(action.kind, ActionKind::AttackRollDamage { .. })
-                && context
-                    == &ActionContext::Weapon {
-                        weapon_type: WeaponType::Melee,
-                        hand: HandSlot::Main,
-                    }
-        }));
+        assert!(actions.contains_key(&registry::actions::WEAPON_MELEE_ATTACK_ID));
     }
 
     #[test]
@@ -92,25 +88,22 @@ mod tests {
         // Check that hero is the current character (he has massive initiative for this test)
         assert!(engine.current_character().id() == hero_id);
 
-        let (action, context) = choose_action(&engine, |action, context| {
-            matches!(action.kind, ActionKind::AttackRollDamage { .. })
-                && context
-                    == &ActionContext::Weapon {
-                        weapon_type: WeaponType::Melee,
-                        hand: HandSlot::Main,
-                    }
-        });
+        let actions = engine.available_actions();
+        let action_id = &registry::actions::WEAPON_MELEE_ATTACK_ID;
+        let context = actions.get(&action_id).unwrap()[0].clone();
 
         println!("=== Action ===");
-        println!("{:?}", action);
+        println!("{:?}", action_id);
 
-        let targeting_context = (action.targeting)(engine.current_character(), &context);
+        let targeting_context = engine
+            .current_character()
+            .targeting_context(action_id, &context);
         // TODO: Check the targeting context is correct and populates the target list
         println!("=== Targeting Context ===");
         println!("{:?}", targeting_context);
         assert!(targeting_context.kind == TargetingKind::Single);
 
-        let action_result = engine.submit_action(&action, &context, vec![goblin_warrior_id]);
+        let action_result = engine.submit_action(&action_id, &context, vec![goblin_warrior_id]);
 
         assert_eq!(
             engine
@@ -166,18 +159,19 @@ mod tests {
             println!("{:?}", action);
         }
 
-        let spell_id: SpellId = SpellId::from_str("MAGIC_MISSILE");
+        // TODO: Placeholder ID
+        let spell_id = SpellId::from_str("MAGIC_MISSILE");
         let spell_level = 2;
 
-        let (action, context) = choose_action(&engine, |action, context| {
-            action.id == ActionId::from_str(spell_id.to_string())
-                && context == &ActionContext::Spell { level: spell_level }
-        });
-
+        let actions = engine.available_actions();
+        let action_id = ActionId::from_str("MAGIC_MISSILE");
+        let context = ActionContext::Spell { level: spell_level };
         println!("=== Action ===");
-        println!("{:?}", (&action, &context));
+        println!("{:?}", (&action_id, &context));
 
-        let targeting_context = (action.targeting)(engine.current_character(), &context);
+        let targeting_context = engine
+            .current_character()
+            .targeting_context(&action_id, &context);
         let num_targets = match targeting_context.kind {
             TargetingKind::Multiple { max_targets } => max_targets,
             _ => panic!("Unexpected targeting kind: {:?}", targeting_context.kind),
@@ -195,7 +189,7 @@ mod tests {
             .spellbook()
             .spell_slots_for_level(spell_level);
 
-        let action_result = engine.submit_action(&action, &context, targets);
+        let action_result = engine.submit_action(&action_id, &context, targets);
 
         assert!(action_result.is_ok());
         let action_result = action_result.unwrap();
@@ -250,20 +244,5 @@ mod tests {
         for result in action_result {
             println!("{}", result);
         }
-    }
-
-    // TODO: Cloning the action is not the most efficient way to do this,
-    // but it makes it a whole lot easier to use
-    fn choose_action(
-        engine: &CombatEngine,
-        predicate: impl Fn(&Action, &ActionContext) -> bool,
-    ) -> (Action, ActionContext) {
-        let actions = engine.available_actions();
-        let (action, context) = actions
-            .iter()
-            .find(|(action, context)| predicate(action, context))
-            .unwrap()
-            .clone();
-        (action.clone(), context)
     }
 }

@@ -343,8 +343,6 @@ pub mod creatures {
 
             character.equip_armor(fixtures::armor::clothing());
 
-            character.spellbook_mut().update_spell_slots(5);
-
             // TODO: Spellcasting ability should be set automatically based on class
             character
                 .spellbook_mut()
@@ -460,8 +458,9 @@ pub mod spells {
     use std::{collections::HashMap, sync::Arc};
 
     use crate::{
-        actions::action::{
-            ActionContext, ActionKind, AreaShape, TargetType, TargetingContext, TargetingKind,
+        actions::{
+            action::{ActionContext, ActionKind},
+            targeting::{AreaShape, TargetType, TargetingContext, TargetingKind},
         },
         combat::damage::{DamageRoll, DamageSource, DamageType},
         dice::dice::DieSize,

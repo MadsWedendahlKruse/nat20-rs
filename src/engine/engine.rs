@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 
-use crate::actions::action::{Action, ActionContext, ActionProvider, ActionResult};
-use crate::creature::character::Character;
-use crate::engine;
-use crate::resources::resources::ResourceError;
-use crate::stats::d20_check::D20CheckResult;
-use crate::stats::skill::Skill;
-use crate::utils::id::CharacterId;
+use crate::{
+    actions::action::{ActionContext, ActionProvider, ActionResult},
+    creature::character::Character,
+    stats::{d20_check::D20CheckResult, skill::Skill},
+    utils::id::{ActionId, CharacterId},
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum CombatState {
@@ -74,8 +73,8 @@ impl<'c> CombatEngine<'c> {
             .unwrap()
     }
 
-    pub fn available_actions(&self) -> Vec<(&Action, ActionContext)> {
-        self.current_character().available_actions()
+    pub fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+        self.current_character().actions()
     }
 
     pub fn participant(&self, id: &CharacterId) -> Option<&Character> {
@@ -88,7 +87,7 @@ impl<'c> CombatEngine<'c> {
 
     pub fn submit_action(
         &mut self,
-        action: &Action,
+        action_id: &ActionId,
         action_context: &ActionContext,
         // TODO: Targets have to determined before submitting the action
         // e.g. for Fireball, the targets are determined by the asking the engine
@@ -102,11 +101,12 @@ impl<'c> CombatEngine<'c> {
         self.state = CombatState::ResolvingAction;
 
         // TODO: validate actions, e.g. for a melee weapon attack, the character must be adjacent to the target
+        // TODO: validate that character has enough resources to perform the action
+        // TEMP: Assume action is valid (unwrap)
 
-        // TODO: Assume action is valid
-        // TODO: Resrouce might error? Should probably check resources as part of the validation
-        // Spend resources, e.g. action points, spell slots, etc.
-        let snapshots = action.perform(self.current_character_mut(), action_context, targets.len());
+        let snapshots =
+            self.current_character_mut()
+                .perform_action(action_id, action_context, targets.len());
 
         let results: Vec<_> = targets
             .into_iter()
@@ -123,21 +123,6 @@ impl<'c> CombatEngine<'c> {
         // For now we just assume the action is resolved
         self.state = CombatState::AwaitingAction;
         Ok(results)
-    }
-
-    fn resolve_action(
-        &mut self,
-        action: &Action,
-        action_context: &ActionContext,
-        target_id: CharacterId,
-    ) -> ActionResult {
-        let character = self.current_character();
-        let action_snapshot = action.snapshot(character, action_context);
-        let target = self
-            .participants
-            .get_mut(&target_id)
-            .expect("Target character not found in participants");
-        action_snapshot.apply_to_character(target)
     }
 
     pub fn end_turn(&mut self) {

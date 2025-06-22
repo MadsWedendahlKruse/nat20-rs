@@ -8,6 +8,7 @@ use crate::{
     dice::dice::DieSize,
     items::equipment::{armor::ArmorType, weapon::WeaponCategory},
     registry,
+    resources::resources::{RechargeRule, Resource},
     stats::{ability::Ability, skill::Skill},
 };
 
@@ -64,7 +65,26 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         HashSet::from([WeaponCategory::Simple, WeaponCategory::Martial]),
         SpellcastingProgression::None,
         HashMap::from([(3, vec![registry::effects::IMPROVED_CRITICAL_ID.clone()])]),
-        HashMap::new(),
+        HashMap::from([
+            (
+                2,
+                vec![Resource::new(
+                    registry::resources::ACTION_SURGE.clone(),
+                    1,
+                    RechargeRule::OnShortRest,
+                )
+                .unwrap()],
+            ),
+            (
+                17,
+                vec![Resource::new(
+                    registry::resources::ACTION_SURGE.clone(),
+                    2,
+                    RechargeRule::OnShortRest,
+                )
+                .unwrap()],
+            ),
+        ]),
         HashMap::from([(
             1,
             vec![LevelUpChoice::Effect(vec![

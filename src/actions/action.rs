@@ -5,17 +5,17 @@ use std::{
 };
 
 use crate::{
+    actions::targeting::{TargetTypeInstance, TargetingContext},
     combat::damage::{
         AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
     },
     creature::character::Character,
     dice::dice::{DiceSetRoll, DiceSetRollResult},
     items::equipment::{equipment::HandSlot, weapon::WeaponType},
-    math::point::Point,
     registry,
-    resources::resources::ResourceError,
+    resources::resources::{RechargeRule, ResourceError},
     stats::saving_throw::SavingThrowDC,
-    utils::id::{ActionId, CharacterId, EffectId, ResourceId},
+    utils::id::{ActionId, EffectId, ResourceId},
 };
 
 /// Represents the context in which an action is performed.
@@ -185,71 +185,15 @@ pub enum ActionKindResult {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum TargetingKind {
-    // TODO: I think None and SelfTarget are the same?
-    // None,       // e.g. Rage
-    SelfTarget, // e.g. Second Wind
-    Single,
-    Multiple {
-        max_targets: u8,
-        // kind: TargetKind,
-    },
-    Area {
-        shape: AreaShape,
-        origin: Point,
-    },
-    // e.g. Knock
-    // Object {
-    //     object_type: ObjectType,
-    // },
-    // Custom(Arc<dyn TargetingLogic>), // fallback for edge cases
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AreaShape {
-    Cone { angle: u32, length: u32 },      // e.g. Cone of Cold
-    Sphere { radius: u32 },                // e.g. Fireball
-    Cube { side_length: u32 },             // e.g. Wall of Force
-    Cylinder { radius: u32, height: u32 }, // e.g. Cloudkill
-    Line { length: u32, width: u32 },      // e.g. Lightning Bolt
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TargetType {
-    // PCs, monsters, summons, etc.
-    Character,
-    // Door, chest, trap, statue, etc.
-    Object,
-    // Self,       // Explicit "this actor" (optional; could be special-cased)
-    // None, // For actions that don't actually select a target
-    // Future-proofing:
-    // Point, // A position/tile (for teleport, movement, some spells)
-    // Area,  // An area, e.g. Cloudkill, Grease (could also be modeled by targeting context)
-}
-
-#[derive(Debug)]
-pub enum TargetTypeInstance {
-    Character(CharacterId),
-    // Object(ObjectId),
-    Point(Point),
-    Area(AreaShape),
-    None,
-}
-
-#[derive(Debug, Clone)]
-pub struct TargetingContext {
-    pub kind: TargetingKind,
-    pub range: u32, // Range of the action, TODO: units?
-    pub valid_target_types: Vec<TargetType>,
-}
-
 #[derive(Clone)]
 pub struct Action {
     pub id: ActionId,
     pub kind: ActionKind,
     pub targeting: Arc<dyn Fn(&Character, &ActionContext) -> TargetingContext + Send + Sync>,
-    pub resource_cost: HashMap<ResourceId, u8>, // e.g. Action, Bonus Action, Reaction
+    /// e.g. Action, Bonus Action, Reaction
+    pub resource_cost: HashMap<ResourceId, u8>,
+    /// Optional cooldown for the action
+    pub cooldown: Option<RechargeRule>,
 }
 
 /// Represents the result of performing an action on a single target. For actions that affect multiple targets,
@@ -262,16 +206,24 @@ pub struct ActionResult {
     pub result: ActionKindResult,
 }
 
+/// Represents a "ready-to-go" action that can be performed by a character. The
+/// ID is used to look up the action in the action registry, and the context can
+/// then be used to perform the action with the appropriate parameters.
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub struct ActionReference {
+//     pub id: ActionId,
+//     pub context: ActionContext,
+// }
+
 /// Represents a provider of actions, which can be used to retrieve available actions
 /// from a character or other entity that can perform actions.
 pub trait ActionProvider {
-    // TODO: Do we need a dedicated struct for the Action and ActionContext pair?
     // TODO: Should probably find a way to avoid rebuilding the action collection every time.
 
-    /// Returns a list of available actions for the character or entity.
+    /// Returns a collection of available actions for the character.
     /// Each action is paired with its context, which provides additional information
     /// about how the action can be performed (e.g. weapon type, spell level, etc.).
-    fn available_actions(&self) -> Vec<(&Action, ActionContext)>;
+    fn actions(&self) -> HashMap<ActionId, Vec<ActionContext>>;
 }
 
 impl ActionKind {
@@ -465,6 +417,7 @@ impl Action {
     ) -> Vec<ActionKindSnapshot> {
         // TODO: Resource might error?
         let _ = self.spend_resources(performer, context);
+
         let snapshots = (0..num_snapshots)
             .map(|_| self.snapshot(performer, context))
             .collect();
@@ -491,6 +444,24 @@ impl Action {
             }
         }
         Ok(())
+    }
+
+    pub fn id(&self) -> &ActionId {
+        &self.id
+    }
+
+    pub fn kind(&self) -> &ActionKind {
+        &self.kind
+    }
+
+    pub fn targeting(
+        &self,
+    ) -> &Arc<dyn Fn(&Character, &ActionContext) -> TargetingContext + Send + Sync> {
+        &self.targeting
+    }
+
+    pub fn resource_cost(&self) -> &HashMap<ResourceId, u8> {
+        &self.resource_cost
     }
 }
 

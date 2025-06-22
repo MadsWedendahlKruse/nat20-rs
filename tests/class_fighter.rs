@@ -8,13 +8,23 @@ mod tests {
         let mut fighter = fixtures::creatures::heroes::fighter();
 
         // Check that the fighter has the Action Surge action
-        let available_actions = fighter.available_actions().clone();
-        let (action_surge_action, context) = available_actions
-            .iter()
-            .find(|(action, _)| action.id == *registry::actions::ACTION_SURGE_ID)
-            .unwrap()
-            .clone();
-        let action_surge_action = action_surge_action.clone();
+        let available_actions = fighter.actions();
+        let action_id = registry::actions::ACTION_SURGE_ID.clone();
+        assert!(
+            available_actions.contains_key(&action_id),
+            "Fighter should have Action Surge action"
+        );
+        let context = available_actions.get(&action_id).unwrap();
+
+        // Check that the fighter has one charge of Action Surge
+        assert_eq!(
+            fighter
+                .resources()
+                .get(&registry::resources::ACTION_SURGE)
+                .unwrap()
+                .current_uses(),
+            1
+        );
 
         // Check that the fighter has one action before using Action Surge
         assert_eq!(
@@ -26,7 +36,7 @@ mod tests {
             1
         );
 
-        let snapshots = action_surge_action.perform(&mut fighter, &context, 1);
+        let snapshots = fighter.perform_action(&action_id, &context[0], 1);
         snapshots[0].apply_to_character(&mut fighter);
 
         // Check that the Action Surge effect is applied
@@ -49,6 +59,9 @@ mod tests {
             2
         );
 
+        // Check that the Action Surge action is on cooldown
+        assert!(fighter.is_on_cooldown(&action_id).unwrap().0);
+
         // Simulate the start of the turn to remove the Action Surge effect
         fighter.on_turn_start();
 
@@ -70,6 +83,16 @@ mod tests {
                 .unwrap()
                 .current_uses(),
             1
+        );
+
+        // Check that the Action Surge action is out of charges
+        assert_eq!(
+            fighter
+                .resources()
+                .get(&registry::resources::ACTION_SURGE)
+                .unwrap()
+                .current_uses(),
+            0
         );
     }
 }

@@ -1,15 +1,20 @@
-use std::collections::HashMap;
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
-use crate::actions::action::{Action, ActionContext, ActionProvider};
-use crate::combat::damage::AttackRollResult;
-use crate::creature::character::Character;
-use crate::items::equipment::armor::Armor;
-use crate::items::equipment::weapon::{Weapon, WeaponProperties, WeaponType};
-use crate::items::equipment::{equipment::*, weapon};
-use crate::stats::d20_check::D20CheckResult;
-use crate::stats::modifier::{ModifierSet, ModifierSource};
-use crate::utils::id::ActionId;
+use crate::{
+    actions::action::{ActionContext, ActionProvider},
+    combat::damage::AttackRollResult,
+    creature::character::Character,
+    items::equipment::{
+        armor::Armor,
+        equipment::{EquipmentItem, EquipmentSlot, GeneralEquipmentSlot, HandSlot},
+        weapon::{Weapon, WeaponProperties, WeaponType},
+    },
+    stats::{
+        d20_check::D20CheckResult,
+        modifier::{ModifierSet, ModifierSource},
+    },
+    utils::id::ActionId,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TryEquipError {
@@ -185,21 +190,21 @@ impl Loadout {
 }
 
 impl ActionProvider for Loadout {
-    fn available_actions(&self) -> Vec<(&Action, ActionContext)> {
-        let mut actions = Vec::new();
+    fn actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+        let mut actions = HashMap::new();
 
         for (weapon_type, weapon_map) in self.weapons.iter() {
             for (hand, weapon_opt) in weapon_map.iter() {
                 if let Some(weapon) = weapon_opt {
                     let weapon_actions = weapon.weapon_actions();
                     for action in weapon_actions {
-                        actions.push((
-                            action,
-                            ActionContext::Weapon {
+                        actions.insert(
+                            action.id().clone(),
+                            vec![ActionContext::Weapon {
                                 weapon_type: weapon_type.clone(),
                                 hand: *hand,
-                            },
-                        ));
+                            }],
+                        );
                     }
                 }
             }
@@ -417,7 +422,7 @@ mod tests {
     fn available_actions_no_weapons() {
         // TODO: Should return unarmed attack
         let loadout = Loadout::new();
-        let actions = loadout.available_actions();
+        let actions = loadout.actions();
         assert_eq!(actions.len(), 0);
     }
 
@@ -431,20 +436,22 @@ mod tests {
         let weapon2 = fixtures::weapons::longbow();
         loadout.equip_weapon(weapon2, HandSlot::Main).unwrap();
 
-        let actions = loadout.available_actions();
+        let actions = loadout.actions();
         assert_eq!(actions.len(), 2);
-        for action in actions {
-            match action.1 {
-                ActionContext::Weapon { weapon_type, hand } => {
-                    if weapon_type == WeaponType::Melee {
-                        assert_eq!(hand, HandSlot::Main);
-                    } else if weapon_type == WeaponType::Ranged {
-                        assert_eq!(hand, HandSlot::Main);
-                    } else {
-                        panic!("Unexpected weapon type: {:?}", weapon_type);
+        for (action, contexts) in actions {
+            for context in contexts {
+                match context {
+                    ActionContext::Weapon { weapon_type, hand } => {
+                        if weapon_type == WeaponType::Melee {
+                            assert_eq!(hand, HandSlot::Main);
+                        } else if weapon_type == WeaponType::Ranged {
+                            assert_eq!(hand, HandSlot::Main);
+                        } else {
+                            panic!("Unexpected weapon type: {:?}", weapon_type);
+                        }
                     }
+                    _ => panic!("Unexpected action context: {:?}", context),
                 }
-                _ => panic!("Unexpected action context: {:?}", action.1),
             }
         }
     }
