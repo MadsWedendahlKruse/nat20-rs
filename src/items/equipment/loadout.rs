@@ -198,13 +198,14 @@ impl ActionProvider for Loadout {
                 if let Some(weapon) = weapon_opt {
                     let weapon_actions = weapon.weapon_actions();
                     for action_id in weapon_actions {
-                        actions.insert(
-                            action_id.clone(),
-                            vec![ActionContext::Weapon {
-                                weapon_type: weapon_type.clone(),
-                                hand: *hand,
-                            }],
-                        );
+                        let context = ActionContext::Weapon {
+                            weapon_type: weapon_type.clone(),
+                            hand: *hand,
+                        };
+                        actions
+                            .entry(action_id.clone())
+                            .and_modify(|a: &mut Vec<_>| a.push(context.clone()))
+                            .or_insert(vec![context]);
                     }
                 }
             }
@@ -255,6 +256,7 @@ impl fmt::Display for Loadout {
 
 #[cfg(test)]
 mod tests {
+    use crate::registry;
     use crate::test_utils::fixtures;
 
     use super::*;
@@ -437,7 +439,14 @@ mod tests {
         loadout.equip_weapon(weapon2, HandSlot::Main).unwrap();
 
         let actions = loadout.actions();
-        assert_eq!(actions.len(), 2);
+        for action in &actions {
+            println!("{:?}", action);
+        }
+
+        // Both melee and ranged attacks use the same ActionId, but their
+        // contexts are different
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[&registry::actions::WEAPON_ATTACK_ID].len(), 2);
         for (action, contexts) in actions {
             for context in contexts {
                 match context {

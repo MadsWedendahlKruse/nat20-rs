@@ -20,9 +20,9 @@ pub static ACTION_REGISTRY: LazyLock<HashMap<ActionId, (Action, ActionContext)>>
         HashMap::from([
             (ACTION_SURGE_ID.clone(), ACTION_SURGE.clone()),
             (
-                WEAPON_MELEE_ATTACK_ID.clone(),
+                WEAPON_ATTACK_ID.clone(),
                 // TODO: What to do with actions that don't have a fixed context?
-                (WEAPON_MELEE_ATTACK.clone(), ActionContext::Other),
+                (WEAPON_ATTACK.clone(), ActionContext::Other),
             ),
         ])
     });
@@ -45,28 +45,11 @@ static ACTION_SURGE: LazyLock<(Action, ActionContext)> = LazyLock::new(|| {
     )
 });
 
-pub static WEAPON_MELEE_ATTACK_ID: LazyLock<ActionId> =
-    LazyLock::new(|| ActionId::from_str("action.weapon.melee_attack"));
+pub static WEAPON_ATTACK_ID: LazyLock<ActionId> =
+    LazyLock::new(|| ActionId::from_str("action.weapon.attack"));
 
-static WEAPON_MELEE_ATTACK: LazyLock<Action> = LazyLock::new(|| Action {
-    id: registry::actions::WEAPON_MELEE_ATTACK_ID.clone(),
-    kind: ActionKind::AttackRollDamage {
-        attack_roll: WEAPON_ATTACK_ROLL.clone(),
-        damage: WEAPON_DAMAGE_ROLL.clone(),
-        damage_on_failure: None,
-    },
-    targeting: WEAPON_TARGETING.clone(),
-    resource_cost: DEFAULT_RESOURCE_COST.clone(),
-    cooldown: None,
-});
-
-// TODO: Implement
-// TODO: What's the actual difference between this and melee attack?
-pub static WEAPON_RANGED_ATTACK_ID: LazyLock<ActionId> =
-    LazyLock::new(|| ActionId::from_str("action.weapon.ranged_attack"));
-
-static WEAPON_RANGED_ATTACK: LazyLock<Action> = LazyLock::new(|| Action {
-    id: registry::actions::WEAPON_RANGED_ATTACK_ID.clone(),
+static WEAPON_ATTACK: LazyLock<Action> = LazyLock::new(|| Action {
+    id: registry::actions::WEAPON_ATTACK_ID.clone(),
     kind: ActionKind::AttackRollDamage {
         attack_roll: WEAPON_ATTACK_ROLL.clone(),
         damage: WEAPON_DAMAGE_ROLL.clone(),

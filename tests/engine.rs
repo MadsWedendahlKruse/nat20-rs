@@ -127,7 +127,7 @@ mod tests {
         }
 
         assert!(!actions.is_empty());
-        assert!(actions.contains_key(&registry::actions::WEAPON_MELEE_ATTACK_ID));
+        assert!(actions.contains_key(&registry::actions::WEAPON_ATTACK_ID));
     }
 
     #[test]
@@ -157,7 +157,7 @@ mod tests {
         assert!(engine.current_character().id() == hero_id);
 
         let actions = engine.available_actions();
-        let action_id = &registry::actions::WEAPON_MELEE_ATTACK_ID;
+        let action_id = &registry::actions::WEAPON_ATTACK_ID;
         let context = actions.get(&action_id).unwrap()[0].clone();
 
         println!("=== Action ===");

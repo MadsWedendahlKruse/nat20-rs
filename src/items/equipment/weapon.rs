@@ -87,12 +87,12 @@ impl Weapon {
             EquipmentType::MeleeWeapon => (
                 WeaponType::Melee,
                 Ability::Strength,
-                vec![registry::actions::WEAPON_MELEE_ATTACK_ID.clone()],
+                vec![registry::actions::WEAPON_ATTACK_ID.clone()],
             ),
             EquipmentType::RangedWeapon => (
                 WeaponType::Ranged,
                 Ability::Dexterity,
-                vec![registry::actions::WEAPON_RANGED_ATTACK_ID.clone()],
+                vec![registry::actions::WEAPON_ATTACK_ID.clone()],
             ),
             _ => panic!("Invalid equipment kind"),
         };
