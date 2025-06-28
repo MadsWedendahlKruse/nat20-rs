@@ -13,7 +13,7 @@ mod tests {
         registry,
         stats::modifier::ModifierSource,
         test_utils::fixtures,
-        utils::id::{ActionId, EffectId, SpellId},
+        utils::id::{ActionId, EffectId},
     };
 
     #[test]

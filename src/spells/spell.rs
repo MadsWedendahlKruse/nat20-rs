@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, hash::Hash, sync::Arc};
+use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use crate::{
     actions::{
@@ -109,14 +109,20 @@ impl Spell {
 
     const BASE_SPELL_SAVE_DC: i32 = 8;
 
-    pub fn spell_save_dc(caster: &Character, ability: Ability) -> D20CheckDC<Ability> {
+    pub fn spell_save_dc(caster: &Character, spellcasting_ability: Ability) -> D20CheckDC<Ability> {
         let mut spell_save_dc = ModifierSet::new();
         spell_save_dc.add_modifier(
             ModifierSource::Custom("Base spell save DC".to_string()),
             Spell::BASE_SPELL_SAVE_DC,
         );
-        let spellcasting_modifier = caster.ability_scores().ability_modifier(ability).total();
-        spell_save_dc.add_modifier(ModifierSource::Ability(ability), spellcasting_modifier);
+        let spellcasting_modifier = caster
+            .ability_scores()
+            .ability_modifier(spellcasting_ability)
+            .total();
+        spell_save_dc.add_modifier(
+            ModifierSource::Ability(spellcasting_ability),
+            spellcasting_modifier,
+        );
         // TODO: Not sure if Proficiency is the correct modifier source here, since I don't think
         // you can have e.g. Expertise in spell save DCs.
         spell_save_dc.add_modifier(
@@ -125,7 +131,7 @@ impl Spell {
         );
 
         D20CheckDC {
-            key: ability,
+            key: spellcasting_ability,
             dc: spell_save_dc,
         }
     }

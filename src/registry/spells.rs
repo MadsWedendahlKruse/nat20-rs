@@ -9,6 +9,7 @@ use crate::{
         targeting::{AreaShape, TargetType, TargetingContext, TargetingKind},
     },
     combat::damage::{DamageRoll, DamageSource, DamageType},
+    creature::character::Character,
     dice::dice::DieSize,
     math::point::Point,
     registry,
@@ -34,7 +35,10 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
         0, // Cantrip
         MagicSchool::Evocation,
         ActionKind::AttackRollDamage {
-            attack_roll: Arc::new(|caster, _| Spell::spell_attack_roll(caster, Ability::Charisma)),
+            attack_roll: Arc::new(|caster, _| {
+                // TODO: Macro?
+                Spell::spell_attack_roll(caster, spellcasting_ability(caster, &ELDRITCH_BLAST_ID))
+            }),
             damage: Arc::new(|_, _| {
                 DamageRoll::new(
                     1,
@@ -74,7 +78,9 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
         3,
         MagicSchool::Evocation,
         ActionKind::SavingThrowDamage {
-            saving_throw: Arc::new(|caster, _| Spell::spell_save_dc(caster, Ability::Dexterity)),
+            saving_throw: Arc::new(|caster, _| {
+                Spell::spell_save_dc(caster, spellcasting_ability(caster, &FIREBALL_ID))
+            }),
             half_damage_on_save: true,
             damage: Arc::new(|_, action_context| {
                 let spell_level = match action_context {
@@ -154,3 +160,7 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
         }),
     )
 });
+
+fn spellcasting_ability(caster: &Character, spell_id: &SpellId) -> Ability {
+    *caster.spellbook().spellcasting_ability(spell_id).unwrap()
+}
