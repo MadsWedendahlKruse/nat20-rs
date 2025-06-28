@@ -39,6 +39,75 @@ mod tests {
     }
 
     #[test]
+    fn end_turn() {
+        let mut hero = fixtures::creatures::heroes::fighter();
+        let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
+
+        println!("Hero ID: {}", hero.id());
+        println!("Goblin ID: {}", goblin_warrior.id());
+
+        let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
+
+        let first_turn_id = engine.current_character_id();
+
+        engine.end_turn();
+
+        let second_turn_id = engine.current_character_id();
+
+        println!("First turn ID: {}", first_turn_id);
+        println!("Second turn ID: {}", second_turn_id);
+
+        assert_ne!(first_turn_id, second_turn_id);
+    }
+
+    #[test]
+    fn resoureces_on_new_turn() {
+        let mut hero = fixtures::creatures::heroes::fighter();
+        let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
+
+        let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
+
+        // Spend the current characters action
+        let current_character = engine.current_character_mut();
+        let first_character_id = current_character.id();
+        assert_eq!(
+            current_character
+                .resource(&registry::resources::ACTION)
+                .unwrap()
+                .current_uses(),
+            1,
+        );
+        let _ = current_character
+            .resource_mut(&registry::resources::ACTION)
+            .unwrap()
+            .spend(1);
+        assert_eq!(
+            current_character
+                .resource(&registry::resources::ACTION)
+                .unwrap()
+                .current_uses(),
+            0,
+        );
+
+        // End turn twice: first for the current character, and then to skip the
+        // second character and come back to the first character
+        engine.end_turn();
+        engine.end_turn();
+
+        // Check that it's the first characters turn and the action resource has
+        // been recharged
+        assert_eq!(first_character_id, engine.current_character_id());
+        assert_eq!(
+            engine
+                .current_character()
+                .resource(&registry::resources::ACTION)
+                .unwrap()
+                .current_uses(),
+            1,
+        );
+    }
+
+    #[test]
     fn available_actions() {
         let mut hero = fixtures::creatures::heroes::fighter();
         fixtures::creatures::heroes::add_initiative(&mut hero);

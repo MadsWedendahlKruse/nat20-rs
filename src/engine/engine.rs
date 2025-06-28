@@ -140,7 +140,7 @@ impl<'c> CombatEngine<'c> {
     }
 
     fn start_turn(&mut self) {
+        self.current_character_mut().on_turn_start();
         self.state = CombatState::AwaitingAction;
-        // TODO: run turn start effects
     }
 }
