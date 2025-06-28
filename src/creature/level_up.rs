@@ -250,7 +250,6 @@ impl PredefinedChoiceProvider {
 
 impl ChoiceProvider for PredefinedChoiceProvider {
     fn provide(&mut self, _choice: &LevelUpChoice) -> LevelUpSelection {
-        // We have to mutate, so wrap in RefCell or make `provide` take &mut self:
         self.responses.pop_front().expect(&format!(
             "Ran out of predefined responses when leveling up {}",
             self.character

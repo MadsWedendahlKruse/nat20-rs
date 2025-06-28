@@ -87,6 +87,7 @@ pub mod weapons {
             1,
             DieSize::D4,
             DamageType::Piercing,
+            vec![],
         )
     }
 
@@ -106,6 +107,7 @@ pub mod weapons {
             1,
             DieSize::D8,
             DamageType::Piercing,
+            vec![],
         )
     }
 
@@ -129,6 +131,7 @@ pub mod weapons {
             1,
             DieSize::D6,
             DamageType::Piercing,
+            vec![],
         )
     }
 
@@ -148,6 +151,7 @@ pub mod weapons {
             2,
             DieSize::D6,
             DamageType::Slashing,
+            vec![],
         )
     }
 
@@ -167,6 +171,7 @@ pub mod weapons {
             1,
             DieSize::D8,
             DamageType::Piercing,
+            vec![],
         )
     }
 }
@@ -506,7 +511,8 @@ pub mod spells {
                     kind: TargetingKind::Multiple {
                         max_targets: 3 + (spell_level - 1),
                     },
-                    range: 120,
+                    normal_range: 120,
+                    max_range: 120,
                     valid_target_types: vec![TargetType::Character],
                 }
             }),
@@ -548,7 +554,8 @@ pub mod spells {
                         z: 0.0,
                     },
                 },
-                range: 150,
+                normal_range: 150,
+                max_range: 150,
                 // TODO: Can also hit objects
                 valid_target_types: vec![TargetType::Character],
             }),
@@ -587,7 +594,8 @@ pub mod spells {
                             _ => 4, // Level 17+ can hit up to 4 targets
                         },
                     },
-                    range: 120,
+                    normal_range: 120,
+                    max_range: 120,
                     valid_target_types: vec![TargetType::Character],
                 }
             }),

@@ -125,38 +125,23 @@ static FIGHTING_STYLE_GREAT_WEAPON_FIGHTING: LazyLock<Effect> = LazyLock::new(||
             return;
         }
 
-        if let Some(main_hand_weapon) = character
+        if !character
             .loadout()
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .is_wielding_weapon_with_both_hands(&WeaponType::Melee)
         {
-            // Check that:
-            // 1. The main hand weapon is two-handed or versatile.
-            // 2. The off hand is empty
-            // (Instead of checking for a specific Versatile(DiceSet), just check for any Versatile property)
-            let is_two_handed = main_hand_weapon.has_property(&WeaponProperties::TwoHanded);
-            let is_versatile = main_hand_weapon
-                .properties
-                .iter()
-                .any(|p| matches!(p, WeaponProperties::Versatile(_)));
-            let has_offhand_weapon = character
-                .loadout()
-                .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Off);
+            return;
+        }
 
-            if !(is_two_handed || is_versatile) && !has_offhand_weapon {
-                return;
-            }
+        if damage_roll_result.components.is_empty() {
+            return;
+        }
 
-            if damage_roll_result.components.is_empty() {
-                return;
-            }
-
-            // First component is the primary damage component
-            let primary_damage_rolls = &mut damage_roll_result.components[0].result.rolls;
-            for i in 0..primary_damage_rolls.len() {
-                // Any roll that is less than 3 is rerolled to 3
-                if primary_damage_rolls[i] < 3 {
-                    primary_damage_rolls[i] = 3
-                }
+        // First component is the primary damage component
+        let primary_damage_rolls = &mut damage_roll_result.components[0].result.rolls;
+        for i in 0..primary_damage_rolls.len() {
+            // Any roll that is less than 3 is rerolled to 3
+            if primary_damage_rolls[i] < 3 {
+                primary_damage_rolls[i] = 3
             }
         }
     });

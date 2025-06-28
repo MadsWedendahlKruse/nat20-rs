@@ -38,6 +38,7 @@ mod tests {
             1,
             DieSize::D8,
             DamageType::Piercing,
+            vec![],
         );
 
         let mut character = Character::default();
@@ -52,7 +53,7 @@ mod tests {
         assert_eq!(weapon.determine_ability(&character), Ability::Dexterity);
 
         // Check that the damage roll uses Dexterity modifier
-        let damage_roll = weapon.damage_roll(&mut character, HandSlot::Main);
+        let damage_roll = weapon.damage_roll(&mut character, &HandSlot::Main);
         let damage_roll_result = damage_roll.roll();
         println!("{:?}", damage_roll_result);
         // Min: 1 (1d8) + 3 (Dex) = 4
@@ -96,6 +97,7 @@ mod tests {
             1,
             DieSize::D6,
             DamageType::Piercing,
+            vec![],
         );
 
         let mut character = Character::default();
@@ -104,13 +106,13 @@ mod tests {
         assert_eq!(unequipped_weapons.len(), 0);
         assert!(character
             .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Main));
+            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main));
 
         let trident = character
             .loadout()
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .unwrap();
-        let damage_roll = trident.damage_roll(&character, HandSlot::Main);
+        let damage_roll = trident.damage_roll(&character, &HandSlot::Main);
         // Check that it's using the two handed dice set
         assert!(damage_roll.primary.dice_roll.dice.num_dice == 1);
         assert!(damage_roll.primary.dice_roll.dice.die_size == DieSize::D8);
@@ -131,19 +133,20 @@ mod tests {
             1,
             DieSize::D4,
             DamageType::Piercing,
+            vec![],
         );
         let unequipped_weapons = character.equip_weapon(dagger, HandSlot::Off).unwrap();
         // Check that nothing was unequipped and the character has a weapon in their hand
         assert_eq!(unequipped_weapons.len(), 0);
         assert!(character
             .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Off));
+            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off));
 
         let trident = character
             .loadout()
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .unwrap();
-        let damage_roll = trident.damage_roll(&character, HandSlot::Main);
+        let damage_roll = trident.damage_roll(&character, &HandSlot::Main);
         // Check that it's using the one handed dice set
         assert!(damage_roll.primary.dice_roll.dice.num_dice == 1);
         assert!(damage_roll.primary.dice_roll.dice.die_size == DieSize::D6);
@@ -156,17 +159,17 @@ mod tests {
         assert!(unequipped_weapon.name() == "Dagger");
         assert!(!character
             .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Off));
+            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off));
         // Check that the character still has the trident in their main hand
         assert!(character
             .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Main));
+            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main));
         // Check that the trident is still using the two handed dice set
         let trident = character
             .loadout()
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .unwrap();
-        let damage_roll = trident.damage_roll(&character, HandSlot::Main);
+        let damage_roll = trident.damage_roll(&character, &HandSlot::Main);
         assert!(damage_roll.primary.dice_roll.dice.num_dice == 1);
         assert!(damage_roll.primary.dice_roll.dice.die_size == DieSize::D8);
     }
@@ -188,6 +191,7 @@ mod tests {
             1,
             DieSize::D4,
             DamageType::Piercing,
+            vec![],
         );
         let trident = Weapon::new(
             EquipmentItem::new(
@@ -209,6 +213,7 @@ mod tests {
             1,
             DieSize::D6,
             DamageType::Piercing,
+            vec![],
         );
 
         let mut character = Character::default();
@@ -219,10 +224,10 @@ mod tests {
         assert_eq!(unequipped_weapons.len(), 0);
         assert!(character
             .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Main));
+            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main));
         assert!(character
             .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Off));
+            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off));
 
         // Equip a two-handed weapon (Greatsword) in the main hand
         let greatsword = Weapon::new(
@@ -239,17 +244,18 @@ mod tests {
             2,
             DieSize::D6,
             DamageType::Slashing,
+            vec![],
         );
         let unequipped_weapons = character.equip_weapon(greatsword, HandSlot::Main).unwrap();
         // Check that both weapons were unequipped
         assert_eq!(unequipped_weapons.len(), 2);
         assert!(character
             .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Main));
+            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main));
         // Off-hand should be empty
         assert!(!character
             .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, HandSlot::Off));
+            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off));
     }
 
     #[test]
@@ -269,6 +275,7 @@ mod tests {
             1,
             DieSize::D8,
             DamageType::Slashing,
+            vec![],
         );
 
         let mut character = Character::default();

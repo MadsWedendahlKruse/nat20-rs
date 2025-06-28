@@ -659,20 +659,14 @@ impl Character {
     // I haven't found a way to avoid cloning the action when performing it, so
     // I guess we might as well just return the action itself here
     fn find_action(&self, action_id: &ActionId) -> Option<Action> {
-        // Start by checking if the action exists in the character's actions
-        if self.actions.contains_key(action_id) {
-            if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id) {
-                return Some(action.clone());
-            }
+        // Start by checking if the action exists in the action registry
+        if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id) {
+            return Some(action.clone());
         }
         // If not found, check the spellbook
         if let Some(action) = self.spellbook.get_action(action_id) {
             return Some(action.clone());
         }
-        // Finally, check the loadout
-        // if let Some(action) = self.loadout.get_action(action_id) {
-        //     return Some(action.clone());
-        // }
         None
     }
 

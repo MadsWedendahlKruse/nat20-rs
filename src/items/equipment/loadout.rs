@@ -144,19 +144,19 @@ impl Loadout {
         }
     }
 
-    pub fn weapon_in_hand(&self, weapon_type: &WeaponType, hand: HandSlot) -> Option<&Weapon> {
+    pub fn weapon_in_hand(&self, weapon_type: &WeaponType, hand: &HandSlot) -> Option<&Weapon> {
         self.weapons
             .get(weapon_type)
-            .and_then(|w| w.get(&hand))
+            .and_then(|w| w.get(hand))
             .and_then(|w| w.as_ref())
     }
 
-    pub fn has_weapon_in_hand(&self, weapon_type: &WeaponType, hand: HandSlot) -> bool {
+    pub fn has_weapon_in_hand(&self, weapon_type: &WeaponType, hand: &HandSlot) -> bool {
         self.weapon_in_hand(weapon_type, hand).is_some()
     }
 
-    pub fn wielding_weapon_with_both_hands(&self, weapon_type: &WeaponType) -> bool {
-        if let Some(main_hand_weapon) = self.weapon_in_hand(weapon_type, HandSlot::Main) {
+    pub fn is_wielding_weapon_with_both_hands(&self, weapon_type: &WeaponType) -> bool {
+        if let Some(main_hand_weapon) = self.weapon_in_hand(weapon_type, &HandSlot::Main) {
             // Check that:
             // 1. The main hand weapon is two-handed or versatile.
             // 2. The off hand is empty
@@ -166,7 +166,7 @@ impl Loadout {
                     .properties
                     .iter()
                     .any(|p| matches!(p, WeaponProperties::Versatile(_))))
-                && !self.has_weapon_in_hand(weapon_type, HandSlot::Off);
+                && !self.has_weapon_in_hand(weapon_type, &HandSlot::Off);
         }
         false
     }
@@ -175,7 +175,7 @@ impl Loadout {
         &self,
         character: &Character,
         weapon_type: &WeaponType,
-        hand: HandSlot,
+        hand: &HandSlot,
     ) -> AttackRollResult {
         // TODO: Unarmed attacks
         let attack_roll = self
@@ -197,9 +197,9 @@ impl ActionProvider for Loadout {
             for (hand, weapon_opt) in weapon_map.iter() {
                 if let Some(weapon) = weapon_opt {
                     let weapon_actions = weapon.weapon_actions();
-                    for action in weapon_actions {
+                    for action_id in weapon_actions {
                         actions.insert(
-                            action.id().clone(),
+                            action_id.clone(),
                             vec![ActionContext::Weapon {
                                 weapon_type: weapon_type.clone(),
                                 hand: *hand,
@@ -341,19 +341,19 @@ mod tests {
         let unequipped = loadout.equip_weapon(weapon, HandSlot::Main);
         assert!(unequipped.is_ok());
         assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .is_some());
 
         let unequipped = loadout.unequip_weapon(&WeaponType::Melee, HandSlot::Main);
         assert!(unequipped.is_some());
         assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .is_none());
 
         let unequipped = loadout.unequip_weapon(&WeaponType::Melee, HandSlot::Main);
         assert!(unequipped.is_none());
         assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .is_none());
     }
 
@@ -365,14 +365,14 @@ mod tests {
         let unequipped1 = loadout.equip_weapon(weapon1, HandSlot::Main);
         assert_eq!(unequipped1.unwrap().len(), 0);
         assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .is_some());
 
         let weapon2 = fixtures::weapons::dagger_light();
         let unequipped2 = loadout.equip_weapon(weapon2, HandSlot::Main);
         assert_eq!(unequipped2.unwrap().len(), 1);
         assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .is_some());
     }
 
@@ -388,7 +388,7 @@ mod tests {
         ]) {
             let unequipped = loadout.equip_weapon(weapon, hand);
             assert!(unequipped.is_ok());
-            assert!(loadout.weapon_in_hand(&WeaponType::Melee, hand).is_some());
+            assert!(loadout.weapon_in_hand(&WeaponType::Melee, &hand).is_some());
         }
 
         let weapon_two_handed = fixtures::weapons::greatsword_two_handed();
@@ -397,13 +397,13 @@ mod tests {
         assert!(unequipped.is_ok());
         assert_eq!(unequipped.unwrap().len(), 2);
         assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .is_some());
         assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Off)
+            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Off)
             .is_none());
         assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, HandSlot::Main)
+            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .unwrap()
             .has_property(&WeaponProperties::TwoHanded));
     }

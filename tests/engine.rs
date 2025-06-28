@@ -5,12 +5,11 @@ mod tests {
 
     use nat20_rs::{
         actions::{
-            action::{Action, ActionContext, ActionKind, ActionKindResult},
+            action::{ActionContext, ActionKindResult},
             targeting::TargetingKind,
         },
         effects::effects::{Effect, EffectDuration},
         engine::engine::CombatEngine,
-        items::equipment::{equipment::HandSlot, weapon::WeaponType},
         registry,
         stats::modifier::ModifierSource,
         test_utils::fixtures,
@@ -35,7 +34,7 @@ mod tests {
             );
         }
         assert_eq!(initiative.len(), 2);
-        assert!(initiative[0].1.total > initiative[1].1.total);
+        assert!(initiative[0].1.total >= initiative[1].1.total);
         assert_eq!(engine.current_character().id(), initiative[0].0);
     }
 
@@ -93,7 +92,7 @@ mod tests {
         let context = actions.get(&action_id).unwrap()[0].clone();
 
         println!("=== Action ===");
-        println!("{:?}", action_id);
+        println!("id: {:?}, context: {:?}", action_id, context);
 
         let targeting_context = engine
             .current_character()

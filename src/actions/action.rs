@@ -38,7 +38,6 @@ pub enum ActionContext {
 }
 
 /// Represents the kind of action that can be performed.
-// TODO: Effect or EffectId?
 #[derive(Clone)]
 pub enum ActionKind {
     /// Actions that deal unconditional damage. Is this only Magic Missile?

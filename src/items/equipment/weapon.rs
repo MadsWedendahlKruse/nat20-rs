@@ -1,13 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::collections::HashSet;
 
 use crate::{
-    actions::{
-        action::{Action, ActionContext, ActionKind},
-        targeting::{TargetType, TargetingContext, TargetingKind},
-    },
     combat::damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
     creature::character::Character,
     dice::dice::{DiceSet, DieSize},
@@ -66,6 +59,9 @@ pub enum WeaponProperties {
 //     Vex,
 // }
 
+const MELEE_RANGE_DEFAULT: u32 = 5;
+const MELEE_RANGE_REACH: u32 = 10;
+
 #[derive(Debug)]
 pub struct Weapon {
     equipment: EquipmentItem,
@@ -74,7 +70,7 @@ pub struct Weapon {
     pub properties: HashSet<WeaponProperties>,
     pub damage_roll: DamageRoll,
     ability: Ability,
-    weapon_actions: Vec<Action>,
+    weapon_actions: Vec<ActionId>,
 }
 
 impl Weapon {
@@ -85,16 +81,20 @@ impl Weapon {
         num_dice: u32,
         die_size: DieSize,
         damage_type: DamageType,
-        // weapon_actions: Vec<Action>,
+        extra_weapon_actions: Vec<ActionId>,
     ) -> Self {
-        let weapon_type = match equipment.kind {
-            EquipmentType::MeleeWeapon => WeaponType::Melee,
-            EquipmentType::RangedWeapon => WeaponType::Ranged,
-            _ => panic!("Invalid weapon type"),
-        };
-        let ability = match weapon_type {
-            WeaponType::Melee => Ability::Strength,
-            WeaponType::Ranged => Ability::Dexterity,
+        let (weapon_type, ability, mut weapon_actions) = match equipment.kind {
+            EquipmentType::MeleeWeapon => (
+                WeaponType::Melee,
+                Ability::Strength,
+                vec![registry::actions::WEAPON_MELEE_ATTACK_ID.clone()],
+            ),
+            EquipmentType::RangedWeapon => (
+                WeaponType::Ranged,
+                Ability::Dexterity,
+                vec![registry::actions::WEAPON_RANGED_ATTACK_ID.clone()],
+            ),
+            _ => panic!("Invalid equipment kind"),
         };
         let damage_roll = DamageRoll::new(
             num_dice,
@@ -103,44 +103,9 @@ impl Weapon {
             DamageSource::Weapon(weapon_type.clone(), properties.clone()),
             equipment.item.name.clone(),
         );
-        let weapon_actions = vec![Action {
-            id: registry::actions::WEAPON_MELEE_ATTACK_ID.clone(),
-            kind: ActionKind::AttackRollDamage {
-                // TODO: Some of this seems a bit circular?
-                attack_roll: Arc::new(|character: &Character, action_context: &ActionContext| {
-                    let (weapon_type, hand) = match action_context {
-                        ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
-                        _ => panic!("Action context must be Weapon"),
-                    };
-                    character
-                        .loadout()
-                        .weapon_in_hand(weapon_type, *hand)
-                        .unwrap()
-                        .attack_roll(character)
-                }),
-                damage: Arc::new(|character: &Character, action_context: &ActionContext| {
-                    let (weapon_type, hand) = match action_context {
-                        ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
-                        _ => panic!("Action context must be Weapon"),
-                    };
-                    character
-                        .loadout()
-                        .weapon_in_hand(weapon_type, *hand)
-                        .unwrap()
-                        .damage_roll(character, *hand)
-                }),
-                damage_on_failure: None,
-            },
-            targeting: Arc::new(|_character: &Character, _action_context: &ActionContext| {
-                TargetingContext {
-                    kind: TargetingKind::Single,
-                    range: 5,
-                    valid_target_types: vec![TargetType::Character],
-                }
-            }),
-            resource_cost: HashMap::from([(registry::resources::ACTION.clone(), 1)]),
-            cooldown: None,
-        }];
+
+        weapon_actions.extend(extra_weapon_actions);
+
         Self {
             equipment,
             category,
@@ -186,7 +151,7 @@ impl Weapon {
         AttackRoll::new(attack_roll, DamageSource::from_weapon(self))
     }
 
-    pub fn damage_roll(&self, character: &Character, hand: HandSlot) -> DamageRoll {
+    pub fn damage_roll(&self, character: &Character, hand: &HandSlot) -> DamageRoll {
         let mut damage_roll = self.damage_roll.clone();
 
         // Check if the weapon is versatile and the character is wielding it in two hands
@@ -200,7 +165,7 @@ impl Weapon {
         if versatile_dice.is_some()
             && !character
                 .loadout()
-                .has_weapon_in_hand(&self.weapon_type, hand.other())
+                .has_weapon_in_hand(&self.weapon_type, &hand.other())
         {
             damage_roll.primary.dice_roll.dice = versatile_dice.unwrap().clone();
         }
@@ -250,11 +215,31 @@ impl Weapon {
         }
     }
 
+    // TODO: Can this be done in a nicer way?
+    /// Returns the normal range and the long range of the weapon.
+    /// When attacking a target beyond normal range, you have Disadvantage on the
+    /// attack roll. You can’t attack a target beyond the long range.
+    /// Note that for melee weapons the normal and long range is the same.
+    pub fn range(&self) -> (u32, u32) {
+        for property in &self.properties {
+            match property {
+                WeaponProperties::Range(normal_range, long_range) => {
+                    return (*normal_range, *long_range);
+                }
+                WeaponProperties::Reach => {
+                    return (MELEE_RANGE_REACH, MELEE_RANGE_REACH);
+                }
+                _ => {}
+            }
+        }
+        return (MELEE_RANGE_DEFAULT, MELEE_RANGE_DEFAULT);
+    }
+
     pub fn effects(&self) -> &Vec<Effect> {
         self.equipment.effects()
     }
 
-    pub fn weapon_actions(&self) -> &Vec<Action> {
+    pub fn weapon_actions(&self) -> &Vec<ActionId> {
         &self.weapon_actions
     }
 }
@@ -286,6 +271,7 @@ mod tests {
             1,
             DieSize::D8,
             DamageType::Slashing,
+            vec![],
         );
 
         assert_eq!(weapon.equipment.item.name, "Longsword");
@@ -318,12 +304,13 @@ mod tests {
                 1,
                 DieSize::D8,
                 DamageType::Slashing,
+                vec![],
             );
         });
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().downcast_ref::<&str>(),
-            Some(&"Invalid weapon type")
+            Some(&"Invalid equipment kind")
         );
     }
 
@@ -344,6 +331,7 @@ mod tests {
             1,
             DieSize::D4,
             DamageType::Piercing,
+            vec![],
         );
         assert!(weapon.has_property(&WeaponProperties::Finesse));
         assert!(weapon.has_property(&WeaponProperties::Light));
@@ -367,6 +355,7 @@ mod tests {
             1,
             DieSize::D6,
             DamageType::Slashing,
+            vec![],
         );
         assert_eq!(weapon.enchantment(), 2);
     }
@@ -388,6 +377,7 @@ mod tests {
             1,
             DieSize::D8,
             DamageType::Piercing,
+            vec![],
         );
         let mut character = fixtures::creatures::heroes::fighter();
         character.ability_scores_mut().set(
@@ -414,6 +404,7 @@ mod tests {
             1,
             DieSize::D10,
             DamageType::Bludgeoning,
+            vec![],
         );
         assert_eq!(weapon.name(), "Warhammer");
         assert!(weapon.effects().is_empty());
@@ -436,6 +427,7 @@ mod tests {
             1,
             DieSize::D6,
             DamageType::Piercing,
+            vec![],
         );
         assert!(!weapon.weapon_actions().is_empty());
     }

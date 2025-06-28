@@ -68,6 +68,7 @@ mod tests {
             1,
             DieSize::D8,
             DamageType::Slashing,
+            vec![],
         );
 
         let mut character = Character::default();
@@ -77,7 +78,7 @@ mod tests {
         let attack_roll =
             character
                 .loadout()
-                .attack_roll(&character, &WeaponType::Melee, HandSlot::Main);
+                .attack_roll(&character, &WeaponType::Melee, &HandSlot::Main);
         assert_eq!(
             attack_roll.roll_result.advantage_tracker.roll_mode(),
             RollMode::Normal
@@ -96,7 +97,7 @@ mod tests {
         let attack_roll =
             character
                 .loadout()
-                .attack_roll(&character, &WeaponType::Melee, HandSlot::Main);
+                .attack_roll(&character, &WeaponType::Melee, &HandSlot::Main);
         assert_eq!(
             attack_roll.roll_result.advantage_tracker.roll_mode(),
             RollMode::Advantage
@@ -108,7 +109,7 @@ mod tests {
         let attack_roll =
             character
                 .loadout()
-                .attack_roll(&character, &WeaponType::Melee, HandSlot::Main);
+                .attack_roll(&character, &WeaponType::Melee, &HandSlot::Main);
         assert_eq!(
             attack_roll.roll_result.advantage_tracker.roll_mode(),
             RollMode::Normal
