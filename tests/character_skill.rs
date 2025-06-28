@@ -38,7 +38,7 @@ mod tests {
             1,
         );
 
-        // 17 (base) + 2 (item) = 19
+        // Strength: 17 (base) + 2 (item) = 19
         assert_eq!(character.ability_scores().total(Ability::Strength), 19);
         // Calculate the expected skill modifier
         // 4 (ability) + 1 (item) = 5
@@ -46,12 +46,20 @@ mod tests {
             .skills()
             .check(Skill::Athletics, &character)
             .modifier_breakdown;
-        print!(
+        println!(
             "Athletics Modifier: {} = {:?}",
             skill_modifiers.total(),
             skill_modifiers
         );
         assert_eq!(skill_modifiers.total(), 5);
+
+        // Perform the skill check
+        let result = character.skill_check(Skill::Athletics);
+        println!("Athletics check: {}", result);
+        // Min roll: 1 + 5 (mod) = 6
+        // Max roll: 20 + 5 (mod) = 25
+        assert!(result.total >= 6);
+        assert!(result.total <= 25);
     }
 
     #[test]
