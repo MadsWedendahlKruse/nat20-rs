@@ -664,8 +664,10 @@ impl Character {
             return Some(action.clone());
         }
         // If not found, check the spellbook
-        if let Some(action) = self.spellbook.get_action(action_id) {
-            return Some(action.clone());
+        if let Some(spell_id) = self.spellbook.get_spell_id_by_action_id(action_id) {
+            return registry::spells::SPELL_REGISTRY
+                .get(spell_id)
+                .map(|spell| spell.action().clone());
         }
         None
     }

@@ -159,11 +159,9 @@ mod tests {
         }
 
         // TODO: Placeholder ID
-        let spell_id = SpellId::from_str("MAGIC_MISSILE");
         let spell_level = 2;
 
-        let actions = engine.available_actions();
-        let action_id = ActionId::from_str("MAGIC_MISSILE");
+        let action_id = ActionId::from_str("spell.magic_missile");
         let context = ActionContext::Spell { level: spell_level };
         println!("=== Action ===");
         println!("{:?}", (&action_id, &context));

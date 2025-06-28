@@ -28,30 +28,26 @@ pub enum MagicSchool {
     Transmutation,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Spell {
     id: SpellId,
-    name: String,
     base_level: u8,
     school: MagicSchool,
     action: Action,
-    spellcasting_ability: Option<Ability>,
 }
 
 impl Spell {
     pub fn new(
-        name: String,
+        id: SpellId,
         base_level: u8,
         school: MagicSchool,
         kind: ActionKind,
         resource_cost: HashMap<ResourceId, u8>,
         targeting: Arc<dyn Fn(&Character, &ActionContext) -> TargetingContext + Send + Sync>,
     ) -> Self {
-        let spell_id = SpellId::from_str(&name.to_uppercase().replace(" ", "_"));
-        let action_id = ActionId::from_str(&spell_id.to_string());
+        let action_id = ActionId::from_str(&id.to_string());
         Self {
-            id: spell_id,
-            name,
+            id,
             base_level,
             school,
             action: Action {
@@ -61,16 +57,11 @@ impl Spell {
                 targeting,
                 cooldown: None,
             },
-            spellcasting_ability: None,
         }
     }
 
     pub fn id(&self) -> &SpellId {
         &self.id
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     pub fn base_level(&self) -> u8 {
@@ -83,16 +74,6 @@ impl Spell {
 
     pub fn school(&self) -> MagicSchool {
         self.school
-    }
-
-    pub fn spellcasting_ability(&self) -> Option<Ability> {
-        self.spellcasting_ability
-    }
-
-    /// This should be called when the spell is learned, so it can be set to spell casting ability
-    /// of the class which learned the spell.
-    pub fn set_spellcasting_ability(&mut self, ability: Ability) {
-        self.spellcasting_ability = Some(ability);
     }
 
     pub fn action(&self) -> &Action {
@@ -112,9 +93,6 @@ impl Spell {
         }
         if self.is_cantrip() && spell_level > &self.base_level {
             return Err(SnapshotError::UpcastingCantripNotAllowed);
-        }
-        if self.spellcasting_ability.is_none() {
-            return Err(SnapshotError::SpellcastingAbilityNotSet);
         }
         // TODO: Something like BG3 Lightning Charges with Magic Missile would not work
         // with this snapshotting, since each damage instance would add an effect to the
@@ -137,8 +115,8 @@ impl Spell {
             ModifierSource::Custom("Base spell save DC".to_string()),
             Spell::BASE_SPELL_SAVE_DC,
         );
-        let spell_casting_modifier = caster.ability_scores().ability_modifier(ability).total();
-        spell_save_dc.add_modifier(ModifierSource::Ability(ability), spell_casting_modifier);
+        let spellcasting_modifier = caster.ability_scores().ability_modifier(ability).total();
+        spell_save_dc.add_modifier(ModifierSource::Ability(ability), spellcasting_modifier);
         // TODO: Not sure if Proficiency is the correct modifier source here, since I don't think
         // you can have e.g. Expertise in spell save DCs.
         spell_save_dc.add_modifier(
@@ -152,25 +130,18 @@ impl Spell {
         }
     }
 
-    pub fn spell_attack_roll(caster: &Character, ability: Ability) -> AttackRoll {
+    pub fn spell_attack_roll(caster: &Character, spellcasting_ability: Ability) -> AttackRoll {
         let mut roll = D20Check::new(Proficiency::Proficient);
-        let spell_casting_modifier = caster.ability_scores().ability_modifier(ability).total();
-        roll.add_modifier(ModifierSource::Ability(ability), spell_casting_modifier);
+        let spellcasting_modifier = caster
+            .ability_scores()
+            .ability_modifier(spellcasting_ability)
+            .total();
+        roll.add_modifier(
+            ModifierSource::Ability(spellcasting_ability),
+            spellcasting_modifier,
+        );
 
         AttackRoll::new(roll, DamageSource::Spell)
-    }
-}
-
-impl fmt::Debug for Spell {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Spell")
-            .field("id", &self.id)
-            .field("name", &self.name)
-            .field("base_level", &self.base_level)
-            .field("school", &self.school)
-            .field("action", &self.action)
-            .field("action_cost", &self.action.resource_cost())
-            .finish()
     }
 }
 
@@ -183,8 +154,4 @@ pub enum SnapshotError {
     /// Cantrips cannot be upcast, so this error is returned when trying to upcast a cantrip.
     /// This is not supposed to be allowed, so the option should not be presented to the player.
     UpcastingCantripNotAllowed,
-    /// The spellcasting ability has not been set for this spell. This usually means it hasn't
-    /// been set by the class that learned the spell.
-    /// This is a programming error, so it should not happen in normal gameplay.
-    SpellcastingAbilityNotSet,
 }

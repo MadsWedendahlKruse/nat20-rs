@@ -6,11 +6,7 @@ use std::{
 use crate::{
     combat::damage::DamageSource,
     effects::effects::{Effect, EffectDuration},
-    items::equipment::{
-        armor::ArmorType,
-        equipment::HandSlot,
-        weapon::{WeaponProperties, WeaponType},
-    },
+    items::equipment::{armor::ArmorType, weapon::WeaponType},
     registry,
     stats::modifier::ModifierSource,
     utils::id::EffectId,
@@ -20,15 +16,15 @@ pub static EFFECT_REGISTRY: LazyLock<HashMap<EffectId, Effect>> = LazyLock::new(
     HashMap::from([
         (ACTION_SURGE_ID.clone(), ACTION_SURGE.to_owned()),
         (
-            FIGHTING_STYLE_ARCHERY.id.clone(),
+            FIGHTING_STYLE_ARCHERY_ID.clone(),
             FIGHTING_STYLE_ARCHERY.to_owned(),
         ),
         (
-            FIGHTING_STYLE_DEFENSE.id.clone(),
+            FIGHTING_STYLE_DEFENSE_ID.clone(),
             FIGHTING_STYLE_DEFENSE.to_owned(),
         ),
         (
-            FIGHTING_STYLE_GREAT_WEAPON_FIGHTING.id.clone(),
+            FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
             FIGHTING_STYLE_GREAT_WEAPON_FIGHTING.to_owned(),
         ),
         (IMPROVED_CRITICAL_ID.clone(), IMPROVED_CRITICAL.to_owned()),
