@@ -265,10 +265,12 @@ impl Character {
         if level == 1 {
             // If it's the first level, add the class to the list
             self.classes.insert(class.name.clone(), level);
-            // Set default ability scores
-            for (ability, score) in class.default_abilities.iter() {
-                self.ability_scores
-                    .set(*ability, AbilityScore::new(*ability, *score));
+            // If it's the first *total* level set default ability scores
+            if self.total_level() == 1 {
+                for (ability, score) in class.default_abilities.iter() {
+                    self.ability_scores
+                        .set(*ability, AbilityScore::new(*ability, *score));
+                }
             }
         } else {
             // If it's an existing class, update its level
@@ -819,6 +821,14 @@ impl fmt::Display for Character {
                 resource.current_uses(),
                 resource.max_uses()
             )?;
+        }
+
+        write!(f, "Spellslots:\n")?;
+        if self.spellbook.spell_slots().is_empty() {
+            write!(f, "\tNo spell slots available\n")?;
+        }
+        for (level, (current_slots, max_slots)) in self.spellbook.spell_slots().iter() {
+            write!(f, "\tLevel {}: ({}/{})\n", level, current_slots, max_slots)?;
         }
 
         write!(f, "Effects:\n")?;

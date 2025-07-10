@@ -19,10 +19,10 @@ pub struct Spellbook {
     /// spell was learned as
     spellcasting_ability: HashMap<SpellId, Ability>,
     /// Spell slots available for each spell level.
-    /// The key is the spell level (1-9), and the value is the number of slots available.
+    /// The key is the spell level (1-9), and the value is:
+    ///     (current_slots, maximum_slots).
     /// Spell slots could be treated as a resource, but that really overcomplicates things.
-    max_spell_slots: HashMap<u8, u8>,
-    current_spell_slots: HashMap<u8, u8>,
+    spell_slots: HashMap<u8, (u8, u8)>,
 }
 
 impl Spellbook {
@@ -31,8 +31,7 @@ impl Spellbook {
             spells_by_spell_id: HashSet::new(),
             spells_by_action_id: HashMap::new(),
             spellcasting_ability: HashMap::new(),
-            max_spell_slots: HashMap::new(),
-            current_spell_slots: HashMap::new(),
+            spell_slots: HashMap::new(),
         }
     }
 
@@ -78,23 +77,23 @@ impl Spellbook {
         self.spellcasting_ability.get(spell_id)
     }
 
-    pub fn spell_slots(&self) -> &HashMap<u8, u8> {
-        &self.current_spell_slots
+    pub fn spell_slots(&self) -> &HashMap<u8, (u8, u8)> {
+        &self.spell_slots
     }
 
     pub fn spell_slots_for_level(&self, level: u8) -> u8 {
-        *self.current_spell_slots.get(&level).unwrap_or(&0)
+        self.spell_slots
+            .get(&level)
+            .map(|(current, _)| *current)
+            .unwrap_or(0)
     }
 
     pub fn update_spell_slots(&mut self, caster_level: u8) {
-        // Clear current slots
-        self.current_spell_slots.clear();
         // Calculate new spell slots based on caster level
         let spell_slots = Self::spell_slots_per_level(caster_level);
         for spell_level in 1..=spell_slots.len() as u8 {
             let slots = spell_slots[spell_level as usize - 1];
-            self.max_spell_slots.insert(spell_level, slots);
-            self.current_spell_slots.insert(spell_level, slots);
+            self.spell_slots.insert(spell_level, (slots, slots));
         }
     }
 
@@ -122,7 +121,7 @@ impl Spellbook {
 
     pub fn use_spell_slot(&mut self, level: u8) -> bool {
         // TODO: Error instead of bool?
-        if let Some(current_slots) = self.current_spell_slots.get_mut(&level) {
+        if let Some((current_slots, _)) = self.spell_slots.get_mut(&level) {
             if *current_slots > 0 {
                 *current_slots -= 1;
                 true
@@ -135,17 +134,22 @@ impl Spellbook {
     }
 
     pub fn restore_spell_slot(&mut self, level: u8) {
-        if let Some(current_slots) = self.current_spell_slots.get_mut(&level) {
+        if let Some((current_slots, _)) = self.spell_slots.get_mut(&level) {
             *current_slots += 1;
         } else {
             // TODO: Is it allowed to restore a slot of a higher level than the current max?
-            self.current_spell_slots.insert(level, 1);
+            self.spell_slots.insert(level, (1, 0));
         }
     }
 
     pub fn restore_all_spell_slots(&mut self) {
-        for (level, slots) in &self.max_spell_slots {
-            self.current_spell_slots.insert(*level, *slots);
+        let slots: Vec<(u8, u8)> = self
+            .spell_slots
+            .iter()
+            .map(|(level, (_, max_slots))| (*level, *max_slots))
+            .collect();
+        for (level, max_slots) in slots {
+            self.spell_slots.insert(level, (max_slots, max_slots));
         }
     }
 
@@ -155,18 +159,19 @@ impl Spellbook {
         use_current_slots: bool,
     ) -> HashMap<u8, u8> {
         let mut spell_slots = HashMap::new();
-        let max_level = self.max_spell_slots.keys().max().cloned().unwrap_or(0);
+        let max_level = self.spell_slots.keys().max().cloned().unwrap_or(0);
         if base_level > max_level {
-            return spell_slots; // No slots available for levels higher than the max
+            // No slots available for levels higher than the max
+            return spell_slots;
         }
         for level in base_level..=max_level {
-            let spell_slots_map = if use_current_slots {
-                &self.current_spell_slots
-            } else {
-                &self.max_spell_slots
-            };
-            if let Some(slots) = spell_slots_map.get(&level) {
-                spell_slots.insert(level, *slots);
+            if let Some((current_slots, max_slots)) = self.spell_slots.get(&level) {
+                let slots = if use_current_slots {
+                    *current_slots
+                } else {
+                    *max_slots
+                };
+                spell_slots.insert(level, slots);
             }
         }
         spell_slots
