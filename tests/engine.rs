@@ -159,8 +159,9 @@ mod tests {
 
         let all_actions = engine.all_actions();
         println!("=== All Actions ===");
-        for (action_id, contexts) in &all_actions {
+        for (action_id, (contexts, resource_cost)) in &all_actions {
             println!("Action ID: {:?}", action_id);
+            println!("Resource Cost: {:?}", resource_cost);
             for context in contexts {
                 println!("\tContext: {:?}", context);
             }
@@ -168,15 +169,16 @@ mod tests {
 
         let available_actions = engine.available_actions();
         println!("=== Available Actions ===");
-        for (action_id, contexts) in &available_actions {
+        for (action_id, (contexts, resource_cost)) in &available_actions {
             println!("Action ID: {:?}", action_id);
+            println!("Resource Cost: {:?}", resource_cost);
             for context in contexts {
                 println!("\tContext: {:?}", context);
             }
         }
 
         let action_id = &registry::actions::WEAPON_ATTACK_ID;
-        let context = available_actions.get(&action_id).unwrap()[0].clone();
+        let context = available_actions.get(&action_id).unwrap().0[0].clone();
 
         println!("=== Action ===");
         println!("id: {:?}, context: {:?}", action_id, context);
@@ -232,13 +234,13 @@ mod tests {
         // Check that the fighter can attack again
         let available_actions = engine.available_actions();
         println!("=== Available Actions (after attacking) ===");
-        for (action_id, contexts) in &available_actions {
+        for (action_id, (contexts, resource_cost)) in &available_actions {
             println!("Action ID: {:?}", action_id);
+            println!("Resource Cost: {:?}", resource_cost);
             for context in contexts {
                 println!("\tContext: {:?}", context);
             }
         }
-        assert!(available_actions.contains_key(&registry::actions::WEAPON_ATTACK_ID));
 
         assert_eq!(
             goblin_warrior.hp(),

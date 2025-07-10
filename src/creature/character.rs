@@ -4,7 +4,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     actions::{
-        action::{Action, ActionContext, ActionKindSnapshot, ActionProvider},
+        action::{self, Action, ActionContext, ActionKindSnapshot, ActionProvider},
         targeting::TargetingContext,
     },
     combat::damage::{
@@ -62,7 +62,7 @@ pub struct Character {
     spellbook: Spellbook,
     resources: HashMap<ResourceId, Resource>,
     effects: Vec<Effect>,
-    actions: HashMap<ActionId, Vec<ActionContext>>,
+    actions: HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)>,
     /// Actions that are currently on cooldown
     cooldowns: HashMap<ActionId, RechargeRule>,
 }
@@ -239,11 +239,15 @@ impl Character {
         }
 
         for action_id in class.actions_by_level(level, &subclass_name.name) {
-            if let Some((_, context)) = registry::actions::ACTION_REGISTRY.get(&action_id) {
+            if let Some((action, context)) = registry::actions::ACTION_REGISTRY.get(&action_id) {
+                let resource_cost = &action.resource_cost().clone();
                 self.actions
                     .entry(action_id.clone())
-                    .or_default()
-                    .push(context.clone().unwrap());
+                    .and_modify(|a: &mut (Vec<ActionContext>, HashMap<ResourceId, u8>)| {
+                        a.0.push(context.clone().unwrap());
+                        a.1.extend(resource_cost.clone());
+                    })
+                    .or_insert((vec![context.clone().unwrap()], resource_cost.clone()));
             } else {
                 panic!("Action {} not found in registry", action_id);
             }
@@ -685,7 +689,7 @@ impl Character {
 
 impl ActionProvider for Character {
     // TODO: Can we cache this?
-    fn all_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
         let mut actions = self.actions.clone();
 
         actions.extend(self.spellbook.all_actions());
@@ -695,30 +699,33 @@ impl ActionProvider for Character {
         actions
     }
 
-    fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+    fn available_actions(
+        &self,
+    ) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
         let mut actions = self.actions.clone();
 
         actions.extend(self.loadout.available_actions());
 
+        actions.extend(self.spellbook.available_actions());
+
         // Remove actions that are on cooldown or where the character does not
         // have the required resources
-        actions.retain(|action_id, action_contexts| {
+        actions.retain(|action_id, (action_contexts, resource_cost)| {
             if self.cooldowns.contains_key(action_id) {
                 // Action is on cooldown
                 return false;
             }
 
             let (action, _) = registry::actions::ACTION_REGISTRY.get(action_id).unwrap();
-            let mut resource_cost = action.resource_cost().clone();
             for action_context in action_contexts {
                 for effect in &self.effects {
-                    (effect.on_resource_cost)(self, action, action_context, &mut resource_cost);
+                    (effect.on_resource_cost)(self, action, action_context, resource_cost);
                 }
             }
 
             for (resource_id, amount) in resource_cost {
                 if let Some(resource) = self.resource(&resource_id) {
-                    if resource.current_uses() < amount {
+                    if resource.current_uses() < *amount {
                         // Not enough resources for this action
                         return false;
                     }
@@ -730,10 +737,6 @@ impl ActionProvider for Character {
 
             true
         });
-
-        // Spells don't have a concept of cooldowns, and the spellbook handles
-        // the spell slots
-        actions.extend(self.spellbook.available_actions());
 
         actions
     }

@@ -4,7 +4,7 @@ use crate::{
     actions::action::{ActionContext, ActionProvider},
     registry,
     stats::ability::Ability,
-    utils::id::{ActionId, SpellId},
+    utils::id::{ActionId, ResourceId, SpellId},
 };
 
 #[derive(Debug, Clone)]
@@ -175,7 +175,7 @@ impl Spellbook {
     fn action_map_from_slots(
         &self,
         use_current_slots: bool,
-    ) -> HashMap<ActionId, Vec<ActionContext>> {
+    ) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
         let mut actions = HashMap::new();
         for spell_id in &self.spells_by_spell_id {
             let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
@@ -185,18 +185,23 @@ impl Spellbook {
                 .iter()
                 .map(|(level, _)| ActionContext::Spell { level: *level })
                 .collect();
-            actions.insert(spell.action().id().clone(), contexts);
+            actions.insert(
+                spell.action().id().clone(),
+                (contexts, spell.action().resource_cost().clone()),
+            );
         }
         actions
     }
 }
 
 impl ActionProvider for Spellbook {
-    fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+    fn available_actions(
+        &self,
+    ) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
         self.action_map_from_slots(true)
     }
 
-    fn all_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
         self.action_map_from_slots(false)
     }
 }

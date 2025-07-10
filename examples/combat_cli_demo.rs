@@ -1,9 +1,12 @@
 extern crate nat20_rs;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use nat20_rs::{
-    actions::{action::ActionProvider, targeting::TargetingKind},
+    actions::{
+        action::{ActionContext, ActionProvider},
+        targeting::TargetingKind,
+    },
     engine::engine::CombatEngine,
     test_utils::{cli::CliChoiceProvider, fixtures},
     utils::id::ActionId,
@@ -32,36 +35,40 @@ fn main() {
 
         println!("{}", engine.current_character());
 
-        let available_actions = engine.available_actions();
+        let mut available_actions = engine.available_actions();
 
-        let mut action_ids: Vec<_> = available_actions.keys().collect();
         // The "End Turn" action is always available and needs special handling
         let end_turn_action_id = ActionId::from_str("action.end_turn");
-        action_ids.push(&end_turn_action_id);
+        available_actions.insert(
+            end_turn_action_id.clone(),
+            (vec![ActionContext::Other], HashMap::new()),
+        );
+
+        let actions_options: Vec<_> = available_actions
+            .iter()
+            .flat_map(|(action_id, (contexts, resource_costs))| {
+                contexts.iter().map(move |context| {
+                    (action_id.clone(), context.clone(), resource_costs.clone())
+                })
+            })
+            .collect();
 
         let action_index = CliChoiceProvider::select_from_list(
             "Select an action to perform:",
-            &action_ids,
-            |id| id.to_string(),
+            &actions_options,
+            |(id, context, resource_costs)| format!("{}, {:?}, {:?}", id, context, resource_costs),
         );
-        let action_id = &action_ids[action_index];
-        if *action_id == &end_turn_action_id {
+
+        let selected_action = &actions_options[action_index];
+        if selected_action.0 == end_turn_action_id {
             // End turn action
             engine.end_turn();
             continue;
         }
 
-        let contexts = &available_actions.get(action_id).unwrap();
-        let context_index = CliChoiceProvider::select_from_list(
-            "Select a context for the action:",
-            contexts,
-            |ctx| format!("{:?}", ctx),
-        );
-        let context = &contexts[context_index];
-
         let targeting_context = engine
             .current_character()
-            .targeting_context(action_id, &context);
+            .targeting_context(&selected_action.0, &selected_action.1);
 
         let participants = engine.participants();
 
@@ -106,7 +113,9 @@ fn main() {
             }
         };
 
-        let results = engine.submit_action(action_id, context, targets).unwrap();
+        let results = engine
+            .submit_action(&selected_action.0, &selected_action.1, targets)
+            .unwrap();
         for result in results {
             println!("{}", result);
         }

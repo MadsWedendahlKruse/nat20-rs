@@ -214,12 +214,14 @@ pub trait ActionProvider {
     /// Returns a collection of ALL possible actions for the character, including
     /// actions that are not currently available (e.g. on cooldown, out of resources, etc.).
     /// Each action is paired with its context, which provides additional information
-    /// about how the action can be performed (e.g. weapon type, spell level, etc.).
-    fn all_actions(&self) -> HashMap<ActionId, Vec<ActionContext>>;
+    /// about how the action can be performed (e.g. weapon type, spell level, etc.)
+    /// as well as the resource cost of the action.
+    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)>;
 
     /// Returns a collection of available actions for the character. i.e. actions
     /// that can be performed at the current time.
-    fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>>;
+    fn available_actions(&self)
+        -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)>;
 }
 
 impl ActionKind {

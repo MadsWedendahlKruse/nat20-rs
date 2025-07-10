@@ -14,7 +14,7 @@ mod tests {
             available_actions.contains_key(&action_id),
             "Fighter should have Action Surge action"
         );
-        let context = available_actions.get(&action_id).unwrap();
+        let (context, _) = available_actions.get(&action_id).unwrap();
 
         // Check that the fighter has one charge of Action Surge
         assert_eq!(
@@ -43,7 +43,7 @@ mod tests {
         let action_surge_effect = fighter
             .effects()
             .iter()
-            .find(|e| e.id == *registry::effects::ACTION_SURGE_ID);
+            .find(|e| *e.id() == *registry::effects::ACTION_SURGE_ID);
         assert!(
             action_surge_effect.is_some(),
             "Action Surge effect should be applied"
@@ -69,7 +69,7 @@ mod tests {
         let action_surge_effect = fighter
             .effects()
             .iter()
-            .find(|e| e.id == *registry::effects::ACTION_SURGE_ID);
+            .find(|e| *e.id() == *registry::effects::ACTION_SURGE_ID);
         assert!(
             action_surge_effect.is_none(),
             "Action Surge effect should be removed"

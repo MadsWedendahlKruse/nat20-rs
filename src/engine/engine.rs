@@ -4,7 +4,7 @@ use crate::{
     actions::action::{ActionContext, ActionProvider, ActionResult},
     creature::character::Character,
     stats::{d20_check::D20CheckResult, skill::Skill},
-    utils::id::{ActionId, CharacterId},
+    utils::id::{ActionId, CharacterId, ResourceId},
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -146,11 +146,13 @@ impl<'c> CombatEngine<'c> {
 }
 
 impl ActionProvider for CombatEngine<'_> {
-    fn all_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
         self.current_character().all_actions()
     }
 
-    fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+    fn available_actions(
+        &self,
+    ) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
         self.current_character().available_actions()
     }
 }

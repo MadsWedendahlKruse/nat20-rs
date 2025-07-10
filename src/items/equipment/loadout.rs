@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt};
 
 use crate::{
-    actions::action::{ActionContext, ActionProvider},
+    actions::action::{self, ActionContext, ActionProvider},
     combat::damage::AttackRollResult,
     creature::character::Character,
     items::equipment::{
@@ -9,11 +9,12 @@ use crate::{
         equipment::{EquipmentItem, EquipmentSlot, GeneralEquipmentSlot, HandSlot},
         weapon::{Weapon, WeaponProperties, WeaponType},
     },
+    registry,
     stats::{
         d20_check::D20CheckResult,
         modifier::{ModifierSet, ModifierSource},
     },
-    utils::id::ActionId,
+    utils::id::{ActionId, ResourceId},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -190,22 +191,32 @@ impl Loadout {
 }
 
 impl ActionProvider for Loadout {
-    fn all_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
         let mut actions = HashMap::new();
 
+        // TODO: There has to be a nicer way to do this
         for (weapon_type, weapon_map) in self.weapons.iter() {
             for (hand, weapon_opt) in weapon_map.iter() {
                 if let Some(weapon) = weapon_opt {
                     let weapon_actions = weapon.weapon_actions();
                     for action_id in weapon_actions {
-                        let context = ActionContext::Weapon {
-                            weapon_type: weapon_type.clone(),
-                            hand: *hand,
-                        };
-                        actions
-                            .entry(action_id.clone())
-                            .and_modify(|a: &mut Vec<_>| a.push(context.clone()))
-                            .or_insert(vec![context]);
+                        if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id)
+                        {
+                            let context = ActionContext::Weapon {
+                                weapon_type: weapon_type.clone(),
+                                hand: *hand,
+                            };
+                            let resource_cost = &action.resource_cost().clone();
+                            actions
+                                .entry(action_id.clone())
+                                .and_modify(
+                                    |a: &mut (Vec<ActionContext>, HashMap<ResourceId, u8>)| {
+                                        a.0.push(context.clone());
+                                        a.1.extend(resource_cost.clone());
+                                    },
+                                )
+                                .or_insert((vec![context], resource_cost.clone()));
+                        }
                     }
                 }
             }
@@ -214,7 +225,9 @@ impl ActionProvider for Loadout {
         actions
     }
 
-    fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+    fn available_actions(
+        &self,
+    ) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
         self.all_actions()
     }
 }
@@ -450,8 +463,8 @@ mod tests {
         // Both melee and ranged attacks use the same ActionId, but their
         // contexts are different
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[&registry::actions::WEAPON_ATTACK_ID].len(), 2);
-        for (action, contexts) in actions {
+        assert_eq!(actions[&registry::actions::WEAPON_ATTACK_ID].0.len(), 2);
+        for (_, (contexts, _)) in actions {
             for context in contexts {
                 match context {
                     ActionContext::Weapon { weapon_type, hand } => {
