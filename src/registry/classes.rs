@@ -64,7 +64,10 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         HashSet::from([ArmorType::Light, ArmorType::Medium, ArmorType::Heavy]),
         HashSet::from([WeaponCategory::Simple, WeaponCategory::Martial]),
         SpellcastingProgression::None,
-        HashMap::from([(3, vec![registry::effects::IMPROVED_CRITICAL_ID.clone()])]),
+        HashMap::from([
+            (3, vec![registry::effects::IMPROVED_CRITICAL_ID.clone()]),
+            (5, vec![registry::effects::EXTRA_ATTACK_ID.clone()]),
+        ]),
         HashMap::from([
             (
                 2,

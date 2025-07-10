@@ -485,7 +485,8 @@ mod tests {
         );
 
         let mitigation_result = resistances.apply(&damage_roll_result);
-        // 7 / 2 + 2 = 3.5 + 2 = 5.5 -> round down to 5
+        // 7 / 2 + 2 = 3.5
+        // 3.5 + 2 = 5.5 -> round down to 5
         assert_eq!(mitigation_result.total, 5);
         println!("{}", mitigation_result);
     }
@@ -567,7 +568,7 @@ mod tests {
         );
 
         let mitigation_result = resistances.apply(&damage_roll_result);
-        // Slashing: 7 - 3 / 2 = 2
+        // Slashing: (7 - 3) / 2 = 2
         // 2 Slashing + 2 Fire = 4
         assert_eq!(mitigation_result.total, 4);
         println!("{}", mitigation_result);

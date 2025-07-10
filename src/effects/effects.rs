@@ -1,13 +1,15 @@
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use crate::{
+    actions::action::{Action, ActionContext},
     combat::damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
     creature::character::Character,
     effects::hooks::{
-        ArmorClassHook, AttackRollHook, AttackRollResultHook, DamageRollHook, DamageRollResultHook,
+        ActionHook, ArmorClassHook, AttackRollHook, AttackRollResultHook, DamageRollHook,
+        DamageRollResultHook, ResourceCostHook,
     },
     stats::modifier::{ModifierSet, ModifierSource},
-    utils::id::EffectId,
+    utils::id::{EffectId, ResourceId},
 };
 
 use super::hooks::{EffectHook, SavingThrowHook, SkillCheckHook};
@@ -17,8 +19,10 @@ pub enum EffectDuration {
     Instant,
     Persistent,
     Temporary {
-        duration: u8,      // Number of turns the effect lasts
-        turns_elapsed: u8, // Number of turns that have passed since the effect was applied
+        /// Number of turns the effect lasts
+        duration: u8,
+        /// Number of turns that have passed since the effect was applied
+        turns_elapsed: u8,
     },
 }
 
@@ -52,6 +56,8 @@ pub struct Effect {
     pub on_armor_class: ArmorClassHook,
     pub pre_damage_roll: DamageRollHook,
     pub post_damage_roll: DamageRollResultHook,
+    pub on_action: ActionHook,
+    pub on_resource_cost: ResourceCostHook,
 }
 
 impl Effect {
@@ -73,6 +79,11 @@ impl Effect {
             pre_damage_roll: Arc::new(|_: &Character, _: &mut DamageRoll| {}) as DamageRollHook,
             post_damage_roll: Arc::new(|_: &Character, _: &mut DamageRollResult| {})
                 as DamageRollResultHook,
+            on_action: Arc::new(|_: &mut Character, _: &Action, _: &ActionContext| {})
+                as ActionHook,
+            on_resource_cost: Arc::new(
+                |_: &Character, _: &Action, _: &ActionContext, _: &mut HashMap<ResourceId, u8>| {},
+            ) as ResourceCostHook,
         }
     }
 

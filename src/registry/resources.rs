@@ -21,6 +21,8 @@ resource!(
     BONUS_ACTION,
     REACTION,
     // --- CLASS RESOURCES ---
+    // - (SHARED MARTIALS) -
+    EXTRA_ATTACK,
     // - FIGHTER -
     // Action Surge can be used twice per short rest at level 17. The easiest
     // way to model the charges is to add it as a resource

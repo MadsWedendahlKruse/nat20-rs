@@ -182,6 +182,15 @@ mod tests {
             0,
             "Expected attack to cost an action"
         );
+        assert_eq!(
+            engine
+                .current_character()
+                .resource(&registry::resources::EXTRA_ATTACK)
+                .unwrap()
+                .current_uses(),
+            1,
+            "Expected attack action to trigger Extra Attack"
+        );
         assert!(action_result.is_ok());
         let action_result = action_result.unwrap();
         assert!(

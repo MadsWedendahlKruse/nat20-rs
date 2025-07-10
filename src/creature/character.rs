@@ -230,12 +230,7 @@ impl Character {
         }
 
         for resource in class.resources_by_level(level, &subclass_name.name) {
-            self.resources
-                .entry(resource.kind().clone())
-                .and_modify(|r| {
-                    r.set_max_uses(resource.max_uses()).unwrap();
-                })
-                .or_insert(resource);
+            self.set_resource(resource);
         }
 
         for saving_throw in class.saving_throw_proficiencies {
@@ -601,6 +596,15 @@ impl Character {
         self.resources.get_mut(kind)
     }
 
+    pub fn set_resource(&mut self, resource: Resource) {
+        self.resources
+            .entry(resource.kind().clone())
+            .and_modify(|r| {
+                r.set_max_uses(resource.max_uses()).unwrap();
+            })
+            .or_insert(resource);
+    }
+
     pub fn recharge(&mut self, rest_type: &RechargeRule) {
         for resource in self.resources.values_mut() {
             resource.recharge(rest_type);
@@ -638,7 +642,7 @@ impl Character {
         num_snapshots: usize,
     ) -> Vec<ActionKindSnapshot> {
         // TODO: Handle missing action
-        let action = self
+        let mut action = self
             .find_action(action_id)
             .expect("Action not found in character's actions or registry");
         if let Some(cooldown) = action.cooldown {

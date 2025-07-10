@@ -11,6 +11,7 @@ use crate::{
     },
     creature::character::Character,
     dice::dice::{DiceSetRoll, DiceSetRollResult},
+    effects,
     items::equipment::{equipment::HandSlot, weapon::WeaponType},
     registry,
     resources::resources::{RechargeRule, ResourceError},
@@ -409,18 +410,30 @@ impl Action {
     }
 
     pub fn perform(
-        &self,
+        &mut self,
         performer: &mut Character,
         context: &ActionContext,
         num_snapshots: usize,
     ) -> Vec<ActionKindSnapshot> {
+        // TODO: Not a fan of having to clone to avoid borrowing issues, but
+        // hopefully since most of the effect just have a no-op as their
+        // on_action component it'll be cheap to clone
+
+        let on_action_effects: Vec<_> = performer
+            .effects()
+            .into_iter()
+            .map(|effect| effect.on_action.clone())
+            .collect();
+        for effect in on_action_effects {
+            (effect)(performer, self, context);
+        }
+
         // TODO: Resource might error?
         let _ = self.spend_resources(performer, context);
 
-        let snapshots = (0..num_snapshots)
+        (0..num_snapshots)
             .map(|_| self.snapshot(performer, context))
-            .collect();
-        snapshots
+            .collect()
     }
 
     fn spend_resources(
@@ -428,7 +441,12 @@ impl Action {
         performer: &mut Character,
         context: &ActionContext,
     ) -> Result<(), ResourceError> {
-        for (resource, amount) in &self.resource_cost {
+        let mut resource_cost = self.resource_cost.clone();
+        for effects in performer.effects() {
+            (effects.on_resource_cost)(performer, self, context, &mut resource_cost);
+        }
+
+        for (resource, amount) in &resource_cost {
             if let Some(resource) = performer.resource_mut(resource) {
                 resource.spend(*amount)?;
             }
@@ -461,6 +479,10 @@ impl Action {
 
     pub fn resource_cost(&self) -> &HashMap<ResourceId, u8> {
         &self.resource_cost
+    }
+
+    pub fn resource_cost_mut(&mut self) -> &mut HashMap<ResourceId, u8> {
+        &mut self.resource_cost
     }
 }
 

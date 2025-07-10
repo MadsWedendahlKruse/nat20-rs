@@ -4,10 +4,12 @@ use std::{
 };
 
 use crate::{
+    actions::action::ActionContext,
     combat::damage::DamageSource,
     effects::effects::{Effect, EffectDuration},
     items::equipment::{armor::ArmorType, weapon::WeaponType},
     registry,
+    resources::resources::{RechargeRule, Resource},
     stats::modifier::ModifierSource,
     utils::id::EffectId,
 };
@@ -15,6 +17,7 @@ use crate::{
 pub static EFFECT_REGISTRY: LazyLock<HashMap<EffectId, Effect>> = LazyLock::new(|| {
     HashMap::from([
         (ACTION_SURGE_ID.clone(), ACTION_SURGE.to_owned()),
+        (EXTRA_ATTACK_ID.clone(), EXTRA_ATTACK.to_owned()),
         (
             FIGHTING_STYLE_ARCHERY_ID.clone(),
             FIGHTING_STYLE_ARCHERY.to_owned(),
@@ -54,6 +57,107 @@ static ACTION_SURGE: LazyLock<Effect> = LazyLock::new(|| {
     });
     effect
 });
+
+pub static EXTRA_ATTACK_ID: LazyLock<EffectId> =
+    LazyLock::new(|| EffectId::from_str("effect.extra_attack"));
+
+static EXTRA_ATTACK: LazyLock<Effect> =
+    LazyLock::new(|| extra_attack_effect(EXTRA_ATTACK_ID.clone(), 2));
+
+fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
+    let mut effect = Effect::new(
+        effect_id.clone(),
+        ModifierSource::ClassFeature(effect_id.to_string()),
+        EffectDuration::Persistent,
+    );
+
+    // TODO: The logic seems sound, but we need to apply the hook when finding
+    // the resource cost of the action, not when it's performed!
+    // BUT we also need to give the "Extra Attack" resource when the Action is
+    // performed, so we need to do both??
+
+    effect.on_action = Arc::new({
+        // This closure captures the `charges` variable, so we can use it in the
+        // closure without having to pass it as an argument.
+        let charges = charges;
+        move |performer, action, context| {
+            // Check that this is only applied for weapon attacks
+            // TODO: Is this logic sufficient? (And is it the nicest way to do this?)
+            if !matches!(
+                context,
+                ActionContext::Weapon {
+                    weapon_type: _,
+                    hand: _
+                }
+            ) {
+                return;
+            }
+
+            // If the Action doesn't cost an "Action" this effect is not relevant
+            if !action
+                .resource_cost()
+                .contains_key(&registry::resources::ACTION)
+            {
+                return;
+            }
+
+            // The first time the character triggers Extra Attack their action is
+            // consumed and they're given a number of charges of an "Extra Attack"
+            // resource.
+            // Check if the character has any of those charges (i.e. they've already
+            // triggered Extra Attack). Otherwise, use an action and give them the
+            // "Extra Attack" charges.
+            if let Some(extra_attack) = performer.resource(&registry::resources::EXTRA_ATTACK) {
+                if extra_attack.max_uses() > 0 {
+                    return;
+                }
+            }
+
+            // Consume the action and give the "Extra Attack" charges
+            // TODO: Assume the action has been validated?
+            let _ = performer
+                .resource_mut(&registry::resources::ACTION)
+                .unwrap()
+                .spend(1);
+            performer.set_resource(
+                Resource::new(
+                    registry::resources::EXTRA_ATTACK.clone(),
+                    charges,
+                    RechargeRule::Never,
+                )
+                .unwrap(),
+            )
+        }
+    });
+
+    effect.on_resource_cost = Arc::new(|character, _, context, resource_cost| {
+        // Check that this is only applied for weapon attacks
+        if !matches!(
+            context,
+            ActionContext::Weapon {
+                weapon_type: _,
+                hand: _
+            }
+        ) {
+            return;
+        }
+
+        // If the Action doesn't cost an "Action" this effect is not relevant
+        if !resource_cost.contains_key(&registry::resources::ACTION) {
+            return;
+        }
+
+        // If the character has any "Extra Attack" charges, we use those instead
+        if let Some(extra_attack) = character.resource(&registry::resources::EXTRA_ATTACK) {
+            if extra_attack.max_uses() > 0 {
+                resource_cost.remove(&registry::resources::ACTION);
+                resource_cost.insert(registry::resources::EXTRA_ATTACK.clone(), 1);
+            }
+        }
+    });
+
+    effect
+}
 
 // TODO: In the SRD fighting styles are a specific type of Feat, but I don't think that's necessary
 
