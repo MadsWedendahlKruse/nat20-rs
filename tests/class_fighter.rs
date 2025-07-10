@@ -8,7 +8,7 @@ mod tests {
         let mut fighter = fixtures::creatures::heroes::fighter();
 
         // Check that the fighter has the Action Surge action
-        let available_actions = fighter.actions();
+        let available_actions = fighter.all_actions();
         let action_id = registry::actions::ACTION_SURGE_ID.clone();
         assert!(
             available_actions.contains_key(&action_id),
@@ -60,7 +60,7 @@ mod tests {
         );
 
         // Check that the Action Surge action is on cooldown
-        assert!(fighter.is_on_cooldown(&action_id).unwrap().0);
+        assert!(fighter.is_on_cooldown(&action_id).is_some());
 
         // Simulate the start of the turn to remove the Action Surge effect
         fighter.on_turn_start();

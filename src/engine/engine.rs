@@ -73,10 +73,6 @@ impl<'c> CombatEngine<'c> {
             .unwrap()
     }
 
-    pub fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
-        self.current_character().actions()
-    }
-
     pub fn participant(&self, id: &CharacterId) -> Option<&Character> {
         self.participants.get(id).map(|c| &**c)
     }
@@ -142,5 +138,15 @@ impl<'c> CombatEngine<'c> {
     fn start_turn(&mut self) {
         self.current_character_mut().on_turn_start();
         self.state = CombatState::AwaitingAction;
+    }
+}
+
+impl ActionProvider for CombatEngine<'_> {
+    fn all_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+        self.current_character().all_actions()
+    }
+
+    fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+        self.current_character().available_actions()
     }
 }

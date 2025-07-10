@@ -190,7 +190,7 @@ impl Loadout {
 }
 
 impl ActionProvider for Loadout {
-    fn actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+    fn all_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
         let mut actions = HashMap::new();
 
         for (weapon_type, weapon_map) in self.weapons.iter() {
@@ -212,6 +212,10 @@ impl ActionProvider for Loadout {
         }
 
         actions
+    }
+
+    fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+        self.all_actions()
     }
 }
 
@@ -424,7 +428,7 @@ mod tests {
     fn available_actions_no_weapons() {
         // TODO: Should return unarmed attack
         let loadout = Loadout::new();
-        let actions = loadout.actions();
+        let actions = loadout.all_actions();
         assert_eq!(actions.len(), 0);
     }
 
@@ -438,7 +442,7 @@ mod tests {
         let weapon2 = fixtures::weapons::longbow();
         loadout.equip_weapon(weapon2, HandSlot::Main).unwrap();
 
-        let actions = loadout.actions();
+        let actions = loadout.all_actions();
         for action in &actions {
             println!("{:?}", action);
         }

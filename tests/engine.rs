@@ -5,7 +5,7 @@ mod tests {
 
     use nat20_rs::{
         actions::{
-            action::{ActionContext, ActionKindResult},
+            action::{ActionContext, ActionKindResult, ActionProvider},
             targeting::TargetingKind,
         },
         effects::effects::{Effect, EffectDuration},
@@ -141,6 +141,7 @@ mod tests {
             ModifierSource::Custom("Test Effect".to_string()),
             EffectDuration::Persistent,
         );
+        // This effect will add +20 to the attack roll, ensuring it hits
         test_effect.pre_attack_roll = Arc::new(|_, attack_roll| {
             attack_roll
                 .d20_check
@@ -156,9 +157,26 @@ mod tests {
         // Check that hero is the current character (he has massive initiative for this test)
         assert!(engine.current_character().id() == hero_id);
 
-        let actions = engine.available_actions();
+        let all_actions = engine.all_actions();
+        println!("=== All Actions ===");
+        for (action_id, contexts) in &all_actions {
+            println!("Action ID: {:?}", action_id);
+            for context in contexts {
+                println!("\tContext: {:?}", context);
+            }
+        }
+
+        let available_actions = engine.available_actions();
+        println!("=== Available Actions ===");
+        for (action_id, contexts) in &available_actions {
+            println!("Action ID: {:?}", action_id);
+            for context in contexts {
+                println!("\tContext: {:?}", context);
+            }
+        }
+
         let action_id = &registry::actions::WEAPON_ATTACK_ID;
-        let context = actions.get(&action_id).unwrap()[0].clone();
+        let context = available_actions.get(&action_id).unwrap()[0].clone();
 
         println!("=== Action ===");
         println!("id: {:?}, context: {:?}", action_id, context);
@@ -191,6 +209,7 @@ mod tests {
             1,
             "Expected attack action to trigger Extra Attack"
         );
+
         assert!(action_result.is_ok());
         let action_result = action_result.unwrap();
         assert!(
@@ -209,6 +228,17 @@ mod tests {
                 action_result
             ),
         };
+
+        // Check that the fighter can attack again
+        let available_actions = engine.available_actions();
+        println!("=== Available Actions (after attacking) ===");
+        for (action_id, contexts) in &available_actions {
+            println!("Action ID: {:?}", action_id);
+            for context in contexts {
+                println!("\tContext: {:?}", context);
+            }
+        }
+        assert!(available_actions.contains_key(&registry::actions::WEAPON_ATTACK_ID));
 
         assert_eq!(
             goblin_warrior.hp(),

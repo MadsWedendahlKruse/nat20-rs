@@ -64,7 +64,7 @@ pub struct Character {
     effects: Vec<Effect>,
     actions: HashMap<ActionId, Vec<ActionContext>>,
     /// Actions that are currently on cooldown
-    cooldowns: HashMap<ActionId, (bool, RechargeRule)>,
+    cooldowns: HashMap<ActionId, RechargeRule>,
 }
 
 impl Character {
@@ -243,7 +243,7 @@ impl Character {
                 self.actions
                     .entry(action_id.clone())
                     .or_default()
-                    .push(context.clone());
+                    .push(context.clone().unwrap());
             } else {
                 panic!("Action {} not found in registry", action_id);
             }
@@ -610,9 +610,8 @@ impl Character {
             resource.recharge(rest_type);
         }
 
-        self.cooldowns.retain(|_, (is_on_cooldown, recharge_rule)| {
-            !recharge_rule.is_recharged_by(rest_type) && *is_on_cooldown
-        });
+        self.cooldowns
+            .retain(|_, recharge_rule| !recharge_rule.is_recharged_by(rest_type));
     }
 
     pub fn on_turn_start(&mut self) {
@@ -626,7 +625,7 @@ impl Character {
         let expired_effects: Vec<_> = self
             .effects
             .iter()
-            .filter(|e| e.is_expired())
+            .filter(|effect| effect.is_expired())
             .cloned()
             .collect();
         for effect in &expired_effects {
@@ -646,7 +645,7 @@ impl Character {
             .find_action(action_id)
             .expect("Action not found in character's actions or registry");
         if let Some(cooldown) = action.cooldown {
-            self.cooldowns.insert(action_id.clone(), (true, cooldown));
+            self.cooldowns.insert(action_id.clone(), cooldown);
         }
         action.perform(self, &context, num_snapshots)
     }
@@ -676,23 +675,62 @@ impl Character {
         None
     }
 
-    pub fn is_on_cooldown(&self, action_id: &ActionId) -> Option<(bool, &RechargeRule)> {
-        if let Some((_, recharge_rule)) = self.cooldowns.get(action_id) {
-            Some((true, recharge_rule))
-        } else {
-            None
-        }
+    pub fn is_on_cooldown(&self, action_id: &ActionId) -> Option<&RechargeRule> {
+        self.cooldowns.get(action_id)
     }
 }
 
 impl ActionProvider for Character {
     // TODO: Can we cache this?
-    fn actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+    fn all_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
         let mut actions = self.actions.clone();
 
-        actions.extend(self.spellbook.actions());
+        actions.extend(self.spellbook.all_actions());
 
-        actions.extend(self.loadout.actions());
+        actions.extend(self.loadout.all_actions());
+
+        actions
+    }
+
+    fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+        let mut actions = self.actions.clone();
+
+        actions.extend(self.loadout.available_actions());
+
+        // Remove actions that are on cooldown or where the character does not
+        // have the required resources
+        actions.retain(|action_id, action_contexts| {
+            if self.cooldowns.contains_key(action_id) {
+                // Action is on cooldown
+                return false;
+            }
+
+            let (action, _) = registry::actions::ACTION_REGISTRY.get(action_id).unwrap();
+            let mut resource_cost = action.resource_cost().clone();
+            for action_context in action_contexts {
+                for effect in &self.effects {
+                    (effect.on_resource_cost)(self, action, action_context, &mut resource_cost);
+                }
+            }
+
+            for (resource_id, amount) in resource_cost {
+                if let Some(resource) = self.resource(&resource_id) {
+                    if resource.current_uses() < amount {
+                        // Not enough resources for this action
+                        return false;
+                    }
+                } else {
+                    // Resource not found
+                    return false;
+                }
+            }
+
+            true
+        });
+
+        // Spells don't have a concept of cooldowns, and the spellbook handles
+        // the spell slots
+        actions.extend(self.spellbook.available_actions());
 
         actions
     }

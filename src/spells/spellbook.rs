@@ -149,28 +149,38 @@ impl Spellbook {
         }
     }
 
-    fn available_spell_slots_for_base_level(&self, base_level: u8) -> HashMap<u8, u8> {
+    fn spell_slots_for_base_level(
+        &self,
+        base_level: u8,
+        use_current_slots: bool,
+    ) -> HashMap<u8, u8> {
         let mut spell_slots = HashMap::new();
         let max_level = self.max_spell_slots.keys().max().cloned().unwrap_or(0);
         if base_level > max_level {
             return spell_slots; // No slots available for levels higher than the max
         }
         for level in base_level..=max_level {
-            if let Some(slots) = self.current_spell_slots.get(&level) {
+            let spell_slots_map = if use_current_slots {
+                &self.current_spell_slots
+            } else {
+                &self.max_spell_slots
+            };
+            if let Some(slots) = spell_slots_map.get(&level) {
                 spell_slots.insert(level, *slots);
             }
         }
         spell_slots
     }
-}
 
-impl ActionProvider for Spellbook {
-    fn actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+    fn action_map_from_slots(
+        &self,
+        use_current_slots: bool,
+    ) -> HashMap<ActionId, Vec<ActionContext>> {
         let mut actions = HashMap::new();
         for spell_id in &self.spells_by_spell_id {
             let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
-            let available_slots: HashMap<u8, u8> =
-                self.available_spell_slots_for_base_level(spell.base_level());
+            let available_slots =
+                self.spell_slots_for_base_level(spell.base_level(), use_current_slots);
             let contexts = available_slots
                 .iter()
                 .map(|(level, _)| ActionContext::Spell { level: *level })
@@ -178,5 +188,15 @@ impl ActionProvider for Spellbook {
             actions.insert(spell.action().id().clone(), contexts);
         }
         actions
+    }
+}
+
+impl ActionProvider for Spellbook {
+    fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+        self.action_map_from_slots(true)
+    }
+
+    fn all_actions(&self) -> HashMap<ActionId, Vec<ActionContext>> {
+        self.action_map_from_slots(false)
     }
 }

@@ -10,7 +10,7 @@ fn resource_key(name: &str) -> ResourceId {
 macro_rules! resource {
     ($($name:ident),* $(,)?) => {
         $(
-            pub static $name: LazyLock<ResourceId> = LazyLock::new(|| resource_key(&stringify!($name).to_lowercase().replace('_', ".")));
+            pub static $name: LazyLock<ResourceId> = LazyLock::new(|| resource_key(&stringify!($name).to_lowercase()));
         )*
     };
 }

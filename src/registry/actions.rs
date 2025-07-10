@@ -15,22 +15,18 @@ use crate::{
     utils::id::{ActionId, ResourceId},
 };
 
-pub static ACTION_REGISTRY: LazyLock<HashMap<ActionId, (Action, ActionContext)>> =
+pub static ACTION_REGISTRY: LazyLock<HashMap<ActionId, (Action, Option<ActionContext>)>> =
     LazyLock::new(|| {
         HashMap::from([
             (ACTION_SURGE_ID.clone(), ACTION_SURGE.clone()),
-            (
-                WEAPON_ATTACK_ID.clone(),
-                // TODO: What to do with actions that don't have a fixed context?
-                (WEAPON_ATTACK.clone(), ActionContext::Other),
-            ),
+            (WEAPON_ATTACK_ID.clone(), (WEAPON_ATTACK.clone(), None)),
         ])
     });
 
 pub static ACTION_SURGE_ID: LazyLock<ActionId> =
     LazyLock::new(|| ActionId::from_str("action.fighter.action_surge"));
 
-static ACTION_SURGE: LazyLock<(Action, ActionContext)> = LazyLock::new(|| {
+static ACTION_SURGE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(|| {
     (
         Action {
             id: ACTION_SURGE_ID.clone(),
@@ -41,7 +37,7 @@ static ACTION_SURGE: LazyLock<(Action, ActionContext)> = LazyLock::new(|| {
             resource_cost: HashMap::from([(registry::resources::ACTION_SURGE.clone(), 1)]),
             cooldown: Some(RechargeRule::OnTurn),
         },
-        ActionContext::Other,
+        Some(ActionContext::Other),
     )
 });
 

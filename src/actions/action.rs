@@ -206,24 +206,20 @@ pub struct ActionResult {
     pub result: ActionKindResult,
 }
 
-/// Represents a "ready-to-go" action that can be performed by a character. The
-/// ID is used to look up the action in the action registry, and the context can
-/// then be used to perform the action with the appropriate parameters.
-// #[derive(Debug, Clone, PartialEq, Eq)]
-// pub struct ActionReference {
-//     pub id: ActionId,
-//     pub context: ActionContext,
-// }
-
 /// Represents a provider of actions, which can be used to retrieve available actions
 /// from a character or other entity that can perform actions.
 pub trait ActionProvider {
     // TODO: Should probably find a way to avoid rebuilding the action collection every time.
 
-    /// Returns a collection of available actions for the character.
+    /// Returns a collection of ALL possible actions for the character, including
+    /// actions that are not currently available (e.g. on cooldown, out of resources, etc.).
     /// Each action is paired with its context, which provides additional information
     /// about how the action can be performed (e.g. weapon type, spell level, etc.).
-    fn actions(&self) -> HashMap<ActionId, Vec<ActionContext>>;
+    fn all_actions(&self) -> HashMap<ActionId, Vec<ActionContext>>;
+
+    /// Returns a collection of available actions for the character. i.e. actions
+    /// that can be performed at the current time.
+    fn available_actions(&self) -> HashMap<ActionId, Vec<ActionContext>>;
 }
 
 impl ActionKind {
