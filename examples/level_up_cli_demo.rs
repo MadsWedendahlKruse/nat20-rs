@@ -1,5 +1,5 @@
 extern crate nat20_rs;
-use nat20_rs::creature::{character::Character, level_up::CliChoiceProvider};
+use nat20_rs::{creature::character::Character, test_utils::cli::CliChoiceProvider};
 
 pub fn main() {
     let mut character = Character::new("John Hero");

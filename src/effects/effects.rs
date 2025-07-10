@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    sync::Arc,
+};
 
 use crate::{
     actions::action::{Action, ActionContext},
@@ -35,9 +39,28 @@ impl EffectDuration {
     }
 }
 
+impl Display for EffectDuration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EffectDuration::Instant => write!(f, "Instant"),
+            EffectDuration::Persistent => write!(f, "Persistent"),
+            EffectDuration::Temporary {
+                duration,
+                turns_elapsed,
+            } => {
+                write!(
+                    f,
+                    "Temporary ({} turns, {} elapsed)",
+                    duration, turns_elapsed
+                )
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Effect {
-    pub id: EffectId,
+    id: EffectId,
     source: ModifierSource,
     duration: EffectDuration,
     // TODO: description?
@@ -106,6 +129,18 @@ impl Effect {
                 turns_elapsed,
             } => turns_elapsed >= duration,
         }
+    }
+
+    pub fn id(&self) -> &EffectId {
+        &self.id
+    }
+
+    pub fn source(&self) -> &ModifierSource {
+        &self.source
+    }
+
+    pub fn duration(&self) -> &EffectDuration {
+        &self.duration
     }
 }
 

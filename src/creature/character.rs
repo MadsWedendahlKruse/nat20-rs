@@ -230,7 +230,7 @@ impl Character {
         }
 
         for resource in class.resources_by_level(level, &subclass_name.name) {
-            self.set_resource(resource);
+            self.set_resource(resource, false);
         }
 
         for saving_throw in class.saving_throw_proficiencies {
@@ -596,11 +596,14 @@ impl Character {
         self.resources.get_mut(kind)
     }
 
-    pub fn set_resource(&mut self, resource: Resource) {
+    pub fn set_resource(&mut self, resource: Resource, set_current_uses: bool) {
         self.resources
             .entry(resource.kind().clone())
             .and_modify(|r| {
                 r.set_max_uses(resource.max_uses()).unwrap();
+                if set_current_uses {
+                    r.set_current_uses(resource.current_uses()).unwrap();
+                }
             })
             .or_insert(resource);
     }
@@ -804,6 +807,22 @@ impl fmt::Display for Character {
         }
 
         write!(f, "{}", self.loadout)?;
+
+        write!(f, "Resources:\n")?;
+        for (resource_id, resource) in &self.resources {
+            write!(
+                f,
+                "\t{}: ({}/{})\n",
+                resource_id,
+                resource.current_uses(),
+                resource.max_uses()
+            )?;
+        }
+
+        write!(f, "Effects:\n")?;
+        for effect in &self.effects {
+            write!(f, "\t{} ({})\n", effect.id(), effect.duration(),)?;
+        }
 
         Ok(())
     }

@@ -108,7 +108,7 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
             // triggered Extra Attack). Otherwise, use an action and give them the
             // "Extra Attack" charges.
             if let Some(extra_attack) = performer.resource(&registry::resources::EXTRA_ATTACK) {
-                if extra_attack.max_uses() > 0 {
+                if extra_attack.current_uses() > 0 {
                     return;
                 }
             }
@@ -126,6 +126,7 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
                     RechargeRule::Never,
                 )
                 .unwrap(),
+                true, // Set current uses to max uses
             )
         }
     });
@@ -149,7 +150,7 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
 
         // If the character has any "Extra Attack" charges, we use those instead
         if let Some(extra_attack) = character.resource(&registry::resources::EXTRA_ATTACK) {
-            if extra_attack.max_uses() > 0 {
+            if extra_attack.current_uses() > 0 {
                 resource_cost.remove(&registry::resources::ACTION);
                 resource_cost.insert(registry::resources::EXTRA_ATTACK.clone(), 1);
             }

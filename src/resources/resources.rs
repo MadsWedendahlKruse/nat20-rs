@@ -138,6 +138,18 @@ impl Resource {
         Ok(())
     }
 
+    pub fn set_current_uses(&mut self, current_uses: u8) -> Result<(), ResourceError> {
+        if current_uses > self.max_uses {
+            return Err(ResourceError::TooManyCurrentUses {
+                kind: self.kind.clone(),
+                current_uses,
+                max_uses: self.max_uses,
+            });
+        }
+        self.current_uses = current_uses;
+        Ok(())
+    }
+
     pub fn max_uses(&self) -> u8 {
         self.max_uses
     }
@@ -167,6 +179,11 @@ pub enum ResourceError {
     NegativeMaxUses {
         kind: ResourceId,
         reduction: u8,
+        max_uses: u8,
+    },
+    TooManyCurrentUses {
+        kind: ResourceId,
+        current_uses: u8,
         max_uses: u8,
     },
 }

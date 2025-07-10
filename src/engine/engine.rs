@@ -139,6 +139,10 @@ impl<'c> CombatEngine<'c> {
         self.current_character_mut().on_turn_start();
         self.state = CombatState::AwaitingAction;
     }
+
+    pub fn round(&self) -> usize {
+        self.round
+    }
 }
 
 impl ActionProvider for CombatEngine<'_> {
