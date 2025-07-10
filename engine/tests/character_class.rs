@@ -65,9 +65,11 @@ mod tests {
             &registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID,
             &registry::effects::IMPROVED_CRITICAL_ID,
         ] {
-            assert!(character
-                .effects()
-                .contains(&registry::effects::EFFECT_REGISTRY.get(&effect_id).unwrap()));
+            assert!(
+                character
+                    .effects()
+                    .contains(&registry::effects::EFFECT_REGISTRY.get(&effect_id).unwrap())
+            );
         }
 
         for skill in [Skill::Athletics, Skill::Perception] {

@@ -64,12 +64,14 @@ mod tests {
             damage_roll_result.total
         );
         // Check that the damage roll has a dex modifier
-        assert!(damage_roll
-            .primary
-            .dice_roll
-            .modifiers
-            .get(&ModifierSource::Ability(Ability::Dexterity))
-            .is_some());
+        assert!(
+            damage_roll
+                .primary
+                .dice_roll
+                .modifiers
+                .get(&ModifierSource::Ability(Ability::Dexterity))
+                .is_some()
+        );
     }
 
     #[test]
@@ -104,9 +106,11 @@ mod tests {
         let unequipped_weapons = character.equip_weapon(trident, HandSlot::Main).unwrap();
         // Check that nothing was unequipped and the character has a weapon in their hand
         assert_eq!(unequipped_weapons.len(), 0);
-        assert!(character
-            .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main));
+        assert!(
+            character
+                .loadout()
+                .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
+        );
 
         let trident = character
             .loadout()
@@ -138,9 +142,11 @@ mod tests {
         let unequipped_weapons = character.equip_weapon(dagger, HandSlot::Off).unwrap();
         // Check that nothing was unequipped and the character has a weapon in their hand
         assert_eq!(unequipped_weapons.len(), 0);
-        assert!(character
-            .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off));
+        assert!(
+            character
+                .loadout()
+                .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off)
+        );
 
         let trident = character
             .loadout()
@@ -157,13 +163,17 @@ mod tests {
             .unwrap();
         // Check that the dagger was unequipped
         assert!(unequipped_weapon.name() == "Dagger");
-        assert!(!character
-            .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off));
+        assert!(
+            !character
+                .loadout()
+                .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off)
+        );
         // Check that the character still has the trident in their main hand
-        assert!(character
-            .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main));
+        assert!(
+            character
+                .loadout()
+                .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
+        );
         // Check that the trident is still using the two handed dice set
         let trident = character
             .loadout()
@@ -222,12 +232,16 @@ mod tests {
         assert_eq!(unequipped_weapons.len(), 0);
         let unequipped_weapons = character.equip_weapon(trident, HandSlot::Main).unwrap();
         assert_eq!(unequipped_weapons.len(), 0);
-        assert!(character
-            .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main));
-        assert!(character
-            .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off));
+        assert!(
+            character
+                .loadout()
+                .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
+        );
+        assert!(
+            character
+                .loadout()
+                .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off)
+        );
 
         // Equip a two-handed weapon (Greatsword) in the main hand
         let greatsword = Weapon::new(
@@ -249,13 +263,17 @@ mod tests {
         let unequipped_weapons = character.equip_weapon(greatsword, HandSlot::Main).unwrap();
         // Check that both weapons were unequipped
         assert_eq!(unequipped_weapons.len(), 2);
-        assert!(character
-            .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main));
+        assert!(
+            character
+                .loadout()
+                .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
+        );
         // Off-hand should be empty
-        assert!(!character
-            .loadout()
-            .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off));
+        assert!(
+            !character
+                .loadout()
+                .has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off)
+        );
     }
 
     #[test]
@@ -289,23 +307,29 @@ mod tests {
 
         // Check that the attack roll uses Dexterity modifier
         let attack_roll = weapon.attack_roll(&mut character);
-        assert!(attack_roll
-            .d20_check
-            .modifiers()
-            .get(&ModifierSource::Ability(Ability::Dexterity))
-            .is_some());
+        assert!(
+            attack_roll
+                .d20_check
+                .modifiers()
+                .get(&ModifierSource::Ability(Ability::Dexterity))
+                .is_some()
+        );
         // Check that the attack roll does not have a proficiency modifier
-        assert!(attack_roll
-            .d20_check
-            .modifiers()
-            .get(&ModifierSource::Proficiency(Proficiency::Proficient))
-            .is_none());
+        assert!(
+            attack_roll
+                .d20_check
+                .modifiers()
+                .get(&ModifierSource::Proficiency(Proficiency::Proficient))
+                .is_none()
+        );
         // Check that the attack roll does not have an enchantment modifier
-        assert!(attack_roll
-            .d20_check
-            .modifiers()
-            .get(&ModifierSource::Item("Enchantment".to_string()))
-            .is_none());
+        assert!(
+            attack_roll
+                .d20_check
+                .modifiers()
+                .get(&ModifierSource::Item("Enchantment".to_string()))
+                .is_none()
+        );
         println!("{:?}", attack_roll);
     }
 }

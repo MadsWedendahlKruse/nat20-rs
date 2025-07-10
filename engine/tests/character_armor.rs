@@ -1,13 +1,20 @@
 extern crate nat20_rs;
 
 mod tests {
-    use nat20_rs::creature::character::*;
-    use nat20_rs::items::equipment::armor::Armor;
-    use nat20_rs::items::equipment::equipment::EquipmentItem;
-    use nat20_rs::items::equipment::equipment::EquipmentType;
-    use nat20_rs::items::item::ItemRarity;
-    use nat20_rs::stats::ability::*;
-    use nat20_rs::stats::modifier::*;
+    use nat20_rs::{
+        creature::character::Character,
+        items::{
+            equipment::{
+                armor::Armor,
+                equipment::{EquipmentItem, EquipmentType},
+            },
+            item::ItemRarity,
+        },
+        stats::{
+            ability::{Ability, AbilityScore},
+            modifier::ModifierSource,
+        },
+    };
 
     #[test]
     fn character_armor_class_no_dex() {
