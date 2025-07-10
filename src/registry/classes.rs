@@ -66,6 +66,7 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         SpellcastingProgression::None,
         HashMap::from([(5, vec![registry::effects::EXTRA_ATTACK_ID.clone()])]),
         HashMap::from([
+            (1, vec![second_wind(2)]),
             (
                 2,
                 vec![Resource::new(
@@ -75,6 +76,8 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
                 )
                 .unwrap()],
             ),
+            (4, vec![second_wind(3)]),
+            (10, vec![second_wind(4)]),
             (
                 17,
                 vec![Resource::new(
@@ -93,9 +96,21 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
                 registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
             ])],
         )]),
-        HashMap::from([(2, vec![registry::actions::ACTION_SURGE_ID.clone()])]),
+        HashMap::from([
+            (1, vec![registry::actions::SECOND_WIND_ID.clone()]),
+            (2, vec![registry::actions::ACTION_SURGE_ID.clone()]),
+        ]),
     )
 });
+
+fn second_wind(charges: u8) -> Resource {
+    Resource::new(
+        registry::resources::SECOND_WIND.clone(),
+        charges,
+        RechargeRule::OnShortRest,
+    )
+    .unwrap()
+}
 
 static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
     name: SubclassName {

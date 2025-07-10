@@ -1,7 +1,14 @@
 extern crate nat20_rs;
 
 mod tests {
-    use nat20_rs::{actions::action::ActionProvider, registry, test_utils::fixtures};
+    use nat20_rs::{
+        actions::action::{ActionKindSnapshot, ActionProvider},
+        combat::damage::{DamageComponentResult, DamageRollResult, DamageSource, DamageType},
+        dice::dice::{DiceSetRollResult, DieSize},
+        registry,
+        stats::modifier::ModifierSet,
+        test_utils::fixtures,
+    };
 
     #[test]
     fn fighter_action_surge() {
@@ -94,5 +101,61 @@ mod tests {
                 .current_uses(),
             0
         );
+    }
+
+    #[test]
+    fn fighter_second_wind() {
+        let mut fighter = fixtures::creatures::heroes::fighter();
+
+        // Check that the fighter has the Second Wind action
+        let available_actions = fighter.all_actions();
+        let action_id = registry::actions::SECOND_WIND_ID.clone();
+        assert!(
+            available_actions.contains_key(&action_id),
+            "Fighter should have Second Wind action"
+        );
+        let (context, _) = available_actions.get(&action_id).unwrap();
+
+        // Check that the fighter has two charges of Second Wind
+        assert_eq!(
+            fighter
+                .resources()
+                .get(&registry::resources::SECOND_WIND)
+                .unwrap()
+                .current_uses(),
+            2
+        );
+
+        // Let the fighter take some damage
+        let damage_source = ActionKindSnapshot::UnconditionalDamage {
+            damage_roll: DamageRollResult {
+                label: "Test Damage".to_string(),
+                components: vec![DamageComponentResult {
+                    result: DiceSetRollResult {
+                        label: "Test Damage".to_string(),
+                        die_size: DieSize::D10,
+                        rolls: vec![3, 4],
+                        modifiers: ModifierSet::new(),
+                        subtotal: 7,
+                    },
+                    damage_type: DamageType::Force,
+                }],
+                total: 10,
+                source: DamageSource::Spell,
+            },
+        };
+        fighter.take_damage(&damage_source);
+
+        // Check that the fighter's HP is reduced
+        assert!(fighter.hp() < fighter.max_hp());
+
+        let prev_hp = fighter.hp();
+
+        let snapshots = fighter.perform_action(&action_id, &context[0], 1);
+        let result = snapshots[0].apply_to_character(&mut fighter);
+        println!("Second Wind Result: {:?}", result);
+
+        // Check that the Fighters HP is increased by the Second Wind healing
+        assert!(fighter.hp() > prev_hp);
     }
 }

@@ -9,17 +9,20 @@ use crate::{
         targeting::{TargetType, TargetingContext, TargetingKind},
     },
     combat::damage::{AttackRoll, DamageRoll},
-    creature::character::Character,
+    creature::{character::Character, classes::class::ClassName},
+    dice::dice::{DiceSet, DiceSetRoll, DieSize},
     registry,
     resources::resources::RechargeRule,
+    stats::modifier::{ModifierSet, ModifierSource},
     utils::id::{ActionId, ResourceId},
 };
 
 pub static ACTION_REGISTRY: LazyLock<HashMap<ActionId, (Action, Option<ActionContext>)>> =
     LazyLock::new(|| {
         HashMap::from([
-            (ACTION_SURGE_ID.clone(), ACTION_SURGE.clone()),
-            (WEAPON_ATTACK_ID.clone(), (WEAPON_ATTACK.clone(), None)),
+            (ACTION_SURGE_ID.clone(), ACTION_SURGE.to_owned()),
+            (SECOND_WIND_ID.clone(), SECOND_WIND.to_owned()),
+            (WEAPON_ATTACK_ID.clone(), (WEAPON_ATTACK.to_owned(), None)),
         ])
     });
 
@@ -36,6 +39,38 @@ static ACTION_SURGE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(|
             targeting: Arc::new(|_, _| TargetingContext::self_target()),
             resource_cost: HashMap::from([(registry::resources::ACTION_SURGE.clone(), 1)]),
             cooldown: Some(RechargeRule::OnTurn),
+        },
+        Some(ActionContext::Other),
+    )
+});
+
+pub static SECOND_WIND_ID: LazyLock<ActionId> =
+    LazyLock::new(|| ActionId::from_str("action.fighter.second_wind"));
+
+static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(|| {
+    (
+        Action {
+            id: SECOND_WIND_ID.clone(),
+            kind: ActionKind::Healing {
+                heal: Arc::new(|character, _| {
+                    let mut modifiers = ModifierSet::new();
+                    modifiers.add_modifier(
+                        ModifierSource::ClassFeature("Fighter level".to_string()),
+                        character.level(&ClassName::Fighter) as i32,
+                    );
+                    DiceSetRoll::new(
+                        DiceSet {
+                            num_dice: 1,
+                            die_size: DieSize::D10,
+                        },
+                        modifiers,
+                        SECOND_WIND_ID.to_string(),
+                    )
+                }),
+            },
+            targeting: Arc::new(|_, _| TargetingContext::self_target()),
+            resource_cost: HashMap::from([(registry::resources::BONUS_ACTION.clone(), 1)]),
+            cooldown: None,
         },
         Some(ActionContext::Other),
     )

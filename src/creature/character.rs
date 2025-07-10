@@ -254,8 +254,12 @@ impl Character {
         }
     }
 
+    pub fn level(&self, class_name: &ClassName) -> u8 {
+        *self.classes.get(class_name).unwrap_or(&0)
+    }
+
     pub fn total_level(&self) -> u8 {
-        self.classes.iter().map(|(_, level)| *level).sum()
+        self.classes.values().sum()
     }
 
     fn increment_class_level(&mut self, class: &Class) -> Vec<LevelUpChoice> {
