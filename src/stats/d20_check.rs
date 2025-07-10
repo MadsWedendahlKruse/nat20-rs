@@ -179,7 +179,7 @@ impl D20Check {
         result
     }
 
-    pub fn format(&self, proficiency_bonus: u32) -> String {
+    pub fn format_bonus(&self, proficiency_bonus: u32) -> String {
         let mut result = format!(
             "+{} ({})",
             self.proficiency.bonus(proficiency_bonus),
@@ -189,6 +189,24 @@ impl D20Check {
             result += &format!(" {}", self.modifiers);
         }
         result
+    }
+
+    pub fn success_probability(&self, target_dc: u32, proficiency_bonus: u32) -> f64 {
+        let mut total_modifier = self.modifiers.total();
+        total_modifier += self.proficiency.bonus(proficiency_bonus) as i32;
+
+        let roll_mode = self.advantage_tracker.roll_mode();
+
+        // Needed raw roll
+        let needed_roll = (target_dc as i32 - total_modifier).clamp(2, 20);
+
+        let single_roll_p = (21 - needed_roll) as f64 / 20.0;
+
+        match roll_mode {
+            RollMode::Normal => single_roll_p,
+            RollMode::Advantage => 1.0 - (1.0 - single_roll_p).powi(2),
+            RollMode::Disadvantage => single_roll_p.powi(2),
+        }
     }
 }
 

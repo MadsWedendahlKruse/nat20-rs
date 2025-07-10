@@ -428,6 +428,11 @@ impl AttackRoll {
 
         result
     }
+
+    pub fn hit_chance(&self, character: &Character, target_ac: u32) -> f64 {
+        self.d20_check
+            .success_probability(target_ac, character.proficiency_bonus())
+    }
 }
 
 #[cfg(test)]

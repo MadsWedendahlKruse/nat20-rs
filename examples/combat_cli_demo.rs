@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use nat20_rs::{
     actions::{
-        action::{ActionContext, ActionProvider},
+        action::{Action, ActionContext, ActionKind, ActionProvider},
         targeting::TargetingKind,
     },
     engine::engine::CombatEngine,
@@ -33,7 +33,7 @@ fn main() {
     println!("=== Initiative Order ===");
     for (i, (id, result)) in initiative.iter().enumerate() {
         println!(
-            "{}: {:?} {:?}",
+            "{}: {}, {}",
             i + 1,
             engine.participant(id).unwrap().name(),
             result
@@ -70,18 +70,44 @@ fn main() {
             |(id, context, resource_costs)| format!("{}, {:?}, {:?}", id, context, resource_costs),
         );
 
-        let selected_action = &actions_options[action_index];
-        if selected_action.0 == end_turn_action_id {
+        let (action_id, action_context, _) = &actions_options[action_index];
+        if action_id == &end_turn_action_id {
             // End turn action
             engine.end_turn();
             continue;
         }
 
+        // If the action uses an attack roll, calculate the chance to hit each target
+        let action = engine.current_character().find_action(action_id).unwrap();
+        fn display<'a>(
+            id: &'a uuid::Uuid,
+            engine: &CombatEngine,
+            action: &Action,
+            action_context: &ActionContext,
+        ) -> String {
+            let target = engine.participant(id).unwrap();
+            let mut result = target.name().to_string();
+            match &action.kind {
+                ActionKind::AttackRollDamage { attack_roll, .. } => {
+                    let hit_chance = (attack_roll)(engine.current_character(), action_context)
+                        .hit_chance(target, target.armor_class().total() as u32);
+                    result.push_str(&format!(" (Hit Chance: {:.2}%)", hit_chance * 100.0));
+                }
+                _ => {}
+            };
+            result
+        }
+
         let targeting_context = engine
             .current_character()
-            .targeting_context(&selected_action.0, &selected_action.1);
+            .targeting_context(action_id, action_context);
 
-        let participants = engine.participants();
+        let all_participants = engine.participants();
+        let participants: Vec<_> = all_participants
+            .iter()
+            .filter(|character| character.id() != engine.current_character().id())
+            .collect();
+        let participant_ids: Vec<_> = participants.iter().map(|c| c.id().clone()).collect();
 
         let targets = match targeting_context.kind {
             TargetingKind::SelfTarget => {
@@ -89,25 +115,15 @@ fn main() {
             }
 
             TargetingKind::Single => {
-                let participants: Vec<_> = participants
-                    .iter()
-                    .filter(|character| character.id() != engine.current_character().id())
-                    .collect();
-                let participant_ids: Vec<_> = participants.iter().map(|c| c.id().clone()).collect();
                 let participant_index = CliChoiceProvider::select_from_list(
                     "Select a target:",
                     &participant_ids,
-                    |id| engine.participant(id).unwrap().name().to_string(),
+                    |id| display(id, &engine, &action, action_context),
                 );
                 vec![participant_ids[participant_index].clone()]
             }
 
             TargetingKind::Multiple { max_targets } => {
-                let participants: Vec<_> = participants
-                    .iter()
-                    .filter(|character| character.id() != engine.current_character().id())
-                    .collect();
-                let participant_ids: Vec<_> = participants.iter().map(|c| c.id().clone()).collect();
                 CliChoiceProvider::select_multiple(
                     &format!(
                         "Select up to {} targets (you can select the same target multiple times):",
@@ -115,7 +131,7 @@ fn main() {
                     ),
                     &participant_ids,
                     max_targets,
-                    |id| engine.participant(id).unwrap().name().to_string(),
+                    |id| display(id, &engine, &action, action_context),
                     false, // Allow duplicates
                 )
             }
@@ -126,7 +142,7 @@ fn main() {
         };
 
         let results = engine
-            .submit_action(&selected_action.0, &selected_action.1, targets)
+            .submit_action(action_id, action_context, targets)
             .unwrap();
         for result in results {
             println!("{}", result);

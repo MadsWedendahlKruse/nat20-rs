@@ -674,7 +674,7 @@ impl Character {
 
     // I haven't found a way to avoid cloning the action when performing it, so
     // I guess we might as well just return the action itself here
-    fn find_action(&self, action_id: &ActionId) -> Option<Action> {
+    pub fn find_action(&self, action_id: &ActionId) -> Option<Action> {
         // Start by checking if the action exists in the action registry
         if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id) {
             return Some(action.clone());
@@ -757,12 +757,22 @@ impl fmt::Display for Character {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Character: {}\n", self.name)?;
         write!(f, "ID: {}\n", self.id)?;
+        write!(f, "Level: {}\n", self.total_level())?;
         write!(
             f,
             "Classes: {}\n",
             self.classes
                 .keys()
-                .map(|class| format!("Level {} {}", self.classes[class], class))
+                .map(|class_name| {
+                    let class_level = self.classes[class_name];
+                    if let Some(subclass_name) = self.subclass(class_name) {
+                        return format!(
+                            "Level {} {} {}",
+                            class_level, subclass_name.name, class_name
+                        );
+                    }
+                    format!("Level {} {}", class_level, class_name)
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         )?;
@@ -786,7 +796,7 @@ impl fmt::Display for Character {
                 f,
                 "\t{}: {}\n",
                 skill,
-                stats.format(self.proficiency_bonus())
+                stats.format_bonus(self.proficiency_bonus())
             )?;
         }
 
@@ -803,7 +813,7 @@ impl fmt::Display for Character {
                 f,
                 "\t{}: {}\n",
                 ability,
-                stats.format(self.proficiency_bonus())
+                stats.format_bonus(self.proficiency_bonus())
             )?;
         }
 
@@ -815,6 +825,8 @@ impl fmt::Display for Character {
         }
 
         write!(f, "{}", self.loadout)?;
+
+        write!(f, "Armor Class: {}\n", self.armor_class())?;
 
         write!(f, "Resources:\n")?;
         for (resource_id, resource) in &self.resources {
