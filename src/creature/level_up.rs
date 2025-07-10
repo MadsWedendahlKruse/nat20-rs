@@ -2,7 +2,7 @@
 
 use std::{
     collections::{HashSet, VecDeque},
-    io::{self, Write},
+    iter::FromIterator,
 };
 
 use strum::IntoEnumIterator;
@@ -156,15 +156,18 @@ impl ChoiceProvider for CliChoiceProvider {
             }
 
             LevelUpChoice::SkillProficiency(skills, num_choices) => {
+                let skills_vec: Vec<_> = skills.iter().cloned().collect();
                 let selected = Self::select_multiple(
                     &format!("Select {} skill(s) to gain proficiency in:", num_choices),
-                    skills,
+                    &skills_vec,
                     *num_choices,
                     |skill| format!("{:?}", skill),
+                    true, // Ensure unique selections
                 );
-                LevelUpSelection::SkillProficiency(selected)
+                LevelUpSelection::SkillProficiency(HashSet::from_iter(selected))
             }
 
+            #[allow(unreachable_patterns)]
             _ => {
                 todo!("Implement CLI choice provider for other LevelUpChoice variants");
             }

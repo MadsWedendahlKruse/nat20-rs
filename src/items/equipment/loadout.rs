@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt};
 
 use crate::{
-    actions::action::{self, ActionContext, ActionProvider},
+    actions::action::{ActionContext, ActionProvider},
     combat::damage::AttackRollResult,
     creature::character::Character,
     items::equipment::{

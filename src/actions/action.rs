@@ -11,7 +11,6 @@ use crate::{
     },
     creature::character::Character,
     dice::dice::{DiceSetRoll, DiceSetRollResult},
-    effects,
     items::equipment::{equipment::HandSlot, weapon::WeaponType},
     registry,
     resources::resources::{RechargeRule, ResourceError},
@@ -441,7 +440,7 @@ impl Action {
     ) -> Result<(), ResourceError> {
         let mut resource_cost = self.resource_cost.clone();
         for effects in performer.effects() {
-            (effects.on_resource_cost)(performer, self, context, &mut resource_cost);
+            (effects.on_resource_cost)(performer, context, &mut resource_cost);
         }
 
         for (resource, amount) in &resource_cost {

@@ -179,8 +179,12 @@ impl Spellbook {
         let mut actions = HashMap::new();
         for spell_id in &self.spells_by_spell_id {
             let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
-            let available_slots =
-                self.spell_slots_for_base_level(spell.base_level(), use_current_slots);
+            let available_slots = if spell.base_level() == 0 {
+                // Cantrips always have 1 slot available
+                HashMap::from([(0, 1)])
+            } else {
+                self.spell_slots_for_base_level(spell.base_level(), use_current_slots)
+            };
             let contexts = available_slots
                 .iter()
                 .map(|(level, _)| ActionContext::Spell { level: *level })

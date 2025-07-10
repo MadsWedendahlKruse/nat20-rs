@@ -4,7 +4,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     actions::{
-        action::{self, Action, ActionContext, ActionKindSnapshot, ActionProvider},
+        action::{Action, ActionContext, ActionKindSnapshot, ActionProvider},
         targeting::TargetingContext,
     },
     combat::damage::{
@@ -716,10 +716,9 @@ impl ActionProvider for Character {
                 return false;
             }
 
-            let (action, _) = registry::actions::ACTION_REGISTRY.get(action_id).unwrap();
             for action_context in action_contexts {
                 for effect in &self.effects {
-                    (effect.on_resource_cost)(self, action, action_context, resource_cost);
+                    (effect.on_resource_cost)(self, action_context, resource_cost);
                 }
             }
 
@@ -823,6 +822,9 @@ impl fmt::Display for Character {
         }
 
         write!(f, "Effects:\n")?;
+        if self.effects.is_empty() {
+            write!(f, "\tNo active effects\n")?;
+        }
         for effect in &self.effects {
             write!(f, "\t{} ({})\n", effect.id(), effect.duration(),)?;
         }

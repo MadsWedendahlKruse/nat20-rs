@@ -1,6 +1,6 @@
 extern crate nat20_rs;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use nat20_rs::{
     actions::{
@@ -13,7 +13,18 @@ use nat20_rs::{
 };
 
 fn main() {
-    let mut hero = fixtures::creatures::heroes::fighter();
+    let heros = vec![
+        fixtures::creatures::heroes::fighter(),
+        fixtures::creatures::heroes::wizard(),
+        fixtures::creatures::heroes::warlock(),
+    ];
+
+    let hero_index =
+        CliChoiceProvider::select_from_list("Select a hero to play with:", &heros, |hero| {
+            format!("{} (Level {:?})", hero.name(), hero.classes())
+        });
+
+    let mut hero = heros.into_iter().nth(hero_index).unwrap();
     let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
 
     let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
@@ -96,16 +107,17 @@ fn main() {
                     .iter()
                     .filter(|character| character.id() != engine.current_character().id())
                     .collect();
-                let participant_ids: HashSet<_> =
-                    participants.iter().map(|c| c.id().clone()).collect();
+                let participant_ids: Vec<_> = participants.iter().map(|c| c.id().clone()).collect();
                 CliChoiceProvider::select_multiple(
-                    "Select targets:",
+                    &format!(
+                        "Select up to {} targets (you can select the same target multiple times):",
+                        max_targets
+                    ),
                     &participant_ids,
                     max_targets,
                     |id| engine.participant(id).unwrap().name().to_string(),
+                    false, // Allow duplicates
                 )
-                .into_iter()
-                .collect()
             }
 
             _ => {

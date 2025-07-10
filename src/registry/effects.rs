@@ -131,7 +131,7 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
         }
     });
 
-    effect.on_resource_cost = Arc::new(|character, _, context, resource_cost| {
+    effect.on_resource_cost = Arc::new(|character, context, resource_cost| {
         // Check that this is only applied for weapon attacks
         if !matches!(
             context,

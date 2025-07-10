@@ -105,7 +105,7 @@ impl Effect {
             on_action: Arc::new(|_: &mut Character, _: &Action, _: &ActionContext| {})
                 as ActionHook,
             on_resource_cost: Arc::new(
-                |_: &Character, _: &Action, _: &ActionContext, _: &mut HashMap<ResourceId, u8>| {},
+                |_: &Character, _: &ActionContext, _: &mut HashMap<ResourceId, u8>| {},
             ) as ResourceCostHook,
         }
     }

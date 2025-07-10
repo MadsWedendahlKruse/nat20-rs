@@ -19,15 +19,17 @@ impl CliChoiceProvider {
 
     pub fn select_multiple<T, F>(
         prompt: &str,
-        items: &HashSet<T>,
+        items: &[T],
         num_choices: u8,
         display: F,
-    ) -> HashSet<T>
+        unique: bool,
+    ) -> Vec<T>
     where
         T: Clone + std::hash::Hash + Eq,
         F: Fn(&T) -> String,
     {
-        let mut selected = HashSet::new();
+        let mut selected = Vec::new();
+        let mut seen = HashSet::new();
         let items_vec: Vec<_> = items.iter().collect();
         println!("\n{}", prompt);
         for (i, item) in items_vec.iter().enumerate() {
@@ -36,11 +38,21 @@ impl CliChoiceProvider {
 
         while selected.len() < num_choices as usize {
             let idx = Self::read_index(items_vec.len());
-            if selected.insert(items_vec[idx].clone()) {
-                println!("Selected: {}", display(items_vec[idx]));
-            } else {
-                println!("Already selected: {}", display(items_vec[idx]));
+            let item = items_vec[idx];
+            if unique && seen.contains(item) {
+                println!("Already selected, please choose a different item.");
+                continue;
             }
+            selected.push(item.clone());
+            if unique {
+                seen.insert(item);
+            }
+            println!(
+                "Selected: {} ({}/{})",
+                display(item),
+                selected.len(),
+                num_choices
+            );
         }
         selected
     }

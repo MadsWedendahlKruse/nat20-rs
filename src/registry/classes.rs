@@ -64,10 +64,7 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         HashSet::from([ArmorType::Light, ArmorType::Medium, ArmorType::Heavy]),
         HashSet::from([WeaponCategory::Simple, WeaponCategory::Martial]),
         SpellcastingProgression::None,
-        HashMap::from([
-            (3, vec![registry::effects::IMPROVED_CRITICAL_ID.clone()]),
-            (5, vec![registry::effects::EXTRA_ATTACK_ID.clone()]),
-        ]),
+        HashMap::from([(5, vec![registry::effects::EXTRA_ATTACK_ID.clone()])]),
         HashMap::from([
             (
                 2,
@@ -111,10 +108,10 @@ static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
         armor_proficiencies: HashSet::new(),
         weapon_proficiencies: HashSet::new(),
         spellcasting: SpellcastingProgression::None,
-        effects_by_level: HashMap::from([
-            // TODO: Improved Critical at level 3
-            (3, vec![]),
-        ]),
+        effects_by_level: HashMap::from([(
+            3,
+            vec![registry::effects::IMPROVED_CRITICAL_ID.clone()],
+        )]),
         resources_by_level: HashMap::new(),
         choices_by_level: HashMap::new(),
         actions_by_level: HashMap::new(),
@@ -150,6 +147,7 @@ static WARLOCK: LazyLock<Class> = LazyLock::new(|| {
         2,
         HashSet::from([ArmorType::Light]),
         HashSet::from([WeaponCategory::Simple]),
+        // TODO: Warlock spellcasting is unique, needs to be handled differently
         SpellcastingProgression::Third,
         HashMap::new(),
         HashMap::new(),

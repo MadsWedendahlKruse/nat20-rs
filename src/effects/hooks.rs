@@ -24,7 +24,7 @@ pub type DamageRollResultHook = Arc<dyn Fn(&Character, &mut DamageRollResult) + 
 pub type ActionHook = Arc<dyn Fn(&mut Character, &Action, &ActionContext) + Send + Sync>;
 // TODO: Struct or type alias for the resource map?
 pub type ResourceCostHook =
-    Arc<dyn Fn(&Character, &Action, &ActionContext, &mut HashMap<ResourceId, u8>) + Send + Sync>;
+    Arc<dyn Fn(&Character, &ActionContext, &mut HashMap<ResourceId, u8>) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct D20CheckHooks<K> {
