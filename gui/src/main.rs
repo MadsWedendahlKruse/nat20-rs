@@ -1,7 +1,9 @@
 use std::{num::NonZeroU32, time::Instant};
 
+mod cube;
 mod utils;
 
+use glow::HasContext;
 use glutin::surface::GlSurface;
 use imgui::{Condition, TreeNodeFlags};
 use nat20_rs::{
@@ -11,10 +13,16 @@ use nat20_rs::{
 use strum::IntoEnumIterator;
 use utils::Triangler;
 
+use crate::cube::Cube;
+
 fn main() {
     let (event_loop, window, surface, context) = utils::create_window("Hello, triangle!", None);
     let (mut winit_platform, mut imgui_context) = utils::imgui_init(&window);
     let gl = utils::glow_context(&context);
+
+    unsafe {
+        gl.enable(glow::DEPTH_TEST);
+    }
 
     let mut ig_renderer = imgui_glow_renderer::AutoRenderer::new(gl, &mut imgui_context)
         .expect("failed to create renderer");
@@ -23,6 +31,8 @@ fn main() {
     let mut last_frame = Instant::now();
 
     let character = fixtures::creatures::heroes::fighter();
+
+    let mut cube = Cube::new(ig_renderer.gl_context());
 
     #[allow(deprecated)]
     event_loop
@@ -153,6 +163,18 @@ fn main() {
                             //     mouse_pos[0], mouse_pos[1]
                             // ));
                         });
+
+                    // Render the cube
+                    let io = ui.io();
+                    if !io.want_capture_mouse && io.mouse_down[0] {
+                        let delta = io.mouse_delta;
+                        cube.rotation.x += delta[1] * 0.01;
+                        cube.rotation.y += delta[0] * 0.01;
+                    }
+                    cube.draw(
+                        ig_renderer.gl_context(),
+                        io.display_size[0] / io.display_size[1],
+                    );
 
                     winit_platform.prepare_render(ui, &window);
                     let draw_data = imgui_context.render();
