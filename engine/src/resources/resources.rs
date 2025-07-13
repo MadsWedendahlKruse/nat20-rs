@@ -16,28 +16,30 @@
 //     // add more as needed
 // }
 
+use std::fmt::Display;
+
 use crate::utils::id::ResourceId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum RechargeRule {
-    OnTurn = 0,
-    OnShortRest = 1,
-    OnLongRest = 2,
-    Daily = 3,
-    Never = 4,
+    OnTurn,
+    OnShortRest,
+    OnLongRest,
+    Daily,
+    Never,
 }
 
 impl RechargeRule {
-    /// Returns the hierarchy level of the recharge rule.
-    pub fn hierarchy(&self) -> u8 {
-        *self as u8
-    }
-
     /// Checks if this recharge rule is recharged by another rule.
     /// For example, `OnShortRest` is also recharged by `OnLongRest`.
     pub fn is_recharged_by(&self, other: &RechargeRule) -> bool {
-        other.hierarchy() >= self.hierarchy()
+        *other >= *self
+    }
+}
+
+impl Display for RechargeRule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
@@ -359,24 +361,15 @@ mod tests {
     }
 
     #[test]
-    fn test_recharge_rule_hierarchy_order() {
-        assert!(RechargeRule::OnShortRest.hierarchy() > RechargeRule::OnTurn.hierarchy());
-        assert!(RechargeRule::OnLongRest.hierarchy() > RechargeRule::OnShortRest.hierarchy());
-        assert!(RechargeRule::Daily.hierarchy() > RechargeRule::OnLongRest.hierarchy());
-        assert!(RechargeRule::Never.hierarchy() > RechargeRule::Daily.hierarchy());
+    fn test_recharge_rule_order() {
+        assert!(RechargeRule::OnShortRest > RechargeRule::OnTurn);
+        assert!(RechargeRule::OnLongRest > RechargeRule::OnShortRest);
+        assert!(RechargeRule::Daily > RechargeRule::OnLongRest);
+        assert!(RechargeRule::Never > RechargeRule::Daily);
     }
 
     #[test]
-    fn test_recharge_rule_hierarchy_equality() {
-        assert_eq!(RechargeRule::OnTurn.hierarchy(), 0);
-        assert_eq!(RechargeRule::OnShortRest.hierarchy(), 1);
-        assert_eq!(RechargeRule::OnLongRest.hierarchy(), 2);
-        assert_eq!(RechargeRule::Daily.hierarchy(), 3);
-        assert_eq!(RechargeRule::Never.hierarchy(), 4);
-    }
-
-    #[test]
-    fn test_resource_recharge_respects_hierarchy() {
+    fn test_resource_recharge_respects_order() {
         let mut res = Resource {
             kind: ResourceId::from_str("Test Resource"),
             max_uses: 2,
@@ -391,7 +384,7 @@ mod tests {
         res.spend(2).unwrap();
         assert_eq!(res.current_uses, 0);
 
-        // Should recharge on long rest (higher in hierarchy)
+        // Should recharge on long rest (higher in order)
         res.recharge(&RechargeRule::OnLongRest);
         assert_eq!(res.current_uses, 2);
 
@@ -399,7 +392,7 @@ mod tests {
         res.spend(2).unwrap();
         assert_eq!(res.current_uses, 0);
 
-        // Should recharge on daily (highest in hierarchy)
+        // Should recharge on daily (highest in order)
         res.recharge(&RechargeRule::Daily);
         assert_eq!(res.current_uses, 2);
 
@@ -407,7 +400,7 @@ mod tests {
         res.spend(2).unwrap();
         assert_eq!(res.current_uses, 0);
 
-        // Should NOT recharge on turn (lower in hierarchy)
+        // Should NOT recharge on turn (lower in order)
         res.recharge(&RechargeRule::OnTurn);
         assert_eq!(res.current_uses, 0);
     }

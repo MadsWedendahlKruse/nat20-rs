@@ -9,7 +9,7 @@ mod tests {
             targeting::TargetingKind,
         },
         effects::effects::{Effect, EffectDuration},
-        engine::engine::CombatEngine,
+        engine::encounter::Encounter,
         registry,
         stats::modifier::ModifierSource,
         test_utils::fixtures,
@@ -21,7 +21,7 @@ mod tests {
         let mut hero = fixtures::creatures::heroes::fighter();
         let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
 
-        let engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
+        let engine = Encounter::new(vec![&mut hero, &mut goblin_warrior]);
 
         let initiative = engine.initiative_order();
         println!("=== Initiative Order ===");
@@ -46,7 +46,7 @@ mod tests {
         println!("Hero ID: {}", hero.id());
         println!("Goblin ID: {}", goblin_warrior.id());
 
-        let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
+        let mut engine = Encounter::new(vec![&mut hero, &mut goblin_warrior]);
 
         let first_turn_id = engine.current_character_id();
 
@@ -65,7 +65,7 @@ mod tests {
         let mut hero = fixtures::creatures::heroes::fighter();
         let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
 
-        let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
+        let mut engine = Encounter::new(vec![&mut hero, &mut goblin_warrior]);
 
         // Spend the current characters action
         let current_character = engine.current_character_mut();
@@ -115,7 +115,7 @@ mod tests {
         let hero_id = hero.id();
         let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
 
-        let engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
+        let engine = Encounter::new(vec![&mut hero, &mut goblin_warrior]);
 
         // Check that hero is the current character (he has massive initiative for this test)
         assert!(engine.current_character().id() == hero_id);
@@ -139,7 +139,7 @@ mod tests {
         let mut test_effect = Effect::new(
             EffectId::from_str("effect.test_effect"),
             ModifierSource::Custom("Test Effect".to_string()),
-            EffectDuration::Persistent,
+            EffectDuration::Permanent,
         );
         // This effect will add +20 to the attack roll, ensuring it hits
         test_effect.pre_attack_roll = Arc::new(|_, attack_roll| {
@@ -152,7 +152,7 @@ mod tests {
         let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
         let goblin_warrior_id = goblin_warrior.id();
 
-        let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
+        let mut engine = Encounter::new(vec![&mut hero, &mut goblin_warrior]);
 
         // Check that hero is the current character (he has massive initiative for this test)
         assert!(engine.current_character().id() == hero_id);
@@ -257,7 +257,7 @@ mod tests {
         let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
         let goblin_warrior_id = goblin_warrior.id();
 
-        let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
+        let mut engine = Encounter::new(vec![&mut hero, &mut goblin_warrior]);
 
         // Check that hero is the current character (he has massive initiative for this test)
         assert!(engine.current_character().id() == hero_id);
@@ -305,8 +305,9 @@ mod tests {
             engine
                 .current_character()
                 .spellbook()
-                .spell_slots_for_level(spell_level),
-            &spell_slots - 1,
+                .spell_slots_for_level(spell_level)
+                .current(),
+            spell_slots.current() - 1,
             "Expected one spell slot to be used for casting Magic Missile"
         );
         assert_eq!(

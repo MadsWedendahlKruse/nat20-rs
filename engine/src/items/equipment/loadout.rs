@@ -25,7 +25,7 @@ pub enum TryEquipError {
     WrongWeaponType,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Loadout {
     pub armor: Option<Armor>,
     weapons: HashMap<WeaponType, HashMap<HandSlot, Option<Weapon>>>,
@@ -39,6 +39,10 @@ impl Loadout {
             weapons: HashMap::new(),
             equipment: HashMap::new(),
         }
+    }
+
+    pub fn armor(&self) -> Option<&Armor> {
+        self.armor.as_ref()
     }
 
     pub fn equip_armor(&mut self, armor: Armor) -> Option<Armor> {
@@ -84,28 +88,28 @@ impl Loadout {
 
     pub fn equip_item(
         &mut self,
-        slot: GeneralEquipmentSlot,
+        slot: &GeneralEquipmentSlot,
         item: EquipmentItem,
     ) -> Result<Option<EquipmentItem>, TryEquipError> {
-        let equip_slot = EquipmentSlot::General(slot);
+        let equip_slot = EquipmentSlot::General(*slot);
         if !item.kind.can_equip_in_slot(equip_slot) {
             return Err(TryEquipError::InvalidSlot);
         }
         let unequipped = self.unequip_item(slot);
-        self.equipment.insert(slot, Some(item));
+        self.equipment.insert(*slot, Some(item));
         Ok(unequipped)
     }
 
-    pub fn unequip_item(&mut self, slot: GeneralEquipmentSlot) -> Option<EquipmentItem> {
-        if let Some(item) = self.equipment.remove(&slot) {
+    pub fn unequip_item(&mut self, slot: &GeneralEquipmentSlot) -> Option<EquipmentItem> {
+        if let Some(item) = self.equipment.remove(slot) {
             item
         } else {
             None
         }
     }
 
-    pub fn item_in_slot(&self, slot: GeneralEquipmentSlot) -> Option<&EquipmentItem> {
-        self.equipment.get(&slot).and_then(|w| w.as_ref())
+    pub fn item_in_slot(&self, slot: &GeneralEquipmentSlot) -> Option<&EquipmentItem> {
+        self.equipment.get(slot).and_then(|w| w.as_ref())
     }
 
     pub fn equip_weapon(
@@ -324,17 +328,17 @@ mod tests {
         let mut loadout = Loadout::new();
 
         let item = fixtures::equipment::boots();
-        let unequipped = loadout.equip_item(GeneralEquipmentSlot::Boots, item);
+        let unequipped = loadout.equip_item(&GeneralEquipmentSlot::Boots, item);
         assert!(unequipped.is_ok());
-        assert!(loadout.item_in_slot(GeneralEquipmentSlot::Boots).is_some());
+        assert!(loadout.item_in_slot(&GeneralEquipmentSlot::Boots).is_some());
 
-        let unequipped = loadout.unequip_item(GeneralEquipmentSlot::Boots);
+        let unequipped = loadout.unequip_item(&GeneralEquipmentSlot::Boots);
         assert!(unequipped.is_some());
-        assert!(loadout.item_in_slot(GeneralEquipmentSlot::Boots).is_none());
+        assert!(loadout.item_in_slot(&GeneralEquipmentSlot::Boots).is_none());
 
-        let unequipped = loadout.unequip_item(GeneralEquipmentSlot::Boots);
+        let unequipped = loadout.unequip_item(&GeneralEquipmentSlot::Boots);
         assert!(unequipped.is_none());
-        assert!(loadout.item_in_slot(GeneralEquipmentSlot::Boots).is_none());
+        assert!(loadout.item_in_slot(&GeneralEquipmentSlot::Boots).is_none());
     }
 
     #[test]
@@ -342,14 +346,14 @@ mod tests {
         let mut loadout = Loadout::new();
 
         let item1 = fixtures::equipment::boots();
-        let unequipped1 = loadout.equip_item(GeneralEquipmentSlot::Boots, item1);
+        let unequipped1 = loadout.equip_item(&GeneralEquipmentSlot::Boots, item1);
         assert!(unequipped1.unwrap().is_none());
-        assert!(loadout.item_in_slot(GeneralEquipmentSlot::Boots).is_some());
+        assert!(loadout.item_in_slot(&GeneralEquipmentSlot::Boots).is_some());
 
         let item2 = fixtures::equipment::boots();
-        let unequipped2 = loadout.equip_item(GeneralEquipmentSlot::Boots, item2);
+        let unequipped2 = loadout.equip_item(&GeneralEquipmentSlot::Boots, item2);
         assert!(unequipped2.unwrap().is_some());
-        assert!(loadout.item_in_slot(GeneralEquipmentSlot::Boots).is_some());
+        assert!(loadout.item_in_slot(&GeneralEquipmentSlot::Boots).is_some());
     }
 
     #[test]
@@ -359,21 +363,27 @@ mod tests {
         let weapon = fixtures::weapons::dagger_light();
         let unequipped = loadout.equip_weapon(weapon, HandSlot::Main);
         assert!(unequipped.is_ok());
-        assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-            .is_some());
+        assert!(
+            loadout
+                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
+                .is_some()
+        );
 
         let unequipped = loadout.unequip_weapon(&WeaponType::Melee, HandSlot::Main);
         assert!(unequipped.is_some());
-        assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-            .is_none());
+        assert!(
+            loadout
+                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
+                .is_none()
+        );
 
         let unequipped = loadout.unequip_weapon(&WeaponType::Melee, HandSlot::Main);
         assert!(unequipped.is_none());
-        assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-            .is_none());
+        assert!(
+            loadout
+                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
+                .is_none()
+        );
     }
 
     #[test]
@@ -383,16 +393,20 @@ mod tests {
         let weapon1 = fixtures::weapons::dagger_light();
         let unequipped1 = loadout.equip_weapon(weapon1, HandSlot::Main);
         assert_eq!(unequipped1.unwrap().len(), 0);
-        assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-            .is_some());
+        assert!(
+            loadout
+                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
+                .is_some()
+        );
 
         let weapon2 = fixtures::weapons::dagger_light();
         let unequipped2 = loadout.equip_weapon(weapon2, HandSlot::Main);
         assert_eq!(unequipped2.unwrap().len(), 1);
-        assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-            .is_some());
+        assert!(
+            loadout
+                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
+                .is_some()
+        );
     }
 
     #[test]
@@ -415,16 +429,22 @@ mod tests {
         println!("{:?}", unequipped);
         assert!(unequipped.is_ok());
         assert_eq!(unequipped.unwrap().len(), 2);
-        assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-            .is_some());
-        assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Off)
-            .is_none());
-        assert!(loadout
-            .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-            .unwrap()
-            .has_property(&WeaponProperties::TwoHanded));
+        assert!(
+            loadout
+                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
+                .is_some()
+        );
+        assert!(
+            loadout
+                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Off)
+                .is_none()
+        );
+        assert!(
+            loadout
+                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
+                .unwrap()
+                .has_property(&WeaponProperties::TwoHanded)
+        );
     }
 
     #[test]
@@ -432,7 +452,7 @@ mod tests {
         let mut loadout = Loadout::new();
 
         let item = fixtures::equipment::boots();
-        let result = loadout.equip_item(GeneralEquipmentSlot::Headwear, item);
+        let result = loadout.equip_item(&GeneralEquipmentSlot::Headwear, item);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), TryEquipError::InvalidSlot);
     }

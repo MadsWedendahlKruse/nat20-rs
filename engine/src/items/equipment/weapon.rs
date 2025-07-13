@@ -1,4 +1,6 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::Display};
+
+use strum::EnumIter;
 
 use crate::{
     combat::damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
@@ -20,10 +22,16 @@ pub enum WeaponCategory {
     Martial,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumIter)]
 pub enum WeaponType {
     Melee,
     Ranged,
+}
+
+impl Display for WeaponType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -62,7 +70,7 @@ pub enum WeaponProperties {
 const MELEE_RANGE_DEFAULT: u32 = 5;
 const MELEE_RANGE_REACH: u32 = 10;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Weapon {
     equipment: EquipmentItem,
     pub category: WeaponCategory,

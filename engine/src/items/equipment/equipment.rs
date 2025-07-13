@@ -1,10 +1,12 @@
 use std::fmt::Debug;
 
+use strum::{Display, EnumIter};
+
 use crate::effects::effects::Effect;
 use crate::items::item::{Item, ItemRarity};
 
 // Armor and weapons behave differently compared to other equipment, so they need special handling.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display)]
 pub enum EquipmentSlot {
     Armor,
     General(GeneralEquipmentSlot),
@@ -12,7 +14,7 @@ pub enum EquipmentSlot {
     Ranged(HandSlot),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter, Display)]
 pub enum GeneralEquipmentSlot {
     Headwear,
     Cloak,
@@ -22,7 +24,7 @@ pub enum GeneralEquipmentSlot {
     Ring(usize),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter, Display)]
 pub enum HandSlot {
     Main,
     Off,

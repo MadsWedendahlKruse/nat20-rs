@@ -17,6 +17,8 @@ pub enum Skill {
     Acrobatics,
     SleightOfHand,
     Stealth,
+    // Not technically a skill, but it behaves like one
+    Initiative,
     // --- Intelligence ---
     Arcana,
     History,
@@ -34,9 +36,6 @@ pub enum Skill {
     Intimidation,
     Performance,
     Persuasion,
-    // --- Other ---
-    // Not technically a skill, but it behaves like one
-    Initiative,
 }
 
 impl fmt::Display for Skill {

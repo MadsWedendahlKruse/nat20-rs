@@ -7,7 +7,7 @@ use nat20_rs::{
         action::{Action, ActionContext, ActionKind, ActionProvider},
         targeting::TargetingKind,
     },
-    engine::engine::CombatEngine,
+    engine::encounter::Encounter,
     test_utils::{cli::CliChoiceProvider, fixtures},
     utils::id::ActionId,
 };
@@ -27,7 +27,7 @@ fn main() {
     let mut hero = heros.into_iter().nth(hero_index).unwrap();
     let mut goblin_warrior = fixtures::creatures::monsters::goblin_warrior();
 
-    let mut engine = CombatEngine::new(vec![&mut hero, &mut goblin_warrior]);
+    let mut engine = Encounter::new(vec![&mut hero, &mut goblin_warrior]);
 
     let initiative = engine.initiative_order();
     println!("=== Initiative Order ===");
@@ -81,7 +81,7 @@ fn main() {
         let action = engine.current_character().find_action(action_id).unwrap();
         fn display<'a>(
             id: &'a uuid::Uuid,
-            engine: &CombatEngine,
+            engine: &Encounter,
             action: &Action,
             action_context: &ActionContext,
         ) -> String {

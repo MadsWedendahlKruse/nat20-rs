@@ -6,12 +6,25 @@ use strum::{EnumIter, IntoEnumIterator};
 
 #[derive(EnumIter, Hash, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum Ability {
-    Strength,
-    Dexterity,
-    Constitution,
-    Intelligence,
-    Wisdom,
-    Charisma,
+    Strength = 0,
+    Dexterity = 1,
+    Constitution = 2,
+    Intelligence = 3,
+    Wisdom = 4,
+    Charisma = 5,
+}
+
+impl Ability {
+    pub fn acronym(&self) -> &'static str {
+        match self {
+            Ability::Strength => "STR",
+            Ability::Dexterity => "DEX",
+            Ability::Constitution => "CON",
+            Ability::Intelligence => "INT",
+            Ability::Wisdom => "WIS",
+            Ability::Charisma => "CHA",
+        }
+    }
 }
 
 impl fmt::Display for Ability {

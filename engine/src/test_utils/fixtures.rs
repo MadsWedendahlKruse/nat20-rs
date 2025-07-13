@@ -355,6 +355,8 @@ pub mod creatures {
             character
                 .spellbook_mut()
                 .add_spell(&registry::spells::FIREBALL_ID, Ability::Intelligence);
+            // TODO: This should be set automatically based on class
+            character.spellbook_mut().set_max_prepared_spells(5);
 
             character
         }

@@ -30,8 +30,8 @@ use crate::{
         d20_check::{D20CheckDC, D20CheckResult, RollMode},
         modifier::{ModifierSet, ModifierSource},
         proficiency::Proficiency,
-        saving_throw::{create_saving_throw_set, SavingThrowSet},
-        skill::{create_skill_set, Skill, SkillSet},
+        saving_throw::{SavingThrowSet, create_saving_throw_set},
+        skill::{Skill, SkillSet, create_skill_set},
     },
     utils::id::{ActionId, CharacterId, ResourceId},
 };
@@ -41,7 +41,7 @@ use super::{
     level_up::{LevelUpChoice, LevelUpSelection},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Character {
     id: CharacterId,
     pub name: String,
@@ -488,6 +488,10 @@ impl Character {
         &self.loadout
     }
 
+    pub fn loadout_mut(&mut self) -> &mut Loadout {
+        &mut self.loadout
+    }
+
     pub fn equip_armor(&mut self, armor: Armor) -> Option<Armor> {
         self.add_effects(armor.effects().clone());
         self.loadout.equip_armor(armor)
@@ -507,7 +511,7 @@ impl Character {
 
     pub fn equip_item(
         &mut self,
-        slot: GeneralEquipmentSlot,
+        slot: &GeneralEquipmentSlot,
         item: EquipmentItem,
     ) -> Result<Option<EquipmentItem>, TryEquipError> {
         let unequipped_item = self.loadout.equip_item(slot, item)?;
@@ -519,7 +523,7 @@ impl Character {
         Ok(unequipped_item)
     }
 
-    pub fn unequip_item(&mut self, slot: GeneralEquipmentSlot) -> Option<EquipmentItem> {
+    pub fn unequip_item(&mut self, slot: &GeneralEquipmentSlot) -> Option<EquipmentItem> {
         let unequipped_item = self.loadout.unequip_item(slot);
         if let Some(item) = &unequipped_item {
             self.remove_effects(item.effects());
@@ -596,6 +600,10 @@ impl Character {
 
     pub fn resources(&self) -> &HashMap<ResourceId, Resource> {
         &self.resources
+    }
+
+    pub fn resources_mut(&mut self) -> &mut HashMap<ResourceId, Resource> {
+        &mut self.resources
     }
 
     pub fn resource(&self, kind: &ResourceId) -> Option<&Resource> {
@@ -843,8 +851,14 @@ impl fmt::Display for Character {
         if self.spellbook.spell_slots().is_empty() {
             write!(f, "\tNo spell slots available\n")?;
         }
-        for (level, (current_slots, max_slots)) in self.spellbook.spell_slots().iter() {
-            write!(f, "\tLevel {}: ({}/{})\n", level, current_slots, max_slots)?;
+        for (level, slots) in self.spellbook.spell_slots().iter() {
+            write!(
+                f,
+                "\tLevel {}: ({}/{})\n",
+                level,
+                slots.current(),
+                slots.maximum()
+            )?;
         }
 
         write!(f, "Effects:\n")?;

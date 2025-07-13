@@ -6,6 +6,7 @@ use crate::{
         effects::{Effect, EffectDuration},
         hooks::SkillCheckHook,
     },
+    items::item::Item,
     stats::{
         ability::Ability,
         d20_check::AdvantageType,
@@ -25,7 +26,7 @@ pub enum ArmorType {
     Heavy,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Armor {
     pub equipment: EquipmentItem,
     pub armor_type: ArmorType,
@@ -42,8 +43,8 @@ impl Armor {
         max_dexterity_bonus: i32,
         stealth_disadvantage: bool,
     ) -> Armor {
-        let item_name = Arc::new(equipment.item.name.clone());
-        let modifier_source: ModifierSource = ModifierSource::Item(item_name.clone().to_string());
+        let modifier_source: ModifierSource =
+            ModifierSource::Item(equipment.item.name.clone().to_string());
 
         let mut armor_class_modifiers = ModifierSet::new();
         armor_class_modifiers.add_modifier(modifier_source.clone(), armor_class);
@@ -52,7 +53,7 @@ impl Armor {
             let mut stealth_disadvantage_effect = Effect::new(
                 EffectId::from_str("effect.armor.stealth_disadvantage"),
                 modifier_source.clone(),
-                EffectDuration::Persistent,
+                EffectDuration::Permanent,
             );
 
             let mut skill_check_hook = SkillCheckHook::new(Skill::Stealth);
@@ -74,6 +75,10 @@ impl Armor {
             max_dexterity_bonus,
             stealth_disadvantage,
         }
+    }
+
+    pub fn item(&self) -> &Item {
+        &self.equipment.item
     }
 
     pub fn clothing(equipment: EquipmentItem) -> Armor {

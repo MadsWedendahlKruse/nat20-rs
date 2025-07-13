@@ -43,7 +43,7 @@ mod tests {
         let mut advantage_effect = Effect::new(
             EffectId::from_str("effect.ring_of_advantage"),
             ModifierSource::Item("Ring of Advantage".to_string()),
-            EffectDuration::Persistent,
+            EffectDuration::Permanent,
         );
         advantage_effect.pre_attack_roll = Arc::new(|_, attack_roll| {
             attack_roll.d20_check.advantage_tracker_mut().add(
@@ -85,7 +85,7 @@ mod tests {
         );
 
         // Advantage after equipping the ring
-        let _ = character.equip_item(GeneralEquipmentSlot::Ring(0), ring);
+        let _ = character.equip_item(&GeneralEquipmentSlot::Ring(0), ring);
         println!(
             "Equipped ring: {:?}",
             character
@@ -105,7 +105,7 @@ mod tests {
         println!("{:?}", attack_roll);
 
         // No advantage after unequipping the ring
-        character.unequip_item(GeneralEquipmentSlot::Ring(0));
+        character.unequip_item(&GeneralEquipmentSlot::Ring(0));
         let attack_roll =
             character
                 .loadout()
@@ -140,7 +140,7 @@ mod tests {
         let mut armor_effect = Effect::new(
             EffectId::from_str("effect.armor_of_sneaking"),
             modifier_source.clone(),
-            EffectDuration::Persistent,
+            EffectDuration::Permanent,
         );
 
         // Create a modifier source for each closure (pre_hook and post_hook)
@@ -202,7 +202,7 @@ mod tests {
         let mut armor_effect = Effect::new(
             EffectId::from_str("effect.armor_of_resilience"),
             modifier_source.clone(),
-            EffectDuration::Persistent,
+            EffectDuration::Permanent,
         );
 
         let mut saving_throw_hook = SavingThrowHook::new(Ability::Constitution);

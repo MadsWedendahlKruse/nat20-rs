@@ -18,16 +18,17 @@ use crate::{
 
 use super::hooks::{EffectHook, SavingThrowHook, SkillCheckHook};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EffectDuration {
     Instant,
-    Persistent,
     Temporary {
         /// Number of turns the effect lasts
         duration: u8,
         /// Number of turns that have passed since the effect was applied
         turns_elapsed: u8,
     },
+    Conditional,
+    Permanent,
 }
 
 impl EffectDuration {
@@ -43,7 +44,7 @@ impl Display for EffectDuration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             EffectDuration::Instant => write!(f, "Instant"),
-            EffectDuration::Persistent => write!(f, "Persistent"),
+            EffectDuration::Permanent => write!(f, "Persistent"),
             EffectDuration::Temporary {
                 duration,
                 turns_elapsed,
@@ -54,6 +55,7 @@ impl Display for EffectDuration {
                     duration, turns_elapsed
                 )
             }
+            EffectDuration::Conditional => write!(f, "Conditional"),
         }
     }
 }
@@ -123,7 +125,7 @@ impl Effect {
     pub fn is_expired(&self) -> bool {
         match self.duration {
             EffectDuration::Instant => true,
-            EffectDuration::Persistent => false,
+            EffectDuration::Permanent | EffectDuration::Conditional => false,
             EffectDuration::Temporary {
                 duration,
                 turns_elapsed,

@@ -108,7 +108,7 @@ mod tests {
         let mut arcana_effect = Effect::new(
             EffectId::from_str("effect.ring_of_arcana"),
             ModifierSource::Item("Ring of Arcana".to_string()),
-            EffectDuration::Persistent,
+            EffectDuration::Permanent,
         );
         arcana_effect.on_skill_check = Some(SkillCheckHook {
             key: Skill::Arcana,

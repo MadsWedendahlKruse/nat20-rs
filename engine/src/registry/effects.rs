@@ -68,7 +68,7 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
     let mut effect = Effect::new(
         effect_id.clone(),
         ModifierSource::ClassFeature(effect_id.to_string()),
-        EffectDuration::Persistent,
+        EffectDuration::Permanent,
     );
 
     // TODO: The logic seems sound, but we need to apply the hook when finding
@@ -169,7 +169,7 @@ static FIGHTING_STYLE_ARCHERY: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         FIGHTING_STYLE_ARCHERY_ID.clone(),
         ModifierSource::ClassFeature("Fighting Style: Archery".to_string()),
-        EffectDuration::Persistent,
+        EffectDuration::Permanent,
     );
     effect.pre_attack_roll = Arc::new(|_, attack_roll| {
         if match &attack_roll.source {
@@ -192,7 +192,7 @@ static FIGHTING_STYLE_DEFENSE: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         FIGHTING_STYLE_DEFENSE_ID.clone(),
         ModifierSource::ClassFeature("Fighting Style: Defense".to_string()),
-        EffectDuration::Persistent,
+        EffectDuration::Permanent,
     );
     effect.on_armor_class = Arc::new(|character, armor_class| {
         if let Some(armor) = &character.loadout().armor {
@@ -215,7 +215,7 @@ static FIGHTING_STYLE_GREAT_WEAPON_FIGHTING: LazyLock<Effect> = LazyLock::new(||
     let mut effect = Effect::new(
         FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
         ModifierSource::ClassFeature("Fighting Style: Great Weapon Fighting".to_string()),
-        EffectDuration::Persistent,
+        EffectDuration::Permanent,
     );
     effect.post_damage_roll = Arc::new(|character, damage_roll_result| {
         // Great weapon fighting only applies to melee attacks (with both hands)
@@ -256,7 +256,7 @@ static IMPROVED_CRITICAL: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         IMPROVED_CRITICAL_ID.clone(),
         ModifierSource::ClassFeature("Improved Critical".to_string()),
-        EffectDuration::Persistent,
+        EffectDuration::Permanent,
     );
     effect.pre_attack_roll = Arc::new(|_, attack_roll| {
         attack_roll.reduce_crit_threshold(1);

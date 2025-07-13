@@ -8,29 +8,29 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum CombatState {
+pub enum EncounterState {
     AwaitingAction,
     ResolvingAction,
     TurnTransition,
     CombatEnded,
 }
 
-pub struct CombatEngine<'c> {
+pub struct Encounter<'c> {
     pub participants: HashMap<CharacterId, &'c mut Character>,
     pub round: usize,
     pub turn_index: usize,
     pub initiative_order: Vec<(CharacterId, D20CheckResult)>,
-    pub state: CombatState,
+    pub state: EncounterState,
 }
 
-impl<'c> CombatEngine<'c> {
+impl<'c> Encounter<'c> {
     pub fn new(participants: Vec<&'c mut Character>) -> Self {
         let mut engine = Self {
             participants: participants.into_iter().map(|p| (p.id(), p)).collect(),
             round: 1,
             turn_index: 0,
             initiative_order: Vec::new(),
-            state: CombatState::TurnTransition,
+            state: EncounterState::TurnTransition,
         };
         engine.roll_initiative();
         engine.start_turn();
@@ -90,11 +90,11 @@ impl<'c> CombatEngine<'c> {
         // which characters are within the area of effect
         targets: Vec<CharacterId>,
     ) -> Result<Vec<ActionResult>, String> {
-        if self.state != CombatState::AwaitingAction {
+        if self.state != EncounterState::AwaitingAction {
             return Err("Engine is not ready for an action submission".into());
         }
 
-        self.state = CombatState::ResolvingAction;
+        self.state = EncounterState::ResolvingAction;
 
         // TODO: validate actions, e.g. for a melee weapon attack, the character must be adjacent to the target
         // TODO: validate that character has enough resources to perform the action
@@ -117,12 +117,12 @@ impl<'c> CombatEngine<'c> {
             .collect();
 
         // For now we just assume the action is resolved
-        self.state = CombatState::AwaitingAction;
+        self.state = EncounterState::AwaitingAction;
         Ok(results)
     }
 
     pub fn end_turn(&mut self) {
-        if self.state != CombatState::AwaitingAction {
+        if self.state != EncounterState::AwaitingAction {
             return;
         }
 
@@ -131,13 +131,13 @@ impl<'c> CombatEngine<'c> {
             self.round += 1;
         }
 
-        self.state = CombatState::TurnTransition;
+        self.state = EncounterState::TurnTransition;
         self.start_turn();
     }
 
     fn start_turn(&mut self) {
         self.current_character_mut().on_turn_start();
-        self.state = CombatState::AwaitingAction;
+        self.state = EncounterState::AwaitingAction;
     }
 
     pub fn round(&self) -> usize {
@@ -145,7 +145,7 @@ impl<'c> CombatEngine<'c> {
     }
 }
 
-impl ActionProvider for CombatEngine<'_> {
+impl ActionProvider for Encounter<'_> {
     fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
         self.current_character().all_actions()
     }
