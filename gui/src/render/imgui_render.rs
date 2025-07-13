@@ -1,13 +1,17 @@
 use std::collections::HashMap;
 
-use imgui::{Id, TableColumnFlags, TableColumnSetup, TableFlags, TreeNodeFlags};
+use imgui::{Id, TableColumnFlags, TableColumnSetup, TableFlags};
 use nat20_rs::{
+    combat::damage::{DamageRoll, DamageType},
     creature::character::Character,
     effects::effects::{Effect, EffectDuration},
-    items::equipment::{
-        equipment::{EquipmentSlot, GeneralEquipmentSlot, HandSlot},
-        loadout::Loadout,
-        weapon::WeaponType,
+    items::{
+        equipment::{
+            equipment::{EquipmentItem, EquipmentSlot, GeneralEquipmentSlot, HandSlot},
+            loadout::Loadout,
+            weapon::{self, Weapon, WeaponType},
+        },
+        item::Item,
     },
     registry,
     resources::resources::Resource,
@@ -23,6 +27,8 @@ use nat20_rs::{
 use std::collections::HashSet;
 use strum::IntoEnumIterator;
 
+use crate::render;
+
 pub trait ImguiRenderable {
     fn render(&self, ui: &imgui::Ui);
 }
@@ -35,14 +41,18 @@ pub trait ImguiRenderableWithContext<C> {
     fn render_with_context(&self, ui: &imgui::Ui, context: &C);
 }
 
-impl<T, C> ImguiRenderableWithContext<C> for T
-where
-    T: ImguiRenderable,
-{
-    fn render_with_context(&self, ui: &imgui::Ui, _context: &C) {
-        self.render(ui);
-    }
+pub trait ImguiRenderableMutWithContext<C> {
+    fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: &C);
 }
+
+// impl<T, C> ImguiRenderableWithContext<C> for T
+// where
+//     T: ImguiRenderable,
+// {
+//     fn render_with_context(&self, ui: &imgui::Ui, _context: &C) {
+//         self.render(ui);
+//     }
+// }
 
 fn table_column(name: &str) -> TableColumnSetup<&str> {
     TableColumnSetup {
@@ -132,6 +142,63 @@ fn render_proficiency(ui: &imgui::Ui, proficiency: &Proficiency, extra_text: &st
         ui.text(proficiency_icon(proficiency));
         if ui.is_item_hovered() {
             ui.tooltip_text(format!("{}{}", proficiency, extra_text));
+        }
+    }
+}
+
+impl ImguiRenderableMut for Character {
+    fn render_mut(&mut self, ui: &imgui::Ui) {
+        ui.text(format!("ID: {}", self.id()));
+        render_classes(ui, self);
+        render_health_bar(ui, self);
+
+        if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{}", self.id())) {
+            if let Some(tab) = ui.tab_item("Abilities") {
+                self.ability_scores().render_with_context(ui, self);
+                tab.end();
+            }
+
+            if let Some(tab) = ui.tab_item("Skills") {
+                self.skills().render_with_context(ui, self);
+                tab.end();
+            }
+
+            if let Some(tab) = ui.tab_item("Inventory") {
+                let mut wielding_both_hands = HashMap::new();
+                for weapon_type in WeaponType::iter() {
+                    wielding_both_hands.insert(
+                        weapon_type.clone(),
+                        self.loadout()
+                            .is_wielding_weapon_with_both_hands(&weapon_type),
+                    );
+                }
+
+                let context = LoadoutRenderContext {
+                    ability_scores: self.ability_scores().clone(),
+                    wielding_both_hands,
+                };
+
+                self.loadout_mut().render_mut_with_context(ui, &context);
+
+                tab.end();
+            }
+
+            if let Some(tab) = ui.tab_item("Spellbook") {
+                self.spellbook_mut().render_mut(ui);
+                tab.end();
+            }
+
+            if let Some(tab) = ui.tab_item("Effects") {
+                self.effects().render(ui);
+                tab.end();
+            }
+
+            if let Some(tab) = ui.tab_item("Resources") {
+                self.resources().render(ui);
+                tab.end();
+            }
+
+            tab_bar.end();
         }
     }
 }
@@ -413,8 +480,13 @@ impl ImguiRenderable for Vec<Effect> {
     }
 }
 
-impl ImguiRenderableMut for Loadout {
-    fn render_mut(&mut self, ui: &imgui::Ui) {
+struct LoadoutRenderContext {
+    ability_scores: AbilityScoreSet,
+    wielding_both_hands: HashMap<WeaponType, bool>,
+}
+
+impl ImguiRenderableMutWithContext<LoadoutRenderContext> for Loadout {
+    fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: &LoadoutRenderContext) {
         ui.separator_with_text("Weapons");
         if let Some(table) = table_columns!(ui, "Weapons", "Hand", "Weapon") {
             for weapon_type in WeaponType::iter() {
@@ -429,7 +501,12 @@ impl ImguiRenderableMut for Loadout {
                     ui.text(hand.to_string());
                     ui.table_next_column();
                     if let Some(weapon) = self.weapon_in_hand(&weapon_type, &hand) {
-                        ui.text(weapon.name().to_string());
+                        ui.text(weapon.equipment().item.name.to_string());
+                        if ui.is_item_hovered() {
+                            ui.tooltip(|| {
+                                weapon.render_with_context(ui, context);
+                            });
+                        }
                     }
                 }
             }
@@ -478,44 +555,73 @@ impl ImguiRenderableMut for Loadout {
     }
 }
 
-impl ImguiRenderableMut for Character {
-    fn render_mut(&mut self, ui: &imgui::Ui) {
-        ui.text(format!("ID: {}", self.id()));
-        render_classes(ui, self);
-        render_health_bar(ui, self);
+fn damage_type_color(damage_type: &DamageType) -> [f32; 4] {
+    match damage_type {
+        DamageType::Bludgeoning | DamageType::Piercing | DamageType::Slashing => {
+            [0.8, 0.8, 0.8, 1.0]
+        }
+        DamageType::Fire => [1.0, 0.5, 0.0, 1.0],
+        DamageType::Cold => [0.0, 1.0, 1.0, 1.0],
+        DamageType::Lightning => [0.25, 0.25, 1.0, 1.0],
+        DamageType::Acid => [0.0, 1.0, 0.0, 1.0],
+        DamageType::Poison => [0.5, 0.9, 0.0, 1.0],
+        DamageType::Force => [0.9, 0.0, 0.0, 1.0],
+        DamageType::Necrotic => [0.5, 1.0, 0.25, 1.0],
+        DamageType::Psychic => [1.0, 0.5, 1.0, 1.0],
+        DamageType::Radiant => [1.0, 0.9, 0.0, 1.0],
+        DamageType::Thunder => [0.5, 0.0, 1.0, 1.0],
+    }
+}
 
-        if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{}", self.id())) {
-            if let Some(tab) = ui.tab_item("Abilities") {
-                self.ability_scores().render_with_context(ui, self);
-                tab.end();
-            }
+fn render_item_misc(ui: &imgui::Ui, item: &Item) {
+    ui.text_colored([0.7, 0.7, 0.7, 1.0], &item.description);
+    // Fake right-aligned text for weight and value
+    let text = format!("{} kg, {} gold", item.weight, item.value);
+    let text_width = ui.calc_text_size(&text)[0];
+    let available_width = ui.content_region_avail()[0];
+    ui.set_cursor_pos([available_width - text_width, ui.cursor_pos()[1] + 10.0]);
+    ui.text(text);
+}
 
-            if let Some(tab) = ui.tab_item("Skills") {
-                self.skills().render_with_context(ui, self);
-                tab.end();
-            }
+impl ImguiRenderableWithContext<LoadoutRenderContext> for Weapon {
+    fn render_with_context(&self, ui: &imgui::Ui, context: &LoadoutRenderContext) {
+        ui.separator_with_text(&self.equipment().item.name);
+        let damage_roll = self.damage_roll(
+            &context.ability_scores,
+            *context.wielding_both_hands.get(self.weapon_type()).unwrap(),
+        );
+        damage_roll.render(ui);
+        ui.separator();
+        ui.text(format!("{}", self.category()));
+        for property in self.properties() {
+            ui.text(format!("{}", property));
+        }
+        ui.separator();
+        render_item_misc(ui, &self.equipment().item);
+    }
+}
 
-            if let Some(tab) = ui.tab_item("Inventory") {
-                self.loadout_mut().render_mut(ui);
-                tab.end();
-            }
+impl ImguiRenderable for DamageRoll {
+    fn render(&self, ui: &imgui::Ui) {
+        let min_max_rolls = self.min_max_rolls();
+        let min_damage = min_max_rolls
+            .iter()
+            .map(|(min_roll, _, _)| min_roll)
+            .sum::<i32>();
+        let max_damage = min_max_rolls
+            .iter()
+            .map(|(_, max_roll, _)| max_roll)
+            .sum::<i32>();
+        ui.text(format!("{}-{} Damage", min_damage, max_damage));
 
-            if let Some(tab) = ui.tab_item("Spellbook") {
-                self.spellbook_mut().render_mut(ui);
-                tab.end();
-            }
+        let mut damage_components = vec![self.primary.clone()];
+        damage_components.extend(self.bonus.clone());
 
-            if let Some(tab) = ui.tab_item("Effects") {
-                self.effects().render(ui);
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Resources") {
-                self.resources().render(ui);
-                tab.end();
-            }
-
-            tab_bar.end();
+        for component in damage_components {
+            ui.text_colored(
+                damage_type_color(&component.damage_type),
+                format!("\t{}", component.to_string()),
+            );
         }
     }
 }

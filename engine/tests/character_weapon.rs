@@ -35,9 +35,7 @@ mod tests {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
-            1,
-            DieSize::D8,
-            DamageType::Piercing,
+            vec![(1, DieSize::D8, DamageType::Piercing)],
             vec![],
         );
 
@@ -50,10 +48,18 @@ mod tests {
             AbilityScore::new(Ability::Dexterity, 16),
         );
 
-        assert_eq!(weapon.determine_ability(&character), Ability::Dexterity);
+        assert_eq!(
+            weapon.determine_ability(&character.ability_scores()),
+            Ability::Dexterity
+        );
 
         // Check that the damage roll uses Dexterity modifier
-        let damage_roll = weapon.damage_roll(&mut character, &HandSlot::Main);
+        let damage_roll = weapon.damage_roll(
+            character.ability_scores(),
+            character
+                .loadout()
+                .is_wielding_weapon_with_both_hands(&weapon.weapon_type()),
+        );
         let damage_roll_result = damage_roll.roll();
         println!("{:?}", damage_roll_result);
         // Min: 1 (1d8) + 3 (Dex) = 4
@@ -96,9 +102,7 @@ mod tests {
                 WeaponProperties::Versatile(dice_set_two_handed),
                 WeaponProperties::Enchantment(1),
             ]),
-            1,
-            DieSize::D6,
-            DamageType::Piercing,
+            vec![(1, DieSize::D6, DamageType::Piercing)],
             vec![],
         );
 
@@ -116,7 +120,12 @@ mod tests {
             .loadout()
             .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .unwrap();
-        let damage_roll = trident.damage_roll(&character, &HandSlot::Main);
+        let damage_roll = trident.damage_roll(
+            character.ability_scores(),
+            character
+                .loadout()
+                .is_wielding_weapon_with_both_hands(&trident.weapon_type()),
+        );
         // Check that it's using the two handed dice set
         assert!(damage_roll.primary.dice_roll.dice.num_dice == 1);
         assert!(damage_roll.primary.dice_roll.dice.die_size == DieSize::D8);
@@ -134,9 +143,7 @@ mod tests {
             equipment,
             WeaponCategory::Simple,
             HashSet::from([WeaponProperties::Light]),
-            1,
-            DieSize::D4,
-            DamageType::Piercing,
+            vec![(1, DieSize::D4, DamageType::Piercing)],
             vec![],
         );
         let unequipped_weapons = character.equip_weapon(dagger, HandSlot::Off).unwrap();
@@ -152,7 +159,12 @@ mod tests {
             .loadout()
             .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .unwrap();
-        let damage_roll = trident.damage_roll(&character, &HandSlot::Main);
+        let damage_roll = trident.damage_roll(
+            character.ability_scores(),
+            character
+                .loadout()
+                .is_wielding_weapon_with_both_hands(&trident.weapon_type()),
+        );
         // Check that it's using the one handed dice set
         assert!(damage_roll.primary.dice_roll.dice.num_dice == 1);
         assert!(damage_roll.primary.dice_roll.dice.die_size == DieSize::D6);
@@ -162,7 +174,7 @@ mod tests {
             .unequip_weapon(&WeaponType::Melee, HandSlot::Off)
             .unwrap();
         // Check that the dagger was unequipped
-        assert!(unequipped_weapon.name() == "Dagger");
+        assert!(unequipped_weapon.equipment().item.name == "Dagger");
         assert!(
             !character
                 .loadout()
@@ -179,7 +191,12 @@ mod tests {
             .loadout()
             .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
             .unwrap();
-        let damage_roll = trident.damage_roll(&character, &HandSlot::Main);
+        let damage_roll = trident.damage_roll(
+            character.ability_scores(),
+            character
+                .loadout()
+                .is_wielding_weapon_with_both_hands(&trident.weapon_type()),
+        );
         assert!(damage_roll.primary.dice_roll.dice.num_dice == 1);
         assert!(damage_roll.primary.dice_roll.dice.die_size == DieSize::D8);
     }
@@ -198,9 +215,7 @@ mod tests {
             ),
             WeaponCategory::Simple,
             HashSet::from([WeaponProperties::Light]),
-            1,
-            DieSize::D4,
-            DamageType::Piercing,
+            vec![(1, DieSize::D4, DamageType::Piercing)],
             vec![],
         );
         let trident = Weapon::new(
@@ -220,9 +235,7 @@ mod tests {
                 }),
                 WeaponProperties::Enchantment(1),
             ]),
-            1,
-            DieSize::D6,
-            DamageType::Piercing,
+            vec![(1, DieSize::D6, DamageType::Piercing)],
             vec![],
         );
 
@@ -255,9 +268,7 @@ mod tests {
             ),
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::TwoHanded]),
-            2,
-            DieSize::D6,
-            DamageType::Slashing,
+            vec![(2, DieSize::D6, DamageType::Slashing)],
             vec![],
         );
         let unequipped_weapons = character.equip_weapon(greatsword, HandSlot::Main).unwrap();
@@ -290,9 +301,7 @@ mod tests {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
-            1,
-            DieSize::D8,
-            DamageType::Slashing,
+            vec![(1, DieSize::D8, DamageType::Slashing)],
             vec![],
         );
 
@@ -306,7 +315,10 @@ mod tests {
         );
 
         // Check that the attack roll uses Dexterity modifier
-        let attack_roll = weapon.attack_roll(&mut character);
+        let attack_roll = weapon.attack_roll(
+            character.ability_scores(),
+            &character.weapon_proficiency(weapon.category()),
+        );
         assert!(
             attack_roll
                 .d20_check

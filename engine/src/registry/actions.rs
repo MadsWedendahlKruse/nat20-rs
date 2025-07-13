@@ -100,11 +100,14 @@ static WEAPON_ATTACK_ROLL: LazyLock<
             ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
             _ => panic!("Action context must be Weapon"),
         };
-        character
+        let weapon = character
             .loadout()
             .weapon_in_hand(weapon_type, hand)
-            .unwrap()
-            .attack_roll(character)
+            .expect("No weapon equipped in the specified hand");
+        weapon.attack_roll(
+            character.ability_scores(),
+            &character.weapon_proficiency(weapon.category()),
+        )
     })
 });
 
@@ -116,11 +119,16 @@ static WEAPON_DAMAGE_ROLL: LazyLock<
             ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
             _ => panic!("Action context must be Weapon"),
         };
-        character
+        let weapon = character
             .loadout()
             .weapon_in_hand(weapon_type, hand)
-            .unwrap()
-            .damage_roll(character, hand)
+            .expect("No weapon equipped in the specified hand");
+        weapon.damage_roll(
+            character.ability_scores(),
+            character
+                .loadout()
+                .is_wielding_weapon_with_both_hands(weapon_type),
+        )
     })
 });
 

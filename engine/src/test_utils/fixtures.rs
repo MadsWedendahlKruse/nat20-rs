@@ -84,9 +84,7 @@ pub mod weapons {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Light]),
-            1,
-            DieSize::D4,
-            DamageType::Piercing,
+            vec![(1, DieSize::D4, DamageType::Piercing)],
             vec![],
         )
     }
@@ -104,9 +102,7 @@ pub mod weapons {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
-            1,
-            DieSize::D8,
-            DamageType::Piercing,
+            vec![(1, DieSize::D8, DamageType::Piercing)],
             vec![],
         )
     }
@@ -128,9 +124,7 @@ pub mod weapons {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Versatile(dice_set_two_handed)]),
-            1,
-            DieSize::D6,
-            DamageType::Piercing,
+            vec![(1, DieSize::D6, DamageType::Piercing)],
             vec![],
         )
     }
@@ -148,9 +142,7 @@ pub mod weapons {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::TwoHanded]),
-            2,
-            DieSize::D6,
-            DamageType::Slashing,
+            vec![(2, DieSize::D6, DamageType::Slashing)],
             vec![],
         )
     }
@@ -168,9 +160,31 @@ pub mod weapons {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Range(10, 40)]),
-            1,
-            DieSize::D8,
-            DamageType::Piercing,
+            vec![(1, DieSize::D8, DamageType::Piercing)],
+            vec![],
+        )
+    }
+
+    pub fn greatsword_flaming() -> Weapon {
+        let equipment: EquipmentItem = EquipmentItem::new(
+            "Flaming Greatsword".to_string(),
+            "A test flaming greatsword.".to_string(),
+            1.8,
+            11,
+            ItemRarity::Rare,
+            EquipmentType::MeleeWeapon,
+        );
+        Weapon::new(
+            equipment,
+            WeaponCategory::Martial,
+            HashSet::from([
+                WeaponProperties::TwoHanded,
+                WeaponProperties::Enchantment(1),
+            ]),
+            vec![
+                (2, DieSize::D6, DamageType::Slashing),
+                (1, DieSize::D4, DamageType::Fire),
+            ],
             vec![],
         )
     }
@@ -303,8 +317,7 @@ pub mod creatures {
             }
 
             character.equip_armor(fixtures::armor::heavy_armor());
-            let _ =
-                character.equip_weapon(fixtures::weapons::greatsword_two_handed(), HandSlot::Main);
+            let _ = character.equip_weapon(fixtures::weapons::greatsword_flaming(), HandSlot::Main);
 
             character
         }

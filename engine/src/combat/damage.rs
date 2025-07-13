@@ -88,13 +88,13 @@ impl fmt::Display for DamageComponentResult {
 pub enum DamageSource {
     // TODO: Could also just use the entire weapon instead? Would be a lot of cloning unless
     // we introduce a lifetime for a reference
-    Weapon(WeaponType, HashSet<WeaponProperties>),
+    Weapon(WeaponType),
     Spell,
 }
 
 impl DamageSource {
     pub fn from_weapon(weapon: &Weapon) -> Self {
-        Self::Weapon(weapon.weapon_type.clone(), weapon.properties.clone())
+        Self::Weapon(weapon.weapon_type().clone())
     }
 }
 
@@ -122,6 +122,17 @@ impl DamageRoll {
             bonus: Vec::new(),
             source,
         }
+    }
+
+    pub fn add_bonus(
+        &mut self,
+        num_dice: u32,
+        die_size: DieSize,
+        damage_type: DamageType,
+        label: String,
+    ) {
+        self.bonus
+            .push(DamageComponent::new(num_dice, die_size, damage_type, label));
     }
 
     pub fn roll(&self) -> DamageRollResult {
@@ -160,6 +171,23 @@ impl DamageRoll {
             total,
             source: self.source.clone(),
         }
+    }
+
+    pub fn min_max_rolls(&self) -> Vec<(i32, i32, DamageType)> {
+        let mut results = Vec::new();
+        results.push((
+            self.primary.dice_roll.min_roll(),
+            self.primary.dice_roll.max_roll(),
+            self.primary.damage_type.clone(),
+        ));
+        for comp in &self.bonus {
+            results.push((
+                comp.dice_roll.min_roll(),
+                comp.dice_roll.max_roll(),
+                comp.damage_type.clone(),
+            ));
+        }
+        results
     }
 }
 
@@ -737,7 +765,7 @@ mod tests {
                 ),
                 damage_type: DamageType::Fire,
             }],
-            source: DamageSource::Weapon(WeaponType::Melee, HashSet::new()),
+            source: DamageSource::Weapon(WeaponType::Melee),
         }
     }
 
@@ -768,7 +796,7 @@ mod tests {
                 },
             ],
             total: 9,
-            source: DamageSource::Weapon(WeaponType::Melee, HashSet::new()),
+            source: DamageSource::Weapon(WeaponType::Melee),
         }
     }
 }

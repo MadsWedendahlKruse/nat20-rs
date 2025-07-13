@@ -1,22 +1,24 @@
 use std::{collections::HashSet, fmt::Display};
 
-use strum::EnumIter;
+use strum::{Display, EnumIter};
 
 use crate::{
     combat::damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
-    creature::character::Character,
     dice::dice::{DiceSet, DieSize},
     effects::effects::Effect,
     registry,
     stats::{
-        ability::Ability, d20_check::D20Check, modifier::ModifierSource, proficiency::Proficiency,
+        ability::{Ability, AbilityScoreSet},
+        d20_check::D20Check,
+        modifier::{ModifierSet, ModifierSource},
+        proficiency::Proficiency,
     },
     utils::id::ActionId,
 };
 
-use super::equipment::{EquipmentItem, EquipmentType, HandSlot};
+use super::equipment::{EquipmentItem, EquipmentType};
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Display)]
 pub enum WeaponCategory {
     Simple,
     Martial,
@@ -54,6 +56,15 @@ pub enum WeaponProperties {
     Enchantment(u32),
 }
 
+impl Display for WeaponProperties {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WeaponProperties::Enchantment(level) => write!(f, "Enchantment +{}", level),
+            _ => write!(f, "{:?}", self),
+        }
+    }
+}
+
 // These are really extra abilities, so might have to handle them differently
 // TODO: Handle these as weapon_actions
 // pub enum MasteryProperty {
@@ -73,10 +84,10 @@ const MELEE_RANGE_REACH: u32 = 10;
 #[derive(Debug, Clone)]
 pub struct Weapon {
     equipment: EquipmentItem,
-    pub category: WeaponCategory,
-    pub weapon_type: WeaponType,
-    pub properties: HashSet<WeaponProperties>,
-    pub damage_roll: DamageRoll,
+    category: WeaponCategory,
+    weapon_type: WeaponType,
+    properties: HashSet<WeaponProperties>,
+    damage_roll: DamageRoll,
     ability: Ability,
     weapon_actions: Vec<ActionId>,
 }
@@ -86,9 +97,7 @@ impl Weapon {
         equipment: EquipmentItem,
         category: WeaponCategory,
         properties: HashSet<WeaponProperties>,
-        num_dice: u32,
-        die_size: DieSize,
-        damage_type: DamageType,
+        damage: Vec<(u32, DieSize, DamageType)>,
         extra_weapon_actions: Vec<ActionId>,
     ) -> Self {
         let (weapon_type, ability, mut weapon_actions) = match equipment.kind {
@@ -104,13 +113,23 @@ impl Weapon {
             ),
             _ => panic!("Invalid equipment kind"),
         };
-        let damage_roll = DamageRoll::new(
+
+        if damage.is_empty() {
+            panic!("Weapon must have at least one damage type");
+        }
+        let (num_dice, die_size, damage_type) = damage[0];
+        let source = DamageSource::Weapon(weapon_type.clone());
+        let mut damage_roll = DamageRoll::new(
             num_dice,
             die_size,
             damage_type,
-            DamageSource::Weapon(weapon_type.clone(), properties.clone()),
+            source.clone(),
             equipment.item.name.clone(),
         );
+        for i in 1..damage.len() {
+            let (num_dice, die_size, damage_type) = damage[i];
+            damage_roll.add_bonus(num_dice, die_size, damage_type, equipment.item.name.clone());
+        }
 
         weapon_actions.extend(extra_weapon_actions);
 
@@ -125,28 +144,34 @@ impl Weapon {
         }
     }
 
-    pub fn name(&self) -> &str {
-        &self.equipment.item.name
+    pub fn equipment(&self) -> &EquipmentItem {
+        &self.equipment
+    }
+
+    pub fn category(&self) -> &WeaponCategory {
+        &self.category
+    }
+
+    pub fn weapon_type(&self) -> &WeaponType {
+        &self.weapon_type
+    }
+
+    pub fn properties(&self) -> &HashSet<WeaponProperties> {
+        &self.properties
     }
 
     pub fn has_property(&self, property: &WeaponProperties) -> bool {
         self.properties.contains(property)
     }
 
-    pub fn attack_roll(&self, character: &Character) -> AttackRoll {
-        let mut attack_roll = D20Check::new(
-            character
-                .weapon_proficiencies
-                .get(&self.category)
-                .unwrap_or(&Proficiency::None)
-                .clone(),
-        );
+    pub fn attack_roll(
+        &self,
+        ability_scores: &AbilityScoreSet,
+        weapon_proficiency: &Proficiency,
+    ) -> AttackRoll {
+        let mut attack_roll = D20Check::new(weapon_proficiency.clone());
 
-        let ability = self.determine_ability(character);
-        attack_roll.add_modifier(
-            ModifierSource::Ability(ability),
-            character.ability_scores().ability_modifier(ability).total(),
-        );
+        self.add_ability_modifier(ability_scores, &mut attack_roll.modifiers_mut());
 
         let enchantment = self.enchantment();
         if enchantment > 0 {
@@ -159,7 +184,11 @@ impl Weapon {
         AttackRoll::new(attack_roll, DamageSource::from_weapon(self))
     }
 
-    pub fn damage_roll(&self, character: &Character, hand: &HandSlot) -> DamageRoll {
+    pub fn damage_roll(
+        &self,
+        ability_scores: &AbilityScoreSet,
+        wielding_both_hands: bool,
+    ) -> DamageRoll {
         let mut damage_roll = self.damage_roll.clone();
 
         // Check if the weapon is versatile and the character is wielding it in two hands
@@ -170,19 +199,11 @@ impl Weapon {
                 None
             }
         });
-        if versatile_dice.is_some()
-            && !character
-                .loadout()
-                .has_weapon_in_hand(&self.weapon_type, &hand.other())
-        {
+        if versatile_dice.is_some() && !wielding_both_hands {
             damage_roll.primary.dice_roll.dice = versatile_dice.unwrap().clone();
         }
 
-        let ability = self.determine_ability(&character);
-        damage_roll.primary.dice_roll.modifiers.add_modifier(
-            ModifierSource::Ability(ability),
-            character.ability_scores().ability_modifier(ability).total(),
-        );
+        self.add_ability_modifier(ability_scores, &mut damage_roll.primary.dice_roll.modifiers);
 
         let enchantment = self.enchantment();
         if enchantment > 0 {
@@ -193,6 +214,14 @@ impl Weapon {
         }
 
         damage_roll
+    }
+
+    fn add_ability_modifier(&self, ability_scores: &AbilityScoreSet, modifiers: &mut ModifierSet) {
+        let ability = self.determine_ability(ability_scores);
+        modifiers.add_modifier(
+            ModifierSource::Ability(ability),
+            ability_scores.ability_modifier(ability).total(),
+        );
     }
 
     fn enchantment(&self) -> u32 {
@@ -208,11 +237,11 @@ impl Weapon {
             .unwrap_or(0)
     }
 
-    pub fn determine_ability(&self, character: &Character) -> Ability {
+    pub fn determine_ability(&self, ability_scores: &AbilityScoreSet) -> Ability {
         if self.has_property(&WeaponProperties::Finesse) {
             // Return the higher of the two abilities
-            let str = character.ability_scores().total(Ability::Strength);
-            let dex = character.ability_scores().total(Ability::Dexterity);
+            let str = ability_scores.total(Ability::Strength);
+            let dex = ability_scores.total(Ability::Dexterity);
             if str > dex {
                 Ability::Strength
             } else {
@@ -276,9 +305,7 @@ mod tests {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse, WeaponProperties::Enchantment(1)]),
-            1,
-            DieSize::D8,
-            DamageType::Slashing,
+            vec![(1, DieSize::D8, DamageType::Slashing)],
             vec![],
         );
 
@@ -309,9 +336,7 @@ mod tests {
                 equipment,
                 WeaponCategory::Martial,
                 HashSet::from([WeaponProperties::Finesse]),
-                1,
-                DieSize::D8,
-                DamageType::Slashing,
+                vec![(1, DieSize::D8, DamageType::Slashing)],
                 vec![],
             );
         });
@@ -336,9 +361,7 @@ mod tests {
             equipment,
             WeaponCategory::Simple,
             HashSet::from([WeaponProperties::Finesse, WeaponProperties::Light]),
-            1,
-            DieSize::D4,
-            DamageType::Piercing,
+            vec![(1, DieSize::D4, DamageType::Piercing)],
             vec![],
         );
         assert!(weapon.has_property(&WeaponProperties::Finesse));
@@ -360,9 +383,7 @@ mod tests {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Enchantment(2)]),
-            1,
-            DieSize::D6,
-            DamageType::Slashing,
+            vec![(1, DieSize::D6, DamageType::Slashing)],
             vec![],
         );
         assert_eq!(weapon.enchantment(), 2);
@@ -382,9 +403,7 @@ mod tests {
             equipment,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
-            1,
-            DieSize::D8,
-            DamageType::Piercing,
+            vec![(1, DieSize::D8, DamageType::Piercing)],
             vec![],
         );
         let mut character = fixtures::creatures::heroes::fighter();
@@ -392,7 +411,10 @@ mod tests {
             Ability::Dexterity,
             AbilityScore::new(Ability::Dexterity, 20),
         );
-        assert_eq!(weapon.determine_ability(&character), Ability::Dexterity);
+        assert_eq!(
+            weapon.determine_ability(&character.ability_scores()),
+            Ability::Dexterity
+        );
     }
 
     #[test]
@@ -409,12 +431,10 @@ mod tests {
             equipment,
             WeaponCategory::Martial,
             HashSet::new(),
-            1,
-            DieSize::D10,
-            DamageType::Bludgeoning,
+            vec![(1, DieSize::D10, DamageType::Bludgeoning)],
             vec![],
         );
-        assert_eq!(weapon.name(), "Warhammer");
+        assert_eq!(weapon.equipment().item.name, "Warhammer");
         assert!(weapon.effects().is_empty());
     }
 
@@ -432,9 +452,7 @@ mod tests {
             equipment,
             WeaponCategory::Simple,
             HashSet::new(),
-            1,
-            DieSize::D6,
-            DamageType::Piercing,
+            vec![(1, DieSize::D6, DamageType::Piercing)],
             vec![],
         );
         assert!(!weapon.weapon_actions().is_empty());

@@ -65,9 +65,7 @@ mod tests {
             ),
             WeaponCategory::Martial,
             HashSet::new(),
-            1,
-            DieSize::D8,
-            DamageType::Slashing,
+            vec![(1, DieSize::D8, DamageType::Slashing)],
             vec![],
         );
 

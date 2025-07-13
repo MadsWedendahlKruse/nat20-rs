@@ -13,6 +13,7 @@ use crate::{
     stats::{
         d20_check::D20CheckResult,
         modifier::{ModifierSet, ModifierSource},
+        proficiency::Proficiency,
     },
     utils::id::{ActionId, ResourceId},
 };
@@ -118,7 +119,7 @@ impl Loadout {
         hand: HandSlot,
     ) -> Result<Vec<Weapon>, TryEquipError> {
         let mut unequipped = Vec::new();
-        let weapon_type = weapon.weapon_type.clone();
+        let weapon_type = weapon.weapon_type().clone();
 
         if let Some(existing) = self.unequip_weapon(&weapon_type, hand) {
             unequipped.push(existing);
@@ -168,7 +169,7 @@ impl Loadout {
             // (Instead of checking for a specific Versatile(DiceSet), just check for any Versatile property)
             return (main_hand_weapon.has_property(&WeaponProperties::TwoHanded)
                 || main_hand_weapon
-                    .properties
+                    .properties()
                     .iter()
                     .any(|p| matches!(p, WeaponProperties::Versatile(_))))
                 && !self.has_weapon_in_hand(weapon_type, &HandSlot::Off);
@@ -183,10 +184,13 @@ impl Loadout {
         hand: &HandSlot,
     ) -> AttackRollResult {
         // TODO: Unarmed attacks
-        let attack_roll = self
+        let weapon = self
             .weapon_in_hand(weapon_type, hand)
-            .unwrap()
-            .attack_roll(character);
+            .expect("No weapon equipped in the specified hand");
+        let attack_roll = weapon.attack_roll(
+            character.ability_scores(),
+            &character.weapon_proficiency(weapon.category()),
+        );
 
         // TODO: How do we handle something like Fighting Style Archery, which modifies the attack roll for only ranged weapons?
 
@@ -247,7 +251,7 @@ impl fmt::Display for Loadout {
                 write!(f, "\t{:?} Weapon(s):\n", weapon_type)?;
                 for (hand, weapon) in weapon_map {
                     if let Some(w) = weapon {
-                        write!(f, "\t\t{} in {:?} hand\n", w.name(), hand)?;
+                        write!(f, "\t\t{} in {:?} hand\n", w.equipment().item.name, hand)?;
                     }
                 }
             }

@@ -572,6 +572,16 @@ impl Character {
         &mut self.resistances
     }
 
+    pub fn weapon_proficiencies(&self) -> &HashMap<WeaponCategory, Proficiency> {
+        &self.weapon_proficiencies
+    }
+
+    pub fn weapon_proficiency(&self, weapon_category: &WeaponCategory) -> &Proficiency {
+        self.weapon_proficiencies
+            .get(weapon_category)
+            .unwrap_or(&Proficiency::None)
+    }
+
     pub fn effects(&self) -> &Vec<Effect> {
         &self.effects
     }
