@@ -1,20 +1,15 @@
-use imgui::{Condition, Id, TableColumnFlags, TableColumnSetup, TableFlags, TreeNodeFlags};
-use nat20_rs::{
-    creature::character::Character,
-    engine::world::World,
-    stats::{ability::Ability, d20_check::RollMode, proficiency::Proficiency, skill::Skill},
-    test_utils::fixtures,
-};
-use strum::IntoEnumIterator;
+use std::collections::HashMap;
 
-use crate::render::imgui_render::{
-    ImguiRenderable, ImguiRenderableMut, ImguiRenderableWithContext,
-};
+use hecs::{Entity, World};
+use imgui::{Condition, TreeNodeFlags};
+use nat20_rs::{components::id::CharacterId, systems, test_utils::fixtures};
 
-pub struct GuiState<'c> {
-    world: World<'c>,
+use crate::render::imgui_render::ImguiRenderableMut;
+
+pub struct GuiState {
+    world: World,
     creation_state: Option<CharacterCreationState>,
-    predefined_characters: Vec<Character>,
+    characters: HashMap<CharacterId, Entity>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -24,17 +19,30 @@ enum CharacterCreationState {
     FromScratch,
 }
 
-impl<'c> GuiState<'c> {
-    pub fn new(world: World<'c>) -> Self {
+impl GuiState {
+    pub fn new() -> Self {
+        let mut world = World::new();
+
+        let spawners = vec![
+            fixtures::creatures::heroes::fighter,
+            fixtures::creatures::heroes::wizard,
+            fixtures::creatures::heroes::warlock,
+            fixtures::creatures::monsters::goblin_warrior,
+        ];
+
+        let mut characters = HashMap::new();
+
+        for spawner in spawners {
+            let (entity, id) = spawner(&mut world);
+            characters.insert(id, entity);
+            let name = systems::helpers::get_component_clone::<String>(&world, entity);
+            println!("Spawned character: {} ({}) ({})", name, id, entity.id());
+        }
+
         Self {
             world,
             creation_state: None,
-            predefined_characters: vec![
-                fixtures::creatures::heroes::fighter(),
-                fixtures::creatures::heroes::wizard(),
-                fixtures::creatures::heroes::warlock(),
-                fixtures::creatures::monsters::goblin_warrior(),
-            ],
+            characters,
         }
     }
 
@@ -48,9 +56,11 @@ impl<'c> GuiState<'c> {
             .size([400.0, 600.0], Condition::FirstUseEver)
             .build(|| {
                 ui.text("Characters in the world:");
-                for character in self.world.characters_mut() {
-                    if ui.collapsing_header(&character.name(), TreeNodeFlags::FRAMED) {
-                        character.render_mut(ui);
+                for (id, character) in &mut self.characters {
+                    let name =
+                        systems::helpers::get_component_clone::<String>(&self.world, *character);
+                    if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
+                        (&mut self.world, *character).render_mut(ui);
                     }
                 }
                 if ui.button("Add Character") {
@@ -64,7 +74,7 @@ impl<'c> GuiState<'c> {
             return;
         }
         ui.window("Character Creation")
-            .size([600.0, 1200.0], Condition::FirstUseEver)
+            .size([600.0, 800.0], Condition::FirstUseEver)
             .build(|| {
                 match self.creation_state {
                     Some(CharacterCreationState::ChoosingMethod) => {
@@ -79,14 +89,18 @@ impl<'c> GuiState<'c> {
                         }
                     }
                     Some(CharacterCreationState::FromPredefined) => {
-                        for character in &mut self.predefined_characters {
-                            if ui.collapsing_header(&character.name(), TreeNodeFlags::FRAMED) {
+                        for (id, character) in &mut self.characters {
+                            let name = systems::helpers::get_component_clone::<String>(
+                                &self.world,
+                                *character,
+                            );
+                            if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
                                 if ui.button(format!("Add to World##{}", character.id())) {
-                                    self.world.add_character(character.clone());
+                                    // self.world.add_character(character.clone());
                                     self.creation_state = None;
                                 }
                                 ui.separator();
-                                character.render_mut(ui);
+                                (&mut self.world, *character).render_mut(ui);
                             }
                         }
                         ui.separator();

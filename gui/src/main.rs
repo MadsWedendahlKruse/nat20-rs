@@ -6,13 +6,6 @@ mod utils;
 
 use glow::HasContext;
 use glutin::surface::GlSurface;
-use imgui::{Condition, TreeNodeFlags};
-use nat20_rs::{
-    engine::world::World,
-    stats::{ability::Ability, d20_check::RollMode, proficiency::Proficiency, skill::Skill},
-    test_utils::fixtures,
-};
-use strum::IntoEnumIterator;
 
 use crate::state::GuiState;
 
@@ -30,7 +23,7 @@ fn main() {
 
     let mut last_frame = Instant::now();
 
-    let mut gui_state = GuiState::new(World::new());
+    let mut gui_state = GuiState::new();
 
     #[allow(deprecated)]
     event_loop

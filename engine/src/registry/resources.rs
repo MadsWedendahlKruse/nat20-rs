@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use crate::utils::id::ResourceId;
+use crate::components::id::ResourceId;
 
 // TODO: Feels a bit over-engineered
 fn resource_key(name: &str) -> ResourceId {

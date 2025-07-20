@@ -1,5 +1,5 @@
 pub mod armor {
-    use crate::items::{
+    use crate::components::items::{
         equipment::{
             armor::Armor,
             equipment::{EquipmentItem, EquipmentType},
@@ -59,9 +59,9 @@ pub mod armor {
 pub mod weapons {
     use std::collections::HashSet;
 
-    use crate::{
-        combat::damage::DamageType,
-        dice::dice::{DiceSet, DieSize},
+    use crate::components::{
+        damage::DamageType,
+        dice::{DiceSet, DieSize},
         items::{
             equipment::{
                 equipment::{EquipmentItem, EquipmentType},
@@ -191,7 +191,7 @@ pub mod weapons {
 }
 
 pub mod equipment {
-    use crate::items::{
+    use crate::components::items::{
         equipment::equipment::{EquipmentItem, EquipmentType},
         item::ItemRarity,
     };
@@ -222,64 +222,54 @@ pub mod equipment {
 pub mod creatures {
     use std::collections::HashMap;
 
+    use hecs::{Entity, World};
+
     use crate::{
-        creature::{
-            character::Character,
-            level_up::{LevelUpSelection, PredefinedChoiceProvider},
-        },
-        items::equipment::equipment::HandSlot,
-        stats::{
-            ability::{Ability, AbilityScore},
+        components::{
+            ability::{Ability, AbilityScore, AbilityScoreSet},
+            items::equipment::equipment::HandSlot,
             modifier::ModifierSource,
             skill::Skill,
         },
+        systems::{
+            self,
+            level_up::{LevelUpSelection, LevelUpSession, PredefinedChoiceProvider},
+        },
     };
-
-    fn apply_level_up_selection(
-        character: &mut Character,
-        levels: u8,
-        responses: Vec<LevelUpSelection>,
-    ) {
-        let mut choice_provider =
-            PredefinedChoiceProvider::new(character.name().to_string(), responses);
-        for level in 1..=levels {
-            let mut level_up_session = character.level_up();
-            level_up_session
-                .advance(&mut choice_provider)
-                .expect(&format!(
-                    "Failed to apply level {} for {}",
-                    level,
-                    character.name()
-                ));
-        }
-    }
 
     pub mod heroes {
         use std::collections::HashSet;
 
         use crate::{
-            creature::{
-                classes::class::{ClassName, SubclassName},
-                level_up::LevelUpSelection,
+            components::{
+                class::{ClassName, SubclassName},
+                id::CharacterId,
+                skill::SkillSet,
+                spells::spellbook::Spellbook,
             },
+            entities::character::Character,
             registry,
             test_utils::fixtures,
         };
 
         use super::*;
 
-        pub fn add_initiative(hero: &mut Character) {
-            hero.skills_mut().add_modifier(
+        pub fn add_initiative(world: &mut World, entity: Entity) {
+            systems::helpers::get_component_mut::<SkillSet>(world, entity).add_modifier(
                 Skill::Initiative,
                 ModifierSource::Custom("Admin testing".to_string()),
                 20,
             );
         }
 
-        pub fn fighter() -> Character {
-            let mut character = Character::new("Johnny Fighter");
+        // TODO: Should spawn an Entity in a World instead of returning a Character
+        pub fn fighter(world: &mut World) -> (Entity, CharacterId) {
+            let character = Character::new("Johnny Fighter");
+            let id = character.id.clone();
+            let entity = world.spawn(character);
             apply_level_up_selection(
-                &mut character,
+                world,
+                entity,
                 5,
                 vec![
                     LevelUpSelection::Class(ClassName::Fighter),
@@ -310,22 +300,26 @@ pub mod creatures {
                 (Ability::Charisma, 8),
             ]);
 
-            for (ability, score) in ability_scores {
-                character
-                    .ability_scores_mut()
-                    .set(ability, AbilityScore::new(ability, score));
-            }
+            set_ability_scores(world, entity, ability_scores);
 
-            character.equip_armor(fixtures::armor::heavy_armor());
-            let _ = character.equip_weapon(fixtures::weapons::greatsword_flaming(), HandSlot::Main);
+            systems::loadout::equip_armor(world, entity, fixtures::armor::heavy_armor());
+            let _ = systems::loadout::equip_weapon(
+                world,
+                entity,
+                fixtures::weapons::greatsword_flaming(),
+                HandSlot::Main,
+            );
 
-            character
+            (entity, id)
         }
 
-        pub fn wizard() -> Character {
-            let mut character = Character::new("Jimmy Wizard");
+        pub fn wizard(world: &mut World) -> (Entity, CharacterId) {
+            let character = Character::new("Jimmy Wizard");
+            let id = character.id.clone();
+            let entity = world.spawn(character);
             apply_level_up_selection(
-                &mut character,
+                world,
+                entity,
                 5,
                 vec![
                     LevelUpSelection::Class(ClassName::Wizard),
@@ -353,31 +347,27 @@ pub mod creatures {
                 (Ability::Charisma, 10),
             ]);
 
-            for (ability, score) in ability_scores {
-                character
-                    .ability_scores_mut()
-                    .set(ability, AbilityScore::new(ability, score));
-            }
+            set_ability_scores(world, entity, ability_scores);
 
-            character.equip_armor(fixtures::armor::clothing());
+            systems::loadout::equip_armor(world, entity, fixtures::armor::clothing());
 
             // TODO: Spellcasting ability should be set automatically based on class
-            character
-                .spellbook_mut()
-                .add_spell(&registry::spells::MAGIC_MISSILE_ID, Ability::Intelligence);
-            character
-                .spellbook_mut()
-                .add_spell(&registry::spells::FIREBALL_ID, Ability::Intelligence);
+            let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
+            spellbook.add_spell(&registry::spells::MAGIC_MISSILE_ID, Ability::Intelligence);
+            spellbook.add_spell(&registry::spells::FIREBALL_ID, Ability::Intelligence);
             // TODO: This should be set automatically based on class
-            character.spellbook_mut().set_max_prepared_spells(5);
+            spellbook.set_max_prepared_spells(5);
 
-            character
+            (entity, id)
         }
 
-        pub fn warlock() -> Character {
-            let mut character = Character::new("Bobby Warlock");
+        pub fn warlock(world: &mut World) -> (Entity, CharacterId) {
+            let character = Character::new("Bobby Warlock");
+            let id = character.id.clone();
+            let entity = world.spawn(character);
             apply_level_up_selection(
-                &mut character,
+                world,
+                entity,
                 5,
                 vec![
                     LevelUpSelection::Class(ClassName::Warlock),
@@ -405,20 +395,15 @@ pub mod creatures {
                 (Ability::Charisma, 17),
             ]);
 
-            for (ability, score) in ability_scores {
-                character
-                    .ability_scores_mut()
-                    .set(ability, AbilityScore::new(ability, score));
-            }
+            set_ability_scores(world, entity, ability_scores);
 
-            character.equip_armor(fixtures::armor::clothing());
+            systems::loadout::equip_armor(world, entity, fixtures::armor::clothing());
 
-            character.spellbook_mut().update_spell_slots(5);
-            character
-                .spellbook_mut()
-                .add_spell(&registry::spells::ELDRITCH_BLAST_ID, Ability::Charisma);
+            let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
+            spellbook.update_spell_slots(5);
+            spellbook.add_spell(&registry::spells::ELDRITCH_BLAST_ID, Ability::Charisma);
 
-            character
+            (entity, id)
         }
     }
 
@@ -426,18 +411,22 @@ pub mod creatures {
         use std::collections::HashSet;
 
         use crate::{
-            creature::{classes::class::ClassName, level_up::LevelUpSelection},
+            components::{class::ClassName, id::CharacterId},
+            entities::character::Character,
             registry,
             test_utils::fixtures,
         };
 
         use super::*;
 
-        pub fn goblin_warrior() -> Character {
-            let mut character = Character::new("Goblin Warrior");
+        pub fn goblin_warrior(world: &mut World) -> (Entity, CharacterId) {
+            let character = Character::new("Goblin Warrior");
+            let id = character.id.clone();
+            let entity = world.spawn(character);
             // TODO: Not sure how to handle monster level-ups yet
             apply_level_up_selection(
-                &mut character,
+                world,
+                entity,
                 1,
                 vec![
                     LevelUpSelection::Class(ClassName::Fighter),
@@ -460,16 +449,46 @@ pub mod creatures {
                 (Ability::Charisma, 8),
             ]);
 
-            for (ability, score) in ability_scores {
-                character
-                    .ability_scores_mut()
-                    .set(ability, AbilityScore::new(ability, score));
-            }
+            set_ability_scores(world, entity, ability_scores);
 
-            character.equip_armor(fixtures::armor::medium_armor());
-            let _ = character.equip_weapon(fixtures::weapons::dagger_light(), HandSlot::Main);
+            systems::loadout::equip_armor(world, entity, fixtures::armor::medium_armor());
+            let _ = systems::loadout::equip_weapon(
+                world,
+                entity,
+                fixtures::weapons::dagger_light(),
+                HandSlot::Main,
+            );
 
-            character
+            (entity, id)
+        }
+    }
+
+    fn apply_level_up_selection(
+        world: &mut World,
+        entity: Entity,
+        levels: u8,
+        responses: Vec<LevelUpSelection>,
+    ) {
+        // TODO: String is a bit generic here
+        let name = systems::helpers::get_component::<String>(world, entity).to_string();
+        let mut choice_provider = PredefinedChoiceProvider::new(name.clone(), responses);
+        for level in 1..=levels {
+            let mut level_up_session = LevelUpSession::new(entity);
+            level_up_session
+                .advance(world, &mut choice_provider)
+                .expect(&format!("Failed to apply level {} for {}", level, name));
+        }
+    }
+
+    fn set_ability_scores(
+        world: &mut World,
+        entity: Entity,
+        ability_scores: HashMap<Ability, i32>,
+    ) {
+        let mut ability_score_set =
+            systems::helpers::get_component_mut::<AbilityScoreSet>(world, entity);
+        for (ability, score) in ability_scores {
+            ability_score_set.set(ability, AbilityScore::new(ability, score));
         }
     }
 }

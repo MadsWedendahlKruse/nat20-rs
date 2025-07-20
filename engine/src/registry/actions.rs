@@ -3,18 +3,25 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+use hecs::{Entity, World};
+
 use crate::{
-    actions::{
-        action::{Action, ActionContext, ActionKind},
-        targeting::{TargetType, TargetingContext, TargetingKind},
+    components::{
+        ability::AbilityScoreSet,
+        actions::{
+            action::{Action, ActionContext, ActionKind},
+            targeting::{TargetType, TargetingContext, TargetingKind},
+        },
+        class::ClassName,
+        damage::{AttackRoll, DamageRoll},
+        dice::{DiceSet, DiceSetRoll, DieSize},
+        id::{ActionId, ResourceId},
+        items::equipment::{loadout::Loadout, weapon::WeaponProficiencyMap},
+        level::CharacterLevels,
+        modifier::{ModifierSet, ModifierSource},
+        resource::RechargeRule,
     },
-    combat::damage::{AttackRoll, DamageRoll},
-    creature::{character::Character, classes::class::ClassName},
-    dice::dice::{DiceSet, DiceSetRoll, DieSize},
-    registry,
-    resources::resources::RechargeRule,
-    stats::modifier::{ModifierSet, ModifierSource},
-    utils::id::{ActionId, ResourceId},
+    registry, systems,
 };
 
 pub static ACTION_REGISTRY: LazyLock<HashMap<ActionId, (Action, Option<ActionContext>)>> =
@@ -36,7 +43,7 @@ static ACTION_SURGE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(|
             kind: ActionKind::BeneficialEffect {
                 effect: registry::effects::ACTION_SURGE_ID.clone(),
             },
-            targeting: Arc::new(|_, _| TargetingContext::self_target()),
+            targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
             resource_cost: HashMap::from([(registry::resources::ACTION_SURGE.clone(), 1)]),
             cooldown: Some(RechargeRule::OnTurn),
         },
@@ -52,11 +59,14 @@ static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(||
         Action {
             id: SECOND_WIND_ID.clone(),
             kind: ActionKind::Healing {
-                heal: Arc::new(|character, _| {
+                heal: Arc::new(|world, entity, _| {
                     let mut modifiers = ModifierSet::new();
                     modifiers.add_modifier(
                         ModifierSource::ClassFeature("Fighter level".to_string()),
-                        character.level(&ClassName::Fighter) as i32,
+                        systems::helpers::get_component::<CharacterLevels>(world, entity)
+                            .class_level(&ClassName::Fighter)
+                            .unwrap()
+                            .level() as i32,
                     );
                     DiceSetRoll::new(
                         DiceSet {
@@ -68,7 +78,7 @@ static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(||
                     )
                 }),
             },
-            targeting: Arc::new(|_, _| TargetingContext::self_target()),
+            targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
             resource_cost: HashMap::from([(registry::resources::BONUS_ACTION.clone(), 1)]),
             cooldown: None,
         },
@@ -93,66 +103,71 @@ static WEAPON_ATTACK: LazyLock<Action> = LazyLock::new(|| Action {
 
 // TODO: Some of this seems a bit circular?
 static WEAPON_ATTACK_ROLL: LazyLock<
-    Arc<dyn Fn(&Character, &ActionContext) -> AttackRoll + Send + Sync>,
+    Arc<dyn Fn(&World, Entity, &ActionContext) -> AttackRoll + Send + Sync>,
 > = LazyLock::new(|| {
-    Arc::new(|character: &Character, action_context: &ActionContext| {
-        let (weapon_type, hand) = match action_context {
-            ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
-            _ => panic!("Action context must be Weapon"),
-        };
-        let weapon = character
-            .loadout()
-            .weapon_in_hand(weapon_type, hand)
-            .expect("No weapon equipped in the specified hand");
-        weapon.attack_roll(
-            character.ability_scores(),
-            &character.weapon_proficiency(weapon.category()),
-        )
-    })
+    Arc::new(
+        |world: &World, entity: Entity, action_context: &ActionContext| {
+            let (weapon_type, hand) = match action_context {
+                ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
+                _ => panic!("Action context must be Weapon"),
+            };
+            let loadout = systems::helpers::get_component::<Loadout>(world, entity);
+            let weapon = loadout
+                .weapon_in_hand(weapon_type, hand)
+                .expect("No weapon equipped in the specified hand");
+            weapon.attack_roll(
+                &systems::helpers::get_component::<&AbilityScoreSet>(world, entity),
+                &systems::helpers::get_component::<WeaponProficiencyMap>(world, entity)
+                    .proficiency(weapon.category()),
+            )
+        },
+    )
 });
 
 static WEAPON_DAMAGE_ROLL: LazyLock<
-    Arc<dyn Fn(&Character, &ActionContext) -> DamageRoll + Send + Sync>,
+    Arc<dyn Fn(&World, Entity, &ActionContext) -> DamageRoll + Send + Sync>,
 > = LazyLock::new(|| {
-    Arc::new(|character: &Character, action_context: &ActionContext| {
-        let (weapon_type, hand) = match action_context {
-            ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
-            _ => panic!("Action context must be Weapon"),
-        };
-        let weapon = character
-            .loadout()
-            .weapon_in_hand(weapon_type, hand)
-            .expect("No weapon equipped in the specified hand");
-        weapon.damage_roll(
-            character.ability_scores(),
-            character
-                .loadout()
-                .is_wielding_weapon_with_both_hands(weapon_type),
-        )
-    })
+    Arc::new(
+        |world: &World, entity: Entity, action_context: &ActionContext| {
+            let (weapon_type, hand) = match action_context {
+                ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
+                _ => panic!("Action context must be Weapon"),
+            };
+            let loadout = systems::helpers::get_component::<Loadout>(world, entity);
+            let weapon = loadout
+                .weapon_in_hand(weapon_type, hand)
+                .expect("No weapon equipped in the specified hand");
+            weapon.damage_roll(
+                &systems::helpers::get_component::<&AbilityScoreSet>(world, entity),
+                loadout.is_wielding_weapon_with_both_hands(weapon_type),
+            )
+        },
+    )
 });
 
 static WEAPON_TARGETING: LazyLock<
-    Arc<dyn Fn(&Character, &ActionContext) -> TargetingContext + Send + Sync>,
+    Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
 > = LazyLock::new(|| {
-    Arc::new(|character: &Character, action_context: &ActionContext| {
-        let (weapon_type, hand) = match action_context {
-            ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
-            _ => panic!("Action context must be Weapon"),
-        };
-        let (normal_range, max_range) = character
-            .loadout()
-            .weapon_in_hand(weapon_type, hand)
-            .unwrap()
-            .range();
+    Arc::new(
+        |world: &World, entity: Entity, action_context: &ActionContext| {
+            let (weapon_type, hand) = match action_context {
+                ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
+                _ => panic!("Action context must be Weapon"),
+            };
+            let (normal_range, max_range) =
+                systems::helpers::get_component::<Loadout>(world, entity)
+                    .weapon_in_hand(weapon_type, hand)
+                    .unwrap()
+                    .range();
 
-        TargetingContext {
-            kind: TargetingKind::Single,
-            normal_range,
-            max_range,
-            valid_target_types: vec![TargetType::Character],
-        }
-    })
+            TargetingContext {
+                kind: TargetingKind::Single,
+                normal_range,
+                max_range,
+                valid_target_types: vec![TargetType::Entity],
+            }
+        },
+    )
 });
 
 static DEFAULT_RESOURCE_COST: LazyLock<HashMap<ResourceId, u8>> =

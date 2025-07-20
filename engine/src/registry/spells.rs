@@ -3,19 +3,28 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+use hecs::{Entity, World};
+
 use crate::{
-    actions::{
-        action::{ActionContext, ActionKind},
-        targeting::{AreaShape, TargetType, TargetingContext, TargetingKind},
+    components::{
+        ability::{Ability, AbilityScoreSet},
+        actions::{
+            action::{ActionContext, ActionKind},
+            targeting::{AreaShape, TargetType, TargetingContext, TargetingKind},
+        },
+        d20_check::{D20Check, D20CheckDC},
+        damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
+        dice::DieSize,
+        id::SpellId,
+        modifier::{ModifierSet, ModifierSource},
+        proficiency::Proficiency,
+        spells::{
+            spell::{MagicSchool, Spell},
+            spellbook::Spellbook,
+        },
     },
-    combat::damage::{DamageRoll, DamageSource, DamageType},
-    creature::character::Character,
-    dice::dice::DieSize,
     math::point::Point,
-    registry,
-    spells::spell::{MagicSchool, Spell},
-    stats::{ability::Ability, modifier::ModifierSource},
-    utils::id::SpellId,
+    registry, systems,
 };
 
 pub static SPELL_REGISTRY: LazyLock<HashMap<SpellId, Spell>> = LazyLock::new(|| {
@@ -35,11 +44,10 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
         0, // Cantrip
         MagicSchool::Evocation,
         ActionKind::AttackRollDamage {
-            attack_roll: Arc::new(|caster, _| {
-                // TODO: Macro?
-                Spell::spell_attack_roll(caster, spellcasting_ability(caster, &ELDRITCH_BLAST_ID))
+            attack_roll: Arc::new(|world, caster, _| {
+                spell_attack_roll(world, caster, &ELDRITCH_BLAST_ID)
             }),
-            damage: Arc::new(|_, _| {
+            damage: Arc::new(|_, _, _| {
                 DamageRoll::new(
                     1,
                     DieSize::D10,
@@ -51,8 +59,10 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
             damage_on_failure: None,
         },
         HashMap::from([(registry::resources::ACTION.clone(), 1)]),
-        Arc::new(|caster, _| {
-            let caster_level = caster.total_level();
+        Arc::new(|world, entity, _| {
+            let caster_level = systems::helpers::level(world, entity)
+                .unwrap()
+                .total_level();
             TargetingContext {
                 kind: TargetingKind::Multiple {
                     max_targets: match caster_level {
@@ -64,7 +74,7 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
                 },
                 normal_range: 120,
                 max_range: 120,
-                valid_target_types: vec![TargetType::Character],
+                valid_target_types: vec![TargetType::Entity],
             }
         }),
     )
@@ -78,11 +88,9 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
         3,
         MagicSchool::Evocation,
         ActionKind::SavingThrowDamage {
-            saving_throw: Arc::new(|caster, _| {
-                Spell::spell_save_dc(caster, spellcasting_ability(caster, &FIREBALL_ID))
-            }),
+            saving_throw: Arc::new(|world, caster, _| spell_save_dc(world, caster, &FIREBALL_ID)),
             half_damage_on_save: true,
-            damage: Arc::new(|_, action_context| {
+            damage: Arc::new(|_, _, action_context| {
                 let spell_level = match action_context {
                     ActionContext::Spell { level } => *level,
                     _ => panic!("Invalid action context"),
@@ -97,7 +105,7 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
             }),
         },
         HashMap::from([(registry::resources::ACTION.clone(), 1)]),
-        Arc::new(|_, _| TargetingContext {
+        Arc::new(|_, _, _| TargetingContext {
             kind: TargetingKind::Area {
                 shape: AreaShape::Sphere { radius: 20 },
                 // TODO: What do we do here?
@@ -110,7 +118,7 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
             normal_range: 150,
             max_range: 150,
             // TODO: Can also hit objects
-            valid_target_types: vec![TargetType::Character],
+            valid_target_types: vec![TargetType::Entity],
         }),
     )
 });
@@ -124,7 +132,7 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
         1,
         MagicSchool::Evocation,
         ActionKind::UnconditionalDamage {
-            damage: Arc::new(|_, _| {
+            damage: Arc::new(|_, _, _| {
                 // TODO: Damage roll hooks? e.g. Empowered Evocation
                 let mut damage_roll = DamageRoll::new(
                     1,
@@ -143,7 +151,7 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
             }),
         },
         HashMap::from([(registry::resources::ACTION.clone(), 1)]),
-        Arc::new(|_, action_context| {
+        Arc::new(|_, _, action_context| {
             let spell_level = match action_context {
                 ActionContext::Spell { level } => *level,
                 // TODO: Better error message? Replace other places too
@@ -155,12 +163,71 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
                 },
                 normal_range: 120,
                 max_range: 120,
-                valid_target_types: vec![TargetType::Character],
+                valid_target_types: vec![TargetType::Entity],
             }
         }),
     )
 });
 
-fn spellcasting_ability(caster: &Character, spell_id: &SpellId) -> Ability {
-    *caster.spellbook().spellcasting_ability(spell_id).unwrap()
+const BASE_SPELL_SAVE_DC: i32 = 8;
+
+fn spell_save_dc(world: &World, caster: Entity, spell_id: &SpellId) -> D20CheckDC<Ability> {
+    let ability_scores = systems::helpers::get_component::<&AbilityScoreSet>(world, caster);
+    let spellcasting_ability = systems::helpers::get_component::<Spellbook>(world, caster)
+        .spellcasting_ability(spell_id)
+        .unwrap()
+        .clone();
+    let proficiency_bonus = systems::helpers::level(world, caster)
+        .unwrap()
+        .proficiency_bonus();
+
+    let mut spell_save_dc = ModifierSet::new();
+    spell_save_dc.add_modifier(
+        ModifierSource::Custom("Base spell save DC".to_string()),
+        BASE_SPELL_SAVE_DC,
+    );
+    let spellcasting_modifier = ability_scores
+        .ability_modifier(spellcasting_ability)
+        .total();
+    spell_save_dc.add_modifier(
+        ModifierSource::Ability(spellcasting_ability),
+        spellcasting_modifier,
+    );
+    // TODO: Not sure if Proficiency is the correct modifier source here, since I don't think
+    // you can have e.g. Expertise in spell save DCs.
+    spell_save_dc.add_modifier(
+        ModifierSource::Proficiency(Proficiency::Proficient),
+        proficiency_bonus as i32,
+    );
+
+    D20CheckDC {
+        key: spellcasting_ability,
+        dc: spell_save_dc,
+    }
+}
+
+fn spell_attack_roll(world: &World, caster: Entity, spell_id: &SpellId) -> AttackRoll {
+    let ability_scores = systems::helpers::get_component::<&AbilityScoreSet>(world, caster);
+    let spellcasting_ability = systems::helpers::get_component::<Spellbook>(world, caster)
+        .spellcasting_ability(spell_id)
+        .unwrap()
+        .clone();
+    let proficiency_bonus = systems::helpers::level(world, caster)
+        .unwrap()
+        .proficiency_bonus();
+
+    let mut roll = D20Check::new(Proficiency::Proficient);
+    let spellcasting_modifier = ability_scores
+        .ability_modifier(spellcasting_ability)
+        .total();
+    roll.add_modifier(
+        ModifierSource::Ability(spellcasting_ability),
+        spellcasting_modifier,
+    );
+    roll.add_modifier(
+        ModifierSource::Proficiency(Proficiency::Proficient),
+        proficiency_bonus as i32,
+    );
+
+    AttackRoll::new(roll, DamageSource::Spell)
 }

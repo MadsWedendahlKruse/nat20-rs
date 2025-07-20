@@ -1,28 +1,31 @@
 use std::collections::HashMap;
 
+use hecs::{Entity, World};
 use imgui::{Id, TableColumnFlags, TableColumnSetup, TableFlags};
 use nat20_rs::{
-    combat::damage::{DamageRoll, DamageType},
-    creature::character::Character,
-    effects::effects::{Effect, EffectDuration},
-    items::{
-        equipment::{
-            equipment::{EquipmentItem, EquipmentSlot, GeneralEquipmentSlot, HandSlot},
-            loadout::Loadout,
-            weapon::{self, Weapon, WeaponType},
+    components::{
+        ability::{self, Ability, AbilityScoreSet},
+        damage::{DamageRoll, DamageType},
+        effects::effects::{Effect, EffectDuration},
+        hit_points::HitPoints,
+        id::{CharacterId, SpellId},
+        items::{
+            equipment::{
+                equipment::{EquipmentSlot, GeneralEquipmentSlot, HandSlot},
+                loadout::Loadout,
+                weapon::{Weapon, WeaponType},
+            },
+            item::Item,
         },
-        item::Item,
-    },
-    registry,
-    resources::resources::Resource,
-    spells::spellbook::Spellbook,
-    stats::{
-        ability::{Ability, AbilityScoreSet},
+        level::CharacterLevels,
         modifier::ModifierSet,
         proficiency::Proficiency,
+        resource::ResourceMap,
+        saving_throw::SavingThrowSet,
         skill::{Skill, SkillSet, skill_ability},
+        spells::spellbook::Spellbook,
     },
-    utils::id::{ResourceId, SpellId},
+    registry, systems,
 };
 use std::collections::HashSet;
 use strum::IntoEnumIterator;
@@ -84,10 +87,12 @@ fn render_item_with_modifier(ui: &imgui::Ui, total: &str, modifiers: &ModifierSe
     }
 }
 
-fn render_classes(ui: &imgui::Ui, character: &Character) {
+fn render_classes(ui: &imgui::Ui, world: &World, entity: Entity) {
     let mut class_strings = Vec::new();
-    for (class_name, level) in character.classes() {
-        let class_str = if let Some(subclass_name) = character.subclass(class_name) {
+    let character_levels = systems::helpers::get_component::<CharacterLevels>(world, entity);
+    for (class_name, level_progression) in character_levels.all_classes() {
+        let level = level_progression.level();
+        let class_str = if let Some(subclass_name) = level_progression.subclass() {
             format!("Level {} {} {}", level, subclass_name.name, class_name)
         } else {
             format!("Level {} {}", level, class_name)
@@ -98,9 +103,10 @@ fn render_classes(ui: &imgui::Ui, character: &Character) {
     ui.text(all_classes);
 }
 
-fn render_health_bar(ui: &imgui::Ui, character: &Character) {
-    let current = character.hp();
-    let max = character.max_hp();
+fn render_health_bar(ui: &imgui::Ui, world: &World, entity: Entity) {
+    let hit_points = systems::helpers::get_component::<HitPoints>(world, entity);
+    let current = hit_points.current();
+    let max = hit_points.max();
     let hp_fraction = current as f32 / max as f32;
     let hp_text = format!("{} / {}", current, max);
 
@@ -146,20 +152,25 @@ fn render_proficiency(ui: &imgui::Ui, proficiency: &Proficiency, extra_text: &st
     }
 }
 
-impl ImguiRenderableMut for Character {
+// TODO: Probably only works if all entities are characters
+impl ImguiRenderableMut for (&mut World, Entity) {
     fn render_mut(&mut self, ui: &imgui::Ui) {
-        ui.text(format!("ID: {}", self.id()));
-        render_classes(ui, self);
-        render_health_bar(ui, self);
+        let (world, entity) = self;
+        let id = systems::helpers::get_component::<CharacterId>(world, *entity).to_string();
+        ui.text(format!("ID: {}", id));
+        render_classes(ui, world, *entity);
+        render_health_bar(ui, world, *entity);
 
-        if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{}", self.id())) {
+        if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{}", id)) {
             if let Some(tab) = ui.tab_item("Abilities") {
-                self.ability_scores().render_with_context(ui, self);
+                systems::helpers::get_component::<AbilityScoreSet>(world, *entity)
+                    .render_with_context(ui, &(world, *entity));
                 tab.end();
             }
 
             if let Some(tab) = ui.tab_item("Skills") {
-                self.skills().render_with_context(ui, self);
+                systems::helpers::get_component::<SkillSet>(world, *entity)
+                    .render_with_context(ui, &(world, *entity));
                 tab.end();
             }
 
@@ -168,33 +179,36 @@ impl ImguiRenderableMut for Character {
                 for weapon_type in WeaponType::iter() {
                     wielding_both_hands.insert(
                         weapon_type.clone(),
-                        self.loadout()
+                        systems::helpers::get_component::<Loadout>(world, *entity)
                             .is_wielding_weapon_with_both_hands(&weapon_type),
                     );
                 }
 
                 let context = LoadoutRenderContext {
-                    ability_scores: self.ability_scores().clone(),
+                    ability_scores: systems::helpers::get_component_clone::<AbilityScoreSet>(
+                        world, *entity,
+                    ),
                     wielding_both_hands,
                 };
 
-                self.loadout_mut().render_mut_with_context(ui, &context);
+                systems::helpers::get_component_mut::<Loadout>(world, *entity)
+                    .render_mut_with_context(ui, &context);
 
                 tab.end();
             }
 
             if let Some(tab) = ui.tab_item("Spellbook") {
-                self.spellbook_mut().render_mut(ui);
+                systems::helpers::get_component_mut::<Spellbook>(world, *entity).render_mut(ui);
                 tab.end();
             }
 
             if let Some(tab) = ui.tab_item("Effects") {
-                self.effects().render(ui);
+                systems::effects::effects(world, *entity).render(ui);
                 tab.end();
             }
 
             if let Some(tab) = ui.tab_item("Resources") {
-                self.resources().render(ui);
+                systems::helpers::get_component::<ResourceMap>(world, *entity).render(ui);
                 tab.end();
             }
 
@@ -203,8 +217,8 @@ impl ImguiRenderableMut for Character {
     }
 }
 
-impl ImguiRenderableWithContext<Character> for AbilityScoreSet {
-    fn render_with_context(&self, ui: &imgui::Ui, context: &Character) {
+impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreSet {
+    fn render_with_context(&self, ui: &imgui::Ui, context: &(&World, Entity)) {
         if let Some(table) = table_columns!(
             ui,
             "Abilities",
@@ -217,7 +231,9 @@ impl ImguiRenderableWithContext<Character> for AbilityScoreSet {
             for ability in Ability::iter() {
                 // Saving throw proficiency column
                 ui.table_next_column();
-                let proficiency = context.saving_throws().get(ability).proficiency();
+                let saving_throws =
+                    systems::helpers::get_component::<SavingThrowSet>(context.0, context.1);
+                let proficiency = saving_throws.get(ability).proficiency();
                 render_proficiency(ui, proficiency, " (Saving Throw)");
                 // Ability name
                 ui.table_next_column();
@@ -241,7 +257,7 @@ impl ImguiRenderableWithContext<Character> for AbilityScoreSet {
                 render_item_with_modifier(ui, &total, &ability_score.ability_modifier());
                 // Saving throw
                 ui.table_next_column();
-                let result = context.saving_throw(ability);
+                let result = saving_throws.check(ability, context.0, context.1);
                 let modifiers = &result.modifier_breakdown;
                 let total = modifiers.total();
                 let total_str = if total >= 0 {
@@ -257,8 +273,8 @@ impl ImguiRenderableWithContext<Character> for AbilityScoreSet {
     }
 }
 
-impl ImguiRenderableWithContext<Character> for SkillSet {
-    fn render_with_context(&self, ui: &imgui::Ui, context: &Character) {
+impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
+    fn render_with_context(&self, ui: &imgui::Ui, context: &(&World, Entity)) {
         // Empty column is for proficiency
         if let Some(table) = table_columns!(ui, "Skills", "", "Skill", "Bonus") {
             // Skills are ordered by ability, so if the ability changes, we can
@@ -285,14 +301,15 @@ impl ImguiRenderableWithContext<Character> for SkillSet {
 
                 // Proficiency column
                 ui.table_next_column();
-                let proficiency = context.skills().get(skill).proficiency();
+                let proficiency = self.get(skill).proficiency();
                 render_proficiency(ui, proficiency, "");
                 // Skill name
                 ui.table_next_column();
                 ui.text(skill.to_string());
                 // Bonus column
                 ui.table_next_column();
-                let result = context.skill_check(skill);
+                // TODO: Avoid doing an actual skill check here every time
+                let result = self.check(skill, context.0, context.1);
                 render_item_with_modifier(
                     ui,
                     &result.modifier_breakdown.total().to_string(),
@@ -308,7 +325,7 @@ impl ImguiRenderableWithContext<Character> for SkillSet {
 static EMPTY_RESOURCE_ICON: &str = "X"; // Placeholder for empty resource icon
 static FILLED_RESOURCE_ICON: &str = "O"; // Placeholder for filled resource icon
 
-impl ImguiRenderable for HashMap<ResourceId, Resource> {
+impl ImguiRenderable for ResourceMap {
     fn render(&self, ui: &imgui::Ui) {
         if let Some(table) = table_columns!(ui, "Resources", "Resource", "Count", "Recharge") {
             for (resource_id, resource) in self.iter() {

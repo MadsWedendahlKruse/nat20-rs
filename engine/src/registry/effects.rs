@@ -4,19 +4,30 @@ use std::{
 };
 
 use crate::{
-    actions::action::ActionContext,
-    combat::damage::DamageSource,
-    effects::effects::{Effect, EffectDuration},
-    items::equipment::{armor::ArmorType, weapon::WeaponType},
-    registry,
-    resources::resources::{RechargeRule, Resource},
-    stats::modifier::ModifierSource,
-    utils::id::EffectId,
+    components::{
+        actions::action::ActionContext,
+        d20_check::AdvantageType,
+        damage::DamageSource,
+        effects::{
+            effects::{Effect, EffectDuration},
+            hooks::SkillCheckHook,
+        },
+        id::EffectId,
+        items::equipment::{armor::ArmorType, loadout, weapon::WeaponType},
+        modifier::ModifierSource,
+        resource::{RechargeRule, Resource, ResourceMap},
+        skill::Skill,
+    },
+    registry, systems,
 };
 
 pub static EFFECT_REGISTRY: LazyLock<HashMap<EffectId, Effect>> = LazyLock::new(|| {
     HashMap::from([
         (ACTION_SURGE_ID.clone(), ACTION_SURGE.to_owned()),
+        (
+            ARMOR_STEALTH_DISADVANTAGE_ID.clone(),
+            ARMOR_STEALTH_DISADVANTAGE.to_owned(),
+        ),
         (EXTRA_ATTACK_ID.clone(), EXTRA_ATTACK.to_owned()),
         (
             FIGHTING_STYLE_ARCHERY_ID.clone(),
@@ -43,19 +54,42 @@ static ACTION_SURGE: LazyLock<Effect> = LazyLock::new(|| {
         ModifierSource::ClassFeature(ACTION_SURGE_ID.to_string()),
         EffectDuration::temporary(1),
     );
-    effect.on_apply = Arc::new(|character| {
-        let _ = character
-            .resource_mut(&registry::resources::ACTION)
+    effect.on_apply = Arc::new(|world, entity| {
+        let _ = systems::helpers::get_component_mut::<ResourceMap>(world, entity)
+            .get_mut(&registry::resources::ACTION)
             .unwrap()
             .add_use();
     });
-    effect.on_unapply = Arc::new(|character| {
-        let _ = character
-            .resource_mut(&registry::resources::ACTION)
+    effect.on_unapply = Arc::new(|world, entity| {
+        let _ = systems::helpers::get_component_mut::<ResourceMap>(world, entity)
+            .get_mut(&registry::resources::ACTION)
             .unwrap()
             .remove_use();
     });
     effect
+});
+
+pub static ARMOR_STEALTH_DISADVANTAGE_ID: LazyLock<EffectId> =
+    LazyLock::new(|| EffectId::from_str("effect.armor.stealth_disadvantage"));
+
+pub static ARMOR_STEALTH_DISADVANTAGE: LazyLock<Effect> = LazyLock::new(|| {
+    let modifier_source: ModifierSource = ModifierSource::Item("Armor".to_string());
+
+    let mut stealth_disadvantage_effect = Effect::new(
+        EffectId::from_str("effect.armor.stealth_disadvantage"),
+        modifier_source.clone(),
+        EffectDuration::Permanent,
+    );
+
+    let mut skill_check_hook = SkillCheckHook::new(Skill::Stealth);
+    skill_check_hook.check_hook = Arc::new(move |_, _, d20_check| {
+        d20_check
+            .advantage_tracker_mut()
+            .add(AdvantageType::Disadvantage, modifier_source.clone());
+    });
+    stealth_disadvantage_effect.on_skill_check = Some(skill_check_hook);
+
+    stealth_disadvantage_effect
 });
 
 pub static EXTRA_ATTACK_ID: LazyLock<EffectId> =
@@ -80,7 +114,7 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
         // This closure captures the `charges` variable, so we can use it in the
         // closure without having to pass it as an argument.
         let charges = charges;
-        move |performer, action, context| {
+        move |world, performer, action, context| {
             // Check that this is only applied for weapon attacks
             // TODO: Is this logic sufficient? (And is it the nicest way to do this?)
             if !matches!(
@@ -107,7 +141,9 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
             // Check if the character has any of those charges (i.e. they've already
             // triggered Extra Attack). Otherwise, use an action and give them the
             // "Extra Attack" charges.
-            if let Some(extra_attack) = performer.resource(&registry::resources::EXTRA_ATTACK) {
+            let mut resources =
+                systems::helpers::get_component_mut::<ResourceMap>(world, performer);
+            if let Some(extra_attack) = resources.get(&registry::resources::EXTRA_ATTACK) {
                 if extra_attack.current_uses() > 0 {
                     return;
                 }
@@ -115,11 +151,11 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
 
             // Consume the action and give the "Extra Attack" charges
             // TODO: Assume the action has been validated?
-            let _ = performer
-                .resource_mut(&registry::resources::ACTION)
+            let _ = resources
+                .get_mut(&registry::resources::ACTION)
                 .unwrap()
                 .spend(1);
-            performer.set_resource(
+            resources.add(
                 Resource::new(
                     registry::resources::EXTRA_ATTACK.clone(),
                     charges,
@@ -127,11 +163,11 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
                 )
                 .unwrap(),
                 true, // Set current uses to max uses
-            )
+            );
         }
     });
 
-    effect.on_resource_cost = Arc::new(|character, context, resource_cost| {
+    effect.on_resource_cost = Arc::new(|world, performer, context, resource_cost| {
         // Check that this is only applied for weapon attacks
         if !matches!(
             context,
@@ -149,7 +185,8 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
         }
 
         // If the character has any "Extra Attack" charges, we use those instead
-        if let Some(extra_attack) = character.resource(&registry::resources::EXTRA_ATTACK) {
+        let resources = systems::helpers::get_component::<ResourceMap>(world, performer);
+        if let Some(extra_attack) = resources.get(&registry::resources::EXTRA_ATTACK) {
             if extra_attack.current_uses() > 0 {
                 resource_cost.remove(&registry::resources::ACTION);
                 resource_cost.insert(registry::resources::EXTRA_ATTACK.clone(), 1);
@@ -171,7 +208,7 @@ static FIGHTING_STYLE_ARCHERY: LazyLock<Effect> = LazyLock::new(|| {
         ModifierSource::ClassFeature("Fighting Style: Archery".to_string()),
         EffectDuration::Permanent,
     );
-    effect.pre_attack_roll = Arc::new(|_, attack_roll| {
+    effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
         if match &attack_roll.source {
             DamageSource::Weapon(weapon_type) => *weapon_type == WeaponType::Ranged,
             _ => false,
@@ -194,11 +231,15 @@ static FIGHTING_STYLE_DEFENSE: LazyLock<Effect> = LazyLock::new(|| {
         ModifierSource::ClassFeature("Fighting Style: Defense".to_string()),
         EffectDuration::Permanent,
     );
-    effect.on_armor_class = Arc::new(|character, armor_class| {
-        if let Some(armor) = &character.loadout().armor {
+    effect.on_armor_class = Arc::new(|world, entity, armor_class| {
+        let loadout = systems::helpers::get_component::<loadout::Loadout>(world, entity);
+        // If the character is not wearing armor, we don't apply this effect
+        if let Some(armor) = &loadout.armor() {
             if armor.armor_type == ArmorType::Clothing {
                 return;
             }
+        } else {
+            return;
         }
         armor_class.add_modifier(
             ModifierSource::ClassFeature("Fighting Style: Defense".to_string()),
@@ -217,7 +258,7 @@ static FIGHTING_STYLE_GREAT_WEAPON_FIGHTING: LazyLock<Effect> = LazyLock::new(||
         ModifierSource::ClassFeature("Fighting Style: Great Weapon Fighting".to_string()),
         EffectDuration::Permanent,
     );
-    effect.post_damage_roll = Arc::new(|character, damage_roll_result| {
+    effect.post_damage_roll = Arc::new(|world, entity, damage_roll_result| {
         // Great weapon fighting only applies to melee attacks (with both hands)
         if match &damage_roll_result.source {
             DamageSource::Weapon(weapon_type) => *weapon_type != WeaponType::Melee,
@@ -226,10 +267,8 @@ static FIGHTING_STYLE_GREAT_WEAPON_FIGHTING: LazyLock<Effect> = LazyLock::new(||
             return;
         }
 
-        if !character
-            .loadout()
-            .is_wielding_weapon_with_both_hands(&WeaponType::Melee)
-        {
+        let loadout = systems::helpers::get_component::<loadout::Loadout>(world, entity);
+        if !loadout.is_wielding_weapon_with_both_hands(&WeaponType::Melee) {
             return;
         }
 
@@ -259,7 +298,7 @@ static IMPROVED_CRITICAL: LazyLock<Effect> = LazyLock::new(|| {
         ModifierSource::ClassFeature("Improved Critical".to_string()),
         EffectDuration::Permanent,
     );
-    effect.pre_attack_roll = Arc::new(|_, attack_roll| {
+    effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
         attack_roll.reduce_crit_threshold(1);
     });
     effect

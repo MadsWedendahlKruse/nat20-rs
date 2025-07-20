@@ -4,16 +4,16 @@ use std::{
 };
 
 use crate::{
-    creature::{classes::class::SubclassName, level_up::LevelUpChoice},
-    dice::dice::DieSize,
-    items::equipment::{armor::ArmorType, weapon::WeaponCategory},
+    components::{
+        ability::Ability,
+        class::{Class, ClassBase, ClassName, SpellcastingProgression, Subclass, SubclassName},
+        dice::DieSize,
+        items::equipment::{armor::ArmorType, weapon::WeaponCategory},
+        level_up::LevelUpChoice,
+        resource::{RechargeRule, Resource},
+        skill::Skill,
+    },
     registry,
-    resources::resources::{RechargeRule, Resource},
-    stats::{ability::Ability, skill::Skill},
-};
-
-use crate::creature::classes::class::{
-    Class, ClassBase, ClassName, SpellcastingProgression, Subclass,
 };
 
 pub static CLASS_REGISTRY: LazyLock<HashMap<ClassName, Class>> = LazyLock::new(|| {
@@ -69,23 +69,27 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
             (1, vec![second_wind(2)]),
             (
                 2,
-                vec![Resource::new(
-                    registry::resources::ACTION_SURGE.clone(),
-                    1,
-                    RechargeRule::OnShortRest,
-                )
-                .unwrap()],
+                vec![
+                    Resource::new(
+                        registry::resources::ACTION_SURGE.clone(),
+                        1,
+                        RechargeRule::OnShortRest,
+                    )
+                    .unwrap(),
+                ],
             ),
             (4, vec![second_wind(3)]),
             (10, vec![second_wind(4)]),
             (
                 17,
-                vec![Resource::new(
-                    registry::resources::ACTION_SURGE.clone(),
-                    2,
-                    RechargeRule::OnShortRest,
-                )
-                .unwrap()],
+                vec![
+                    Resource::new(
+                        registry::resources::ACTION_SURGE.clone(),
+                        2,
+                        RechargeRule::OnShortRest,
+                    )
+                    .unwrap(),
+                ],
             ),
         ]),
         HashMap::from([(
