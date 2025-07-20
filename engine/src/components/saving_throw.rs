@@ -1,49 +1,30 @@
 use hecs::{Entity, World};
 
 use crate::{
-    components::effects::hooks::SavingThrowHook,
+    components::{
+        ability::Ability,
+        d20_check::{D20CheckDC, D20CheckSet},
+        effects::hooks::D20CheckHooks,
+    },
     systems::{self},
 };
 
-use super::{
-    ability::Ability,
-    d20_check::{D20Check, D20CheckDC, D20CheckResult, D20CheckSet},
-};
+pub type SavingThrowSet = D20CheckSet<Ability>;
 
-pub type SavingThrowSet = D20CheckSet<Ability, SavingThrowHook>;
+pub type SavingThrowDC = D20CheckDC<Ability>;
 
 pub fn get_saving_throw_hooks(
     ability: Ability,
     world: &World,
     entity: Entity,
-) -> Vec<SavingThrowHook> {
+) -> Vec<D20CheckHooks> {
     systems::effects::effects(world, entity)
         .iter()
-        .filter_map(|e| e.on_saving_throw.clone()) // clone the hook, not the whole vec
-        .filter(|hook| hook.key == ability)
+        .filter_map(|e| e.on_saving_throw.get(&ability))
+        .cloned()
         .collect()
 }
 
-pub fn apply_check_hook(hook: &SavingThrowHook, world: &World, entity: Entity, d20: &mut D20Check) {
-    (hook.check_hook)(world, entity, d20);
-}
-
-pub fn apply_result_hook(
-    hook: &SavingThrowHook,
-    world: &World,
-    entity: Entity,
-    result: &mut D20CheckResult,
-) {
-    (hook.result_hook)(world, entity, result);
-}
-
 pub fn create_saving_throw_set() -> SavingThrowSet {
-    SavingThrowSet::new(
-        get_saving_throw_hooks,
-        apply_check_hook,
-        apply_result_hook,
-        |k| k,
-    )
+    SavingThrowSet::new(|k| k, get_saving_throw_hooks)
 }
-
-pub type SavingThrowDC = D20CheckDC<Ability>;

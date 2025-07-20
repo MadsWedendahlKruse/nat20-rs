@@ -1,10 +1,12 @@
 use std::{fmt, hash::Hash};
 
-use crate::{components::effects::hooks::SkillCheckHook, systems};
-
-use super::{
-    ability::Ability,
-    d20_check::{D20Check, D20CheckResult, D20CheckSet},
+use crate::{
+    components::{
+        ability::Ability,
+        d20_check::{D20CheckDC, D20CheckSet},
+        effects::hooks::D20CheckHooks,
+    },
+    systems,
 };
 
 use hecs::{Entity, World};
@@ -83,40 +85,26 @@ skill_ability_map! {
     Initiative => Dexterity,
 }
 
-pub type SkillSet = D20CheckSet<Skill, SkillCheckHook>;
+pub type SkillSet = D20CheckSet<Skill>;
 
-pub fn get_skill_hooks(skill: Skill, world: &World, entity: Entity) -> Vec<SkillCheckHook> {
+pub type SkillCheckDC = D20CheckDC<Skill>;
+
+pub fn get_skill_hooks(skill: Skill, world: &World, entity: Entity) -> Vec<D20CheckHooks> {
     systems::effects::effects(world, entity)
         .iter()
-        .filter_map(|e| e.on_skill_check.clone())
-        .filter(|hook| hook.key == skill)
+        .filter_map(|e| e.on_skill_check.get(&skill))
+        .cloned()
         .collect()
 }
 
-pub fn apply_check_hook(hook: &SkillCheckHook, world: &World, entity: Entity, d20: &mut D20Check) {
-    (hook.check_hook)(world, entity, d20);
-}
-
-pub fn apply_result_hook(
-    hook: &SkillCheckHook,
-    world: &World,
-    entity: Entity,
-    result: &mut D20CheckResult,
-) {
-    (hook.result_hook)(world, entity, result);
-}
-
 pub fn create_skill_set() -> SkillSet {
-    SkillSet::new(
-        get_skill_hooks,
-        apply_check_hook,
-        apply_result_hook,
-        skill_ability,
-    )
+    SkillSet::new(skill_ability, get_skill_hooks)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::components::ability::Ability;
+
     use super::*;
 
     #[test]

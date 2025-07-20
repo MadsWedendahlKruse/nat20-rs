@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use strum::{Display, EnumIter};
 
 use crate::components::{
-    effects::effects::Effect,
     id::EffectId,
     items::item::{Item, ItemRarity},
 };

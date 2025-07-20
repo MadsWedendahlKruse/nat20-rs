@@ -1,6 +1,5 @@
 use std::num::NonZeroU32;
 
-use glow::HasContext;
 use glutin::{
     config::ConfigTemplateBuilder,
     context::{ContextApi, ContextAttributesBuilder, NotCurrentGlContext, PossiblyCurrentContext},

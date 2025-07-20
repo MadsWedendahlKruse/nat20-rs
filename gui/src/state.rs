@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use hecs::{Entity, World};
 use imgui::{Condition, TreeNodeFlags};
-use nat20_rs::{components::id::CharacterId, systems, test_utils::fixtures};
+use nat20_rs::{
+    components::id::CharacterId, entities::character::CharacterTag, systems, test_utils::fixtures,
+};
 
 use crate::render::imgui_render::ImguiRenderableMut;
 
@@ -56,11 +58,14 @@ impl GuiState {
             .size([400.0, 600.0], Condition::FirstUseEver)
             .build(|| {
                 ui.text("Characters in the world:");
-                for (id, character) in &mut self.characters {
+
+                for (id, entity) in &mut self.characters {
                     let name =
-                        systems::helpers::get_component_clone::<String>(&self.world, *character);
+                        systems::helpers::get_component_clone::<String>(&self.world, *entity);
+                    let tag =
+                        systems::helpers::get_component_clone::<CharacterTag>(&self.world, *entity);
                     if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
-                        (&mut self.world, *character).render_mut(ui);
+                        (&mut self.world, *entity, tag).render_mut(ui);
                     }
                 }
                 if ui.button("Add Character") {
@@ -89,18 +94,22 @@ impl GuiState {
                         }
                     }
                     Some(CharacterCreationState::FromPredefined) => {
-                        for (id, character) in &mut self.characters {
+                        for (id, entity) in &mut self.characters {
                             let name = systems::helpers::get_component_clone::<String>(
                                 &self.world,
-                                *character,
+                                *entity,
+                            );
+                            let tag = systems::helpers::get_component_clone::<CharacterTag>(
+                                &self.world,
+                                *entity,
                             );
                             if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
-                                if ui.button(format!("Add to World##{}", character.id())) {
+                                if ui.button(format!("Add to World##{}", entity.id())) {
                                     // self.world.add_character(character.clone());
                                     self.creation_state = None;
                                 }
                                 ui.separator();
-                                (&mut self.world, *character).render_mut(ui);
+                                (&mut self.world, *entity, tag).render_mut(ui);
                             }
                         }
                         ui.separator();

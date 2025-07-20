@@ -7,17 +7,19 @@ use std::{
 use hecs::{Entity, World};
 
 use crate::components::{
+    ability::Ability,
     actions::action::{Action, ActionContext},
     damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
     effects::hooks::{
-        ActionHook, ArmorClassHook, AttackRollHook, AttackRollResultHook, DamageRollHook,
-        DamageRollResultHook, ResourceCostHook,
+        ActionHook, ArmorClassHook, AttackRollHook, AttackRollResultHook, D20CheckHooks,
+        DamageRollHook, DamageRollResultHook, ResourceCostHook,
     },
     id::{EffectId, ResourceId},
     modifier::{ModifierSet, ModifierSource},
+    skill::Skill,
 };
 
-use super::hooks::{EffectHook, SavingThrowHook, SkillCheckHook};
+use super::hooks::EffectHook;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EffectDuration {
@@ -73,10 +75,8 @@ pub struct Effect {
     // the effect is removed from the character?
     // pub on_expire: EffectHook,
     pub on_unapply: EffectHook,
-    // These use Option because they need a key for the skill or saving throw, which
-    // we don't have when constructing the effect.
-    pub on_skill_check: Option<SkillCheckHook>,
-    pub on_saving_throw: Option<SavingThrowHook>,
+    pub on_skill_check: HashMap<Skill, D20CheckHooks>,
+    pub on_saving_throw: HashMap<Ability, D20CheckHooks>,
     pub pre_attack_roll: AttackRollHook,
     pub post_attack_roll: AttackRollResultHook,
     pub on_armor_class: ArmorClassHook,
@@ -96,8 +96,8 @@ impl Effect {
             duration,
             on_apply: noop.clone(),
             on_unapply: noop.clone(),
-            on_skill_check: None,
-            on_saving_throw: None,
+            on_skill_check: HashMap::new(),
+            on_saving_throw: HashMap::new(),
             pre_attack_roll: Arc::new(|_: &World, _: Entity, _: &mut AttackRoll| {})
                 as AttackRollHook,
             post_attack_roll: Arc::new(|_: &World, _: Entity, _: &mut AttackRollResult| {})

@@ -1,18 +1,20 @@
 // TODO: reformat imports
 
-use crate::components::ability::AbilityScoreSet;
-use crate::components::modifier::{ModifierSet, ModifierSource};
-use crate::components::proficiency::Proficiency;
-use crate::systems::helpers::{get_component, level};
+use std::{collections::HashMap, fmt, hash::Hash};
 
 use hecs::{Entity, World};
 use rand::Rng;
-use std::collections::HashMap;
-use std::fmt;
-use std::hash::Hash;
 use strum::IntoEnumIterator;
 
-use super::ability::Ability;
+use crate::{
+    components::{
+        ability::{Ability, AbilityScoreSet},
+        effects::hooks::D20CheckHooks,
+        modifier::{ModifierSet, ModifierSource},
+        proficiency::Proficiency,
+    },
+    systems,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RollMode {
@@ -162,38 +164,27 @@ impl D20Check {
         }
     }
 
-    // TODO: What's the type of `T` here? Isn't it just Effect?
-    pub fn roll_hooks<T>(
+    pub fn roll_hooks(
         &self,
         world: &World,
         entity: Entity,
-        hooks: &[T],
-        pre: impl Fn(&T, &World, Entity, &mut D20Check),
-        post: impl Fn(&T, &World, Entity, &mut D20CheckResult),
+        hooks: &Vec<D20CheckHooks>,
     ) -> D20CheckResult {
         let mut check = self.clone();
         for hook in hooks {
-            pre(hook, world, entity, &mut check);
+            (hook.check_hook)(world, entity, &mut check);
         }
 
-        let mut result = check.roll(level(world, entity).unwrap().proficiency_bonus());
+        let mut result = check.roll(
+            systems::helpers::level(world, entity)
+                .unwrap()
+                .proficiency_bonus(),
+        );
 
         for hook in hooks {
-            post(hook, world, entity, &mut result);
+            (hook.result_hook)(world, entity, &mut result);
         }
 
-        result
-    }
-
-    pub fn format_bonus(&self, proficiency_bonus: u8) -> String {
-        let mut result = format!(
-            "+{} ({})",
-            self.proficiency.bonus(proficiency_bonus),
-            self.proficiency
-        );
-        if !self.modifiers.is_empty() {
-            result += &format!(" {}", self.modifiers);
-        }
         result
     }
 
@@ -270,36 +261,30 @@ impl fmt::Display for D20CheckResult {
 }
 
 #[derive(Debug, Clone)]
-pub struct D20CheckSet<K, H>
+pub struct D20CheckSet<K>
 where
     K: Eq + Hash + IntoEnumIterator + Copy,
 {
     checks: HashMap<K, D20Check>,
-    get_hooks: fn(K, &World, Entity) -> Vec<H>,
-    apply_check_hook: fn(&H, &World, Entity, &mut D20Check),
-    apply_result_hook: fn(&H, &World, Entity, &mut D20CheckResult),
     ability_mapper: fn(K) -> Ability,
+    get_hooks: fn(K, &World, Entity) -> Vec<D20CheckHooks>,
 }
 
-impl<K, T> D20CheckSet<K, T>
+impl<K> D20CheckSet<K>
 where
     K: Eq + Hash + IntoEnumIterator + Copy,
 {
     pub fn new(
-        get_hooks: fn(K, &World, Entity) -> Vec<T>,
-        apply_check_hook: fn(&T, &World, Entity, &mut D20Check),
-        apply_result_hook: fn(&T, &World, Entity, &mut D20CheckResult),
         ability_mapper: fn(K) -> Ability,
+        get_hooks: fn(K, &World, Entity) -> Vec<D20CheckHooks>,
     ) -> Self {
         let checks = K::iter()
             .map(|k| (k, D20Check::new(Proficiency::None)))
             .collect();
         Self {
             checks,
-            get_hooks,
-            apply_check_hook,
-            apply_result_hook,
             ability_mapper,
+            get_hooks,
         }
     }
 
@@ -326,19 +311,13 @@ where
     pub fn check(&self, key: K, world: &World, entity: Entity) -> D20CheckResult {
         let mut d20 = self.get(key).clone();
         let ability = (self.ability_mapper)(key);
-        let ability_scores = get_component::<AbilityScoreSet>(world, entity);
+        let ability_scores = systems::helpers::get_component::<AbilityScoreSet>(world, entity);
         d20.add_modifier(
             ModifierSource::Ability(ability),
             ability_scores.ability_modifier(ability).total(),
         );
 
-        d20.roll_hooks(
-            world,
-            entity,
-            &(self.get_hooks)(key, world, entity),
-            |hook, world, entity, check| (self.apply_check_hook)(hook, world, entity, check),
-            |hook, world, entity, result| (self.apply_result_hook)(hook, world, entity, result),
-        )
+        d20.roll_hooks(world, entity, &(self.get_hooks)(key, world, entity))
     }
 
     pub fn check_dc(&self, dc: &D20CheckDC<K>, world: &World, entity: Entity) -> D20CheckResult {

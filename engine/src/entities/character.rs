@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 
-use hecs::Bundle;
+use hecs::{Bundle, Entity, Query, Ref, RefMut, With, World};
 
 use crate::{
     components::{
@@ -19,29 +19,117 @@ use crate::{
         spells::spellbook::Spellbook,
     },
     registry::{self},
+    systems,
 };
+
+// TODO: I feel like this View thing is an anti-pattern
+/// Macro to generate a struct and a corresponding view struct with references to its fields.
+// macro_rules! struct_with_view {
+//     (
+//         $(#[$meta:meta])*
+//         $vis:vis struct $name:ident {
+//             $(
+//                 $(#[$field_meta:meta])*
+//                 $field_vis:vis $field:ident : $ty:ty,
+//             )*
+//         }
+//         view $view_name:ident
+//         view_mut $view_mut_name:ident
+//     ) => {
+//         $(#[$meta])*
+//         $vis struct $name {
+//             $(
+//                 $(#[$field_meta])*
+//                 $field_vis $field : $ty,
+//             )*
+//         }
+
+//         $vis struct $view_name<'a> {
+//             $(
+//                 $(#[$field_meta])*
+//                 $field_vis $field : Ref<'a, $ty>,
+//             )*
+//         }
+
+//         impl<'a> $view_name<'a> {
+//             pub fn from_world(world: &'a World, entity: Entity) -> Self {
+//                 Self {
+//                     $(
+//                         $field: systems::helpers::get_component(world, entity),
+//                     )*
+//                 }
+//             }
+//         }
+
+//         $vis struct $view_mut_name<'a> {
+//             $(
+//                 $(#[$field_meta])*
+//                 $field_vis $field : &'a mut $ty,
+//             )*
+//         }
+
+//         impl<'a> $view_mut_name<'a> {
+//             pub fn from_world(world: &'a mut World, entity: Entity) -> Self {
+//                 let (
+//                     $($field,)*
+//                 ) = world
+//                     .query_one_mut::<(
+//                         $( &mut $ty , )*
+//                     )>(entity)
+//                     .unwrap();
+
+//                 Self {
+//                     $($field,)*
+//                 }
+//             }
+//         }
+//     }
+// }
+
+#[derive(Debug, Clone)]
+pub struct CharacterTag;
+
+// struct_with_view! {
+//     #[derive(Bundle)]
+//     pub struct Character {
+//         pub tag: CharacterTag,
+//         pub id: CharacterId,
+//         pub name: String,
+//         pub levels: CharacterLevels,
+//         pub hp: HitPoints,
+//         pub ability_scores: AbilityScoreSet,
+//         pub skills: SkillSet,
+//         pub saving_throws: SavingThrowSet,
+//         pub resistances: DamageResistances,
+//         pub weapon_proficiencies: WeaponProficiencyMap,
+//         pub loadout: Loadout,
+//         pub spellbook: Spellbook,
+//         pub resources: ResourceMap,
+//         pub effects: Vec<Effect>,
+//         pub actions: ActionMap,
+//         pub cooldowns: HashMap<ActionId, RechargeRule>,
+//     }
+//     view CharacterView
+//     view_mut CharacterViewMut
+// }
 
 #[derive(Bundle)]
 pub struct Character {
+    pub tag: CharacterTag,
     pub id: CharacterId,
     pub name: String,
     pub levels: CharacterLevels,
-    pub latest_class: Option<ClassName>, // The class that was most recently leveled up
     pub hp: HitPoints,
     pub ability_scores: AbilityScoreSet,
     pub skills: SkillSet,
     pub saving_throws: SavingThrowSet,
     pub resistances: DamageResistances,
-    // TODO: Might have to make this more granular later (not just martial/simple)
-    // TODO: Should it just be a bool (or a set even)? Not sure if you can have expertise in a weapon
     pub weapon_proficiencies: WeaponProficiencyMap,
-    /// Equipped items
     pub loadout: Loadout,
     pub spellbook: Spellbook,
     pub resources: ResourceMap,
     pub effects: Vec<Effect>,
     pub actions: ActionMap,
-    /// Actions that are currently on cooldown
     pub cooldowns: HashMap<ActionId, RechargeRule>,
 }
 
@@ -61,10 +149,10 @@ impl Character {
             );
         }
         Self {
+            tag: CharacterTag,
             id: CharacterId::new_v4(),
             name: name.to_string(),
             levels: CharacterLevels::new(),
-            latest_class: None,
             hp: HitPoints::new(0),
             ability_scores: AbilityScoreSet::new(),
             skills: create_skill_set(),

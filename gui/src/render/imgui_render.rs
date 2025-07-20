@@ -4,7 +4,7 @@ use hecs::{Entity, World};
 use imgui::{Id, TableColumnFlags, TableColumnSetup, TableFlags};
 use nat20_rs::{
     components::{
-        ability::{self, Ability, AbilityScoreSet},
+        ability::{Ability, AbilityScoreSet},
         damage::{DamageRoll, DamageType},
         effects::effects::{Effect, EffectDuration},
         hit_points::HitPoints,
@@ -25,12 +25,11 @@ use nat20_rs::{
         skill::{Skill, SkillSet, skill_ability},
         spells::spellbook::Spellbook,
     },
+    entities::character::CharacterTag,
     registry, systems,
 };
 use std::collections::HashSet;
 use strum::IntoEnumIterator;
-
-use crate::render;
 
 pub trait ImguiRenderable {
     fn render(&self, ui: &imgui::Ui);
@@ -153,9 +152,9 @@ fn render_proficiency(ui: &imgui::Ui, proficiency: &Proficiency, extra_text: &st
 }
 
 // TODO: Probably only works if all entities are characters
-impl ImguiRenderableMut for (&mut World, Entity) {
+impl ImguiRenderableMut for (&mut World, Entity, CharacterTag) {
     fn render_mut(&mut self, ui: &imgui::Ui) {
-        let (world, entity) = self;
+        let (world, entity, _) = self;
         let id = systems::helpers::get_component::<CharacterId>(world, *entity).to_string();
         ui.text(format!("ID: {}", id));
         render_classes(ui, world, *entity);

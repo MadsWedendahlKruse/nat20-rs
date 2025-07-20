@@ -10,7 +10,7 @@ use crate::{
         damage::DamageSource,
         effects::{
             effects::{Effect, EffectDuration},
-            hooks::SkillCheckHook,
+            hooks::D20CheckHooks,
         },
         id::EffectId,
         items::equipment::{armor::ArmorType, loadout, weapon::WeaponType},
@@ -81,13 +81,15 @@ pub static ARMOR_STEALTH_DISADVANTAGE: LazyLock<Effect> = LazyLock::new(|| {
         EffectDuration::Permanent,
     );
 
-    let mut skill_check_hook = SkillCheckHook::new(Skill::Stealth);
-    skill_check_hook.check_hook = Arc::new(move |_, _, d20_check| {
+    let mut stealth_hook = D20CheckHooks::new();
+    stealth_hook.check_hook = Arc::new(move |_, _, d20_check| {
         d20_check
             .advantage_tracker_mut()
             .add(AdvantageType::Disadvantage, modifier_source.clone());
     });
-    stealth_disadvantage_effect.on_skill_check = Some(skill_check_hook);
+    stealth_disadvantage_effect
+        .on_skill_check
+        .insert(Skill::Stealth, stealth_hook);
 
     stealth_disadvantage_effect
 });

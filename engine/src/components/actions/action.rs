@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, hash_map::Entry},
+    collections::HashMap,
     fmt::{Debug, Display},
     sync::Arc,
 };
