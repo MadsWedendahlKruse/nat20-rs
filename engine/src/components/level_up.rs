@@ -1,4 +1,7 @@
-use std::collections::HashSet;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::LazyLock,
+};
 
 use strum::IntoEnumIterator;
 
@@ -11,12 +14,28 @@ use crate::{
     registry,
 };
 
-#[derive(Debug, Clone)]
+pub static ABILITY_SCORE_POINT_COST: LazyLock<HashMap<u8, u8>> = LazyLock::new(|| {
+    HashMap::from([
+        (8, 0),
+        (9, 1),
+        (10, 2),
+        (11, 3),
+        (12, 4),
+        (13, 5),
+        (14, 7),
+        (15, 9),
+    ])
+});
+
+pub static ABILITY_SCORE_POINTS: u8 = 27;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LevelUpChoice {
     Class(Vec<ClassName>),
     Subclass(Vec<SubclassName>),
     Effect(Vec<EffectId>),
     SkillProficiency(HashSet<Skill>, u8),
+    AbilityScores(HashMap<u8, u8>, u8),
     // FeatSelection(Vec<FeatOption>),
     // AbilityScoreImprovement(u8), // u8 = number of points to distribute
     // AbilityPointSelection(Vec<Ability>),
@@ -31,6 +50,7 @@ impl LevelUpChoice {
             LevelUpChoice::Subclass(_) => "Subclass",
             LevelUpChoice::Effect(_) => "Effect",
             LevelUpChoice::SkillProficiency(_, _) => "SkillProficiency",
+            LevelUpChoice::AbilityScores(_, _) => "AbilityScores",
             // LevelUpChoice::FeatSelection(_) => "FeatSelection",
             // LevelUpChoice::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
             // LevelUpChoice::AbilityPointSelection(_) => "AbilityPointSelection",
@@ -53,5 +73,9 @@ impl LevelUpChoice {
             panic!("No subclasses found for class: {:?}", class_name);
         }
         LevelUpChoice::Subclass(subclasses)
+    }
+
+    pub fn ability_scores() -> Self {
+        LevelUpChoice::AbilityScores(ABILITY_SCORE_POINT_COST.clone(), ABILITY_SCORE_POINTS)
     }
 }

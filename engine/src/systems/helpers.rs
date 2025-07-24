@@ -26,6 +26,12 @@ pub fn get_component_clone<T: hecs::Component + Clone>(world: &World, entity: En
     get_component::<T>(world, entity).deref().clone()
 }
 
+pub fn set_component<T: hecs::Component + Clone>(world: &mut World, entity: Entity, value: T) {
+    world
+        .insert_one(entity, value)
+        .unwrap_or_else(|_| missing_component_panic::<T>(entity));
+}
+
 fn missing_component_panic<T: 'static>(entity: Entity) -> ! {
     let type_name = type_name::<T>();
 

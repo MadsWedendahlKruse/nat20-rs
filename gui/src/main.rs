@@ -7,7 +7,7 @@ mod utils;
 use glow::HasContext;
 use glutin::surface::GlSurface;
 
-use crate::state::GuiState;
+use crate::state::gui::GuiState;
 
 fn main() {
     let (event_loop, window, surface, context) = utils::create_window("Hello, triangle!", None);

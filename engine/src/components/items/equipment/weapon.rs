@@ -80,6 +80,7 @@ impl Display for WeaponProperties {
 //     Vex,
 // }
 
+#[derive(Debug, Clone)]
 pub struct WeaponProficiencyMap {
     map: HashMap<WeaponCategory, Proficiency>,
 }

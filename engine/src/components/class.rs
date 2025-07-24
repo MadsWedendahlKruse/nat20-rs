@@ -87,7 +87,7 @@ pub struct Class {
     pub hit_die: DieSize,
     pub hp_per_level: u8,
 
-    pub default_abilities: HashMap<Ability, i32>,
+    pub default_abilities: HashMap<Ability, u8>,
 
     /// Saving throw proficiencies granted at level 1 (e.g. STR + CON for Fighter)
     pub saving_throw_proficiencies: [Ability; 2],
@@ -102,7 +102,7 @@ impl Class {
         name: ClassName,
         hit_die: DieSize,
         hp_per_level: u8,
-        default_abilities: HashMap<Ability, i32>,
+        default_abilities: HashMap<Ability, u8>,
         saving_throw_proficiencies: [Ability; 2],
         subclass_level: u8,
         subclasses: HashMap<SubclassName, Subclass>,

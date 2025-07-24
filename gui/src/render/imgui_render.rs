@@ -56,7 +56,7 @@ pub trait ImguiRenderableMutWithContext<C> {
 //     }
 // }
 
-fn table_column(name: &str) -> TableColumnSetup<&str> {
+pub fn table_column(name: &str) -> TableColumnSetup<&str> {
     TableColumnSetup {
         name,
         flags: TableColumnFlags::NO_HIDE,
@@ -65,6 +65,7 @@ fn table_column(name: &str) -> TableColumnSetup<&str> {
     }
 }
 
+#[macro_export]
 macro_rules! table_columns {
     ($ui:expr, $table_name:expr, $( $col_name:expr ),+ $(,)? ) => {{
     let columns = [ $( table_column($col_name) ),+ ];
@@ -79,58 +80,61 @@ macro_rules! table_columns {
     }};
 }
 
-fn render_item_with_modifier(ui: &imgui::Ui, total: &str, modifiers: &ModifierSet) {
+pub fn render_item_with_modifier(ui: &imgui::Ui, total: &str, modifiers: &ModifierSet) {
     ui.text(total);
     if ui.is_item_hovered() && !modifiers.is_empty() {
         ui.tooltip_text(modifiers.to_string());
     }
 }
 
-fn render_classes(ui: &imgui::Ui, world: &World, entity: Entity) {
-    let mut class_strings = Vec::new();
-    let character_levels = systems::helpers::get_component::<CharacterLevels>(world, entity);
-    for (class_name, level_progression) in character_levels.all_classes() {
-        let level = level_progression.level();
-        let class_str = if let Some(subclass_name) = level_progression.subclass() {
-            format!("Level {} {} {}", level, subclass_name.name, class_name)
-        } else {
-            format!("Level {} {}", level, class_name)
-        };
-        class_strings.push(class_str);
+impl ImguiRenderable for CharacterLevels {
+    fn render(&self, ui: &imgui::Ui) {
+        let mut class_strings = Vec::new();
+        for (class_name, level_progression) in self.all_classes() {
+            let level = level_progression.level();
+            let class_str = if let Some(subclass_name) = level_progression.subclass() {
+                format!("Level {} {} {}", level, subclass_name.name, class_name)
+            } else {
+                format!("Level {} {}", level, class_name)
+            };
+            class_strings.push(class_str);
+        }
+        let all_classes = class_strings.join(", ");
+        ui.text(all_classes);
     }
-    let all_classes = class_strings.join(", ");
-    ui.text(all_classes);
 }
 
-fn render_health_bar(ui: &imgui::Ui, world: &World, entity: Entity) {
-    let hit_points = systems::helpers::get_component::<HitPoints>(world, entity);
-    let current = hit_points.current();
-    let max = hit_points.max();
-    let hp_fraction = current as f32 / max as f32;
-    let hp_text = format!("{} / {}", current, max);
+impl ImguiRenderable for HitPoints {
+    fn render(&self, ui: &imgui::Ui) {
+        let current = self.current();
+        let max = self.max();
+        let hp_fraction = current as f32 / max as f32;
+        let hp_text = format!("{} / {}", current, max);
 
-    // Reserve vertical space for the taller widget (the progress bar)
-    let line_height = ui.text_line_height_with_spacing();
-    let bar_height = line_height;
-    let y_offset = (bar_height - line_height) * 0.5;
-    ui.dummy([0.0, y_offset.max(0.0)]); // move down a little if needed
+        // Reserve vertical space for the taller widget (the progress bar)
+        let line_height = ui.text_line_height_with_spacing();
+        let bar_height = line_height;
+        let y_offset = (bar_height - line_height) * 0.5;
+        ui.dummy([0.0, y_offset.max(0.0)]); // move down a little if needed
 
-    // "HP" label
-    ui.text("HP:");
-    ui.same_line();
+        // "HP" label
+        ui.text("HP:");
+        ui.same_line();
 
-    // Style colors
-    let foreground = ui.push_style_color(imgui::StyleColor::PlotHistogram, [0.7, 0.0, 0.0, 1.0]);
-    let background = ui.push_style_color(imgui::StyleColor::FrameBg, [0.2, 0.0, 0.0, 1.0]);
+        // Style colors
+        let foreground =
+            ui.push_style_color(imgui::StyleColor::PlotHistogram, [0.7, 0.0, 0.0, 1.0]);
+        let background = ui.push_style_color(imgui::StyleColor::FrameBg, [0.2, 0.0, 0.0, 1.0]);
 
-    imgui::ProgressBar::new(hp_fraction)
-        .size([150.0, bar_height])
-        .overlay_text(&hp_text)
-        .build(ui);
+        imgui::ProgressBar::new(hp_fraction)
+            .size([150.0, bar_height])
+            .overlay_text(&hp_text)
+            .build(ui);
 
-    // Pop the style colors
-    foreground.pop();
-    background.pop();
+        // Pop the style colors
+        foreground.pop();
+        background.pop();
+    }
 }
 
 fn proficiency_icon(proficiency: &Proficiency) -> &'static str {
@@ -151,14 +155,14 @@ fn render_proficiency(ui: &imgui::Ui, proficiency: &Proficiency, extra_text: &st
     }
 }
 
-// TODO: Probably only works if all entities are characters
 impl ImguiRenderableMut for (&mut World, Entity, CharacterTag) {
     fn render_mut(&mut self, ui: &imgui::Ui) {
         let (world, entity, _) = self;
         let id = systems::helpers::get_component::<CharacterId>(world, *entity).to_string();
         ui.text(format!("ID: {}", id));
-        render_classes(ui, world, *entity);
-        render_health_bar(ui, world, *entity);
+
+        systems::helpers::get_component::<CharacterLevels>(world, *entity).render(ui);
+        systems::helpers::get_component::<HitPoints>(world, *entity).render(ui);
 
         if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{}", id)) {
             if let Some(tab) = ui.tab_item("Abilities") {

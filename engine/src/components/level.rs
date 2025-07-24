@@ -9,9 +9,13 @@ pub trait Level {
     fn total_level(&self) -> u8;
 
     fn proficiency_bonus(&self) -> u8 {
+        let total_level = self.total_level();
+        if total_level == 0 {
+            return 0;
+        }
         // Proficiency bonus is typically calculated as (total level - 1) / 4 + 2
         // This is a common rule in many RPG systems, including D&D 5e
-        (self.total_level() - 1) / 4 + 2
+        (total_level - 1) / 4 + 2
     }
 }
 
@@ -61,6 +65,7 @@ static EXPERIENCE_PER_LEVEL: LazyLock<Vec<u32>> = LazyLock::new(|| {
 
 static MAX_LEVEL: u8 = 20;
 
+#[derive(Debug, Clone)]
 pub struct ClassLevelProgression {
     level: u8,
     subclass: Option<SubclassName>,
@@ -83,6 +88,7 @@ impl ClassLevelProgression {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct CharacterLevels {
     class_levels: HashMap<ClassName, ClassLevelProgression>,
     /// The class that was first leveled up. Occasionally this is relevant, e.g

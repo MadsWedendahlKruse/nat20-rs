@@ -190,6 +190,7 @@ pub enum ResourceError {
     },
 }
 
+#[derive(Debug, Clone)]
 pub struct ResourceMap {
     resources: HashMap<ResourceId, Resource>,
 }

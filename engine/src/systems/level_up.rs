@@ -1,13 +1,11 @@
-use std::{
-    collections::{HashSet, VecDeque},
-    iter::FromIterator,
-};
+use std::collections::{HashMap, HashSet};
 
 use hecs::{Entity, World};
+use strum::IntoEnumIterator;
 
 use crate::{
     components::{
-        ability::{AbilityScore, AbilityScoreSet},
+        ability::{Ability, AbilityScore, AbilityScoreSet},
         actions::action::{ActionContext, ActionMap},
         class::{Class, ClassBase, ClassName, SubclassName},
         id::EffectId,
@@ -19,15 +17,19 @@ use crate::{
         skill::{Skill, SkillSet},
     },
     registry, systems,
-    test_utils::cli::CliChoiceProvider,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LevelUpSelection {
     Class(ClassName),
     Subclass(SubclassName),
     Effect(EffectId),
     SkillProficiency(HashSet<Skill>),
+    AbilityScores {
+        scores: HashMap<Ability, u8>,
+        plus_2_bonus: Ability,
+        plus_1_bonus: Ability,
+    },
     // Feat(FeatOption),
     // AbilityScoreImprovement(u8), // u8 = number of points to distribute
     // AbilityPoint(Ability),
@@ -42,6 +44,7 @@ impl LevelUpSelection {
             LevelUpSelection::Subclass(_) => "Subclass",
             LevelUpSelection::Effect(_) => "Effect",
             LevelUpSelection::SkillProficiency(_) => "SkillProficiency",
+            LevelUpSelection::AbilityScores { .. } => "AbilityScores",
             // LevelUpSelection::Feat(_) => "Feat",
             // LevelUpSelection::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
             // LevelUpSelection::AbilityPoint(_) => "AbilityPoint",
@@ -60,108 +63,70 @@ pub enum LevelUpError {
         choice: LevelUpChoice,
         selection: LevelUpSelection,
     },
+    MissingChoiceForSelection {
+        selection: LevelUpSelection,
+    },
     RegistryMissing(String),
     // TODO: Add more error variants as needed
 }
 
 pub struct LevelUpSession {
     character: Entity,
-    pending: VecDeque<LevelUpChoice>,
+    pending: Vec<LevelUpChoice>,
 }
 
 impl LevelUpSession {
-    pub fn new(character: Entity) -> Self {
-        let mut pending = VecDeque::new();
-        pending.push_back(LevelUpChoice::class());
+    pub fn new(world: &World, character: Entity) -> Self {
+        let mut pending = Vec::new();
+        pending.push(LevelUpChoice::class());
+
+        // Special level up choices when creating a new character
+        if systems::helpers::get_component::<CharacterLevels>(world, character).total_level() == 0 {
+            pending.push(LevelUpChoice::ability_scores());
+        }
+
         LevelUpSession { character, pending }
+    }
+
+    pub fn pending_choices(&self) -> &Vec<LevelUpChoice> {
+        &self.pending
+    }
+    pub fn is_complete(&self) -> bool {
+        self.pending.is_empty()
     }
 
     pub fn advance(
         &mut self,
         world: &mut World,
-        provider: &mut impl ChoiceProvider,
+        selection: &LevelUpSelection,
     ) -> Result<(), LevelUpError> {
-        while let Some(choice) = self.pending.pop_front() {
-            let selection = provider.provide(&choice);
-            let next = resolve_level_up_choice(world, self.character, choice, selection)?;
-            for c in next {
-                self.pending.push_back(c)
+        let mut new_choices = Vec::new();
+
+        let mut resolved_choice = None;
+
+        for choice in self.pending.iter() {
+            if choice.name() != selection.name() {
+                continue;
             }
+
+            let next_choices =
+                resolve_level_up_choice(world, self.character, choice.clone(), selection.clone())?;
+            new_choices.extend(next_choices);
+            resolved_choice = Some(choice.clone());
+            break;
         }
+
+        if resolved_choice.is_none() {
+            return Err(LevelUpError::MissingChoiceForSelection {
+                selection: selection.clone(),
+            });
+        }
+
+        self.pending
+            .retain(|c| c != resolved_choice.as_ref().unwrap());
+
+        self.pending.extend(new_choices);
         Ok(())
-    }
-}
-
-pub trait ChoiceProvider {
-    fn provide(&mut self, choice: &LevelUpChoice) -> LevelUpSelection;
-}
-
-impl ChoiceProvider for CliChoiceProvider {
-    fn provide(&mut self, choice: &LevelUpChoice) -> LevelUpSelection {
-        match choice {
-            LevelUpChoice::Class(classes) => {
-                let idx = Self::select_from_list("Choose a class:", classes, |class| {
-                    format!("{}", class)
-                });
-                LevelUpSelection::Class(classes[idx].clone())
-            }
-
-            LevelUpChoice::Subclass(subclasses) => {
-                let idx = Self::select_from_list("Choose a subclass:", subclasses, |sub| {
-                    format!("{} ({})", sub.name, sub.class)
-                });
-                LevelUpSelection::Subclass(subclasses[idx].clone())
-            }
-
-            LevelUpChoice::Effect(effects) => {
-                let idx = Self::select_from_list("Choose an effect:", effects, |effect| {
-                    format!("{}", effect)
-                });
-                LevelUpSelection::Effect(effects[idx].clone())
-            }
-
-            LevelUpChoice::SkillProficiency(skills, num_choices) => {
-                let skills_vec: Vec<_> = skills.iter().cloned().collect();
-                let selected = Self::select_multiple(
-                    &format!("Select {} skill(s) to gain proficiency in:", num_choices),
-                    &skills_vec,
-                    *num_choices,
-                    |skill| format!("{:?}", skill),
-                    true, // Ensure unique selections
-                );
-                LevelUpSelection::SkillProficiency(HashSet::from_iter(selected))
-            }
-
-            #[allow(unreachable_patterns)]
-            _ => {
-                todo!("Implement CLI choice provider for other LevelUpChoice variants");
-            }
-        }
-    }
-}
-
-/// A provider that hands out selections from a predefined list.
-/// Useful for testing or when you want to simulate a specific sequence of choices.
-pub struct PredefinedChoiceProvider {
-    name: String,
-    responses: VecDeque<LevelUpSelection>,
-}
-
-impl PredefinedChoiceProvider {
-    pub fn new(name: String, responses: Vec<LevelUpSelection>) -> Self {
-        Self {
-            name,
-            responses: responses.into(),
-        }
-    }
-}
-
-impl ChoiceProvider for PredefinedChoiceProvider {
-    fn provide(&mut self, _choice: &LevelUpChoice) -> LevelUpSelection {
-        self.responses.pop_front().expect(&format!(
-            "Ran out of predefined responses when leveling up {}",
-            self.name
-        ))
     }
 }
 
@@ -235,6 +200,51 @@ pub fn resolve_level_up_choice(
             }
         }
 
+        (
+            LevelUpChoice::AbilityScores(score_point_cost, num_points),
+            LevelUpSelection::AbilityScores {
+                scores,
+                plus_2_bonus,
+                plus_1_bonus,
+            },
+        ) => {
+            if scores.len() != Ability::iter().count() {
+                return Err(LevelUpError::InvalidSelection { choice, selection });
+            }
+
+            if scores
+                .values()
+                .any(|&score| !score_point_cost.contains_key(&score))
+            {
+                return Err(LevelUpError::InvalidSelection { choice, selection });
+            }
+
+            let total_cost = scores
+                .iter()
+                .map(|(_, score)| {
+                    score_point_cost
+                        .get(score)
+                        .expect("Invalid ability score")
+                        .clone()
+                })
+                .sum::<u8>();
+            if total_cost != *num_points {
+                return Err(LevelUpError::InvalidSelection { choice, selection });
+            }
+
+            let mut ability_score_set =
+                systems::helpers::get_component_mut::<AbilityScoreSet>(world, entity);
+            for (ability, score) in scores {
+                let mut final_score = *score as i32;
+                if ability == plus_2_bonus {
+                    final_score += 2;
+                } else if ability == plus_1_bonus {
+                    final_score += 1;
+                }
+                ability_score_set.set(*ability, AbilityScore::new(*ability, final_score));
+            }
+        }
+
         _ => {
             // If the choice and selection are called the same, and we made it here,
             // it's probably just because it hasn't been implemented yet
@@ -245,6 +255,7 @@ pub fn resolve_level_up_choice(
                     selection
                 );
             }
+
             return Err(LevelUpError::ChoiceSelectionMismatch { choice, selection });
         }
     }
@@ -253,20 +264,11 @@ pub fn resolve_level_up_choice(
 }
 
 fn increment_class_level(world: &mut World, entity: Entity, class: &Class) -> Vec<LevelUpChoice> {
-    let (new_level, total_level) = {
+    let new_level = {
         let mut character_levels =
             systems::helpers::get_component_mut::<CharacterLevels>(world, entity);
-        let new_level = character_levels.level_up(class.name.clone());
-        (new_level, character_levels.total_level())
+        character_levels.level_up(class.name.clone())
     };
-
-    // If it's the first total level set default ability scores
-    if total_level == 1 {
-        for (ability, score) in class.default_abilities.iter() {
-            systems::helpers::get_component_mut::<AbilityScoreSet>(world, entity)
-                .set(*ability, AbilityScore::new(*ability, *score));
-        }
-    }
 
     for ability in class.saving_throw_proficiencies.iter() {
         systems::helpers::get_component_mut::<SavingThrowSet>(world, entity)

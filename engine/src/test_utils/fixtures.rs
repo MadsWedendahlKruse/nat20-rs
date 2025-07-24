@@ -233,7 +233,7 @@ pub mod creatures {
         },
         systems::{
             self,
-            level_up::{LevelUpSelection, LevelUpSession, PredefinedChoiceProvider},
+            level_up::{LevelUpError, LevelUpSelection, LevelUpSession},
         },
     };
 
@@ -273,6 +273,15 @@ pub mod creatures {
                 5,
                 vec![
                     LevelUpSelection::Class(ClassName::Fighter),
+                    LevelUpSelection::AbilityScores {
+                        scores: registry::classes::CLASS_REGISTRY
+                            .get(&ClassName::Fighter)
+                            .unwrap()
+                            .default_abilities
+                            .clone(),
+                        plus_2_bonus: Ability::Strength,
+                        plus_1_bonus: Ability::Constitution,
+                    },
                     LevelUpSelection::Effect(
                         registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                     ),
@@ -290,17 +299,6 @@ pub mod creatures {
                     LevelUpSelection::Class(ClassName::Fighter),
                 ],
             );
-
-            let ability_scores = HashMap::from([
-                (Ability::Strength, 17),
-                (Ability::Dexterity, 14),
-                (Ability::Constitution, 16),
-                (Ability::Intelligence, 12),
-                (Ability::Wisdom, 10),
-                (Ability::Charisma, 8),
-            ]);
-
-            set_ability_scores(world, entity, ability_scores);
 
             systems::loadout::equip_armor(world, entity, fixtures::armor::heavy_armor());
             let _ = systems::loadout::equip_weapon(
@@ -323,6 +321,15 @@ pub mod creatures {
                 5,
                 vec![
                     LevelUpSelection::Class(ClassName::Wizard),
+                    LevelUpSelection::AbilityScores {
+                        scores: registry::classes::CLASS_REGISTRY
+                            .get(&ClassName::Wizard)
+                            .unwrap()
+                            .default_abilities
+                            .clone(),
+                        plus_2_bonus: Ability::Intelligence,
+                        plus_1_bonus: Ability::Constitution,
+                    },
                     LevelUpSelection::SkillProficiency(HashSet::from([
                         Skill::Arcana,
                         Skill::History,
@@ -337,17 +344,6 @@ pub mod creatures {
                     LevelUpSelection::Class(ClassName::Wizard),
                 ],
             );
-
-            let ability_scores = HashMap::from([
-                (Ability::Strength, 8),
-                (Ability::Dexterity, 14),
-                (Ability::Constitution, 16),
-                (Ability::Intelligence, 17),
-                (Ability::Wisdom, 12),
-                (Ability::Charisma, 10),
-            ]);
-
-            set_ability_scores(world, entity, ability_scores);
 
             systems::loadout::equip_armor(world, entity, fixtures::armor::clothing());
 
@@ -371,6 +367,15 @@ pub mod creatures {
                 5,
                 vec![
                     LevelUpSelection::Class(ClassName::Warlock),
+                    LevelUpSelection::AbilityScores {
+                        scores: registry::classes::CLASS_REGISTRY
+                            .get(&ClassName::Warlock)
+                            .unwrap()
+                            .default_abilities
+                            .clone(),
+                        plus_2_bonus: Ability::Charisma,
+                        plus_1_bonus: Ability::Constitution,
+                    },
                     LevelUpSelection::SkillProficiency(HashSet::from([
                         Skill::Arcana,
                         Skill::Deception,
@@ -385,17 +390,6 @@ pub mod creatures {
                     LevelUpSelection::Class(ClassName::Warlock),
                 ],
             );
-
-            let ability_scores = HashMap::from([
-                (Ability::Strength, 8),
-                (Ability::Dexterity, 14),
-                (Ability::Constitution, 16),
-                (Ability::Intelligence, 12),
-                (Ability::Wisdom, 10),
-                (Ability::Charisma, 17),
-            ]);
-
-            set_ability_scores(world, entity, ability_scores);
 
             systems::loadout::equip_armor(world, entity, fixtures::armor::clothing());
 
@@ -430,6 +424,15 @@ pub mod creatures {
                 1,
                 vec![
                     LevelUpSelection::Class(ClassName::Fighter),
+                    LevelUpSelection::AbilityScores {
+                        scores: registry::classes::CLASS_REGISTRY
+                            .get(&ClassName::Fighter)
+                            .unwrap()
+                            .default_abilities
+                            .clone(),
+                        plus_2_bonus: Ability::Strength,
+                        plus_1_bonus: Ability::Constitution,
+                    },
                     LevelUpSelection::Effect(
                         registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                     ),
@@ -439,17 +442,6 @@ pub mod creatures {
                     ])),
                 ],
             );
-
-            let ability_scores = HashMap::from([
-                (Ability::Strength, 8),
-                (Ability::Dexterity, 15),
-                (Ability::Constitution, 10),
-                (Ability::Intelligence, 10),
-                (Ability::Wisdom, 8),
-                (Ability::Charisma, 8),
-            ]);
-
-            set_ability_scores(world, entity, ability_scores);
 
             systems::loadout::equip_armor(world, entity, fixtures::armor::medium_armor());
             let _ = systems::loadout::equip_weapon(
@@ -469,26 +461,49 @@ pub mod creatures {
         levels: u8,
         responses: Vec<LevelUpSelection>,
     ) {
-        // TODO: String is a bit generic here
-        let name = systems::helpers::get_component::<String>(world, entity).to_string();
-        let mut choice_provider = PredefinedChoiceProvider::new(name.clone(), responses);
-        for level in 1..=levels {
-            let mut level_up_session = LevelUpSession::new(entity);
-            level_up_session
-                .advance(world, &mut choice_provider)
-                .expect(&format!("Failed to apply level {} for {}", level, name));
-        }
-    }
+        let mut responses = responses;
 
-    fn set_ability_scores(
-        world: &mut World,
-        entity: Entity,
-        ability_scores: HashMap<Ability, i32>,
-    ) {
-        let mut ability_score_set =
-            systems::helpers::get_component_mut::<AbilityScoreSet>(world, entity);
-        for (ability, score) in ability_scores {
-            ability_score_set.set(ability, AbilityScore::new(ability, score));
+        for level in 1..=levels {
+            let name = systems::helpers::get_component_clone::<String>(world, entity);
+            let mut level_up_session = LevelUpSession::new(world, entity);
+
+            // Some of the responses are identical, e.g. selecting the same class
+            // multiple times. Using retain would therefore remove all of them,
+            // so we need to track the indices of the used responses.
+            let mut used_indices = Vec::new();
+            for (i, response) in responses.iter().enumerate() {
+                let result = level_up_session.advance(world, response);
+                match result {
+                    Ok(_) | Err(LevelUpError::MissingChoiceForSelection { .. }) => {
+                        // This is expected to happen since the responses cover all
+                        // levels, but the session only advances one level at a time.
+                        used_indices.push(i);
+                        if level_up_session.is_complete() {
+                            break;
+                        }
+                    }
+                    _ => {
+                        panic!(
+                            "Failed to apply level up response for {} at level {}: {:?}",
+                            name, level, result
+                        );
+                    }
+                }
+            }
+
+            // Remove the used responses from the list
+            for index in used_indices.iter().rev() {
+                responses.remove(*index);
+            }
+
+            if !level_up_session.is_complete() {
+                panic!(
+                    "Level up session for {} at level {} did not complete: {:?}",
+                    name,
+                    level,
+                    level_up_session.pending_choices()
+                );
+            }
         }
     }
 }
