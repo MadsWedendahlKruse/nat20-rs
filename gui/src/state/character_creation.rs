@@ -25,7 +25,7 @@ use crate::{
     table_columns,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum LevelUpSelectionProgress {
     Class(Option<ClassName>),
     Subclass(Option<SubclassName>),
@@ -112,7 +112,7 @@ impl LevelUpSelectionProgress {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct LevelUpChoiceWithProgress {
     choice: LevelUpChoice,
     progress: LevelUpSelectionProgress,
@@ -130,6 +130,7 @@ pub enum CharacterCreationState {
     ChoosingMethod,
     FromPredefined,
     FromScratch,
+    CreationComplete,
 }
 
 pub struct CharacterCreation {
@@ -141,7 +142,6 @@ pub struct CharacterCreation {
     current_character: Option<Entity>,
     level_up_session: Option<LevelUpSession>,
     pending_selections: Vec<LevelUpChoiceWithProgress>,
-    creation_complete: bool,
 }
 
 impl CharacterCreation {
@@ -167,7 +167,6 @@ impl CharacterCreation {
             current_character: None,
             level_up_session: None,
             pending_selections: Vec::new(),
-            creation_complete: false,
         }
     }
 
@@ -176,10 +175,39 @@ impl CharacterCreation {
         self.current_character = None;
         self.level_up_session = None;
         self.pending_selections.clear();
-        self.creation_complete = false;
     }
 
     fn sync_pending_selections(&mut self) {
+        // Preserve the name
+        let name = systems::helpers::get_component_clone::<String>(
+            &self.world,
+            self.current_character.unwrap(),
+        );
+
+        self.current_character = Some(self.world.spawn(Character::new(&name)));
+
+        self.level_up_session = Some(LevelUpSession::new(
+            &self.world,
+            self.current_character.unwrap(),
+        ));
+
+        // Check if any of the current selections are still valid
+        let mut valid_selections = Vec::new();
+        for choice in &self.pending_selections {
+            if choice.progress.is_complete() {
+                let selection = choice.progress.clone().finalize();
+                let result = self
+                    .level_up_session
+                    .as_mut()
+                    .unwrap()
+                    .advance(&mut self.world, &selection);
+                if result.is_ok() {
+                    valid_selections.push(choice.clone());
+                }
+            }
+        }
+        self.pending_selections = valid_selections;
+
         let pending_choices = self.level_up_session.as_ref().unwrap().pending_choices();
 
         for choice in pending_choices {
@@ -192,7 +220,7 @@ impl CharacterCreation {
     }
 
     pub fn creation_complete(&self) -> bool {
-        self.creation_complete
+        matches!(self.state, Some(CharacterCreationState::CreationComplete))
     }
 
     pub fn get_character(&mut self) -> Option<Character> {
@@ -219,6 +247,7 @@ impl ImguiRenderableMut for CharacterCreation {
                             self.state = Some(CharacterCreationState::FromPredefined);
                         }
                         if ui.button("From Scratch") {
+                            self.reset();
                             self.state = Some(CharacterCreationState::FromScratch);
                         }
                         if ui.button("Cancel") {
@@ -237,7 +266,7 @@ impl ImguiRenderableMut for CharacterCreation {
                             if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
                                 if ui.button(format!("Add to World##{}", entity.id())) {
                                     self.current_character = Some(entity);
-                                    self.creation_complete = true;
+                                    self.state = Some(CharacterCreationState::CreationComplete);
                                 }
                                 ui.separator();
                                 (&mut self.world, entity, tag).render_mut(ui);
@@ -253,28 +282,13 @@ impl ImguiRenderableMut for CharacterCreation {
                         // Logic for scratch character creation
                         if ui.button("Back") {
                             self.state = Some(CharacterCreationState::ChoosingMethod);
-                            self.current_character = None;
-                            self.level_up_session = None;
                         }
                         ui.separator();
 
                         if self.current_character.is_none() {
-                            let character = Character::new("Johnny Hero");
-                            self.current_character = Some(self.world.spawn(character));
+                            self.current_character =
+                                Some(self.world.spawn(Character::new("Johnny Hero")));
                         }
-
-                        if self.level_up_session.is_none() {
-                            println!("Starting level up session for character");
-                            self.level_up_session = Some(LevelUpSession::new(
-                                &self.world,
-                                self.current_character.unwrap(),
-                            ));
-                        }
-
-                        let tag = systems::helpers::get_component_clone::<CharacterTag>(
-                            &self.world,
-                            self.current_character.unwrap(),
-                        );
 
                         let mut name = systems::helpers::get_component_clone::<String>(
                             &self.world,
@@ -312,15 +326,15 @@ impl ImguiRenderableMut for CharacterCreation {
                                 tab_bar.end();
 
                                 if pending_selection.progress.is_complete() {
-                                    let finalized_selection =
-                                        pending_selection.progress.clone().finalize();
-                                    let result = self
-                                        .level_up_session
-                                        .as_mut()
-                                        .unwrap()
-                                        .advance(&mut self.world, &finalized_selection);
-                                    if result.is_ok() {
-                                        choice_selected = true;
+                                    let selection = pending_selection.progress.clone().finalize();
+                                    if let Some(level_up_session) = &mut self.level_up_session {
+                                        if !level_up_session
+                                            .chosen_selections()
+                                            .contains(&selection)
+                                        {
+                                            println!("New selection: {:?}", selection);
+                                            choice_selected = true;
+                                        }
                                     }
                                 }
                             }
@@ -334,24 +348,14 @@ impl ImguiRenderableMut for CharacterCreation {
 
                         ui.separator();
 
-                        for (i, choice) in self
-                            .level_up_session
-                            .as_ref()
-                            .unwrap()
-                            .pending_choices()
-                            .iter()
-                            .enumerate()
-                        {
-                            ui.text(format!("Choice {}: {}", i + 1, choice.name()));
-                        }
-
                         if self.level_up_session.as_ref().unwrap().is_complete() {
                             if ui.button("Finish Character Creation") {
-                                self.creation_complete = true;
+                                self.state = Some(CharacterCreationState::CreationComplete);
                             }
                         }
                     }
-                    None => {}
+
+                    _ => {}
                 }
             });
     }

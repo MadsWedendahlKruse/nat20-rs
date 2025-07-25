@@ -72,7 +72,8 @@ pub enum LevelUpError {
 
 pub struct LevelUpSession {
     character: Entity,
-    pending: Vec<LevelUpChoice>,
+    pending_choices: Vec<LevelUpChoice>,
+    chosen_selections: Vec<LevelUpSelection>,
 }
 
 impl LevelUpSession {
@@ -85,14 +86,23 @@ impl LevelUpSession {
             pending.push(LevelUpChoice::ability_scores());
         }
 
-        LevelUpSession { character, pending }
+        LevelUpSession {
+            character,
+            pending_choices: pending,
+            chosen_selections: Vec::new(),
+        }
     }
 
     pub fn pending_choices(&self) -> &Vec<LevelUpChoice> {
-        &self.pending
+        &self.pending_choices
     }
+
+    pub fn chosen_selections(&self) -> &Vec<LevelUpSelection> {
+        &self.chosen_selections
+    }
+
     pub fn is_complete(&self) -> bool {
-        self.pending.is_empty()
+        self.pending_choices.is_empty()
     }
 
     pub fn advance(
@@ -104,7 +114,7 @@ impl LevelUpSession {
 
         let mut resolved_choice = None;
 
-        for choice in self.pending.iter() {
+        for choice in self.pending_choices.iter() {
             if choice.name() != selection.name() {
                 continue;
             }
@@ -122,10 +132,12 @@ impl LevelUpSession {
             });
         }
 
-        self.pending
+        self.pending_choices
             .retain(|c| c != resolved_choice.as_ref().unwrap());
 
-        self.pending.extend(new_choices);
+        self.chosen_selections.push(selection.clone());
+
+        self.pending_choices.extend(new_choices);
         Ok(())
     }
 }
