@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use hecs::{Entity, World};
-use imgui::{Id, TableColumnFlags, TableColumnSetup, TableFlags};
 use nat20_rs::{
     components::{
         ability::{Ability, AbilityScoreSet},
@@ -31,59 +30,29 @@ use nat20_rs::{
 use std::collections::HashSet;
 use strum::IntoEnumIterator;
 
-pub trait ImguiRenderable {
-    fn render(&self, ui: &imgui::Ui);
-}
+use crate::{
+    render::utils::{
+        ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
+        ImguiRenderableWithContext,
+    },
+    table_with_columns,
+};
 
-pub trait ImguiRenderableMut {
-    fn render_mut(&mut self, ui: &imgui::Ui);
-}
-
-pub trait ImguiRenderableWithContext<C> {
-    fn render_with_context(&self, ui: &imgui::Ui, context: &C);
-}
-
-pub trait ImguiRenderableMutWithContext<C> {
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: &C);
-}
-
-// impl<T, C> ImguiRenderableWithContext<C> for T
-// where
-//     T: ImguiRenderable,
-// {
-//     fn render_with_context(&self, ui: &imgui::Ui, _context: &C) {
-//         self.render(ui);
-//     }
-// }
-
-pub fn table_column(name: &str) -> TableColumnSetup<&str> {
-    TableColumnSetup {
-        name,
-        flags: TableColumnFlags::NO_HIDE,
-        init_width_or_weight: 0.0,
-        user_id: Id::default(),
-    }
-}
-
-#[macro_export]
-macro_rules! table_columns {
-    ($ui:expr, $table_name:expr, $( $col_name:expr ),+ $(,)? ) => {{
-    let columns = [ $( table_column($col_name) ),+ ];
-    $ui.begin_table_header_with_flags(
-        $table_name,
-        columns,
-        TableFlags::SIZING_FIXED_FIT
-        | TableFlags::BORDERS
-        | TableFlags::ROW_BG
-        | TableFlags::NO_HOST_EXTEND_X,
-    )
-    }};
-}
-
-pub fn render_item_with_modifier(ui: &imgui::Ui, total: &str, modifiers: &ModifierSet) {
-    ui.text(total);
-    if ui.is_item_hovered() && !modifiers.is_empty() {
-        ui.tooltip_text(modifiers.to_string());
+impl ImguiRenderableWithContext<bool> for ModifierSet {
+    fn render_with_context(&self, ui: &imgui::Ui, render_plus: &bool) {
+        let total = if *render_plus {
+            format!(
+                "{}{}",
+                if self.total() >= 0 { "+" } else { "" },
+                self.total()
+            )
+        } else {
+            self.total().to_string()
+        };
+        ui.text(total);
+        if ui.is_item_hovered() {
+            ui.tooltip_text(self.to_string());
+        }
     }
 }
 
@@ -146,12 +115,20 @@ fn proficiency_icon(proficiency: &Proficiency) -> &'static str {
     }
 }
 
-fn render_proficiency(ui: &imgui::Ui, proficiency: &Proficiency, extra_text: &str) {
-    if proficiency != &Proficiency::None {
-        ui.text(proficiency_icon(proficiency));
-        if ui.is_item_hovered() {
-            ui.tooltip_text(format!("{}{}", proficiency, extra_text));
+impl ImguiRenderableWithContext<String> for Proficiency {
+    fn render_with_context(&self, ui: &imgui::Ui, context: &String) {
+        if self != &Proficiency::None {
+            ui.text(proficiency_icon(self));
+            if ui.is_item_hovered() {
+                ui.tooltip_text(format!("{}{}", self, context));
+            }
         }
+    }
+}
+
+impl ImguiRenderable for Proficiency {
+    fn render(&self, ui: &imgui::Ui) {
+        self.render_with_context(ui, &"".to_string());
     }
 }
 
@@ -222,7 +199,7 @@ impl ImguiRenderableMut for (&mut World, Entity, CharacterTag) {
 
 impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreSet {
     fn render_with_context(&self, ui: &imgui::Ui, context: &(&World, Entity)) {
-        if let Some(table) = table_columns!(
+        if let Some(table) = table_with_columns!(
             ui,
             "Abilities",
             "", // Empty column for saving throw proficiency
@@ -237,38 +214,24 @@ impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreSet {
                 let saving_throws =
                     systems::helpers::get_component::<SavingThrowSet>(context.0, context.1);
                 let proficiency = saving_throws.get(ability).proficiency();
-                render_proficiency(ui, proficiency, " (Saving Throw)");
+                proficiency.render_with_context(ui, &" (Saving Throw)".to_string());
                 // Ability name
                 ui.table_next_column();
                 ui.text(ability.to_string());
                 // Ability score
                 ui.table_next_column();
                 let ability_score = self.get(ability);
-                render_item_with_modifier(
-                    ui,
-                    &ability_score.total().to_string(),
-                    &ability_score.modifiers,
-                );
+                ability_score.modifiers.render_with_context(ui, &false);
                 // Ability modifier
                 ui.table_next_column();
-                let ability_modifier = ability_score.ability_modifier().total();
-                let total = if ability_modifier >= 0 {
-                    format!("+{}", ability_modifier)
-                } else {
-                    format!("{}", ability_modifier)
-                };
-                render_item_with_modifier(ui, &total, &ability_score.ability_modifier());
+                ability_score
+                    .ability_modifier()
+                    .render_with_context(ui, &true);
                 // Saving throw
                 ui.table_next_column();
                 let result = saving_throws.check(ability, context.0, context.1);
                 let modifiers = &result.modifier_breakdown;
-                let total = modifiers.total();
-                let total_str = if total >= 0 {
-                    format!("+{}", total)
-                } else {
-                    format!("{}", total)
-                };
-                render_item_with_modifier(ui, &total_str, &modifiers);
+                modifiers.render_with_context(ui, &true);
             }
 
             table.end();
@@ -279,7 +242,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreSet {
 impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
     fn render_with_context(&self, ui: &imgui::Ui, context: &(&World, Entity)) {
         // Empty column is for proficiency
-        if let Some(table) = table_columns!(ui, "Skills", "", "Skill", "Bonus") {
+        if let Some(table) = table_with_columns!(ui, "Skills", "", "Skill", "Bonus") {
             // Skills are ordered by ability, so if the ability changes, we can
             // render a separator. Since the first skill is Athletics, we just
             // have to start with anything other than Strength.
@@ -305,7 +268,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
                 // Proficiency column
                 ui.table_next_column();
                 let proficiency = self.get(skill).proficiency();
-                render_proficiency(ui, proficiency, "");
+                proficiency.render(ui);
                 // Skill name
                 ui.table_next_column();
                 ui.text(skill.to_string());
@@ -313,11 +276,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
                 ui.table_next_column();
                 // TODO: Avoid doing an actual skill check here every time
                 let result = self.check(skill, context.0, context.1);
-                render_item_with_modifier(
-                    ui,
-                    &result.modifier_breakdown.total().to_string(),
-                    &result.modifier_breakdown,
-                );
+                result.modifier_breakdown.render_with_context(ui, &true);
             }
 
             table.end();
@@ -330,7 +289,7 @@ static FILLED_RESOURCE_ICON: &str = "O"; // Placeholder for filled resource icon
 
 impl ImguiRenderable for ResourceMap {
     fn render(&self, ui: &imgui::Ui) {
-        if let Some(table) = table_columns!(ui, "Resources", "Resource", "Count", "Recharge") {
+        if let Some(table) = table_with_columns!(ui, "Resources", "Resource", "Count", "Recharge") {
             for (resource_id, resource) in self.iter() {
                 // Resource ID column
                 ui.table_next_column();
@@ -358,7 +317,7 @@ impl ImguiRenderable for ResourceMap {
     }
 }
 
-fn roman_numeral(level: u8) -> &'static str {
+fn spell_level_roman_numeral(level: u8) -> &'static str {
     match level {
         0 => "Cantrips",
         1 => "I",
@@ -394,7 +353,7 @@ impl ImguiRenderableMut for Spellbook {
             if ui.button(format!(
                 "{} ({})",
                 spell_id,
-                roman_numeral(spell.base_level())
+                spell_level_roman_numeral(spell.base_level())
             )) {
                 self.unprepare_spell(spell_id);
             }
@@ -411,7 +370,7 @@ impl ImguiRenderableMut for Spellbook {
         }
 
         ui.separator_with_text("All Spells");
-        if let Some(table) = table_columns!(ui, "Spells", "Level", "Spells", "Slots") {
+        if let Some(table) = table_with_columns!(ui, "Spells", "Level", "Spells", "Slots") {
             // Group spells by level
             let mut spells_by_level: HashMap<u8, Vec<&SpellId>> = HashMap::new();
             let all_spells = self.all_spells().clone();
@@ -428,7 +387,7 @@ impl ImguiRenderableMut for Spellbook {
             for level in 1..=max_level {
                 // Level column
                 ui.table_next_column();
-                ui.text(roman_numeral(level));
+                ui.text(spell_level_roman_numeral(level));
 
                 // Spells column
                 ui.table_next_column();
@@ -467,7 +426,7 @@ impl ImguiRenderableMut for Spellbook {
 
 impl ImguiRenderable for Vec<Effect> {
     fn render(&self, ui: &imgui::Ui) {
-        if let Some(table) = table_columns!(ui, "Effects", "Effect", "Source") {
+        if let Some(table) = table_with_columns!(ui, "Effects", "Effect", "Source") {
             // Sort by duration
             let mut sorted_effects = self.clone();
             sorted_effects.sort_by_key(|effect| effect.duration().clone());
@@ -508,7 +467,7 @@ struct LoadoutRenderContext {
 impl ImguiRenderableMutWithContext<LoadoutRenderContext> for Loadout {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: &LoadoutRenderContext) {
         ui.separator_with_text("Weapons");
-        if let Some(table) = table_columns!(ui, "Weapons", "Hand", "Weapon") {
+        if let Some(table) = table_with_columns!(ui, "Weapons", "Hand", "Weapon") {
             for weapon_type in WeaponType::iter() {
                 // Render separator for each weapon type
                 ui.table_next_row_with_flags(imgui::TableRowFlags::empty());
@@ -535,7 +494,7 @@ impl ImguiRenderableMutWithContext<LoadoutRenderContext> for Loadout {
         }
 
         ui.separator_with_text("Equipment");
-        if let Some(table) = table_columns!(ui, "Equipment", "Slot", "Item") {
+        if let Some(table) = table_with_columns!(ui, "Equipment", "Slot", "Item") {
             // Armor is technically not considered equipment, but we can sneak
             // it in here for now
             ui.table_next_column();
@@ -575,24 +534,6 @@ impl ImguiRenderableMutWithContext<LoadoutRenderContext> for Loadout {
     }
 }
 
-fn damage_type_color(damage_type: &DamageType) -> [f32; 4] {
-    match damage_type {
-        DamageType::Bludgeoning | DamageType::Piercing | DamageType::Slashing => {
-            [0.8, 0.8, 0.8, 1.0]
-        }
-        DamageType::Fire => [1.0, 0.5, 0.0, 1.0],
-        DamageType::Cold => [0.0, 1.0, 1.0, 1.0],
-        DamageType::Lightning => [0.25, 0.25, 1.0, 1.0],
-        DamageType::Acid => [0.0, 1.0, 0.0, 1.0],
-        DamageType::Poison => [0.5, 0.9, 0.0, 1.0],
-        DamageType::Force => [0.9, 0.0, 0.0, 1.0],
-        DamageType::Necrotic => [0.5, 1.0, 0.25, 1.0],
-        DamageType::Psychic => [1.0, 0.5, 1.0, 1.0],
-        DamageType::Radiant => [1.0, 0.9, 0.0, 1.0],
-        DamageType::Thunder => [0.5, 0.0, 1.0, 1.0],
-    }
-}
-
 fn render_item_misc(ui: &imgui::Ui, item: &Item) {
     ui.text_colored([0.7, 0.7, 0.7, 1.0], &item.description);
     // Fake right-aligned text for weight and value
@@ -618,6 +559,24 @@ impl ImguiRenderableWithContext<LoadoutRenderContext> for Weapon {
         }
         ui.separator();
         render_item_misc(ui, &self.equipment().item);
+    }
+}
+
+fn damage_type_color(damage_type: &DamageType) -> [f32; 4] {
+    match damage_type {
+        DamageType::Bludgeoning | DamageType::Piercing | DamageType::Slashing => {
+            [0.8, 0.8, 0.8, 1.0]
+        }
+        DamageType::Fire => [1.0, 0.5, 0.0, 1.0],
+        DamageType::Cold => [0.0, 1.0, 1.0, 1.0],
+        DamageType::Lightning => [0.25, 0.25, 1.0, 1.0],
+        DamageType::Acid => [0.0, 1.0, 0.0, 1.0],
+        DamageType::Poison => [0.5, 0.9, 0.0, 1.0],
+        DamageType::Force => [0.9, 0.0, 0.0, 1.0],
+        DamageType::Necrotic => [0.5, 1.0, 0.25, 1.0],
+        DamageType::Psychic => [1.0, 0.5, 1.0, 1.0],
+        DamageType::Radiant => [1.0, 0.9, 0.0, 1.0],
+        DamageType::Thunder => [0.5, 0.0, 1.0, 1.0],
     }
 }
 

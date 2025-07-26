@@ -5,7 +5,7 @@ use imgui::{Condition, TreeNodeFlags};
 use nat20_rs::{components::id::CharacterId, entities::character::CharacterTag, systems};
 
 use crate::{
-    render::imgui_render::ImguiRenderableMut,
+    render::utils::ImguiRenderableMut,
     state::character_creation::{CharacterCreation, CharacterCreationState},
 };
 
@@ -57,7 +57,8 @@ impl GuiState {
                     }
                 }
                 if ui.button("Add Character") {
-                    self.character_creation.state = Some(CharacterCreationState::ChoosingMethod);
+                    self.character_creation
+                        .set_state(CharacterCreationState::ChoosingMethod);
                 }
             });
     }

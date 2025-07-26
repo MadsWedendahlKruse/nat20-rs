@@ -1,12 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use hecs::{Entity, World};
-use imgui::{Condition, TableFlags, TreeNodeFlags};
+use imgui::{Condition, TreeNodeFlags};
 use nat20_rs::{
     components::{
         ability::Ability,
         class::{ClassName, SubclassName},
         id::EffectId,
+        level::CharacterLevels,
         level_up::LevelUpChoice,
         skill::Skill,
     },
@@ -21,8 +22,11 @@ use nat20_rs::{
 use strum::IntoEnumIterator;
 
 use crate::{
-    render::imgui_render::{ImguiRenderableMut, ImguiRenderableMutWithContext, table_column},
-    table_columns,
+    render::utils::{
+        ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
+        render_button_selectable, render_uniform_buttons,
+    },
+    table_with_columns,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -138,8 +142,12 @@ pub struct CharacterCreation {
     /// main game world, but rather a dummy world. Once the character is created,
     /// it will be added to the main game world.
     world: World,
-    pub state: Option<CharacterCreationState>,
+    state: Option<CharacterCreationState>,
     current_character: Option<Entity>,
+    /// The initial state of the character when the level-up session was first created.
+    /// Whenever the user changes a selection, this is used to reset the character
+    /// to the initial state, and then apply the new selections.
+    initial_character: Option<Character>,
     level_up_session: Option<LevelUpSession>,
     pending_selections: Vec<LevelUpChoiceWithProgress>,
 }
@@ -165,12 +173,35 @@ impl CharacterCreation {
             world,
             state: None,
             current_character: None,
+            initial_character: None,
             level_up_session: None,
             pending_selections: Vec::new(),
         }
     }
 
+    pub fn set_state(&mut self, state: CharacterCreationState) {
+        self.state = Some(state);
+    }
+
+    pub fn creation_complete(&self) -> bool {
+        matches!(self.state, Some(CharacterCreationState::CreationComplete))
+    }
+
+    pub fn get_character(&mut self) -> Option<Character> {
+        if let Some(entity) = self.current_character {
+            let character = Some(Character::from_world(&self.world, entity));
+            self.reset();
+            character
+        } else {
+            None
+        }
+    }
+
     fn reset(&mut self) {
+        if let Some(entity) = self.current_character {
+            self.world.despawn(entity).unwrap();
+        }
+
         self.state = None;
         self.current_character = None;
         self.level_up_session = None;
@@ -184,7 +215,14 @@ impl CharacterCreation {
             self.current_character.unwrap(),
         );
 
-        self.current_character = Some(self.world.spawn(Character::new(&name)));
+        // Drop the current character and spawn a new one with the same name
+        // This is to re-apply any changes made during the level-up session
+        self.world.despawn(self.current_character.unwrap()).unwrap();
+        self.current_character = Some(
+            self.world
+                .spawn(self.initial_character.as_ref().unwrap().clone()),
+        );
+        systems::helpers::set_component(&mut self.world, self.current_character.unwrap(), name);
 
         self.level_up_session = Some(LevelUpSession::new(
             &self.world,
@@ -218,19 +256,6 @@ impl CharacterCreation {
             }
         }
     }
-
-    pub fn creation_complete(&self) -> bool {
-        matches!(self.state, Some(CharacterCreationState::CreationComplete))
-    }
-
-    pub fn get_character(&mut self) -> Option<Character> {
-        if let Some(entity) = self.current_character {
-            self.reset();
-            Some(Character::from_world(&self.world, entity))
-        } else {
-            None
-        }
-    }
 }
 
 impl ImguiRenderableMut for CharacterCreation {
@@ -239,19 +264,22 @@ impl ImguiRenderableMut for CharacterCreation {
             return;
         }
         ui.window("Character Creation")
-            .size([500.0, 400.0], Condition::FirstUseEver)
+            .always_auto_resize(true)
             .build(|| {
                 match self.state {
                     Some(CharacterCreationState::ChoosingMethod) => {
-                        if ui.button("From Predefined") {
-                            self.state = Some(CharacterCreationState::FromPredefined);
-                        }
-                        if ui.button("From Scratch") {
-                            self.reset();
-                            self.state = Some(CharacterCreationState::FromScratch);
-                        }
-                        if ui.button("Cancel") {
-                            self.state = None;
+                        let labels = ["From Predefined", "From Scratch", "Cancel"];
+                        if let Some(clicked_index) = render_uniform_buttons(ui, &labels, [20.0, 5.])
+                        {
+                            match clicked_index {
+                                0 => self.state = Some(CharacterCreationState::FromPredefined),
+                                1 => {
+                                    self.reset();
+                                    self.state = Some(CharacterCreationState::FromScratch);
+                                }
+                                2 => self.state = None,
+                                _ => unreachable!(),
+                            }
                         }
                     }
 
@@ -286,8 +314,11 @@ impl ImguiRenderableMut for CharacterCreation {
                         ui.separator();
 
                         if self.current_character.is_none() {
-                            self.current_character =
-                                Some(self.world.spawn(Character::new("Johnny Hero")));
+                            self.initial_character = Some(Character::new("Johnny Hero"));
+                            self.current_character = Some(
+                                self.world
+                                    .spawn(self.initial_character.as_ref().unwrap().clone()),
+                            );
                         }
 
                         let mut name = systems::helpers::get_component_clone::<String>(
@@ -308,13 +339,21 @@ impl ImguiRenderableMut for CharacterCreation {
                             );
                         }
 
+                        {
+                            let level = systems::helpers::get_component::<CharacterLevels>(
+                                &self.world,
+                                self.current_character.unwrap(),
+                            );
+                            level.render(ui);
+                        }
+
                         ui.separator();
 
-                        let mut choice_selected = false;
                         // TODO: Not terribly efficient, but works for now
                         let choice_clones = self.pending_selections.clone();
+
+                        let mut choice_selected = false;
                         for pending_selection in &mut self.pending_selections {
-                            // ui.separator_with_text(format!("{}", pending_selection.choice.name()));
                             if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs")) {
                                 if let Some(tab) =
                                     ui.tab_item(format!("{}", pending_selection.choice.name()))
@@ -346,10 +385,18 @@ impl ImguiRenderableMut for CharacterCreation {
                             self.sync_pending_selections();
                         }
 
-                        ui.separator();
-
                         if self.level_up_session.as_ref().unwrap().is_complete() {
-                            if ui.button("Finish Character Creation") {
+                            ui.separator();
+                            if ui.button_with_size("Level up", [200.0, 35.0]) {
+                                self.initial_character = Some(Character::from_world(
+                                    &self.world,
+                                    self.current_character.unwrap(),
+                                ));
+                                self.pending_selections.clear();
+                            }
+
+                            ui.separator();
+                            if ui.button_with_size("Finish Character Creation", [200.0, 35.0]) {
                                 self.state = Some(CharacterCreationState::CreationComplete);
                             }
                         }
@@ -365,7 +412,7 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
     fn render_mut_with_context(
         &mut self,
         ui: &imgui::Ui,
-        context: &Vec<LevelUpChoiceWithProgress>,
+        all_choices: &Vec<LevelUpChoiceWithProgress>,
     ) {
         match self.choice {
             LevelUpChoice::Class(ref classes) => {
@@ -374,22 +421,14 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
                     let buttons_per_row = 4;
 
                     for (i, class) in classes.iter().enumerate() {
-                        let is_selected = selection.is_some_and(|s| s == *class);
-
-                        let style_color = if is_selected {
-                            ui.push_style_color(imgui::StyleColor::Button, [0.2, 0.6, 0.2, 1.0])
-                        } else {
-                            ui.push_style_color(
-                                imgui::StyleColor::Button,
-                                ui.style_color(imgui::StyleColor::Button),
-                            )
-                        };
-
-                        if ui.button_with_size(format!("{}", class), button_size) {
+                        if render_button_selectable(
+                            ui,
+                            format!("{}", class),
+                            button_size,
+                            selection.is_some_and(|s| s == *class),
+                        ) {
                             *selection = Some(class.clone());
                         }
-
-                        style_color.pop();
 
                         if (i + 1) % buttons_per_row != 0 {
                             ui.same_line();
@@ -426,7 +465,7 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
                         *plus_1_bonus = None;
                     }
 
-                    for choice in context {
+                    for choice in all_choices {
                         match &choice.progress {
                             LevelUpSelectionProgress::Class(chosen_class) => {
                                 if let Some(class) = chosen_class {
@@ -449,7 +488,7 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
                     }
 
                     if let Some(table) =
-                        table_columns!(ui, "Abilities", "Ability", "Score", "Mod", "+2", "+1",)
+                        table_with_columns!(ui, "Abilities", "Ability", "Score", "Mod", "+2", "+1",)
                     {
                         for ability in Ability::iter() {
                             // Ability name
@@ -563,22 +602,14 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
             LevelUpChoice::Effect(ref effects) => {
                 if let LevelUpSelectionProgress::Effect(ref mut selection) = self.progress {
                     for effect in effects {
-                        let is_selected = selection.as_ref().is_some_and(|s| *s == *effect);
-
-                        let style_color = if is_selected {
-                            ui.push_style_color(imgui::StyleColor::Button, [0.2, 0.6, 0.2, 1.0])
-                        } else {
-                            ui.push_style_color(
-                                imgui::StyleColor::Button,
-                                ui.style_color(imgui::StyleColor::Button),
-                            )
-                        };
-
-                        if ui.button(format!("{}", effect)) {
+                        if render_button_selectable(
+                            ui,
+                            format!("{}", effect),
+                            [0., 0.],
+                            selection.as_ref().is_some_and(|s| *s == *effect),
+                        ) {
                             *selection = Some(effect.clone());
                         }
-
-                        style_color.pop();
                     }
                 } else {
                     ui.text("Mismatched progress type for Effect choice");
@@ -602,7 +633,7 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
                         *remaining_selections = *num_choices;
                     }
 
-                    if let Some(table) = table_columns!(ui, "Skills", "Skill", "") {
+                    if let Some(table) = table_with_columns!(ui, "Skills", "Skill", "") {
                         for skill in skills {
                             ui.table_next_column();
                             ui.text(skill.to_string());

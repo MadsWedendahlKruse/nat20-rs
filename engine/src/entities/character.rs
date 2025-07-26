@@ -56,7 +56,7 @@ macro_rules! from_world {
 pub struct CharacterTag;
 
 from_world!(
-    #[derive(Bundle)]
+    #[derive(Bundle, Clone)]
     pub struct Character {
         pub tag: CharacterTag,
         pub id: CharacterId,
