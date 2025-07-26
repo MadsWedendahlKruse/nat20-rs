@@ -39,7 +39,7 @@ impl Spell {
         resource_cost: HashMap<ResourceId, u8>,
         targeting: Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
     ) -> Self {
-        let action_id = ActionId::from_str(&id.to_string());
+        let action_id = id.to_action_id();
         Self {
             id,
             base_level,

@@ -6,7 +6,7 @@ use crate::{
     components::{
         ability::AbilityScoreSet,
         actions::action::{ActionContext, ActionProvider},
-        damage::AttackRollResult,
+        damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
         id::{ActionId, ResourceId},
         items::equipment::{
             armor::Armor,
@@ -14,6 +14,7 @@ use crate::{
             weapon::{Weapon, WeaponProficiencyMap, WeaponProperties, WeaponType},
         },
         modifier::{ModifierSet, ModifierSource},
+        resource::ResourceCostMap,
     },
     registry,
     systems::{self},
@@ -187,26 +188,37 @@ impl Loadout {
         entity: Entity,
         weapon_type: &WeaponType,
         hand: &HandSlot,
-    ) -> AttackRollResult {
+    ) -> AttackRoll {
         // TODO: Unarmed attacks
         let weapon = self
             .weapon_in_hand(weapon_type, hand)
             .expect("No weapon equipped in the specified hand");
-
-        let weapon_proficiency =
-            systems::helpers::get_component::<WeaponProficiencyMap>(world, entity)
-                .proficiency(&weapon.category());
-        let attack_roll = weapon.attack_roll(
+        weapon.attack_roll(
             &systems::helpers::get_component::<AbilityScoreSet>(world, entity),
-            &weapon_proficiency,
-        );
+            &systems::helpers::get_component::<WeaponProficiencyMap>(world, entity)
+                .proficiency(&weapon.category()),
+        )
+    }
 
-        attack_roll.roll(world, entity)
+    pub fn damage_roll(
+        &self,
+        world: &World,
+        entity: Entity,
+        weapon_type: &WeaponType,
+        hand: &HandSlot,
+    ) -> DamageRoll {
+        let weapon = self
+            .weapon_in_hand(weapon_type, hand)
+            .expect("No weapon equipped in the specified hand");
+        weapon.damage_roll(
+            &systems::helpers::get_component::<AbilityScoreSet>(world, entity),
+            self.is_wielding_weapon_with_both_hands(weapon_type),
+        )
     }
 }
 
 impl ActionProvider for Loadout {
-    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
+    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)> {
         let mut actions = HashMap::new();
 
         // TODO: There has to be a nicer way to do this
@@ -224,12 +236,10 @@ impl ActionProvider for Loadout {
                             let resource_cost = &action.resource_cost().clone();
                             actions
                                 .entry(action_id.clone())
-                                .and_modify(
-                                    |a: &mut (Vec<ActionContext>, HashMap<ResourceId, u8>)| {
-                                        a.0.push(context.clone());
-                                        a.1.extend(resource_cost.clone());
-                                    },
-                                )
+                                .and_modify(|a: &mut (Vec<ActionContext>, ResourceCostMap)| {
+                                    a.0.push(context.clone());
+                                    a.1.extend(resource_cost.clone());
+                                })
                                 .or_insert((vec![context], resource_cost.clone()));
                         }
                     }
@@ -240,9 +250,7 @@ impl ActionProvider for Loadout {
         actions
     }
 
-    fn available_actions(
-        &self,
-    ) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
+    fn available_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)> {
         self.all_actions()
     }
 }

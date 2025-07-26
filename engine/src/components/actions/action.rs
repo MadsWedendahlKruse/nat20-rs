@@ -217,12 +217,11 @@ pub trait ActionProvider {
     /// Each action is paired with its context, which provides additional information
     /// about how the action can be performed (e.g. weapon type, spell level, etc.)
     /// as well as the resource cost of the action.
-    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)>;
+    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)>;
 
     /// Returns a collection of available actions for the character. i.e. actions
     /// that can be performed at the current time.
-    fn available_actions(&self)
-    -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)>;
+    fn available_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)>;
 }
 
 impl ActionKind {
@@ -588,3 +587,5 @@ impl Display for ActionResult {
 }
 
 pub type ActionMap = HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)>;
+
+pub type ActionCooldownMap = HashMap<ActionId, RechargeRule>;

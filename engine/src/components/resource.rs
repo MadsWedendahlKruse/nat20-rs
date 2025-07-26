@@ -225,6 +225,10 @@ impl ResourceMap {
     pub fn iter(&self) -> impl Iterator<Item = (&ResourceId, &Resource)> {
         self.resources.iter()
     }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&ResourceId, &mut Resource)> {
+        self.resources.iter_mut()
+    }
 }
 
 pub type ResourceCostMap = HashMap<ResourceId, u8>;

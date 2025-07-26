@@ -1,16 +1,15 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::collections::HashMap;
 
-use hecs::{Bundle, Entity, Query, Ref, RefMut, With, World};
+use hecs::Bundle;
 
 use crate::{
     components::{
         ability::AbilityScoreSet,
-        actions::action::{ActionContext, ActionMap},
-        class::ClassName,
+        actions::action::{ActionCooldownMap, ActionMap},
         damage::DamageResistances,
         effects::effects::Effect,
         hit_points::HitPoints,
-        id::{ActionId, CharacterId, ResourceId},
+        id::{ActionId, CharacterId},
         items::equipment::{loadout::Loadout, weapon::WeaponProficiencyMap},
         level::CharacterLevels,
         resource::{RechargeRule, Resource, ResourceMap},
@@ -19,7 +18,6 @@ use crate::{
         spells::spellbook::Spellbook,
     },
     registry::{self},
-    systems,
 };
 
 macro_rules! from_world {
@@ -32,6 +30,9 @@ macro_rules! from_world {
             )*
         }
     ) => {
+        use hecs::{World, Entity};
+        use crate::systems;
+
         $(#[$meta])*
         $vis struct $name {
             $(
@@ -73,7 +74,7 @@ from_world!(
         pub resources: ResourceMap,
         pub effects: Vec<Effect>,
         pub actions: ActionMap,
-        pub cooldowns: HashMap<ActionId, RechargeRule>,
+        pub cooldowns: ActionCooldownMap,
     }
 );
 

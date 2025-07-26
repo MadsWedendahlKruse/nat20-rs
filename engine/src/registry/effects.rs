@@ -5,6 +5,7 @@ use std::{
 
 use crate::{
     components::{
+        ability::Ability,
         actions::action::ActionContext,
         d20_check::AdvantageType,
         damage::DamageSource,
@@ -16,7 +17,8 @@ use crate::{
         items::equipment::{armor::ArmorType, loadout, weapon::WeaponType},
         modifier::ModifierSource,
         resource::{RechargeRule, Resource, ResourceMap},
-        skill::Skill,
+        saving_throw::SavingThrowSet,
+        skill::{Skill, SkillSet},
     },
     registry, systems,
 };
@@ -24,6 +26,11 @@ use crate::{
 pub static EFFECT_REGISTRY: LazyLock<HashMap<EffectId, Effect>> = LazyLock::new(|| {
     HashMap::from([
         (ACTION_SURGE_ID.clone(), ACTION_SURGE.to_owned()),
+        (
+            ARMOR_OF_CONSTITUTION_SAVING_THROWS_ID.clone(),
+            ARMOR_OF_CONSTITUTION_SAVING_THROWS.to_owned(),
+        ),
+        (ARMOR_OF_SNEAKING_ID.clone(), ARMOR_OF_SNEAKING.to_owned()),
         (
             ARMOR_STEALTH_DISADVANTAGE_ID.clone(),
             ARMOR_STEALTH_DISADVANTAGE.to_owned(),
@@ -42,6 +49,7 @@ pub static EFFECT_REGISTRY: LazyLock<HashMap<EffectId, Effect>> = LazyLock::new(
             FIGHTING_STYLE_GREAT_WEAPON_FIGHTING.to_owned(),
         ),
         (IMPROVED_CRITICAL_ID.clone(), IMPROVED_CRITICAL.to_owned()),
+        (RING_OF_ATTACKING_ID.clone(), RING_OF_ATTACKING.to_owned()),
     ])
 });
 
@@ -66,6 +74,63 @@ static ACTION_SURGE: LazyLock<Effect> = LazyLock::new(|| {
             .unwrap()
             .remove_use();
     });
+    effect
+});
+
+pub static ARMOR_OF_CONSTITUTION_SAVING_THROWS_ID: LazyLock<EffectId> =
+    LazyLock::new(|| EffectId::from_str("effect.item.armor_of_constitution_saving_throws"));
+
+static ARMOR_OF_CONSTITUTION_SAVING_THROWS: LazyLock<Effect> = LazyLock::new(|| {
+    let mut effect = Effect::new(
+        ARMOR_OF_CONSTITUTION_SAVING_THROWS_ID.clone(),
+        ModifierSource::Item("Armor of Constitution Saving Throws".to_string()),
+        EffectDuration::Permanent,
+    );
+
+    effect.on_saving_throw = HashMap::from([(
+        Ability::Constitution,
+        D20CheckHooks::with_check_hook(|_, _, d20_check| {
+            d20_check.advantage_tracker_mut().add(
+                AdvantageType::Advantage,
+                ModifierSource::Item("Armor of Constitution Saving Throws".to_string()),
+            );
+        }),
+    )]);
+
+    effect
+});
+
+pub static ARMOR_OF_SNEAKING_ID: LazyLock<EffectId> =
+    LazyLock::new(|| EffectId::from_str("effect.item.armor_of_sneaking"));
+
+static ARMOR_OF_SNEAKING: LazyLock<Effect> = LazyLock::new(|| {
+    let mut effect = Effect::new(
+        ARMOR_OF_SNEAKING_ID.clone(),
+        ModifierSource::Item("Armor of Sneaking".to_string()),
+        EffectDuration::Permanent,
+    );
+
+    effect.on_apply = Arc::new({
+        move |world, entity| {
+            let mut skills = systems::helpers::get_component_mut::<SkillSet>(world, entity);
+            skills.add_modifier(
+                Skill::Stealth,
+                ModifierSource::Item("Armor of Sneaking".to_string()),
+                2,
+            );
+        }
+    });
+
+    effect.on_unapply = Arc::new({
+        move |world, entity| {
+            let mut skills = systems::helpers::get_component_mut::<SkillSet>(world, entity);
+            skills.remove_modifier(
+                Skill::Stealth,
+                &ModifierSource::Item("Armor of Sneaking".to_string()),
+            );
+        }
+    });
+
     effect
 });
 
@@ -119,13 +184,7 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
         move |world, performer, action, context| {
             // Check that this is only applied for weapon attacks
             // TODO: Is this logic sufficient? (And is it the nicest way to do this?)
-            if !matches!(
-                context,
-                ActionContext::Weapon {
-                    weapon_type: _,
-                    hand: _
-                }
-            ) {
+            if !matches!(context, ActionContext::Weapon { .. }) {
                 return;
             }
 
@@ -302,6 +361,24 @@ static IMPROVED_CRITICAL: LazyLock<Effect> = LazyLock::new(|| {
     );
     effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
         attack_roll.reduce_crit_threshold(1);
+    });
+    effect
+});
+
+pub static RING_OF_ATTACKING_ID: LazyLock<EffectId> =
+    LazyLock::new(|| EffectId::from_str("effect.item.ring_of_attacking"));
+
+static RING_OF_ATTACKING: LazyLock<Effect> = LazyLock::new(|| {
+    let mut effect = Effect::new(
+        RING_OF_ATTACKING_ID.clone(),
+        ModifierSource::Item("Ring of Attacking".to_string()),
+        EffectDuration::Permanent,
+    );
+    effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
+        attack_roll.d20_check.advantage_tracker_mut().add(
+            AdvantageType::Advantage,
+            ModifierSource::Item("Ring of Attacking".to_string()),
+        );
     });
     effect
 });

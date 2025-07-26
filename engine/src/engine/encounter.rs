@@ -1,149 +1,144 @@
-// use std::collections::HashMap;
+use std::collections::HashSet;
 
-// use crate::{
-//     actions::action::{ActionContext, ActionProvider, ActionResult},
-//     creature::character::Character,
-//     components::{d20_check::D20CheckResult, skill::Skill},
-//     utils::id::{ActionId, CharacterId, ResourceId},
-// };
+use hecs::{Entity, World};
 
-// #[derive(Debug, PartialEq, Eq)]
-// pub enum EncounterState {
-//     AwaitingAction,
-//     ResolvingAction,
-//     TurnTransition,
-//     CombatEnded,
-// }
+use crate::{
+    components::{
+        actions::action::{ActionContext, ActionResult},
+        d20_check::D20CheckResult,
+        id::ActionId,
+        skill::{Skill, SkillSet},
+    },
+    systems,
+};
 
-// pub struct Encounter<'c> {
-//     pub participants: HashMap<CharacterId, &'c mut Character>,
-//     pub round: usize,
-//     pub turn_index: usize,
-//     pub initiative_order: Vec<(CharacterId, D20CheckResult)>,
-//     pub state: EncounterState,
-// }
+#[derive(Debug, PartialEq, Eq)]
+pub enum EncounterState {
+    AwaitingAction,
+    ResolvingAction,
+    TurnTransition,
+    CombatEnded,
+}
 
-// impl<'c> Encounter<'c> {
-//     pub fn new(participants: Vec<&'c mut Character>) -> Self {
-//         let mut engine = Self {
-//             participants: participants.into_iter().map(|p| (p.id(), p)).collect(),
-//             round: 1,
-//             turn_index: 0,
-//             initiative_order: Vec::new(),
-//             state: EncounterState::TurnTransition,
-//         };
-//         engine.roll_initiative();
-//         engine.start_turn();
-//         engine
-//     }
+pub struct Encounter {
+    pub participants: HashSet<Entity>,
+    pub round: usize,
+    pub turn_index: usize,
+    pub initiative_order: Vec<(Entity, D20CheckResult)>,
+    pub state: EncounterState,
+}
 
-//     fn roll_initiative(&mut self) {
-//         let mut indexed_rolls: Vec<(CharacterId, D20CheckResult)> = self
-//             .participants
-//             .iter_mut()
-//             .map(|(uuid, character)| {
-//                 let roll = character.skill_check(Skill::Initiative);
-//                 (uuid.clone(), roll)
-//             })
-//             .collect();
+impl Encounter {
+    pub fn new(world: &mut World, participants: &[Entity]) -> Self {
+        let mut engine = Self {
+            participants: participants.iter().cloned().collect(),
+            round: 1,
+            turn_index: 0,
+            initiative_order: Vec::new(),
+            state: EncounterState::TurnTransition,
+        };
+        engine.roll_initiative(world);
+        engine.start_turn(world);
+        engine
+    }
 
-//         indexed_rolls.sort_by_key(|(_, roll)| -(roll.total as i32));
-//         self.initiative_order = indexed_rolls
-//             .into_iter()
-//             .map(|(i, roll)| (i, roll))
-//             .collect();
-//     }
+    fn roll_initiative(&mut self, world: &World) {
+        let mut indexed_rolls: Vec<(Entity, D20CheckResult)> = self
+            .participants
+            .iter()
+            .map(|entity| {
+                let roll = systems::helpers::get_component::<SkillSet>(world, *entity).check(
+                    Skill::Initiative,
+                    world,
+                    *entity,
+                );
+                (entity.clone(), roll)
+            })
+            .collect();
 
-//     pub fn initiative_order(&self) -> &Vec<(CharacterId, D20CheckResult)> {
-//         &self.initiative_order
-//     }
+        indexed_rolls.sort_by_key(|(_, roll)| -(roll.total as i32));
+        self.initiative_order = indexed_rolls
+            .into_iter()
+            .map(|(i, roll)| (i, roll))
+            .collect();
+    }
 
-//     pub fn current_character_id(&self) -> CharacterId {
-//         let (idx, _) = self.initiative_order[self.turn_index];
-//         idx
-//     }
+    pub fn initiative_order(&self) -> &Vec<(Entity, D20CheckResult)> {
+        &self.initiative_order
+    }
 
-//     pub fn current_character(&self) -> &World, Entity {
-//         self.participants.get(&self.current_character_id()).unwrap()
-//     }
+    pub fn current_entity(&self) -> Entity {
+        let (idx, _) = self.initiative_order[self.turn_index];
+        idx
+    }
 
-//     pub fn current_character_mut(&mut self) -> &mut Character {
-//         self.participants
-//             .get_mut(&self.current_character_id())
-//             .unwrap()
-//     }
+    pub fn participants(&self) -> &HashSet<Entity> {
+        &self.participants
+    }
 
-//     pub fn participant(&self, id: &World, EntityId) -> Option<&World, Entity> {
-//         self.participants.get(id).map(|c| &**c)
-//     }
+    // pub fn submit_action(
+    //     &mut self,
+    //     action_id: &ActionId,
+    //     action_context: &ActionContext,
+    //     // TODO: Targets have to determined before submitting the action
+    //     // e.g. for Fireball, the targets are determined by the asking the engine
+    //     // which characters are within the area of effect
+    //     targets: Vec<Entity>,
+    // ) -> Result<Vec<ActionResult>, String> {
+    //     if self.state != EncounterState::AwaitingAction {
+    //         return Err("Engine is not ready for an action submission".into());
+    //     }
 
-//     pub fn participants(&self) -> Vec<&World, Entity> {
-//         self.participants.values().map(|c| &**c).collect()
-//     }
+    //     self.state = EncounterState::ResolvingAction;
 
-//     pub fn submit_action(
-//         &mut self,
-//         action_id: &ActionId,
-//         action_context: &ActionContext,
-//         // TODO: Targets have to determined before submitting the action
-//         // e.g. for Fireball, the targets are determined by the asking the engine
-//         // which characters are within the area of effect
-//         targets: Vec<CharacterId>,
-//     ) -> Result<Vec<ActionResult>, String> {
-//         if self.state != EncounterState::AwaitingAction {
-//             return Err("Engine is not ready for an action submission".into());
-//         }
+    //     // TODO: validate actions, e.g. for a melee weapon attack, the character must be adjacent to the target
+    //     // TODO: validate that character has enough resources to perform the action
+    //     // TEMP: Assume action is valid (unwrap)
 
-//         self.state = EncounterState::ResolvingAction;
+    //     let snapshots =
+    //         self.current_character_mut()
+    //             .perform_action(action_id, action_context, targets.len());
 
-//         // TODO: validate actions, e.g. for a melee weapon attack, the character must be adjacent to the target
-//         // TODO: validate that character has enough resources to perform the action
-//         // TEMP: Assume action is valid (unwrap)
+    //     let results: Vec<_> = targets
+    //         .into_iter()
+    //         .zip(snapshots)
+    //         .map(|(target_id, action_snapshot)| {
+    //             let target = self
+    //                 .participants
+    //                 .get_mut(&target_id)
+    //                 .expect("Target character not found in participants");
+    //             action_snapshot.apply_to_character(target)
+    //         })
+    //         .collect();
 
-//         let snapshots =
-//             self.current_character_mut()
-//                 .perform_action(action_id, action_context, targets.len());
+    //     // For now we just assume the action is resolved
+    //     self.state = EncounterState::AwaitingAction;
+    //     Ok(results)
+    // }
 
-//         let results: Vec<_> = targets
-//             .into_iter()
-//             .zip(snapshots)
-//             .map(|(target_id, action_snapshot)| {
-//                 let target = self
-//                     .participants
-//                     .get_mut(&target_id)
-//                     .expect("Target character not found in participants");
-//                 action_snapshot.apply_to_character(target)
-//             })
-//             .collect();
+    pub fn end_turn(&mut self, world: &mut World) {
+        if self.state != EncounterState::AwaitingAction {
+            return;
+        }
 
-//         // For now we just assume the action is resolved
-//         self.state = EncounterState::AwaitingAction;
-//         Ok(results)
-//     }
+        self.turn_index = (self.turn_index + 1) % self.participants.len();
+        if self.turn_index == 0 {
+            self.round += 1;
+        }
 
-//     pub fn end_turn(&mut self) {
-//         if self.state != EncounterState::AwaitingAction {
-//             return;
-//         }
+        self.state = EncounterState::TurnTransition;
+        self.start_turn(world);
+    }
 
-//         self.turn_index = (self.turn_index + 1) % self.participants.len();
-//         if self.turn_index == 0 {
-//             self.round += 1;
-//         }
+    fn start_turn(&mut self, world: &mut World) {
+        systems::turns::on_turn_start(world, self.current_entity());
+        self.state = EncounterState::AwaitingAction;
+    }
 
-//         self.state = EncounterState::TurnTransition;
-//         self.start_turn();
-//     }
-
-//     fn start_turn(&mut self) {
-//         self.current_character_mut().on_turn_start();
-//         self.state = EncounterState::AwaitingAction;
-//     }
-
-//     pub fn round(&self) -> usize {
-//         self.round
-//     }
-// }
+    pub fn round(&self) -> usize {
+        self.round
+    }
+}
 
 // impl ActionProvider for Encounter<'_> {
 //     fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {

@@ -14,10 +14,13 @@ pub fn effects_mut(world: &mut World, entity: Entity) -> hecs::RefMut<'_, Vec<Ef
     systems::helpers::get_component_mut::<Vec<Effect>>(world, entity)
 }
 
-fn get_effect(effect_id: &EffectId) -> Effect {
+pub fn get_effect(effect_id: &EffectId) -> Effect {
     registry::effects::EFFECT_REGISTRY
         .get(effect_id)
-        .expect("Effect not found in registry")
+        .expect(&format!(
+            "Effect with ID `{}` not found in the registry",
+            effect_id
+        ))
         .clone()
 }
 

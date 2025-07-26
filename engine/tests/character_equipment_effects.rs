@@ -1,230 +1,168 @@
-// extern crate nat20_rs;
+extern crate nat20_rs;
 
-// mod tests {
-//     use std::{collections::HashSet, sync::Arc};
+mod tests {
+    use std::{collections::HashSet, sync::Arc};
 
-//     use nat20_rs::{
-//         components::{
-//             ability::Ability,
-//             d20_check::{AdvantageType, RollMode},
-//             damage::DamageType,
-//             dice::DieSize,
-//             effects::{
-//                 effects::{Effect, EffectDuration},
-//                 hooks::SavingThrowHook,
-//             },
-//             id::EffectId,
-//             items::{
-//                 equipment::{
-//                     armor::Armor,
-//                     equipment::{EquipmentItem, EquipmentType, GeneralEquipmentSlot, HandSlot},
-//                     weapon::{Weapon, WeaponCategory, WeaponType},
-//                 },
-//                 item::ItemRarity,
-//             },
-//             modifier::ModifierSource,
-//             proficiency::Proficiency,
-//             skill::Skill,
-//         },
-//         entities::character::Character,
-//     };
+    use hecs::World;
+    use nat20_rs::{
+        components::{
+            ability::Ability,
+            d20_check::RollMode,
+            damage::DamageType,
+            dice::DieSize,
+            items::{
+                equipment::{
+                    armor::Armor,
+                    equipment::{EquipmentItem, EquipmentType, GeneralEquipmentSlot, HandSlot},
+                    weapon::{Weapon, WeaponCategory, WeaponType},
+                },
+                item::ItemRarity,
+            },
+            saving_throw::SavingThrowSet,
+            skill::{Skill, SkillSet},
+        },
+        entities::character::Character,
+        registry, systems,
+    };
 
-//     #[test]
-//     fn character_pre_attack_roll_effect() {
-//         // Create a ring that grants advantage on attack rolls
-//         let mut ring = EquipmentItem::new(
-//             "Ring of Advantage".to_string(),
-//             "A ring that grants advantage on attack rolls.".to_string(),
-//             0.1,
-//             100,
-//             ItemRarity::Uncommon,
-//             EquipmentType::Ring,
-//         );
-//         let mut advantage_effect = Effect::new(
-//             EffectId::from_str("effect.ring_of_advantage"),
-//             ModifierSource::Item("Ring of Advantage".to_string()),
-//             EffectDuration::Permanent,
-//         );
-//         advantage_effect.pre_attack_roll = Arc::new(|_, attack_roll| {
-//             attack_roll.d20_check.advantage_tracker_mut().add(
-//                 AdvantageType::Advantage,
-//                 ModifierSource::Item("Ring of Advantage".to_string()),
-//             );
-//         });
-//         ring.add_effect(advantage_effect);
+    #[test]
+    fn character_pre_attack_roll_effect() {
+        let mut world = World::new();
+        let entity = world.spawn(Character::default());
 
-//         // Create a weapon for the character
-//         let weapon = Weapon::new(
-//             EquipmentItem::new(
-//                 "Sword".to_string(),
-//                 "A sharp sword.".to_string(),
-//                 3.0,
-//                 10,
-//                 ItemRarity::Common,
-//                 EquipmentType::MeleeWeapon,
-//             ),
-//             WeaponCategory::Martial,
-//             HashSet::new(),
-//             vec![(1, DieSize::D8, DamageType::Slashing)],
-//             vec![],
-//         );
+        let mut ring = EquipmentItem::new(
+            "Ring of Advantage".to_string(),
+            "A ring that grants advantage on attack rolls.".to_string(),
+            0.1,
+            100,
+            ItemRarity::Uncommon,
+            EquipmentType::Ring,
+        );
 
-//         let mut character = Character::default();
-//         let _ = character.equip_weapon(weapon, HandSlot::Main);
+        ring.add_effect(registry::effects::RING_OF_ATTACKING_ID.clone());
 
-//         // No advantage before equipping the ring
-//         let attack_roll =
-//             character
-//                 .loadout()
-//                 .attack_roll(&World, Entity, &WeaponType::Melee, &HandSlot::Main);
-//         assert_eq!(
-//             attack_roll.roll_result.advantage_tracker.roll_mode(),
-//             RollMode::Normal
-//         );
+        let weapon = Weapon::new(
+            EquipmentItem::new(
+                "Sword".to_string(),
+                "A sharp sword.".to_string(),
+                3.0,
+                10,
+                ItemRarity::Common,
+                EquipmentType::MeleeWeapon,
+            ),
+            WeaponCategory::Martial,
+            HashSet::new(),
+            vec![(1, DieSize::D8, DamageType::Slashing)],
+            vec![],
+        );
 
-//         // Advantage after equipping the ring
-//         let _ = character.equip_item(&GeneralEquipmentSlot::Ring(0), ring);
-//         println!(
-//             "Equipped ring: {:?}",
-//             character
-//                 .loadout()
-//                 .equipment
-//                 .get(&GeneralEquipmentSlot::Ring(0))
-//         );
-//         println!("Effects: {:?}", character.effects());
-//         let attack_roll =
-//             character
-//                 .loadout()
-//                 .attack_roll(&World, Entity, &WeaponType::Melee, &HandSlot::Main);
-//         assert_eq!(
-//             attack_roll.roll_result.advantage_tracker.roll_mode(),
-//             RollMode::Advantage
-//         );
-//         println!("{:?}", attack_roll);
+        let _ = systems::loadout::equip_weapon(&mut world, entity, weapon, HandSlot::Main);
 
-//         // No advantage after unequipping the ring
-//         character.unequip_item(&GeneralEquipmentSlot::Ring(0));
-//         let attack_roll =
-//             character
-//                 .loadout()
-//                 .attack_roll(&World, Entity, &WeaponType::Melee, &HandSlot::Main);
-//         assert_eq!(
-//             attack_roll.roll_result.advantage_tracker.roll_mode(),
-//             RollMode::Normal
-//         );
-//         println!("{:?}", attack_roll);
-//     }
+        // Before equipping the ring
+        let roll =
+            systems::combat::attack_roll(&world, entity, &WeaponType::Melee, &HandSlot::Main)
+                .roll(&world, entity);
+        assert_eq!(
+            roll.roll_result.advantage_tracker.roll_mode(),
+            RollMode::Normal
+        );
 
-//     #[test]
-//     fn character_skill_bonus_effect() {
-//         let mut character = Character::default();
-//         character
-//             .skills_mut()
-//             .set_proficiency(Skill::Stealth, Proficiency::Proficient);
+        // Equip the ring
+        let _ =
+            systems::loadout::equip_item(&mut world, entity, &GeneralEquipmentSlot::Ring(0), ring);
+        let roll =
+            systems::combat::attack_roll(&world, entity, &WeaponType::Melee, &HandSlot::Main)
+                .roll(&world, entity);
+        assert_eq!(
+            roll.roll_result.advantage_tracker.roll_mode(),
+            RollMode::Advantage
+        );
 
-//         // Create an armor that adds +2 to stealth
-//         let armor_name = Arc::new("Armor of Sneaking".to_string());
-//         let modifier_source = ModifierSource::Item(armor_name.clone().to_string());
+        // Unequip the ring
+        systems::loadout::unequip_item(&mut world, entity, &GeneralEquipmentSlot::Ring(0));
+        let roll =
+            systems::combat::attack_roll(&world, entity, &WeaponType::Melee, &HandSlot::Main)
+                .roll(&world, entity);
+        assert_eq!(
+            roll.roll_result.advantage_tracker.roll_mode(),
+            RollMode::Normal
+        );
+    }
 
-//         let mut equipment: EquipmentItem = EquipmentItem::new(
-//             armor_name.clone().to_string(),
-//             "It's made of a lightweight material that allows for silent movement.".to_string(),
-//             5.85,
-//             1000,
-//             ItemRarity::Rare,
-//             EquipmentType::Armor,
-//         );
+    #[test]
+    fn character_skill_bonus_effect() {
+        let mut world = World::new();
+        let entity = world.spawn(Character::default());
 
-//         let mut armor_effect = Effect::new(
-//             EffectId::from_str("effect.armor_of_sneaking"),
-//             modifier_source.clone(),
-//             EffectDuration::Permanent,
-//         );
+        let armor_name = Arc::new("Armor of Sneaking".to_string());
 
-//         // Create a modifier source for each closure (pre_hook and post_hook)
-//         // to avoid borrowing the same variable multiple times
-//         let add_skill_source = modifier_source.clone();
-//         let remove_skill_source = modifier_source.clone();
+        let mut item = EquipmentItem::new(
+            armor_name.to_string(),
+            "Lightweight and silent.".to_string(),
+            5.85,
+            1000,
+            ItemRarity::Rare,
+            EquipmentType::Armor,
+        );
 
-//         armor_effect.on_apply = Arc::new(move |world, entity| {
-//             character
-//                 .skills_mut()
-//                 .add_modifier(Skill::Stealth, add_skill_source.clone(), 2);
-//         });
-//         armor_effect.on_unapply = Arc::new(move |world, entity| {
-//             character
-//                 .skills_mut()
-//                 .remove_modifier(Skill::Stealth, &remove_skill_source);
-//         });
+        item.add_effect(registry::effects::ARMOR_OF_SNEAKING_ID.clone());
 
-//         equipment.add_effect(armor_effect);
+        let armor = Armor::light(item, 12);
+        systems::loadout::equip_armor(&mut world, entity, armor);
 
-//         let armor = Armor::light(equipment, 12);
+        let check = systems::helpers::get_component::<SkillSet>(&world, entity).check(
+            Skill::Stealth,
+            &world,
+            entity,
+        );
+        assert_eq!(check.total_modifier, 2);
 
-//         character.equip_armor(armor);
+        let unequipped =
+            systems::loadout::unequip_armor(&mut world, entity).expect("Failed to unequip armor");
+        assert_eq!(unequipped.equipment.item.name, "Armor of Sneaking");
 
-//         // Check if the skill modifier is applied
-//         let stealth_check = character.skill_check(Skill::Stealth);
-//         println!("{:?}", stealth_check);
-//         // 2 (proficient) + 2 (armor) = 4
-//         assert_eq!(4, stealth_check.total_modifier);
+        let check = systems::helpers::get_component::<SkillSet>(&world, entity).check(
+            Skill::Stealth,
+            &world,
+            entity,
+        );
+        assert_eq!(check.total_modifier, 0);
+    }
 
-//         // Un-equip the armor
-//         let armor_name = character.unequip_armor().unwrap().equipment.item.name;
-//         println!("Un-equipped {:?}", armor_name);
-//         assert_eq!(armor_name, "Armor of Sneaking");
+    #[test]
+    fn character_saving_throw_effect() {
+        let mut world = World::new();
+        let entity = world.spawn(Character::default());
 
-//         // Check if the skill modifier is removed
-//         let stealth_check = character.skill_check(Skill::Stealth);
-//         println!("{:?}", stealth_check);
-//         // 2 (proficient) + 0 (armor) = 2
-//         assert_eq!(2, stealth_check.total_modifier);
-//     }
+        let armor_name = Arc::new("Armor of Resilience".to_string());
 
-//     #[test]
-//     fn character_saving_throw_effect() {
-//         let mut character = Character::default();
+        let mut item = EquipmentItem::new(
+            armor_name.to_string(),
+            "Grants advantage on Constitution saves.".to_string(),
+            5.85,
+            1000,
+            ItemRarity::Rare,
+            EquipmentType::Armor,
+        );
 
-//         let armor_name = Arc::new("Armor of Resilience".to_string());
-//         let modifier_source = ModifierSource::Item(armor_name.clone().to_string());
+        item.add_effect(registry::effects::ARMOR_OF_CONSTITUTION_SAVING_THROWS_ID.clone());
+        let armor = Armor::heavy(item, 12);
+        systems::loadout::equip_armor(&mut world, entity, armor);
 
-//         let mut equipment = EquipmentItem::new(
-//             "Armor of Resilience".to_string(),
-//             "A suit of armor that grants advantage on Constitution saving throws.".to_string(),
-//             5.85,
-//             1000,
-//             ItemRarity::Rare,
-//             EquipmentType::Armor,
-//         );
+        let throw = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
+            Ability::Constitution,
+            &world,
+            entity,
+        );
+        assert_eq!(throw.advantage_tracker.roll_mode(), RollMode::Advantage);
 
-//         let mut armor_effect = Effect::new(
-//             EffectId::from_str("effect.armor_of_resilience"),
-//             modifier_source.clone(),
-//             EffectDuration::Permanent,
-//         );
+        systems::loadout::unequip_armor(&mut world, entity);
 
-//         let mut saving_throw_hook = SavingThrowHook::new(Ability::Constitution);
-//         saving_throw_hook.check_hook = Arc::new(move |_, d20_check| {
-//             d20_check
-//                 .advantage_tracker_mut()
-//                 .add(AdvantageType::Advantage, modifier_source.clone());
-//         });
-//         armor_effect.on_saving_throw = Some(saving_throw_hook);
-
-//         equipment.add_effect(armor_effect);
-
-//         let armor = Armor::heavy(equipment, 12);
-
-//         character.equip_armor(armor);
-
-//         // Check if the advantage is applied
-//         let constitution_saving_throw = character.saving_throw(Ability::Constitution);
-//         assert!(constitution_saving_throw.advantage_tracker.roll_mode() == RollMode::Advantage);
-
-//         character.unequip_armor();
-
-//         // Check if the advantage is removed
-//         let constitution_saving_throw = character.saving_throw(Ability::Constitution);
-//         assert!(constitution_saving_throw.advantage_tracker.roll_mode() == RollMode::Normal);
-//     }
-// }
+        let throw = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
+            Ability::Constitution,
+            &world,
+            entity,
+        );
+        assert_eq!(throw.advantage_tracker.roll_mode(), RollMode::Normal);
+    }
+}

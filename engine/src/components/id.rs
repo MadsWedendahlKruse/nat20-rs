@@ -30,3 +30,15 @@ macro_rules! id_newtypes {
 }
 
 id_newtypes!(EffectId, ResourceId, ActionId, SpellId);
+
+impl SpellId {
+    pub fn to_action_id(&self) -> ActionId {
+        ActionId::from_str(&self.0)
+    }
+}
+
+impl ActionId {
+    pub fn to_spell_id(&self) -> SpellId {
+        SpellId::from_str(&self.0)
+    }
+}

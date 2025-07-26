@@ -63,6 +63,10 @@ impl ModifierSet {
         self.modifiers.get(source).cloned()
     }
 
+    pub fn contains_key(&self, source: &ModifierSource) -> bool {
+        self.modifiers.contains_key(source)
+    }
+
     // Only used for ability modifiers
     pub fn scale_modifiers(&mut self, scale: f32) {
         for m in self.modifiers.values_mut() {

@@ -45,4 +45,24 @@ impl D20CheckHooks {
             result_hook: Arc::new(|_, _, _| {}),
         }
     }
+
+    pub fn with_check_hook<F>(hook: F) -> Self
+    where
+        F: Fn(&World, Entity, &mut D20Check) + Send + Sync + 'static,
+    {
+        Self {
+            check_hook: Arc::new(hook),
+            result_hook: Arc::new(|_, _, _| {}),
+        }
+    }
+
+    pub fn with_result_hook<F>(hook: F) -> Self
+    where
+        F: Fn(&World, Entity, &mut D20CheckResult) + Send + Sync + 'static,
+    {
+        Self {
+            check_hook: Arc::new(|_, _, _| {}),
+            result_hook: Arc::new(hook),
+        }
+    }
 }

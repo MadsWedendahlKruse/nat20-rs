@@ -267,7 +267,7 @@ pub mod creatures {
             let character = Character::new("Johnny Fighter");
             let id = character.id.clone();
             let entity = world.spawn(character);
-            apply_level_up_selection(
+            systems::level_up::apply_level_up_selection(
                 world,
                 entity,
                 5,
@@ -315,7 +315,7 @@ pub mod creatures {
             let character = Character::new("Jimmy Wizard");
             let id = character.id.clone();
             let entity = world.spawn(character);
-            apply_level_up_selection(
+            systems::level_up::apply_level_up_selection(
                 world,
                 entity,
                 5,
@@ -361,7 +361,7 @@ pub mod creatures {
             let character = Character::new("Bobby Warlock");
             let id = character.id.clone();
             let entity = world.spawn(character);
-            apply_level_up_selection(
+            systems::level_up::apply_level_up_selection(
                 world,
                 entity,
                 5,
@@ -418,7 +418,7 @@ pub mod creatures {
             let id = character.id.clone();
             let entity = world.spawn(character);
             // TODO: Not sure how to handle monster level-ups yet
-            apply_level_up_selection(
+            systems::level_up::apply_level_up_selection(
                 world,
                 entity,
                 1,
@@ -452,58 +452,6 @@ pub mod creatures {
             );
 
             (entity, id)
-        }
-    }
-
-    fn apply_level_up_selection(
-        world: &mut World,
-        entity: Entity,
-        levels: u8,
-        responses: Vec<LevelUpSelection>,
-    ) {
-        let mut responses = responses;
-
-        for level in 1..=levels {
-            let name = systems::helpers::get_component_clone::<String>(world, entity);
-            let mut level_up_session = LevelUpSession::new(world, entity);
-
-            // Some of the responses are identical, e.g. selecting the same class
-            // multiple times. Using retain would therefore remove all of them,
-            // so we need to track the indices of the used responses.
-            let mut used_indices = Vec::new();
-            for (i, response) in responses.iter().enumerate() {
-                let result = level_up_session.advance(world, response);
-                match result {
-                    Ok(_) | Err(LevelUpError::MissingChoiceForSelection { .. }) => {
-                        // This is expected to happen since the responses cover all
-                        // levels, but the session only advances one level at a time.
-                        used_indices.push(i);
-                        if level_up_session.is_complete() {
-                            break;
-                        }
-                    }
-                    _ => {
-                        panic!(
-                            "Failed to apply level up response for {} at level {}: {:?}",
-                            name, level, result
-                        );
-                    }
-                }
-            }
-
-            // Remove the used responses from the list
-            for index in used_indices.iter().rev() {
-                responses.remove(*index);
-            }
-
-            if !level_up_session.is_complete() {
-                panic!(
-                    "Level up session for {} at level {} did not complete: {:?}",
-                    name,
-                    level,
-                    level_up_session.pending_choices()
-                );
-            }
         }
     }
 }

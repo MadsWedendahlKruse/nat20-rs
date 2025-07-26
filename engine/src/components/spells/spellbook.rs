@@ -5,6 +5,7 @@ use crate::{
         ability::Ability,
         actions::action::{ActionContext, ActionProvider},
         id::{ActionId, ResourceId, SpellId},
+        resource::ResourceCostMap,
     },
     registry,
 };
@@ -33,10 +34,6 @@ impl SpellSlots {
 pub struct Spellbook {
     /// Set of learned spells
     spells_by_spell_id: HashSet<SpellId>,
-    /// Store the ID of the spell's action for quick access.
-    /// This is primarily used when submitting actions in the combat engine,
-    /// which is done using ActionId.
-    spells_by_action_id: HashMap<ActionId, SpellId>,
     /// Spells that are currently prepared for casting.
     // TODO: Default prepared spells?
     prepared_spells: HashSet<SpellId>,
@@ -54,7 +51,6 @@ impl Spellbook {
     pub fn new() -> Self {
         Self {
             spells_by_spell_id: HashSet::new(),
-            spells_by_action_id: HashMap::new(),
             prepared_spells: HashSet::new(),
             max_prepared_spells: 0,
             spellcasting_ability: HashMap::new(),
@@ -68,9 +64,7 @@ impl Spellbook {
             .get(spell_id)
             .unwrap()
             .clone();
-        let action_id = spell.action().id().clone();
         self.spells_by_spell_id.insert(spell_id.clone());
-        self.spells_by_action_id.insert(action_id, spell_id.clone());
         self.spellcasting_ability
             .insert(spell_id.clone(), spellcasting_ability);
     }
@@ -82,14 +76,7 @@ impl Spellbook {
             .unwrap()
             .clone();
         self.spells_by_spell_id.remove(spell_id);
-        self.spells_by_action_id.remove(spell.action().id());
         self.spellcasting_ability.remove(spell_id);
-    }
-
-    pub fn get_spell_id_by_action_id(&self, action_id: &ActionId) -> Option<&SpellId> {
-        self.spells_by_action_id
-            .get(action_id)
-            .and_then(|spell_id| self.spells_by_spell_id.get(spell_id))
     }
 
     pub fn has_spell(&self, spell_id: &SpellId) -> bool {
@@ -271,13 +258,11 @@ impl Spellbook {
 }
 
 impl ActionProvider for Spellbook {
-    fn available_actions(
-        &self,
-    ) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
+    fn available_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)> {
         self.action_map_from_slots(true)
     }
 
-    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
+    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)> {
         self.action_map_from_slots(false)
     }
 }

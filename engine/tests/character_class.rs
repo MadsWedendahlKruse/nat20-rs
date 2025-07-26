@@ -1,91 +1,105 @@
-// extern crate nat20_rs;
+extern crate nat20_rs;
 
-// mod tests {
+mod tests {
 
-//     use std::collections::{HashMap, HashSet};
+    use std::collections::{HashMap, HashSet};
 
-//     use nat20_rs::{
-//         components::{
-//             ability::Ability,
-//             class::{ClassName, SubclassName},
-//             proficiency::Proficiency,
-//             skill::Skill,
-//         },
-//         entities::character::Character,
-//         registry,
-//         systems::level_up::{LevelUpSelection, PredefinedChoiceProvider},
-//     };
+    use hecs::World;
+    use nat20_rs::{
+        components::{
+            ability::Ability,
+            class::{ClassName, SubclassName},
+            level::CharacterLevels,
+            proficiency::Proficiency,
+            saving_throw::SavingThrowSet,
+            skill::{Skill, SkillSet},
+        },
+        entities::character::Character,
+        registry,
+        systems::{self, level_up::LevelUpSelection},
+    };
 
-//     #[test]
-//     fn character_level_up_fighter() {
-//         let mut character = Character::new("John Fighter");
-//         let mut choice_provider = PredefinedChoiceProvider::new(
-//             character.name().to_string(),
-//             vec![
-//                 LevelUpSelection::Class(ClassName::Fighter),
-//                 LevelUpSelection::Effect(
-//                     registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
-//                 ),
-//                 LevelUpSelection::SkillProficiency(HashSet::from([
-//                     Skill::Athletics,
-//                     Skill::Perception,
-//                 ])),
-//                 LevelUpSelection::Class(ClassName::Fighter),
-//                 LevelUpSelection::Class(ClassName::Fighter),
-//                 LevelUpSelection::Subclass(SubclassName {
-//                     class: ClassName::Fighter,
-//                     name: "Champion".to_string(),
-//                 }),
-//             ],
-//         );
+    #[test]
+    fn character_level_up_fighter() {
+        let mut world = World::new();
+        let character = world.spawn(Character::default());
 
-//         for level in 1..=3 {
-//             print!("{}", character);
-//             println!("{} reached level {}", character.name(), level);
+        systems::level_up::apply_level_up_selection(
+            &mut world,
+            character,
+            3,
+            vec![
+                LevelUpSelection::Class(ClassName::Fighter),
+                LevelUpSelection::AbilityScores {
+                    scores: HashMap::from([
+                        (Ability::Strength, 15),
+                        (Ability::Dexterity, 14),
+                        (Ability::Constitution, 13),
+                        (Ability::Intelligence, 8),
+                        (Ability::Wisdom, 10),
+                        (Ability::Charisma, 12),
+                    ]),
+                    plus_2_bonus: Ability::Strength,
+                    plus_1_bonus: Ability::Constitution,
+                },
+                LevelUpSelection::Effect(
+                    registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                ),
+                LevelUpSelection::SkillProficiency(HashSet::from([
+                    Skill::Athletics,
+                    Skill::Perception,
+                ])),
+                LevelUpSelection::Class(ClassName::Fighter),
+                LevelUpSelection::Class(ClassName::Fighter),
+                LevelUpSelection::Subclass(SubclassName {
+                    class: ClassName::Fighter,
+                    name: "Champion".to_string(),
+                }),
+            ],
+        );
 
-//             let mut level_up_session = character.level_up();
-//             level_up_session
-//                 .advance(&mut choice_provider)
-//                 .expect("Level-up failed");
-//         }
+        {
+            let levels = systems::helpers::get_component::<CharacterLevels>(&mut world, character);
+            assert_eq!(levels.total_level(), 3);
+            assert_eq!(levels.class_level(&ClassName::Fighter).unwrap().level(), 3);
+            assert_eq!(
+                levels.class_level(&ClassName::Fighter).unwrap().subclass(),
+                Some(&SubclassName {
+                    class: ClassName::Fighter,
+                    name: "Champion".to_string()
+                })
+            );
+        }
 
-//         assert_eq!(character.total_level(), 3);
-//         assert_eq!(
-//             *character.classes(),
-//             HashMap::from([(ClassName::Fighter, 3),])
-//         );
-//         assert_eq!(
-//             character.subclass(&ClassName::Fighter),
-//             Some(&SubclassName {
-//                 class: ClassName::Fighter,
-//                 name: "Champion".to_string()
-//             })
-//         );
+        {
+            let effects = systems::effects::effects(&mut world, character);
+            assert_eq!(effects.len(), 2);
+            for effect_id in [
+                &registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID,
+                &registry::effects::IMPROVED_CRITICAL_ID,
+            ] {
+                assert!(
+                    effects.contains(&registry::effects::EFFECT_REGISTRY.get(&effect_id).unwrap())
+                );
+            }
+        }
 
-//         assert_eq!(character.effects().len(), 2);
-//         for effect_id in [
-//             &registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID,
-//             &registry::effects::IMPROVED_CRITICAL_ID,
-//         ] {
-//             assert!(
-//                 character
-//                     .effects()
-//                     .contains(&registry::effects::EFFECT_REGISTRY.get(&effect_id).unwrap())
-//             );
-//         }
+        {
+            let skills = systems::helpers::get_component::<SkillSet>(&mut world, character);
+            for skill in [Skill::Athletics, Skill::Perception] {
+                assert_eq!(skills.get(skill).proficiency(), &Proficiency::Proficient);
+            }
+        }
 
-//         for skill in [Skill::Athletics, Skill::Perception] {
-//             assert_eq!(
-//                 character.skills().get(skill).proficiency(),
-//                 &Proficiency::Proficient
-//             );
-//         }
-
-//         for ability in [Ability::Strength, Ability::Constitution] {
-//             assert_eq!(
-//                 character.saving_throws().get(ability).proficiency(),
-//                 &Proficiency::Proficient
-//             );
-//         }
-//     }
-// }
+        {
+            let saving_throws =
+                systems::helpers::get_component::<SavingThrowSet>(&mut world, character);
+            for ability in [Ability::Strength, Ability::Constitution] {
+                assert_eq!(
+                    saving_throws.get(ability).proficiency(),
+                    &Proficiency::Proficient
+                );
+            }
+        }
+    }
+}
