@@ -45,6 +45,9 @@ impl GameState {
         participants: HashSet<Entity>,
         encounter_id: EncounterId,
     ) -> EncounterId {
+        for entity in &participants {
+            self.in_combat.insert(*entity, encounter_id.clone());
+        }
         let encounter = Encounter::new(&mut self.world, participants, encounter_id.clone());
         self.encounters.insert(encounter_id.clone(), encounter);
         encounter_id
@@ -62,6 +65,14 @@ impl GameState {
 
     pub fn encounter_mut(&mut self, encounter_id: &EncounterId) -> Option<&mut Encounter> {
         self.encounters.get_mut(encounter_id)
+    }
+
+    pub fn end_encounter(&mut self, encounter_id: &EncounterId) {
+        if let Some(encounter) = self.encounters.remove(encounter_id) {
+            for entity in encounter.participants() {
+                self.in_combat.remove(&entity);
+            }
+        }
     }
 
     pub fn process(

@@ -24,7 +24,7 @@ use strum::IntoEnumIterator;
 use crate::{
     render::utils::{
         ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-        render_button_selectable, render_uniform_buttons,
+        render_button_selectable, render_uniform_buttons, render_window_at_cursor,
     },
     table_with_columns,
 };
@@ -263,147 +263,144 @@ impl ImguiRenderableMut for CharacterCreation {
         if self.state.is_none() {
             return;
         }
-        ui.window("Character Creation")
-            .always_auto_resize(true)
-            .build(|| {
-                match self.state {
-                    Some(CharacterCreationState::ChoosingMethod) => {
-                        let labels = ["From Predefined", "From Scratch", "Cancel"];
-                        if let Some(clicked_index) = render_uniform_buttons(ui, &labels, [20.0, 5.])
-                        {
-                            match clicked_index {
-                                0 => self.state = Some(CharacterCreationState::FromPredefined),
-                                1 => {
-                                    self.reset();
-                                    self.state = Some(CharacterCreationState::FromScratch);
-                                }
-                                2 => self.state = None,
-                                _ => unreachable!(),
+        render_window_at_cursor(ui, "Character Creation", true, || {
+            match self.state {
+                Some(CharacterCreationState::ChoosingMethod) => {
+                    let labels = ["From Predefined", "From Scratch", "Cancel"];
+                    if let Some(clicked_index) = render_uniform_buttons(ui, &labels, [20.0, 5.]) {
+                        match clicked_index {
+                            0 => self.state = Some(CharacterCreationState::FromPredefined),
+                            1 => {
+                                self.reset();
+                                self.state = Some(CharacterCreationState::FromScratch);
                             }
+                            2 => self.state = None,
+                            _ => unreachable!(),
                         }
                     }
+                }
 
-                    Some(CharacterCreationState::FromPredefined) => {
-                        // Avoid double borrow
-                        let characters = self
-                            .world
-                            .query_mut::<(&String, &CharacterTag)>()
-                            .into_iter()
-                            .map(|(entity, (name, tag))| (entity, name.clone(), tag.clone()))
-                            .collect::<Vec<_>>();
-                        for (entity, name, tag) in characters {
-                            if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
-                                if ui.button(format!("Add to World##{}", entity.id())) {
-                                    self.current_character = Some(entity);
-                                    self.state = Some(CharacterCreationState::CreationComplete);
-                                }
-                                ui.separator();
-                                // TODO: Maybe they shouldn't be rendered as mutable?
-                                (entity, tag).render_mut_with_context(ui, &mut self.world);
+                Some(CharacterCreationState::FromPredefined) => {
+                    // Avoid double borrow
+                    let characters = self
+                        .world
+                        .query_mut::<(&String, &CharacterTag)>()
+                        .into_iter()
+                        .map(|(entity, (name, tag))| (entity, name.clone(), tag.clone()))
+                        .collect::<Vec<_>>();
+                    for (entity, name, tag) in characters {
+                        if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
+                            if ui.button(format!("Add to World##{}", entity.id())) {
+                                self.current_character = Some(entity);
+                                self.state = Some(CharacterCreationState::CreationComplete);
                             }
-                        }
-                        ui.separator();
-                        if ui.button("Back") {
-                            self.state = Some(CharacterCreationState::ChoosingMethod);
+                            ui.separator();
+                            // TODO: Maybe they shouldn't be rendered as mutable?
+                            (entity, tag).render_mut_with_context(ui, &mut self.world);
                         }
                     }
+                    ui.separator();
+                    if ui.button("Back") {
+                        self.state = Some(CharacterCreationState::ChoosingMethod);
+                    }
+                }
 
-                    Some(CharacterCreationState::FromScratch) => {
-                        // Logic for scratch character creation
-                        if ui.button("Back") {
-                            self.state = Some(CharacterCreationState::ChoosingMethod);
-                        }
-                        ui.separator();
+                Some(CharacterCreationState::FromScratch) => {
+                    // Logic for scratch character creation
+                    if ui.button("Back") {
+                        self.state = Some(CharacterCreationState::ChoosingMethod);
+                    }
+                    ui.separator();
 
-                        if self.current_character.is_none() {
-                            self.initial_character = Some(Character::new("Johnny Hero"));
-                            self.current_character = Some(
-                                self.world
-                                    .spawn(self.initial_character.as_ref().unwrap().clone()),
-                            );
-                        }
+                    if self.current_character.is_none() {
+                        self.initial_character = Some(Character::new("Johnny Hero"));
+                        self.current_character = Some(
+                            self.world
+                                .spawn(self.initial_character.as_ref().unwrap().clone()),
+                        );
+                    }
 
-                        let mut name = systems::helpers::get_component_clone::<String>(
+                    let mut name = systems::helpers::get_component_clone::<String>(
+                        &self.world,
+                        self.current_character.unwrap(),
+                    );
+                    ui.text("Name:");
+                    if ui
+                        .input_text("##", &mut name)
+                        .enter_returns_true(true)
+                        .build()
+                    {
+                        // User pressed Enter, maybe commit name change here
+                        systems::helpers::set_component(
+                            &mut self.world,
+                            self.current_character.unwrap(),
+                            name,
+                        );
+                    }
+
+                    {
+                        let level = systems::helpers::get_component::<CharacterLevels>(
                             &self.world,
                             self.current_character.unwrap(),
                         );
-                        ui.text("Name:");
-                        if ui
-                            .input_text("##", &mut name)
-                            .enter_returns_true(true)
-                            .build()
-                        {
-                            // User pressed Enter, maybe commit name change here
-                            systems::helpers::set_component(
-                                &mut self.world,
-                                self.current_character.unwrap(),
-                                name,
-                            );
-                        }
+                        level.render(ui);
+                    }
 
-                        {
-                            let level = systems::helpers::get_component::<CharacterLevels>(
-                                &self.world,
-                                self.current_character.unwrap(),
-                            );
-                            level.render(ui);
-                        }
+                    ui.separator();
 
-                        ui.separator();
+                    // TODO: Not terribly efficient, but works for now
+                    let prompt_clones = self.pending_decisions.clone();
 
-                        // TODO: Not terribly efficient, but works for now
-                        let prompt_clones = self.pending_decisions.clone();
+                    let mut decision_selected = false;
+                    for pending_decision in &mut self.pending_decisions {
+                        if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs")) {
+                            if let Some(tab) =
+                                ui.tab_item(format!("{}", pending_decision.prompt.name()))
+                            {
+                                pending_decision.render_mut_with_context(ui, &prompt_clones);
+                                tab.end();
+                            }
 
-                        let mut decision_selected = false;
-                        for pending_decision in &mut self.pending_decisions {
-                            if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs")) {
-                                if let Some(tab) =
-                                    ui.tab_item(format!("{}", pending_decision.prompt.name()))
-                                {
-                                    pending_decision.render_mut_with_context(ui, &prompt_clones);
-                                    tab.end();
-                                }
+                            tab_bar.end();
 
-                                tab_bar.end();
-
-                                if pending_decision.progress.is_complete() {
-                                    let decision = pending_decision.progress.clone().finalize();
-                                    if let Some(level_up_session) = &mut self.level_up_session {
-                                        if !level_up_session.decisions().contains(&decision) {
-                                            println!("New decision: {:?}", decision);
-                                            decision_selected = true;
-                                        }
+                            if pending_decision.progress.is_complete() {
+                                let decision = pending_decision.progress.clone().finalize();
+                                if let Some(level_up_session) = &mut self.level_up_session {
+                                    if !level_up_session.decisions().contains(&decision) {
+                                        println!("New decision: {:?}", decision);
+                                        decision_selected = true;
                                     }
                                 }
                             }
                         }
-
-                        // Check if any new pending prompts were triggered
-                        // Or if there are no pending decisions to choose from
-                        if decision_selected || self.pending_decisions.is_empty() {
-                            self.sync_pending_decisions();
-                        }
-
-                        if self.level_up_session.as_ref().unwrap().is_complete() {
-                            ui.separator();
-                            if ui.button_with_size("Level up", [200.0, 35.0]) {
-                                self.initial_character = Some(Character::from_world(
-                                    &self.world,
-                                    self.current_character.unwrap(),
-                                ));
-                                self.pending_decisions.clear();
-                            }
-
-                            ui.separator();
-                            if ui.button_with_size("Finish Character Creation", [200.0, 35.0]) {
-                                self.state = Some(CharacterCreationState::CreationComplete);
-                            }
-                        }
                     }
 
-                    _ => {}
+                    // Check if any new pending prompts were triggered
+                    // Or if there are no pending decisions to choose from
+                    if decision_selected || self.pending_decisions.is_empty() {
+                        self.sync_pending_decisions();
+                    }
+
+                    if self.level_up_session.as_ref().unwrap().is_complete() {
+                        ui.separator();
+                        if ui.button_with_size("Level up", [200.0, 35.0]) {
+                            self.initial_character = Some(Character::from_world(
+                                &self.world,
+                                self.current_character.unwrap(),
+                            ));
+                            self.pending_decisions.clear();
+                        }
+
+                        ui.separator();
+                        if ui.button_with_size("Finish Character Creation", [200.0, 35.0]) {
+                            self.state = Some(CharacterCreationState::CreationComplete);
+                        }
+                    }
                 }
-            });
+
+                _ => {}
+            }
+        });
     }
 }
 

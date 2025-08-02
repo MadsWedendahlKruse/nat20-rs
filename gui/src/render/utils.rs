@@ -122,3 +122,16 @@ pub fn render_button_disabled_conditionally(
 
     clicked && !condition // Only return true if clicked and not disabled
 }
+
+pub fn render_window_at_cursor<R, F: FnOnce() -> R>(
+    ui: &imgui::Ui,
+    name: &str,
+    always_auto_resize: bool,
+    build_fn: F,
+) {
+    let cursor_pos = ui.io().mouse_pos;
+    ui.window(name)
+        .position(cursor_pos, imgui::Condition::Once)
+        .always_auto_resize(always_auto_resize)
+        .build(build_fn);
+}

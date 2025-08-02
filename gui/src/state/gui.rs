@@ -1,18 +1,10 @@
-use std::collections::HashSet;
-
-use hecs::Entity;
 use imgui::TreeNodeFlags;
-use nat20_rs::{
-    components::id::EncounterId,
-    engine::{encounter::Encounter, game_state::GameState},
-    entities::character::CharacterTag,
-    systems,
-};
+use nat20_rs::{engine::game_state::GameState, entities::character::CharacterTag, systems};
 
 use crate::{
     render::utils::{
         ImguiRenderableMut, ImguiRenderableMutWithContext, render_button_disabled_conditionally,
-        render_button_selectable,
+        render_window_at_cursor,
     },
     state::{
         character_creation::{CharacterCreation, CharacterCreationState},
@@ -92,12 +84,17 @@ impl GameGui {
             }
         });
 
+        let mut encounter_finished = None;
         for encounter in &mut self.encounters {
-            ui.window(format!("Encounter: {}", encounter.id()))
-                .always_auto_resize(true)
-                .build(|| {
-                    encounter.render_mut_with_context(ui, &mut self.game_state);
-                });
+            render_window_at_cursor(ui, &format!("Encounter: {}", encounter.id()), true, || {
+                encounter.render_mut_with_context(ui, &mut self.game_state);
+            });
+            if encounter.finished() {
+                encounter_finished = Some(encounter.id().clone());
+            }
+        }
+        if let Some(id) = encounter_finished {
+            self.encounters.retain(|encounter| encounter.id() != &id);
         }
     }
 }
