@@ -7,11 +7,11 @@ pub trait ImguiRenderableMut {
 }
 
 pub trait ImguiRenderableWithContext<C> {
-    fn render_with_context(&self, ui: &imgui::Ui, context: &C);
+    fn render_with_context(&self, ui: &imgui::Ui, context: C);
 }
 
 pub trait ImguiRenderableMutWithContext<C> {
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: &C);
+    fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: C);
 }
 
 #[macro_export]
@@ -85,15 +85,40 @@ pub fn render_uniform_buttons(ui: &imgui::Ui, labels: &[&str], padding: [f32; 2]
 
     for (i, label) in labels.iter().enumerate() {
         // Optional: push style to center-align text (cosmetic if font is monospaced)
-        let _style = ui.push_style_var(imgui::StyleVar::ButtonTextAlign([0.5, 0.5]));
+        let style = ui.push_style_var(imgui::StyleVar::ButtonTextAlign([0.5, 0.5]));
 
         let height = ui.calc_text_size(label)[1] + padding[1] * 2.0;
         if ui.button_with_size(label, [max_width, height]) {
             clicked_index = Some(i);
         }
 
-        _style.pop(); // Remove the text align override
+        style.pop(); // Remove the text align override
     }
 
     clicked_index
+}
+
+pub fn render_button_disabled_conditionally(
+    ui: &imgui::Ui,
+    label: &str,
+    condition: bool,
+    tooltip: &str,
+) -> bool {
+    let style = if condition {
+        Some(ui.push_style_var(imgui::StyleVar::Alpha(0.5))) // make it look disabled
+    } else {
+        None
+    };
+
+    let clicked = ui.button(label);
+
+    if let Some(s) = style {
+        s.pop();
+    }
+
+    if ui.is_item_hovered() && condition {
+        ui.tooltip_text(tooltip);
+    }
+
+    clicked && !condition // Only return true if clicked and not disabled
 }

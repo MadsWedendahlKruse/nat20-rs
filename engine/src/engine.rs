@@ -1,2 +1,2 @@
 pub mod encounter;
-pub mod world;
+pub mod game_state;

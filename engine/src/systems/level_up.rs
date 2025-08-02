@@ -10,7 +10,7 @@ use crate::{
         class::{Class, ClassBase, ClassName, SubclassName},
         id::EffectId,
         level::CharacterLevels,
-        level_up::LevelUpChoice,
+        level_up::LevelUpPrompt,
         proficiency::Proficiency,
         resource::{ResourceCostMap, ResourceMap},
         saving_throw::SavingThrowSet,
@@ -20,7 +20,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LevelUpSelection {
+pub enum LevelUpDecision {
     Class(ClassName),
     Subclass(SubclassName),
     Effect(EffectId),
@@ -37,14 +37,14 @@ pub enum LevelUpSelection {
     // etc.
 }
 
-impl LevelUpSelection {
+impl LevelUpDecision {
     pub fn name(&self) -> &'static str {
         match self {
-            LevelUpSelection::Class(_) => "Class",
-            LevelUpSelection::Subclass(_) => "Subclass",
-            LevelUpSelection::Effect(_) => "Effect",
-            LevelUpSelection::SkillProficiency(_) => "SkillProficiency",
-            LevelUpSelection::AbilityScores { .. } => "AbilityScores",
+            LevelUpDecision::Class(_) => "Class",
+            LevelUpDecision::Subclass(_) => "Subclass",
+            LevelUpDecision::Effect(_) => "Effect",
+            LevelUpDecision::SkillProficiency(_) => "SkillProficiency",
+            LevelUpDecision::AbilityScores { .. } => "AbilityScores",
             // LevelUpSelection::Feat(_) => "Feat",
             // LevelUpSelection::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
             // LevelUpSelection::AbilityPoint(_) => "AbilityPoint",
@@ -55,16 +55,16 @@ impl LevelUpSelection {
 
 #[derive(Debug, Clone)]
 pub enum LevelUpError {
-    InvalidSelection {
-        choice: LevelUpChoice,
-        selection: LevelUpSelection,
+    InvalidDecision {
+        prompt: LevelUpPrompt,
+        decision: LevelUpDecision,
     },
-    ChoiceSelectionMismatch {
-        choice: LevelUpChoice,
-        selection: LevelUpSelection,
+    PrompDecisionMismatch {
+        prompt: LevelUpPrompt,
+        decision: LevelUpDecision,
     },
-    MissingChoiceForSelection {
-        selection: LevelUpSelection,
+    MissingChoiceForDecision {
+        decision: LevelUpDecision,
     },
     RegistryMissing(String),
     // TODO: Add more error variants as needed
@@ -72,108 +72,108 @@ pub enum LevelUpError {
 
 pub struct LevelUpSession {
     character: Entity,
-    pending_choices: Vec<LevelUpChoice>,
-    chosen_selections: Vec<LevelUpSelection>,
+    pending_prompts: Vec<LevelUpPrompt>,
+    decisions: Vec<LevelUpDecision>,
 }
 
 impl LevelUpSession {
     pub fn new(world: &World, character: Entity) -> Self {
         let mut pending = Vec::new();
-        pending.push(LevelUpChoice::class());
+        pending.push(LevelUpPrompt::class());
 
-        // Special level up choices when creating a new character
+        // Special level up prompts when creating a new character
         if systems::helpers::get_component::<CharacterLevels>(world, character).total_level() == 0 {
-            pending.push(LevelUpChoice::ability_scores());
+            pending.push(LevelUpPrompt::ability_scores());
         }
 
         LevelUpSession {
             character,
-            pending_choices: pending,
-            chosen_selections: Vec::new(),
+            pending_prompts: pending,
+            decisions: Vec::new(),
         }
     }
 
-    pub fn pending_choices(&self) -> &Vec<LevelUpChoice> {
-        &self.pending_choices
+    pub fn pending_prompts(&self) -> &Vec<LevelUpPrompt> {
+        &self.pending_prompts
     }
 
-    pub fn chosen_selections(&self) -> &Vec<LevelUpSelection> {
-        &self.chosen_selections
+    pub fn decisions(&self) -> &Vec<LevelUpDecision> {
+        &self.decisions
     }
 
     pub fn is_complete(&self) -> bool {
-        self.pending_choices.is_empty()
+        self.pending_prompts.is_empty()
     }
 
     pub fn advance(
         &mut self,
         world: &mut World,
-        selection: &LevelUpSelection,
+        decision: &LevelUpDecision,
     ) -> Result<(), LevelUpError> {
-        let mut new_choices = Vec::new();
+        let mut new_prompts = Vec::new();
 
-        let mut resolved_choice = None;
+        let mut resolved_prompt = None;
 
-        for choice in self.pending_choices.iter() {
-            if choice.name() != selection.name() {
+        for prompt in self.pending_prompts.iter() {
+            if prompt.name() != decision.name() {
                 continue;
             }
 
-            let next_choices =
-                resolve_level_up_choice(world, self.character, choice.clone(), selection.clone())?;
-            new_choices.extend(next_choices);
-            resolved_choice = Some(choice.clone());
+            let next_prompts =
+                resolve_level_up_prompt(world, self.character, prompt.clone(), decision.clone())?;
+            new_prompts.extend(next_prompts);
+            resolved_prompt = Some(prompt.clone());
             break;
         }
 
-        if resolved_choice.is_none() {
-            return Err(LevelUpError::MissingChoiceForSelection {
-                selection: selection.clone(),
+        if resolved_prompt.is_none() {
+            return Err(LevelUpError::MissingChoiceForDecision {
+                decision: decision.clone(),
             });
         }
 
-        self.pending_choices
-            .retain(|c| c != resolved_choice.as_ref().unwrap());
+        self.pending_prompts
+            .retain(|c| c != resolved_prompt.as_ref().unwrap());
 
-        self.chosen_selections.push(selection.clone());
+        self.decisions.push(decision.clone());
 
-        self.pending_choices.extend(new_choices);
+        self.pending_prompts.extend(new_prompts);
         Ok(())
     }
 }
 
-pub fn resolve_level_up_choice(
+pub fn resolve_level_up_prompt(
     world: &mut World,
     entity: Entity,
-    choice: LevelUpChoice,
-    selection: LevelUpSelection,
-) -> Result<Vec<LevelUpChoice>, LevelUpError> {
-    let mut choices = Vec::new();
+    prompt: LevelUpPrompt,
+    decision: LevelUpDecision,
+) -> Result<Vec<LevelUpPrompt>, LevelUpError> {
+    let mut prompts = Vec::new();
 
-    match (&choice, &selection) {
-        (LevelUpChoice::Class(classes), LevelUpSelection::Class(class_name)) => {
+    match (&prompt, &decision) {
+        (LevelUpPrompt::Class(classes), LevelUpDecision::Class(class_name)) => {
             if !classes.contains(&class_name) {
-                return Err(LevelUpError::InvalidSelection { choice, selection });
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
             if let Some(class) = registry::classes::CLASS_REGISTRY.get(&class_name) {
-                choices.extend(increment_class_level(world, entity, &class));
+                prompts.extend(increment_class_level(world, entity, &class));
             } else {
                 return Err(LevelUpError::RegistryMissing(class_name.to_string()));
             }
         }
 
-        (LevelUpChoice::Subclass(subclasses), LevelUpSelection::Subclass(subclass_name)) => {
+        (LevelUpPrompt::Subclass(subclasses), LevelUpDecision::Subclass(subclass_name)) => {
             if !subclasses.contains(&subclass_name) {
-                return Err(LevelUpError::InvalidSelection { choice, selection });
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
             if let Some(class) = registry::classes::CLASS_REGISTRY.get(&subclass_name.class) {
                 if !class.subclasses.contains_key(&subclass_name) {
-                    return Err(LevelUpError::InvalidSelection { choice, selection });
+                    return Err(LevelUpError::InvalidDecision { prompt, decision });
                 }
 
-                choices.extend(set_subclass(world, entity, class, subclass_name.clone()));
+                prompts.extend(set_subclass(world, entity, class, subclass_name.clone()));
             } else {
                 return Err(LevelUpError::RegistryMissing(
                     subclass_name.class.to_string(),
@@ -181,9 +181,9 @@ pub fn resolve_level_up_choice(
             }
         }
 
-        (LevelUpChoice::Effect(effects), LevelUpSelection::Effect(effect_id)) => {
+        (LevelUpPrompt::Effect(effects), LevelUpDecision::Effect(effect_id)) => {
             if !effects.contains(&effect_id) {
-                return Err(LevelUpError::InvalidSelection { choice, selection });
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
             // TODO: Unnecessary check?
@@ -191,16 +191,16 @@ pub fn resolve_level_up_choice(
         }
 
         (
-            LevelUpChoice::SkillProficiency(skills, num_choices),
-            LevelUpSelection::SkillProficiency(selected_skills),
+            LevelUpPrompt::SkillProficiency(skills, num_prompts),
+            LevelUpDecision::SkillProficiency(selected_skills),
         ) => {
-            if selected_skills.len() != *num_choices as usize {
-                return Err(LevelUpError::InvalidSelection { choice, selection });
+            if selected_skills.len() != *num_prompts as usize {
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
             for skill in selected_skills {
                 if !skills.contains(&skill) {
-                    return Err(LevelUpError::InvalidSelection { choice, selection });
+                    return Err(LevelUpError::InvalidDecision { prompt, decision });
                 }
                 // TODO: Expertise handling
                 systems::helpers::get_component_mut::<SkillSet>(world, entity)
@@ -209,22 +209,22 @@ pub fn resolve_level_up_choice(
         }
 
         (
-            LevelUpChoice::AbilityScores(score_point_cost, num_points),
-            LevelUpSelection::AbilityScores {
+            LevelUpPrompt::AbilityScores(score_point_cost, num_points),
+            LevelUpDecision::AbilityScores {
                 scores,
                 plus_2_bonus,
                 plus_1_bonus,
             },
         ) => {
             if scores.len() != Ability::iter().count() {
-                return Err(LevelUpError::InvalidSelection { choice, selection });
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
             if scores
                 .values()
                 .any(|&score| !score_point_cost.contains_key(&score))
             {
-                return Err(LevelUpError::InvalidSelection { choice, selection });
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
             let total_cost = scores
@@ -237,7 +237,7 @@ pub fn resolve_level_up_choice(
                 })
                 .sum::<u8>();
             if total_cost != *num_points {
-                return Err(LevelUpError::InvalidSelection { choice, selection });
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
             let mut ability_score_set =
@@ -254,24 +254,24 @@ pub fn resolve_level_up_choice(
         }
 
         _ => {
-            // If the choice and selection are called the same, and we made it here,
+            // If the prompt and decision are called the same, and we made it here,
             // it's probably just because it hasn't been implemented yet
-            if choice.name() == selection.name() {
+            if prompt.name() == decision.name() {
                 todo!(
-                    "Implement choice: {:?} with selection: {:?}",
-                    choice,
-                    selection
+                    "Implement prompt: {:?} with decision: {:?}",
+                    prompt,
+                    decision
                 );
             }
 
-            return Err(LevelUpError::ChoiceSelectionMismatch { choice, selection });
+            return Err(LevelUpError::PrompDecisionMismatch { prompt, decision });
         }
     }
 
-    Ok(choices)
+    Ok(prompts)
 }
 
-fn increment_class_level(world: &mut World, entity: Entity, class: &Class) -> Vec<LevelUpChoice> {
+fn increment_class_level(world: &mut World, entity: Entity, class: &Class) -> Vec<LevelUpPrompt> {
     let new_level = {
         let mut character_levels =
             systems::helpers::get_component_mut::<CharacterLevels>(world, entity);
@@ -283,7 +283,7 @@ fn increment_class_level(world: &mut World, entity: Entity, class: &Class) -> Ve
             .set_proficiency(*ability, Proficiency::Proficient);
     }
 
-    // TODO: If it's a level that triggers a feat choice, and ability score improvement
+    // TODO: If it's a level that triggers a feat prompt, and ability score improvement
     // is selected, then the Constitution modifier might increase, in which case we need to
     // recalculate hit points.
     systems::health::update_hit_points(world, entity);
@@ -298,7 +298,7 @@ fn set_subclass(
     entity: Entity,
     class: &Class,
     subclass_name: SubclassName,
-) -> Vec<LevelUpChoice> {
+) -> Vec<LevelUpPrompt> {
     let (subclass, level) = {
         let mut character_levels =
             systems::helpers::get_component_mut::<CharacterLevels>(world, entity);
@@ -320,7 +320,7 @@ fn apply_class_base(
     entity: Entity,
     class_base: &ClassBase,
     level: u8,
-) -> Vec<LevelUpChoice> {
+) -> Vec<LevelUpPrompt> {
     // Effect
     if let Some(effects_for_level) = class_base.effects_by_level.get(&level) {
         for effect in effects_for_level {
@@ -359,21 +359,21 @@ fn apply_class_base(
         }
     }
 
-    // Return any additional choices that should be presented to the player
+    // Return any additional prompts that should be presented to the player
     class_base
-        .choices_by_level
+        .prompts_by_level
         .get(&level)
         .cloned()
         .unwrap_or_default()
 }
 
-pub fn apply_level_up_selection(
+pub fn apply_level_up_decision(
     world: &mut World,
     entity: Entity,
     levels: u8,
-    responses: Vec<LevelUpSelection>,
+    decisions: Vec<LevelUpDecision>,
 ) {
-    let mut responses = responses;
+    let mut decisions = decisions;
 
     for level in 1..=levels {
         let name = systems::helpers::get_component_clone::<String>(world, entity);
@@ -383,10 +383,10 @@ pub fn apply_level_up_selection(
         // multiple times. Using retain would therefore remove all of them,
         // so we need to track the indices of the used responses.
         let mut used_indices = Vec::new();
-        for (i, response) in responses.iter().enumerate() {
-            let result = level_up_session.advance(world, response);
+        for (i, decision) in decisions.iter().enumerate() {
+            let result = level_up_session.advance(world, decision);
             match result {
-                Ok(_) | Err(LevelUpError::MissingChoiceForSelection { .. }) => {
+                Ok(_) | Err(LevelUpError::MissingChoiceForDecision { .. }) => {
                     // This is expected to happen since the responses cover all
                     // levels, but the session only advances one level at a time.
                     used_indices.push(i);
@@ -405,7 +405,7 @@ pub fn apply_level_up_selection(
 
         // Remove the used responses from the list
         for index in used_indices.iter().rev() {
-            responses.remove(*index);
+            decisions.remove(*index);
         }
 
         if !level_up_session.is_complete() {
@@ -413,7 +413,7 @@ pub fn apply_level_up_selection(
                 "Level up session for {} at level {} did not complete: {:?}",
                 name,
                 level,
-                level_up_session.pending_choices()
+                level_up_session.pending_prompts()
             );
         }
     }

@@ -1,65 +1,103 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
-use hecs::{Entity, World};
-use imgui::{Condition, TreeNodeFlags};
-use nat20_rs::{components::id::CharacterId, entities::character::CharacterTag, systems};
-
-use crate::{
-    render::utils::ImguiRenderableMut,
-    state::character_creation::{CharacterCreation, CharacterCreationState},
+use hecs::Entity;
+use imgui::TreeNodeFlags;
+use nat20_rs::{
+    components::id::EncounterId,
+    engine::{encounter::Encounter, game_state::GameState},
+    entities::character::CharacterTag,
+    systems,
 };
 
-pub struct GuiState {
-    world: World,
-    character_creation: CharacterCreation,
-    characters: HashMap<CharacterId, Entity>,
+use crate::{
+    render::utils::{
+        ImguiRenderableMut, ImguiRenderableMutWithContext, render_button_disabled_conditionally,
+        render_button_selectable,
+    },
+    state::{
+        character_creation::{CharacterCreation, CharacterCreationState},
+        encounter::EncounterGui,
+    },
+};
+
+pub enum GuiState {
+    MainMenu,
 }
 
-impl GuiState {
+pub struct GameGui {
+    gui_state: GuiState,
+    game_state: GameState,
+    character_creation: CharacterCreation,
+    encounters: Vec<EncounterGui>,
+}
+
+impl GameGui {
     pub fn new() -> Self {
         Self {
-            world: World::new(),
+            gui_state: GuiState::MainMenu,
+            game_state: GameState::new(),
             character_creation: CharacterCreation::new(),
-            characters: HashMap::new(),
+            encounters: Vec::new(),
         }
     }
 
     pub fn render(&mut self, ui: &imgui::Ui) {
-        self.render_world(ui);
-        self.character_creation.render_mut(ui);
+        ui.window("World").always_auto_resize(true).build(|| {
+            match self.gui_state {
+                GuiState::MainMenu => {
+                    ui.separator_with_text("Characters in the world");
+                    // Avoid double borrow
+                    let characters = self
+                        .game_state
+                        .world
+                        .query_mut::<(&String, &CharacterTag)>()
+                        .into_iter()
+                        .map(|(entity, (name, tag))| (entity, name.clone(), tag.clone()))
+                        .collect::<Vec<_>>();
+                    for (entity, name, tag) in &characters {
+                        if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
+                            (*entity, tag.clone())
+                                .render_mut_with_context(ui, &mut self.game_state.world);
+                        }
+                    }
 
-        if self.character_creation.creation_complete() {
-            println!("Character creation complete!");
-            if let Some(character) = self.character_creation.get_character() {
-                println!("Character created: {:?}", character.name);
-                let character_id = character.id;
-                let entity = self.world.spawn(character);
-                self.characters.insert(character_id, entity);
-                // They spawn at zero health by default
-                systems::health::heal_full(&mut self.world, entity);
-            }
-        }
-    }
+                    ui.separator();
+                    if ui.button("Add Character") {
+                        self.character_creation
+                            .set_state(CharacterCreationState::ChoosingMethod);
+                    }
 
-    fn render_world(&mut self, ui: &imgui::Ui) {
-        ui.window("World")
-            .size([400.0, 600.0], Condition::FirstUseEver)
-            .build(|| {
-                ui.text("Characters in the world:");
+                    ui.separator();
+                    if render_button_disabled_conditionally(
+                        ui,
+                        "Start Encounter",
+                        characters.len() < 2,
+                        "You must have at least two characters to create an encounter.",
+                    ) {
+                        self.encounters.push(EncounterGui::new());
+                    }
 
-                for (id, entity) in &mut self.characters {
-                    let name =
-                        systems::helpers::get_component_clone::<String>(&self.world, *entity);
-                    let tag =
-                        systems::helpers::get_component_clone::<CharacterTag>(&self.world, *entity);
-                    if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
-                        (&mut self.world, *entity, tag).render_mut(ui);
+                    self.character_creation.render_mut(ui);
+
+                    if self.character_creation.creation_complete() {
+                        println!("Character creation complete!");
+                        if let Some(character) = self.character_creation.get_character() {
+                            println!("Character created: {:?}", character.name);
+                            let entity = self.game_state.world.spawn(character);
+                            // They spawn at zero health by default
+                            systems::health::heal_full(&mut self.game_state.world, entity);
+                        }
                     }
                 }
-                if ui.button("Add Character") {
-                    self.character_creation
-                        .set_state(CharacterCreationState::ChoosingMethod);
-                }
-            });
+            }
+        });
+
+        for encounter in &mut self.encounters {
+            ui.window(format!("Encounter: {}", encounter.id()))
+                .always_auto_resize(true)
+                .build(|| {
+                    encounter.render_mut_with_context(ui, &mut self.game_state);
+                });
+        }
     }
 }

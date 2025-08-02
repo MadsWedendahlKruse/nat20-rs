@@ -1,21 +1,21 @@
 use std::collections::{HashMap, HashSet};
 
 use hecs::{Entity, World};
-use imgui::{Condition, TreeNodeFlags};
+use imgui::TreeNodeFlags;
 use nat20_rs::{
     components::{
         ability::Ability,
         class::{ClassName, SubclassName},
         id::EffectId,
         level::CharacterLevels,
-        level_up::LevelUpChoice,
+        level_up::LevelUpPrompt,
         skill::Skill,
     },
     entities::character::{Character, CharacterTag},
     registry,
     systems::{
         self,
-        level_up::{LevelUpSelection, LevelUpSession},
+        level_up::{LevelUpDecision, LevelUpSession},
     },
     test_utils::fixtures,
 };
@@ -30,13 +30,13 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
-enum LevelUpSelectionProgress {
+enum LevelUpDecisionProgress {
     Class(Option<ClassName>),
     Subclass(Option<SubclassName>),
     Effect(Option<EffectId>),
     SkillProficiency {
         selected: HashSet<Skill>,
-        remaining_selections: u8,
+        remaining_decisions: u8,
     },
     AbilityScores {
         assignments: HashMap<Ability, u8>,
@@ -47,18 +47,18 @@ enum LevelUpSelectionProgress {
     // Add more as needed
 }
 
-impl LevelUpSelectionProgress {
+impl LevelUpDecisionProgress {
     // TODO: Might need more complex validation
     fn is_complete(&self) -> bool {
         match self {
-            LevelUpSelectionProgress::Class(class) => class.is_some(),
-            LevelUpSelectionProgress::Subclass(subclass) => subclass.is_some(),
-            LevelUpSelectionProgress::Effect(effect) => effect.is_some(),
-            LevelUpSelectionProgress::SkillProficiency {
+            LevelUpDecisionProgress::Class(class) => class.is_some(),
+            LevelUpDecisionProgress::Subclass(subclass) => subclass.is_some(),
+            LevelUpDecisionProgress::Effect(effect) => effect.is_some(),
+            LevelUpDecisionProgress::SkillProficiency {
                 selected,
-                remaining_selections,
-            } => remaining_selections == &0 && selected.len() > 0,
-            LevelUpSelectionProgress::AbilityScores {
+                remaining_decisions,
+            } => remaining_decisions == &0 && selected.len() > 0,
+            LevelUpDecisionProgress::AbilityScores {
                 assignments,
                 remaining_budget,
                 plus_2_bonus,
@@ -72,22 +72,22 @@ impl LevelUpSelectionProgress {
         }
     }
 
-    fn finalize(self) -> LevelUpSelection {
+    fn finalize(self) -> LevelUpDecision {
         match self {
-            LevelUpSelectionProgress::Class(class) => LevelUpSelection::Class(class.unwrap()),
-            LevelUpSelectionProgress::Subclass(subclass) => {
-                LevelUpSelection::Subclass(subclass.unwrap())
+            LevelUpDecisionProgress::Class(class) => LevelUpDecision::Class(class.unwrap()),
+            LevelUpDecisionProgress::Subclass(subclass) => {
+                LevelUpDecision::Subclass(subclass.unwrap())
             }
-            LevelUpSelectionProgress::Effect(effect) => LevelUpSelection::Effect(effect.unwrap()),
-            LevelUpSelectionProgress::SkillProficiency { selected, .. } => {
-                LevelUpSelection::SkillProficiency(selected)
+            LevelUpDecisionProgress::Effect(effect) => LevelUpDecision::Effect(effect.unwrap()),
+            LevelUpDecisionProgress::SkillProficiency { selected, .. } => {
+                LevelUpDecision::SkillProficiency(selected)
             }
-            LevelUpSelectionProgress::AbilityScores {
+            LevelUpDecisionProgress::AbilityScores {
                 assignments,
                 plus_2_bonus,
                 plus_1_bonus,
                 ..
-            } => LevelUpSelection::AbilityScores {
+            } => LevelUpDecision::AbilityScores {
                 scores: assignments,
                 plus_2_bonus: plus_2_bonus.unwrap(),
                 plus_1_bonus: plus_1_bonus.unwrap(),
@@ -95,18 +95,18 @@ impl LevelUpSelectionProgress {
         }
     }
 
-    fn from_choice(choice: &LevelUpChoice) -> Self {
-        match choice {
-            LevelUpChoice::Class(_) => LevelUpSelectionProgress::Class(None),
-            LevelUpChoice::Subclass(_) => LevelUpSelectionProgress::Subclass(None),
-            LevelUpChoice::Effect(_) => LevelUpSelectionProgress::Effect(None),
-            LevelUpChoice::SkillProficiency(_, required) => {
-                LevelUpSelectionProgress::SkillProficiency {
+    fn from_prompt(prompt: &LevelUpPrompt) -> Self {
+        match prompt {
+            LevelUpPrompt::Class(_) => LevelUpDecisionProgress::Class(None),
+            LevelUpPrompt::Subclass(_) => LevelUpDecisionProgress::Subclass(None),
+            LevelUpPrompt::Effect(_) => LevelUpDecisionProgress::Effect(None),
+            LevelUpPrompt::SkillProficiency(_, required) => {
+                LevelUpDecisionProgress::SkillProficiency {
                     selected: HashSet::new(),
-                    remaining_selections: *required,
+                    remaining_decisions: *required,
                 }
             }
-            LevelUpChoice::AbilityScores(_, budget) => LevelUpSelectionProgress::AbilityScores {
+            LevelUpPrompt::AbilityScores(_, budget) => LevelUpDecisionProgress::AbilityScores {
                 assignments: HashMap::new(),
                 remaining_budget: *budget,
                 plus_2_bonus: None,
@@ -117,15 +117,15 @@ impl LevelUpSelectionProgress {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct LevelUpChoiceWithProgress {
-    choice: LevelUpChoice,
-    progress: LevelUpSelectionProgress,
+struct LevelUpPromptWithProgress {
+    prompt: LevelUpPrompt,
+    progress: LevelUpDecisionProgress,
 }
 
-impl LevelUpChoiceWithProgress {
-    fn new(choice: LevelUpChoice) -> Self {
-        let progress = LevelUpSelectionProgress::from_choice(&choice);
-        Self { choice, progress }
+impl LevelUpPromptWithProgress {
+    fn new(prompt: LevelUpPrompt) -> Self {
+        let progress = LevelUpDecisionProgress::from_prompt(&prompt);
+        Self { prompt, progress }
     }
 }
 
@@ -145,11 +145,11 @@ pub struct CharacterCreation {
     state: Option<CharacterCreationState>,
     current_character: Option<Entity>,
     /// The initial state of the character when the level-up session was first created.
-    /// Whenever the user changes a selection, this is used to reset the character
-    /// to the initial state, and then apply the new selections.
+    /// Whenever the user changes a decision, this is used to reset the character
+    /// to the initial state, and then apply the new decisions.
     initial_character: Option<Character>,
     level_up_session: Option<LevelUpSession>,
-    pending_selections: Vec<LevelUpChoiceWithProgress>,
+    pending_decisions: Vec<LevelUpPromptWithProgress>,
 }
 
 impl CharacterCreation {
@@ -175,7 +175,7 @@ impl CharacterCreation {
             current_character: None,
             initial_character: None,
             level_up_session: None,
-            pending_selections: Vec::new(),
+            pending_decisions: Vec::new(),
         }
     }
 
@@ -205,10 +205,10 @@ impl CharacterCreation {
         self.state = None;
         self.current_character = None;
         self.level_up_session = None;
-        self.pending_selections.clear();
+        self.pending_decisions.clear();
     }
 
-    fn sync_pending_selections(&mut self) {
+    fn sync_pending_decisions(&mut self) {
         // Preserve the name
         let name = systems::helpers::get_component_clone::<String>(
             &self.world,
@@ -229,30 +229,30 @@ impl CharacterCreation {
             self.current_character.unwrap(),
         ));
 
-        // Check if any of the current selections are still valid
-        let mut valid_selections = Vec::new();
-        for choice in &self.pending_selections {
-            if choice.progress.is_complete() {
-                let selection = choice.progress.clone().finalize();
+        // Check if any of the current decisions are still valid
+        let mut valid_in_progress = Vec::new();
+        for prompt_progress in &self.pending_decisions {
+            if prompt_progress.progress.is_complete() {
+                let decision = prompt_progress.progress.clone().finalize();
                 let result = self
                     .level_up_session
                     .as_mut()
                     .unwrap()
-                    .advance(&mut self.world, &selection);
+                    .advance(&mut self.world, &decision);
                 if result.is_ok() {
-                    valid_selections.push(choice.clone());
+                    valid_in_progress.push(prompt_progress.clone());
                 }
             }
         }
-        self.pending_selections = valid_selections;
+        self.pending_decisions = valid_in_progress;
 
-        let pending_choices = self.level_up_session.as_ref().unwrap().pending_choices();
+        let pending_prompts = self.level_up_session.as_ref().unwrap().pending_prompts();
 
-        for choice in pending_choices {
-            let already_present = self.pending_selections.iter().any(|p| p.choice == *choice);
+        for prompt in pending_prompts {
+            let already_present = self.pending_decisions.iter().any(|p| p.prompt == *prompt);
             if !already_present {
-                self.pending_selections
-                    .push(LevelUpChoiceWithProgress::new(choice.clone()));
+                self.pending_decisions
+                    .push(LevelUpPromptWithProgress::new(prompt.clone()));
             }
         }
     }
@@ -284,12 +284,13 @@ impl ImguiRenderableMut for CharacterCreation {
                     }
 
                     Some(CharacterCreationState::FromPredefined) => {
-                        let mut characters = Vec::new();
-                        for (entity, (name, tag)) in
-                            self.world.query_mut::<(&String, &CharacterTag)>()
-                        {
-                            characters.push((entity, name.clone(), tag.clone()));
-                        }
+                        // Avoid double borrow
+                        let characters = self
+                            .world
+                            .query_mut::<(&String, &CharacterTag)>()
+                            .into_iter()
+                            .map(|(entity, (name, tag))| (entity, name.clone(), tag.clone()))
+                            .collect::<Vec<_>>();
                         for (entity, name, tag) in characters {
                             if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
                                 if ui.button(format!("Add to World##{}", entity.id())) {
@@ -297,7 +298,8 @@ impl ImguiRenderableMut for CharacterCreation {
                                     self.state = Some(CharacterCreationState::CreationComplete);
                                 }
                                 ui.separator();
-                                (&mut self.world, entity, tag).render_mut(ui);
+                                // TODO: Maybe they shouldn't be rendered as mutable?
+                                (entity, tag).render_mut_with_context(ui, &mut self.world);
                             }
                         }
                         ui.separator();
@@ -350,39 +352,36 @@ impl ImguiRenderableMut for CharacterCreation {
                         ui.separator();
 
                         // TODO: Not terribly efficient, but works for now
-                        let choice_clones = self.pending_selections.clone();
+                        let prompt_clones = self.pending_decisions.clone();
 
-                        let mut choice_selected = false;
-                        for pending_selection in &mut self.pending_selections {
+                        let mut decision_selected = false;
+                        for pending_decision in &mut self.pending_decisions {
                             if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs")) {
                                 if let Some(tab) =
-                                    ui.tab_item(format!("{}", pending_selection.choice.name()))
+                                    ui.tab_item(format!("{}", pending_decision.prompt.name()))
                                 {
-                                    pending_selection.render_mut_with_context(ui, &choice_clones);
+                                    pending_decision.render_mut_with_context(ui, &prompt_clones);
                                     tab.end();
                                 }
 
                                 tab_bar.end();
 
-                                if pending_selection.progress.is_complete() {
-                                    let selection = pending_selection.progress.clone().finalize();
+                                if pending_decision.progress.is_complete() {
+                                    let decision = pending_decision.progress.clone().finalize();
                                     if let Some(level_up_session) = &mut self.level_up_session {
-                                        if !level_up_session
-                                            .chosen_selections()
-                                            .contains(&selection)
-                                        {
-                                            println!("New selection: {:?}", selection);
-                                            choice_selected = true;
+                                        if !level_up_session.decisions().contains(&decision) {
+                                            println!("New decision: {:?}", decision);
+                                            decision_selected = true;
                                         }
                                     }
                                 }
                             }
                         }
 
-                        // Check if any new pending choices were triggered
-                        // Or if there are no pending selections to choose from
-                        if choice_selected || self.pending_selections.is_empty() {
-                            self.sync_pending_selections();
+                        // Check if any new pending prompts were triggered
+                        // Or if there are no pending decisions to choose from
+                        if decision_selected || self.pending_decisions.is_empty() {
+                            self.sync_pending_decisions();
                         }
 
                         if self.level_up_session.as_ref().unwrap().is_complete() {
@@ -392,7 +391,7 @@ impl ImguiRenderableMut for CharacterCreation {
                                     &self.world,
                                     self.current_character.unwrap(),
                                 ));
-                                self.pending_selections.clear();
+                                self.pending_decisions.clear();
                             }
 
                             ui.separator();
@@ -408,15 +407,15 @@ impl ImguiRenderableMut for CharacterCreation {
     }
 }
 
-impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpChoiceWithProgress {
+impl ImguiRenderableMutWithContext<&Vec<LevelUpPromptWithProgress>> for LevelUpPromptWithProgress {
     fn render_mut_with_context(
         &mut self,
         ui: &imgui::Ui,
-        all_choices: &Vec<LevelUpChoiceWithProgress>,
+        all_prompts: &Vec<LevelUpPromptWithProgress>,
     ) {
-        match self.choice {
-            LevelUpChoice::Class(ref classes) => {
-                if let LevelUpSelectionProgress::Class(ref mut selection) = self.progress {
+        match self.prompt {
+            LevelUpPrompt::Class(ref classes) => {
+                if let LevelUpDecisionProgress::Class(ref mut decision) = self.progress {
                     let button_size = [100.0, 30.0];
                     let buttons_per_row = 4;
 
@@ -425,9 +424,9 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
                             ui,
                             format!("{}", class),
                             button_size,
-                            selection.is_some_and(|s| s == *class),
+                            decision.is_some_and(|s| s == *class),
                         ) {
-                            *selection = Some(class.clone());
+                            *decision = Some(class.clone());
                         }
 
                         if (i + 1) % buttons_per_row != 0 {
@@ -435,12 +434,12 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
                         }
                     }
                 } else {
-                    ui.text("Mismatched progress type for Class choice");
+                    ui.text("Mismatched progress type for Class prompt");
                 }
             }
 
-            LevelUpChoice::AbilityScores(ref scores_cost, ref point_budget) => {
-                if let LevelUpSelectionProgress::AbilityScores {
+            LevelUpPrompt::AbilityScores(ref scores_cost, ref point_budget) => {
+                if let LevelUpDecisionProgress::AbilityScores {
                     ref mut assignments,
                     ref mut remaining_budget,
                     ref mut plus_2_bonus,
@@ -465,9 +464,9 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
                         *plus_1_bonus = None;
                     }
 
-                    for choice in all_choices {
-                        match &choice.progress {
-                            LevelUpSelectionProgress::Class(chosen_class) => {
+                    for prompt in all_prompts {
+                        match &prompt.progress {
+                            LevelUpDecisionProgress::Class(chosen_class) => {
                                 if let Some(class) = chosen_class {
                                     ui.same_line();
                                     if ui.button(format!("Default ({})", class)) {
@@ -595,42 +594,42 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
                         table.end();
                     }
                 } else {
-                    ui.text("Mismatched progress type for Ability Scores choice");
+                    ui.text("Mismatched progress type for Ability Scores prompt");
                 }
             }
 
-            LevelUpChoice::Effect(ref effects) => {
-                if let LevelUpSelectionProgress::Effect(ref mut selection) = self.progress {
+            LevelUpPrompt::Effect(ref effects) => {
+                if let LevelUpDecisionProgress::Effect(ref mut decision) = self.progress {
                     for effect in effects {
                         if render_button_selectable(
                             ui,
                             format!("{}", effect),
                             [0., 0.],
-                            selection.as_ref().is_some_and(|s| *s == *effect),
+                            decision.as_ref().is_some_and(|s| *s == *effect),
                         ) {
-                            *selection = Some(effect.clone());
+                            *decision = Some(effect.clone());
                         }
                     }
                 } else {
-                    ui.text("Mismatched progress type for Effect choice");
+                    ui.text("Mismatched progress type for Effect prompt");
                 }
             }
 
-            LevelUpChoice::SkillProficiency(ref skills, ref num_choices) => {
-                if let LevelUpSelectionProgress::SkillProficiency {
+            LevelUpPrompt::SkillProficiency(ref skills, ref num_prompts) => {
+                if let LevelUpDecisionProgress::SkillProficiency {
                     ref mut selected,
-                    ref mut remaining_selections,
+                    ref mut remaining_decisions,
                 } = self.progress
                 {
                     ui.text(format!(
                         "Select up to {} skills ({} selected):",
-                        num_choices,
+                        num_prompts,
                         selected.len()
                     ));
 
                     if ui.button("Reset##Skills") {
                         selected.clear();
-                        *remaining_selections = *num_choices;
+                        *remaining_decisions = *num_prompts;
                     }
 
                     if let Some(table) = table_with_columns!(ui, "Skills", "Skill", "") {
@@ -645,13 +644,13 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
                             if ui.checkbox(format!("##{}", skill), &mut checked) {
                                 if checked {
                                     // Only add if we have room and it's not already selected
-                                    if selected.len() < *num_choices as usize {
+                                    if selected.len() < *num_prompts as usize {
                                         selected.insert(*skill);
-                                        *remaining_selections -= 1;
+                                        *remaining_decisions -= 1;
                                     }
                                 } else {
                                     selected.remove(skill);
-                                    *remaining_selections += 1;
+                                    *remaining_decisions += 1;
                                 }
                             }
                         }
@@ -659,7 +658,7 @@ impl ImguiRenderableMutWithContext<Vec<LevelUpChoiceWithProgress>> for LevelUpCh
                         table.end();
                     }
                 } else {
-                    ui.text("Mismatched progress type for Skill Proficiency choice");
+                    ui.text("Mismatched progress type for Skill Proficiency prompt");
                 }
             }
 

@@ -4,7 +4,7 @@ use hecs::{Entity, World};
 
 use crate::components::{
     actions::{
-        action::{Action, ActionContext, ActionKind, ActionKindSnapshot},
+        action::{Action, ActionContext, ActionKind, ActionKindSnapshot, ReactionKind},
         targeting::TargetingContext,
     },
     id::{ActionId, ResourceId, SpellId},
@@ -38,6 +38,20 @@ impl Spell {
         kind: ActionKind,
         resource_cost: HashMap<ResourceId, u8>,
         targeting: Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
+        reaction_trigger: Option<
+            Arc<
+                dyn Fn(
+                        &World,
+                        Entity,
+                        Entity,
+                        &ActionId,
+                        &ActionContext,
+                        &[Entity],
+                    ) -> Option<ReactionKind>
+                    + Send
+                    + Sync,
+            >,
+        >,
     ) -> Self {
         let action_id = id.to_action_id();
         Self {
@@ -50,6 +64,7 @@ impl Spell {
                 resource_cost,
                 targeting,
                 cooldown: None,
+                reaction_trigger,
             },
         }
     }

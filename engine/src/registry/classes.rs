@@ -9,7 +9,7 @@ use crate::{
         class::{Class, ClassBase, ClassName, SpellcastingProgression, Subclass, SubclassName},
         dice::DieSize,
         items::equipment::{armor::ArmorType, weapon::WeaponCategory},
-        level_up::LevelUpChoice,
+        level_up::LevelUpPrompt,
         resource::{RechargeRule, Resource},
         skill::Skill,
     },
@@ -94,7 +94,7 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         ]),
         HashMap::from([(
             1,
-            vec![LevelUpChoice::Effect(vec![
+            vec![LevelUpPrompt::Effect(vec![
                 registry::effects::FIGHTING_STYLE_ARCHERY_ID.clone(),
                 registry::effects::FIGHTING_STYLE_DEFENSE_ID.clone(),
                 registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
@@ -123,7 +123,7 @@ static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
     },
     base: ClassBase {
         skill_proficiencies: HashSet::new(),
-        skill_choices: 0,
+        skill_prompts: 0,
         armor_proficiencies: HashSet::new(),
         weapon_proficiencies: HashSet::new(),
         spellcasting: SpellcastingProgression::None,
@@ -132,7 +132,7 @@ static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
             vec![registry::effects::IMPROVED_CRITICAL_ID.clone()],
         )]),
         resources_by_level: HashMap::new(),
-        choices_by_level: HashMap::new(),
+        prompts_by_level: HashMap::new(),
         actions_by_level: HashMap::new(),
     },
 });
@@ -182,7 +182,7 @@ static FIEND_PATRON: LazyLock<Subclass> = LazyLock::new(|| Subclass {
     },
     base: ClassBase {
         skill_proficiencies: HashSet::new(),
-        skill_choices: 0,
+        skill_prompts: 0,
         armor_proficiencies: HashSet::new(),
         weapon_proficiencies: HashSet::new(),
         spellcasting: SpellcastingProgression::Third,
@@ -191,7 +191,7 @@ static FIEND_PATRON: LazyLock<Subclass> = LazyLock::new(|| Subclass {
             (6, vec![]),
         ]),
         resources_by_level: HashMap::new(),
-        choices_by_level: HashMap::new(),
+        prompts_by_level: HashMap::new(),
         actions_by_level: HashMap::new(),
     },
 });
@@ -239,7 +239,7 @@ static EVOKER: LazyLock<Subclass> = LazyLock::new(|| Subclass {
     },
     base: ClassBase {
         skill_proficiencies: HashSet::new(),
-        skill_choices: 0,
+        skill_prompts: 0,
         armor_proficiencies: HashSet::new(),
         weapon_proficiencies: HashSet::new(),
         spellcasting: SpellcastingProgression::Full,
@@ -252,7 +252,7 @@ static EVOKER: LazyLock<Subclass> = LazyLock::new(|| Subclass {
             (6, vec![]),
         ]),
         resources_by_level: HashMap::new(),
-        choices_by_level: HashMap::new(),
+        prompts_by_level: HashMap::new(),
         actions_by_level: HashMap::new(),
     },
 });

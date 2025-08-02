@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     components::{
         ability::Ability,
-        actions::action::{ActionContext, ActionProvider},
+        actions::action::{ActionContext, ActionMap, ActionProvider},
         id::{ActionId, ResourceId, SpellId},
         resource::ResourceCostMap,
     },
@@ -258,11 +258,11 @@ impl Spellbook {
 }
 
 impl ActionProvider for Spellbook {
-    fn available_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)> {
+    fn available_actions(&self) -> ActionMap {
         self.action_map_from_slots(true)
     }
 
-    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)> {
+    fn all_actions(&self) -> ActionMap {
         self.action_map_from_slots(false)
     }
 }

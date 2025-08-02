@@ -7,16 +7,15 @@ use crate::{
         actions::{
             action::{
                 Action, ActionContext, ActionCooldownMap, ActionKindSnapshot, ActionMap,
-                ActionProvider,
+                ActionProvider, ActionResult, ReactionKind, ReactionSet,
             },
             targeting::TargetingContext,
         },
-        id::ActionId,
+        id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
         resource::{RechargeRule, ResourceCostMap, ResourceMap},
         spells::spellbook::Spellbook,
     },
-    engine::world,
     registry, systems,
 };
 
@@ -41,10 +40,7 @@ pub fn on_cooldown(world: &World, entity: Entity, action_id: &ActionId) -> Optio
     }
 }
 
-pub fn all_actions(
-    world: &World,
-    entity: Entity,
-) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)> {
+pub fn all_actions(world: &World, entity: Entity) -> ActionMap {
     let mut actions = systems::helpers::get_component_clone::<ActionMap>(world, entity);
 
     actions.extend(systems::helpers::get_component::<Spellbook>(world, entity).all_actions());
@@ -52,6 +48,44 @@ pub fn all_actions(
     actions.extend(systems::helpers::get_component::<Loadout>(world, entity).all_actions());
 
     actions
+}
+
+pub enum ActionUsability {
+    Usable,
+    OnCooldown(RechargeRule),
+    NotEnoughResources(ResourceCostMap),
+    ResourceNotFound(ResourceId),
+}
+
+pub fn action_usable(
+    world: &World,
+    entity: Entity,
+    action_id: &ActionId,
+    contexts: &Vec<ActionContext>,
+    resource_cost: &mut ResourceCostMap,
+) -> ActionUsability {
+    if let Some(cooldown) = on_cooldown(world, entity, action_id) {
+        return ActionUsability::OnCooldown(cooldown);
+    }
+
+    for action_context in contexts {
+        for effect in systems::effects::effects(world, entity).iter() {
+            (effect.on_resource_cost)(world, entity, action_context, resource_cost);
+        }
+    }
+
+    let resources = systems::helpers::get_component::<ResourceMap>(world, entity);
+    for (resource_id, amount) in &*resource_cost {
+        if let Some(resource) = resources.get(resource_id) {
+            if resource.current_uses() < *amount {
+                return ActionUsability::NotEnoughResources(resource_cost.clone());
+            }
+        } else {
+            return ActionUsability::ResourceNotFound(resource_id.clone());
+        }
+    }
+
+    ActionUsability::Usable
 }
 
 pub fn available_actions(
@@ -122,4 +156,67 @@ pub fn targeting_context(
 ) -> TargetingContext {
     // TODO: Handle missing action
     get_action(action_id).unwrap().targeting()(world, entity, context)
+}
+
+fn filter_reactions(actions: &ActionMap) -> ReactionSet {
+    actions
+        .iter()
+        .filter_map(|(action_id, _)| {
+            if let Some(action) = get_action(action_id) {
+                if action.reaction_trigger.is_some() {
+                    return Some(action_id.clone());
+                }
+            }
+            None
+        })
+        .collect()
+}
+
+pub fn all_reactions(world: &World, entity: Entity) -> ReactionSet {
+    filter_reactions(&all_actions(world, entity))
+}
+
+pub fn available_reactions(world: &World, entity: Entity) -> ReactionSet {
+    filter_reactions(&available_actions(world, entity))
+}
+
+// TODO: Struct for the return type?
+pub fn available_reactions_to_action(
+    world: &World,
+    reactor: Entity,
+    actor: Entity,
+    action_id: &ActionId,
+    context: &ActionContext,
+    targets: &[Entity],
+) -> Vec<(ActionId, Vec<ActionContext>, ResourceCostMap, ReactionKind)> {
+    let mut reactions = Vec::new();
+    for (reaction_id, (contexts, resource_cost)) in
+        systems::actions::available_actions(world, reactor)
+    {
+        if let Some((reaction, _)) = registry::actions::ACTION_REGISTRY.get(&reaction_id) {
+            if let Some(trigger) = &reaction.reaction_trigger {
+                if let Some(kind) = trigger(world, reactor, actor, action_id, context, targets) {
+                    reactions.push((
+                        reaction_id.clone(),
+                        contexts.clone(),
+                        resource_cost.clone(),
+                        kind,
+                    ));
+                }
+            }
+        }
+    }
+    reactions
+}
+
+pub fn apply_to_targets(
+    world: &mut World,
+    snapshots: Vec<ActionKindSnapshot>,
+    targets: &Vec<Entity>,
+) -> Vec<ActionResult> {
+    targets
+        .iter()
+        .zip(snapshots.iter())
+        .map(|(target, snapshot)| snapshot.apply_to_entity(world, *target))
+        .collect()
 }

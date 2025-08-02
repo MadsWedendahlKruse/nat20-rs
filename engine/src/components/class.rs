@@ -10,7 +10,7 @@ use crate::components::{
     dice::DieSize,
     id::{ActionId, EffectId},
     items::equipment::{armor::ArmorType, weapon::WeaponCategory},
-    level_up::LevelUpChoice,
+    level_up::LevelUpPrompt,
     resource::Resource,
     skill::Skill,
 };
@@ -46,7 +46,7 @@ pub struct ClassBase {
     /// Skills that can be chosen from when gaining the (sub)class
     pub skill_proficiencies: HashSet<Skill>,
     /// The number of skill proficiencies the character can choose
-    pub skill_choices: u8,
+    pub skill_prompts: u8,
 
     pub armor_proficiencies: HashSet<ArmorType>,
     pub weapon_proficiencies: HashSet<WeaponCategory>,
@@ -60,10 +60,10 @@ pub struct ClassBase {
     /// Passive effects that are always active for the class or subclass.
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
     pub resources_by_level: HashMap<u8, Vec<Resource>>,
-    /// Class specific choices that can be made at each level.
+    /// Class specific prompts that can be made at each level.
     /// For example, a Fighter might choose a fighting style at level 1.
-    /// TODO: Include subclass choices?
-    pub choices_by_level: HashMap<u8, Vec<LevelUpChoice>>,
+    /// TODO: Include subclass prompts?
+    pub prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
     /// Actions that are available at each level.
     pub actions_by_level: HashMap<u8, Vec<ActionId>>,
 }
@@ -108,38 +108,38 @@ impl Class {
         subclasses: HashMap<SubclassName, Subclass>,
         feat_levels: HashSet<u8>,
         skill_proficiencies: HashSet<Skill>,
-        skill_choices: u8,
+        skill_prompts: u8,
         armor_proficiencies: HashSet<ArmorType>,
         weapon_proficiencies: HashSet<WeaponCategory>,
         spellcasting: SpellcastingProgression,
         effects_by_level: HashMap<u8, Vec<EffectId>>,
         resources_by_level: HashMap<u8, Vec<Resource>>,
-        mut choices_by_level: HashMap<u8, Vec<LevelUpChoice>>,
+        mut prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
         actions_by_level: HashMap<u8, Vec<ActionId>>,
     ) -> Self {
         // Add skill proficiencies
-        choices_by_level
+        prompts_by_level
             .entry(1)
             .or_default()
-            .push(LevelUpChoice::SkillProficiency(
+            .push(LevelUpPrompt::SkillProficiency(
                 skill_proficiencies.clone(),
-                skill_choices,
+                skill_prompts,
             ));
 
-        // Add subclass choices
-        choices_by_level
+        // Add subclass prompts
+        prompts_by_level
             .entry(subclass_level)
             .or_default()
-            .push(LevelUpChoice::Subclass(
+            .push(LevelUpPrompt::Subclass(
                 subclasses.keys().cloned().collect(),
             ));
 
-        // Add feat selections
+        // Add feat decisions
         for level in feat_levels.iter() {
-            // TODO: Implement feat selection
-            // choices_by_level.entry(*level)
+            // TODO: Implement feat decision
+            // prompts_by_level.entry(*level)
             //     .or_default()
-            //     .push(LevelUpChoice::feat_selection());
+            //     .push(LevelUpChoice::feat_decision());
         }
 
         Self {
@@ -151,13 +151,13 @@ impl Class {
             subclasses,
             base: ClassBase {
                 skill_proficiencies,
-                skill_choices,
+                skill_prompts,
                 armor_proficiencies,
                 weapon_proficiencies,
                 spellcasting,
                 effects_by_level,
                 resources_by_level,
-                choices_by_level,
+                prompts_by_level,
                 actions_by_level,
             },
         }

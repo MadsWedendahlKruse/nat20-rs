@@ -30,7 +30,7 @@ pub static ABILITY_SCORE_POINT_COST: LazyLock<HashMap<u8, u8>> = LazyLock::new(|
 pub static ABILITY_SCORE_POINTS: u8 = 27;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LevelUpChoice {
+pub enum LevelUpPrompt {
     Class(Vec<ClassName>),
     Subclass(Vec<SubclassName>),
     Effect(Vec<EffectId>),
@@ -43,14 +43,14 @@ pub enum LevelUpChoice {
     // etc.
 }
 
-impl LevelUpChoice {
+impl LevelUpPrompt {
     pub fn name(&self) -> &'static str {
         match self {
-            LevelUpChoice::Class(_) => "Class",
-            LevelUpChoice::Subclass(_) => "Subclass",
-            LevelUpChoice::Effect(_) => "Effect",
-            LevelUpChoice::SkillProficiency(_, _) => "SkillProficiency",
-            LevelUpChoice::AbilityScores(_, _) => "AbilityScores",
+            LevelUpPrompt::Class(_) => "Class",
+            LevelUpPrompt::Subclass(_) => "Subclass",
+            LevelUpPrompt::Effect(_) => "Effect",
+            LevelUpPrompt::SkillProficiency(_, _) => "SkillProficiency",
+            LevelUpPrompt::AbilityScores(_, _) => "AbilityScores",
             // LevelUpChoice::FeatSelection(_) => "FeatSelection",
             // LevelUpChoice::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
             // LevelUpChoice::AbilityPointSelection(_) => "AbilityPointSelection",
@@ -59,10 +59,10 @@ impl LevelUpChoice {
     }
 }
 
-impl LevelUpChoice {
+impl LevelUpPrompt {
     pub fn class() -> Self {
         let classes = ClassName::iter().collect();
-        LevelUpChoice::Class(classes)
+        LevelUpPrompt::Class(classes)
     }
 
     pub fn subclass(class_name: ClassName) -> Self {
@@ -72,10 +72,10 @@ impl LevelUpChoice {
         if subclasses.is_empty() {
             panic!("No subclasses found for class: {:?}", class_name);
         }
-        LevelUpChoice::Subclass(subclasses)
+        LevelUpPrompt::Subclass(subclasses)
     }
 
     pub fn ability_scores() -> Self {
-        LevelUpChoice::AbilityScores(ABILITY_SCORE_POINT_COST.clone(), ABILITY_SCORE_POINTS)
+        LevelUpPrompt::AbilityScores(ABILITY_SCORE_POINT_COST.clone(), ABILITY_SCORE_POINTS)
     }
 }

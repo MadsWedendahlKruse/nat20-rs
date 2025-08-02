@@ -233,7 +233,7 @@ pub mod creatures {
         },
         systems::{
             self,
-            level_up::{LevelUpError, LevelUpSelection, LevelUpSession},
+            level_up::{LevelUpDecision, LevelUpError, LevelUpSession},
         },
     };
 
@@ -267,13 +267,13 @@ pub mod creatures {
             let character = Character::new("Johnny Fighter");
             let id = character.id.clone();
             let entity = world.spawn(character);
-            systems::level_up::apply_level_up_selection(
+            systems::level_up::apply_level_up_decision(
                 world,
                 entity,
                 5,
                 vec![
-                    LevelUpSelection::Class(ClassName::Fighter),
-                    LevelUpSelection::AbilityScores {
+                    LevelUpDecision::Class(ClassName::Fighter),
+                    LevelUpDecision::AbilityScores {
                         scores: registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Fighter)
                             .unwrap()
@@ -282,21 +282,21 @@ pub mod creatures {
                         plus_2_bonus: Ability::Strength,
                         plus_1_bonus: Ability::Constitution,
                     },
-                    LevelUpSelection::Effect(
+                    LevelUpDecision::Effect(
                         registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                     ),
-                    LevelUpSelection::SkillProficiency(HashSet::from([
+                    LevelUpDecision::SkillProficiency(HashSet::from([
                         Skill::Athletics,
                         Skill::Perception,
                     ])),
-                    LevelUpSelection::Class(ClassName::Fighter),
-                    LevelUpSelection::Class(ClassName::Fighter),
-                    LevelUpSelection::Subclass(SubclassName {
+                    LevelUpDecision::Class(ClassName::Fighter),
+                    LevelUpDecision::Class(ClassName::Fighter),
+                    LevelUpDecision::Subclass(SubclassName {
                         class: ClassName::Fighter,
                         name: "Champion".to_string(),
                     }),
-                    LevelUpSelection::Class(ClassName::Fighter),
-                    LevelUpSelection::Class(ClassName::Fighter),
+                    LevelUpDecision::Class(ClassName::Fighter),
+                    LevelUpDecision::Class(ClassName::Fighter),
                 ],
             );
 
@@ -315,13 +315,13 @@ pub mod creatures {
             let character = Character::new("Jimmy Wizard");
             let id = character.id.clone();
             let entity = world.spawn(character);
-            systems::level_up::apply_level_up_selection(
+            systems::level_up::apply_level_up_decision(
                 world,
                 entity,
                 5,
                 vec![
-                    LevelUpSelection::Class(ClassName::Wizard),
-                    LevelUpSelection::AbilityScores {
+                    LevelUpDecision::Class(ClassName::Wizard),
+                    LevelUpDecision::AbilityScores {
                         scores: registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Wizard)
                             .unwrap()
@@ -330,18 +330,18 @@ pub mod creatures {
                         plus_2_bonus: Ability::Intelligence,
                         plus_1_bonus: Ability::Constitution,
                     },
-                    LevelUpSelection::SkillProficiency(HashSet::from([
+                    LevelUpDecision::SkillProficiency(HashSet::from([
                         Skill::Arcana,
                         Skill::History,
                     ])),
-                    LevelUpSelection::Class(ClassName::Wizard),
-                    LevelUpSelection::Class(ClassName::Wizard),
-                    LevelUpSelection::Subclass(SubclassName {
+                    LevelUpDecision::Class(ClassName::Wizard),
+                    LevelUpDecision::Class(ClassName::Wizard),
+                    LevelUpDecision::Subclass(SubclassName {
                         class: ClassName::Wizard,
                         name: "Evoker".to_string(),
                     }),
-                    LevelUpSelection::Class(ClassName::Wizard),
-                    LevelUpSelection::Class(ClassName::Wizard),
+                    LevelUpDecision::Class(ClassName::Wizard),
+                    LevelUpDecision::Class(ClassName::Wizard),
                 ],
             );
 
@@ -361,13 +361,13 @@ pub mod creatures {
             let character = Character::new("Bobby Warlock");
             let id = character.id.clone();
             let entity = world.spawn(character);
-            systems::level_up::apply_level_up_selection(
+            systems::level_up::apply_level_up_decision(
                 world,
                 entity,
                 5,
                 vec![
-                    LevelUpSelection::Class(ClassName::Warlock),
-                    LevelUpSelection::AbilityScores {
+                    LevelUpDecision::Class(ClassName::Warlock),
+                    LevelUpDecision::AbilityScores {
                         scores: registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Warlock)
                             .unwrap()
@@ -376,18 +376,18 @@ pub mod creatures {
                         plus_2_bonus: Ability::Charisma,
                         plus_1_bonus: Ability::Constitution,
                     },
-                    LevelUpSelection::SkillProficiency(HashSet::from([
+                    LevelUpDecision::SkillProficiency(HashSet::from([
                         Skill::Arcana,
                         Skill::Deception,
                     ])),
-                    LevelUpSelection::Class(ClassName::Warlock),
-                    LevelUpSelection::Class(ClassName::Warlock),
-                    LevelUpSelection::Subclass(SubclassName {
+                    LevelUpDecision::Class(ClassName::Warlock),
+                    LevelUpDecision::Class(ClassName::Warlock),
+                    LevelUpDecision::Subclass(SubclassName {
                         class: ClassName::Warlock,
                         name: "Fiend Patron".to_string(),
                     }),
-                    LevelUpSelection::Class(ClassName::Warlock),
-                    LevelUpSelection::Class(ClassName::Warlock),
+                    LevelUpDecision::Class(ClassName::Warlock),
+                    LevelUpDecision::Class(ClassName::Warlock),
                 ],
             );
 
@@ -418,13 +418,13 @@ pub mod creatures {
             let id = character.id.clone();
             let entity = world.spawn(character);
             // TODO: Not sure how to handle monster level-ups yet
-            systems::level_up::apply_level_up_selection(
+            systems::level_up::apply_level_up_decision(
                 world,
                 entity,
                 1,
                 vec![
-                    LevelUpSelection::Class(ClassName::Fighter),
-                    LevelUpSelection::AbilityScores {
+                    LevelUpDecision::Class(ClassName::Fighter),
+                    LevelUpDecision::AbilityScores {
                         scores: registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Fighter)
                             .unwrap()
@@ -433,10 +433,10 @@ pub mod creatures {
                         plus_2_bonus: Ability::Strength,
                         plus_1_bonus: Ability::Constitution,
                     },
-                    LevelUpSelection::Effect(
+                    LevelUpDecision::Effect(
                         registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                     ),
-                    LevelUpSelection::SkillProficiency(HashSet::from([
+                    LevelUpDecision::SkillProficiency(HashSet::from([
                         Skill::Acrobatics,
                         Skill::Survival,
                     ])),

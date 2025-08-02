@@ -16,7 +16,7 @@ mod tests {
         },
         entities::character::Character,
         registry,
-        systems::{self, level_up::LevelUpSelection},
+        systems::{self, level_up::LevelUpDecision},
     };
 
     #[test]
@@ -24,13 +24,13 @@ mod tests {
         let mut world = World::new();
         let character = world.spawn(Character::default());
 
-        systems::level_up::apply_level_up_selection(
+        systems::level_up::apply_level_up_decision(
             &mut world,
             character,
             3,
             vec![
-                LevelUpSelection::Class(ClassName::Fighter),
-                LevelUpSelection::AbilityScores {
+                LevelUpDecision::Class(ClassName::Fighter),
+                LevelUpDecision::AbilityScores {
                     scores: HashMap::from([
                         (Ability::Strength, 15),
                         (Ability::Dexterity, 14),
@@ -42,16 +42,16 @@ mod tests {
                     plus_2_bonus: Ability::Strength,
                     plus_1_bonus: Ability::Constitution,
                 },
-                LevelUpSelection::Effect(
+                LevelUpDecision::Effect(
                     registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                 ),
-                LevelUpSelection::SkillProficiency(HashSet::from([
+                LevelUpDecision::SkillProficiency(HashSet::from([
                     Skill::Athletics,
                     Skill::Perception,
                 ])),
-                LevelUpSelection::Class(ClassName::Fighter),
-                LevelUpSelection::Class(ClassName::Fighter),
-                LevelUpSelection::Subclass(SubclassName {
+                LevelUpDecision::Class(ClassName::Fighter),
+                LevelUpDecision::Class(ClassName::Fighter),
+                LevelUpDecision::Subclass(SubclassName {
                     class: ClassName::Fighter,
                     name: "Champion".to_string(),
                 }),

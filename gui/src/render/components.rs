@@ -4,6 +4,7 @@ use hecs::{Entity, World};
 use nat20_rs::{
     components::{
         ability::{Ability, AbilityScoreSet},
+        d20_check::D20CheckResult,
         damage::{DamageRoll, DamageType},
         effects::effects::{Effect, EffectDuration},
         hit_points::HitPoints,
@@ -39,8 +40,8 @@ use crate::{
 };
 
 impl ImguiRenderableWithContext<bool> for ModifierSet {
-    fn render_with_context(&self, ui: &imgui::Ui, render_plus: &bool) {
-        let total = if *render_plus {
+    fn render_with_context(&self, ui: &imgui::Ui, render_plus: bool) {
+        let total = if render_plus {
             format!(
                 "{}{}",
                 if self.total() >= 0 { "+" } else { "" },
@@ -115,8 +116,8 @@ fn proficiency_icon(proficiency: &Proficiency) -> &'static str {
     }
 }
 
-impl ImguiRenderableWithContext<String> for Proficiency {
-    fn render_with_context(&self, ui: &imgui::Ui, context: &String) {
+impl ImguiRenderableWithContext<&str> for Proficiency {
+    fn render_with_context(&self, ui: &imgui::Ui, context: &str) {
         if self != &Proficiency::None {
             ui.text(proficiency_icon(self));
             if ui.is_item_hovered() {
@@ -128,13 +129,13 @@ impl ImguiRenderableWithContext<String> for Proficiency {
 
 impl ImguiRenderable for Proficiency {
     fn render(&self, ui: &imgui::Ui) {
-        self.render_with_context(ui, &"".to_string());
+        self.render_with_context(ui, &"");
     }
 }
 
-impl ImguiRenderableMut for (&mut World, Entity, CharacterTag) {
-    fn render_mut(&mut self, ui: &imgui::Ui) {
-        let (world, entity, _) = self;
+impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
+    fn render_mut_with_context(&mut self, ui: &imgui::Ui, world: &mut World) {
+        let (entity, _) = self;
         let id = systems::helpers::get_component::<CharacterId>(world, *entity).to_string();
         ui.text(format!("ID: {}", id));
 
@@ -144,13 +145,13 @@ impl ImguiRenderableMut for (&mut World, Entity, CharacterTag) {
         if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{}", id)) {
             if let Some(tab) = ui.tab_item("Abilities") {
                 systems::helpers::get_component::<AbilityScoreSet>(world, *entity)
-                    .render_with_context(ui, &(world, *entity));
+                    .render_with_context(ui, (world, *entity));
                 tab.end();
             }
 
             if let Some(tab) = ui.tab_item("Skills") {
                 systems::helpers::get_component::<SkillSet>(world, *entity)
-                    .render_with_context(ui, &(world, *entity));
+                    .render_with_context(ui, (world, *entity));
                 tab.end();
             }
 
@@ -198,7 +199,7 @@ impl ImguiRenderableMut for (&mut World, Entity, CharacterTag) {
 }
 
 impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreSet {
-    fn render_with_context(&self, ui: &imgui::Ui, context: &(&World, Entity)) {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
         if let Some(table) = table_with_columns!(
             ui,
             "Abilities",
@@ -221,17 +222,17 @@ impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreSet {
                 // Ability score
                 ui.table_next_column();
                 let ability_score = self.get(ability);
-                ability_score.modifiers.render_with_context(ui, &false);
+                ability_score.modifiers.render_with_context(ui, false);
                 // Ability modifier
                 ui.table_next_column();
                 ability_score
                     .ability_modifier()
-                    .render_with_context(ui, &true);
+                    .render_with_context(ui, true);
                 // Saving throw
                 ui.table_next_column();
                 let result = saving_throws.check(ability, context.0, context.1);
                 let modifiers = &result.modifier_breakdown;
-                modifiers.render_with_context(ui, &true);
+                modifiers.render_with_context(ui, true);
             }
 
             table.end();
@@ -240,7 +241,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreSet {
 }
 
 impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
-    fn render_with_context(&self, ui: &imgui::Ui, context: &(&World, Entity)) {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
         // Empty column is for proficiency
         if let Some(table) = table_with_columns!(ui, "Skills", "", "Skill", "Bonus") {
             // Skills are ordered by ability, so if the ability changes, we can
@@ -276,7 +277,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
                 ui.table_next_column();
                 // TODO: Avoid doing an actual skill check here every time
                 let result = self.check(skill, context.0, context.1);
-                result.modifier_breakdown.render_with_context(ui, &true);
+                result.modifier_breakdown.render_with_context(ui, true);
             }
 
             table.end();
@@ -464,7 +465,7 @@ struct LoadoutRenderContext {
     wielding_both_hands: HashMap<WeaponType, bool>,
 }
 
-impl ImguiRenderableMutWithContext<LoadoutRenderContext> for Loadout {
+impl ImguiRenderableMutWithContext<&LoadoutRenderContext> for Loadout {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: &LoadoutRenderContext) {
         ui.separator_with_text("Weapons");
         if let Some(table) = table_with_columns!(ui, "Weapons", "Hand", "Weapon") {
@@ -544,7 +545,7 @@ fn render_item_misc(ui: &imgui::Ui, item: &Item) {
     ui.text(text);
 }
 
-impl ImguiRenderableWithContext<LoadoutRenderContext> for Weapon {
+impl ImguiRenderableWithContext<&LoadoutRenderContext> for Weapon {
     fn render_with_context(&self, ui: &imgui::Ui, context: &LoadoutRenderContext) {
         ui.separator_with_text(&self.equipment().item.name);
         let damage_roll = self.damage_roll(
@@ -602,5 +603,11 @@ impl ImguiRenderable for DamageRoll {
                 format!("\t{}", component.to_string()),
             );
         }
+    }
+}
+
+impl ImguiRenderable for D20CheckResult {
+    fn render(&self, ui: &imgui::Ui) {
+        ui.text(format!("{}", self.selected_roll));
     }
 }

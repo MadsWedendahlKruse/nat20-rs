@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::{Debug, Display},
     sync::Arc,
 };
@@ -188,6 +188,26 @@ pub enum ActionKindResult {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReactionKind {
+    ModifyAction {
+        action: ActionId,
+        // TODO: implement
+        // modification:
+        //     Arc<dyn Fn(&World, Entity, &ActionContext) -> ActionKindSnapshot + Send + Sync>,
+    },
+    NewAction {
+        action: ActionId,
+        context: ActionContext,
+        targets: Vec<Entity>,
+    },
+    CancelAction {
+        action: ActionId,
+        context: ActionContext,
+        targets: Vec<Entity>,
+    },
+}
+
 #[derive(Clone)]
 pub struct Action {
     pub id: ActionId,
@@ -197,6 +217,27 @@ pub struct Action {
     pub resource_cost: HashMap<ResourceId, u8>,
     /// Optional cooldown for the action
     pub cooldown: Option<RechargeRule>,
+    /// If the action is a reaction, this will describe what triggers the reaction.
+    /// * (first)  Entity: The entity that is performing the reaction.
+    /// * (second) Entity: The entity that is performing the action which triggers
+    ///   the reaction.
+    /// * ActionId: The ID of the action that is being performed.
+    /// * ActionContext: The context in which the action is being performed.
+    /// * &\[Entity\]: The targets of the action.
+    pub reaction_trigger: Option<
+        Arc<
+            dyn Fn(
+                    &World,
+                    Entity,
+                    Entity,
+                    &ActionId,
+                    &ActionContext,
+                    &[Entity],
+                ) -> Option<ReactionKind>
+                + Send
+                + Sync,
+        >,
+    >,
 }
 
 /// Represents the result of performing an action on a single target. For actions that affect multiple targets,
@@ -217,11 +258,11 @@ pub trait ActionProvider {
     /// Each action is paired with its context, which provides additional information
     /// about how the action can be performed (e.g. weapon type, spell level, etc.)
     /// as well as the resource cost of the action.
-    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)>;
+    fn all_actions(&self) -> ActionMap;
 
     /// Returns a collection of available actions for the character. i.e. actions
     /// that can be performed at the current time.
-    fn available_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)>;
+    fn available_actions(&self) -> ActionMap;
 }
 
 impl ActionKind {
@@ -589,3 +630,5 @@ impl Display for ActionResult {
 pub type ActionMap = HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)>;
 
 pub type ActionCooldownMap = HashMap<ActionId, RechargeRule>;
+
+pub type ReactionSet = HashSet<ActionId>;

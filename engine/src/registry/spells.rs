@@ -18,6 +18,7 @@ use crate::{
         id::SpellId,
         modifier::{ModifierSet, ModifierSource},
         proficiency::Proficiency,
+        resource::ResourceCostMap,
         spells::{
             spell::{MagicSchool, Spell},
             spellbook::Spellbook,
@@ -29,10 +30,49 @@ use crate::{
 
 pub static SPELL_REGISTRY: LazyLock<HashMap<SpellId, Spell>> = LazyLock::new(|| {
     HashMap::from([
+        (COUNTERSPELL_ID.clone(), COUNTERSPELL.to_owned()),
         (ELDRITCH_BLAST_ID.clone(), ELDRITCH_BLAST.to_owned()),
         (FIREBALL_ID.clone(), FIREBALL.to_owned()),
         (MAGIC_MISSILE_ID.clone(), MAGIC_MISSILE.to_owned()),
     ])
+});
+
+pub static COUNTERSPELL_ID: LazyLock<SpellId> =
+    LazyLock::new(|| SpellId::from_str("spell.counterspell"));
+
+static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
+    Spell::new(
+        COUNTERSPELL_ID.clone(),
+        3, // Level 3 spell
+        MagicSchool::Abjuration,
+        ActionKind::Utility {},
+        ResourceCostMap::from([(registry::resources::REACTION.clone(), 1)]),
+        Arc::new(|_, _, _| TargetingContext {
+            kind: TargetingKind::Single,
+            normal_range: 60,
+            max_range: 60,
+            valid_target_types: vec![TargetType::Entity],
+        }),
+        Some(Arc::new(
+            |world, reactor, actor, action_id, action_context, targets| {
+                if reactor == actor {
+                    // Cannot counterspell yourself
+                    return None;
+                }
+                // TODO: Can we just counterspell spells of any level?
+                if let ActionContext::Spell { level } = action_context {
+                    return Some(
+                        crate::components::actions::action::ReactionKind::CancelAction {
+                            action: action_id.clone(),
+                            context: action_context.clone(),
+                            targets: targets.to_vec(),
+                        },
+                    );
+                }
+                None
+            },
+        )),
+    )
 });
 
 pub static ELDRITCH_BLAST_ID: LazyLock<SpellId> =
@@ -77,6 +117,7 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
                 valid_target_types: vec![TargetType::Entity],
             }
         }),
+        None,
     )
 });
 
@@ -120,6 +161,7 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
             // TODO: Can also hit objects
             valid_target_types: vec![TargetType::Entity],
         }),
+        None,
     )
 });
 
@@ -166,6 +208,7 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
                 valid_target_types: vec![TargetType::Entity],
             }
         }),
+        None,
     )
 });
 

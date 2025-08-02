@@ -7,7 +7,6 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        ability::AbilityScoreSet,
         actions::{
             action::{Action, ActionContext, ActionKind},
             targeting::{TargetType, TargetingContext, TargetingKind},
@@ -16,7 +15,7 @@ use crate::{
         damage::{AttackRoll, DamageRoll},
         dice::{DiceSet, DiceSetRoll, DieSize},
         id::{ActionId, ResourceId},
-        items::equipment::{loadout::Loadout, weapon::WeaponProficiencyMap},
+        items::equipment::loadout::Loadout,
         level::CharacterLevels,
         modifier::{ModifierSet, ModifierSource},
         resource::RechargeRule,
@@ -46,6 +45,7 @@ static ACTION_SURGE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(|
             targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
             resource_cost: HashMap::from([(registry::resources::ACTION_SURGE.clone(), 1)]),
             cooldown: Some(RechargeRule::OnTurn),
+            reaction_trigger: None,
         },
         Some(ActionContext::Other),
     )
@@ -81,6 +81,7 @@ static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(||
             targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
             resource_cost: HashMap::from([(registry::resources::BONUS_ACTION.clone(), 1)]),
             cooldown: None,
+            reaction_trigger: None,
         },
         Some(ActionContext::Other),
     )
@@ -99,6 +100,7 @@ static WEAPON_ATTACK: LazyLock<Action> = LazyLock::new(|| Action {
     targeting: WEAPON_TARGETING.clone(),
     resource_cost: DEFAULT_RESOURCE_COST.clone(),
     cooldown: None,
+    reaction_trigger: None,
 });
 
 // TODO: Some of this seems a bit circular?
@@ -107,19 +109,10 @@ static WEAPON_ATTACK_ROLL: LazyLock<
 > = LazyLock::new(|| {
     Arc::new(
         |world: &World, entity: Entity, action_context: &ActionContext| {
-            let (weapon_type, hand) = match action_context {
-                ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
-                _ => panic!("Action context must be Weapon"),
-            };
-            let loadout = systems::helpers::get_component::<Loadout>(world, entity);
-            let weapon = loadout
-                .weapon_in_hand(weapon_type, hand)
-                .expect("No weapon equipped in the specified hand");
-            weapon.attack_roll(
-                &systems::helpers::get_component::<&AbilityScoreSet>(world, entity),
-                &systems::helpers::get_component::<WeaponProficiencyMap>(world, entity)
-                    .proficiency(weapon.category()),
-            )
+            if let ActionContext::Weapon { weapon_type, hand } = action_context {
+                return systems::combat::attack_roll(world, entity, weapon_type, hand);
+            }
+            panic!("Action context must be Weapon");
         },
     )
 });
@@ -129,18 +122,10 @@ static WEAPON_DAMAGE_ROLL: LazyLock<
 > = LazyLock::new(|| {
     Arc::new(
         |world: &World, entity: Entity, action_context: &ActionContext| {
-            let (weapon_type, hand) = match action_context {
-                ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
-                _ => panic!("Action context must be Weapon"),
-            };
-            let loadout = systems::helpers::get_component::<Loadout>(world, entity);
-            let weapon = loadout
-                .weapon_in_hand(weapon_type, hand)
-                .expect("No weapon equipped in the specified hand");
-            weapon.damage_roll(
-                &systems::helpers::get_component::<&AbilityScoreSet>(world, entity),
-                loadout.is_wielding_weapon_with_both_hands(weapon_type),
-            )
+            if let ActionContext::Weapon { weapon_type, hand } = action_context {
+                return systems::combat::damage_roll(world, entity, weapon_type, hand);
+            }
+            panic!("Action context must be Weapon");
         },
     )
 });
@@ -150,21 +135,20 @@ static WEAPON_TARGETING: LazyLock<
 > = LazyLock::new(|| {
     Arc::new(
         |world: &World, entity: Entity, action_context: &ActionContext| {
-            let (weapon_type, hand) = match action_context {
-                ActionContext::Weapon { weapon_type, hand } => (weapon_type, hand),
-                _ => panic!("Action context must be Weapon"),
-            };
-            let (normal_range, max_range) =
-                systems::helpers::get_component::<Loadout>(world, entity)
-                    .weapon_in_hand(weapon_type, hand)
-                    .unwrap()
-                    .range();
-
-            TargetingContext {
-                kind: TargetingKind::Single,
-                normal_range,
-                max_range,
-                valid_target_types: vec![TargetType::Entity],
+            if let ActionContext::Weapon { weapon_type, hand } = action_context {
+                let (normal_range, max_range) =
+                    systems::helpers::get_component::<Loadout>(world, entity)
+                        .weapon_in_hand(weapon_type, hand)
+                        .unwrap()
+                        .range();
+                TargetingContext {
+                    kind: TargetingKind::Single,
+                    normal_range,
+                    max_range,
+                    valid_target_types: vec![TargetType::Entity],
+                }
+            } else {
+                panic!("Action context must be Weapon");
             }
         },
     )
