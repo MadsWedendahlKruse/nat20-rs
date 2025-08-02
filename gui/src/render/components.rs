@@ -4,8 +4,12 @@ use hecs::{Entity, World};
 use nat20_rs::{
     components::{
         ability::{Ability, AbilityScoreSet},
+        actions::{
+            action::{ActionKindResult, ActionResult},
+            targeting::TargetTypeInstance,
+        },
         d20_check::D20CheckResult,
-        damage::{DamageRoll, DamageType},
+        damage::{DamageComponentMitigation, DamageMitigationResult, DamageRoll, DamageType},
         effects::effects::{Effect, EffectDuration},
         hit_points::HitPoints,
         id::{CharacterId, SpellId},
@@ -34,7 +38,7 @@ use strum::IntoEnumIterator;
 use crate::{
     render::utils::{
         ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-        ImguiRenderableWithContext,
+        ImguiRenderableWithContext, colored_inline_text,
     },
     table_with_columns,
 };
@@ -609,5 +613,136 @@ impl ImguiRenderable for DamageRoll {
 impl ImguiRenderable for D20CheckResult {
     fn render(&self, ui: &imgui::Ui) {
         ui.text(format!("{}", self.selected_roll));
+    }
+}
+
+impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, u8)) {
+        let (world, indent_level) = context;
+
+        let target_name = match &self.target {
+            TargetTypeInstance::Entity(entity) => {
+                systems::helpers::get_component::<String>(world, *entity)
+            }
+            TargetTypeInstance::Point(point) => todo!(),
+            TargetTypeInstance::Area(area_shape) => {
+                todo!()
+            }
+            TargetTypeInstance::None => todo!(),
+        };
+
+        match &self.result {
+            ActionKindResult::UnconditionalDamage {
+                damage_roll,
+                damage_taken,
+            } => {
+                damage_taken
+                    .render_with_context(ui, (&target_name, indent_level + 1, "took no damage"));
+            }
+
+            ActionKindResult::AttackRollDamage {
+                attack_roll,
+                damage_roll,
+                damage_taken,
+            } => {
+                damage_taken
+                    .render_with_context(ui, (&target_name, indent_level + 1, "was not hit"));
+            }
+
+            ActionKindResult::SavingThrowDamage {
+                saving_throw,
+                half_damage_on_save,
+                damage_roll,
+                damage_taken,
+            } => todo!(),
+
+            ActionKindResult::UnconditionalEffect { effect, applied } => todo!(),
+
+            ActionKindResult::SavingThrowEffect {
+                saving_throw,
+                effect,
+                applied,
+            } => todo!(),
+
+            ActionKindResult::BeneficialEffect { effect, applied } => {
+                indent_text(ui, indent_level + 1);
+                colored_inline_text(
+                    ui,
+                    &[
+                        (&target_name, [1.0, 0.8, 0.8, 1.0]),
+                        ("gained effect", [1.0, 1.0, 1.0, 1.0]),
+                        (&effect.to_string(), [1.0, 1.0, 0.8, 1.0]),
+                    ],
+                );
+            }
+
+            ActionKindResult::Healing { healing } => {
+                indent_text(ui, indent_level + 1);
+                colored_inline_text(
+                    ui,
+                    &[
+                        (&target_name, [1.0, 0.8, 0.8, 1.0]),
+                        ("was healed for", [1.0, 1.0, 1.0, 1.0]),
+                        (&format!("{} HP", healing.subtotal), [0.0, 1.0, 0.0, 1.0]),
+                    ],
+                );
+            }
+
+            ActionKindResult::Utility => todo!(),
+
+            ActionKindResult::Composite { actions } => todo!(),
+
+            ActionKindResult::Custom {} => todo!(),
+        }
+    }
+}
+
+fn indent_text(ui: &imgui::Ui, indent_level: u8) {
+    for _ in 0..indent_level {
+        ui.text("\t");
+        ui.same_line();
+    }
+}
+
+fn render_no_damage(ui: &imgui::Ui, target_name: &str, indent_level: u8, no_damage_text: &str) {
+    indent_text(ui, indent_level);
+    colored_inline_text(
+        ui,
+        &[
+            (target_name, [1.0, 0.8, 0.8, 1.0]),
+            (no_damage_text, [1.0, 1.0, 1.0, 1.0]),
+        ],
+    );
+}
+
+impl ImguiRenderableWithContext<(&str, u8)> for DamageComponentMitigation {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&str, u8)) {
+        let (target_name, indent_level) = context;
+        indent_text(ui, indent_level);
+        colored_inline_text(
+            ui,
+            &[
+                (&target_name, [1.0, 0.8, 0.8, 1.0]),
+                ("was hit for", [1.0, 1.0, 1.0, 1.0]),
+                (
+                    &format!("{} {} damage", self.after_mods, self.damage_type),
+                    damage_type_color(&self.damage_type),
+                ),
+            ],
+        );
+    }
+}
+
+impl ImguiRenderableWithContext<(&str, u8, &str)> for Option<DamageMitigationResult> {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&str, u8, &str)) {
+        let (target_name, indent_level, no_damage_text) = context;
+        match self {
+            Some(result) => {
+                for component in &result.components {
+                    component.render_with_context(ui, (target_name, indent_level));
+                }
+            }
+            None => render_no_damage(ui, target_name, indent_level, no_damage_text),
+        }
     }
 }

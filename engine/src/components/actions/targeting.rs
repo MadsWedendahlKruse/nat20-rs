@@ -43,7 +43,7 @@ pub enum TargetType {
     // Area,  // An area, e.g. Cloudkill, Grease (could also be modeled by targeting context)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TargetTypeInstance {
     Entity(Entity),
     Point(Point),

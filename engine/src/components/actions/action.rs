@@ -146,7 +146,7 @@ pub enum ActionKindSnapshot {
 /// The result of applying an action snapshot to a target.
 /// This is the final result of the action, which includes any damage dealt,
 /// effects applied, or healing done.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ActionKindResult {
     UnconditionalDamage {
         damage_roll: DamageRollResult,
@@ -242,7 +242,7 @@ pub struct Action {
 
 /// Represents the result of performing an action on a single target. For actions that affect multiple targets,
 /// multiple `ActionResult` instances can be collected.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ActionResult {
     pub target: TargetTypeInstance,
     pub result: ActionKindResult,

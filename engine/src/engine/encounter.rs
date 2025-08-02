@@ -63,7 +63,7 @@ pub enum ActionDecision {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ActionDecisionResult {
     /// The action was successfully performed, and the results are applied to the targets.
     ActionPerformed {
@@ -224,6 +224,8 @@ impl ActionDecision {
     }
 }
 
+pub type CombatLog = Vec<ActionDecisionResult>;
+
 pub struct Encounter {
     pub id: EncounterId,
     pub participants: HashSet<Entity>,
@@ -235,6 +237,7 @@ pub struct Encounter {
     /// until the reaction is resolved. The decision will then be processed once
     /// the reaction is resolved. In most cases this will be a single decision.
     pub pending_decisions: VecDeque<ActionDecision>,
+    pub combat_log: CombatLog,
 }
 
 impl Encounter {
@@ -247,6 +250,7 @@ impl Encounter {
             initiative_order: Vec::new(),
             pending_prompts: VecDeque::new(),
             pending_decisions: VecDeque::new(),
+            combat_log: Vec::new(),
         };
         engine.roll_initiative(world);
         engine.start_turn(world);
@@ -305,6 +309,21 @@ impl Encounter {
         // Ensure the decision matches the current prompt
         prompt.is_valid_decision(&decision)?;
 
+        let result = self.resolve_decision(world, &prompt.clone(), decision);
+
+        if result.as_ref().is_ok() {
+            self.combat_log.push(result.as_ref().unwrap().clone());
+        }
+
+        result
+    }
+
+    fn resolve_decision(
+        &mut self,
+        world: &mut World,
+        prompt: &ActionPrompt,
+        decision: ActionDecision,
+    ) -> Result<ActionDecisionResult, ActionError> {
         match (prompt, &decision) {
             (ActionPrompt::Action { .. }, ActionDecision::Action { action }) => {
                 // If the decision is currently pending it has already been
@@ -356,6 +375,7 @@ impl Encounter {
                     &action.context,
                     action.targets.len(),
                 );
+
                 // TODO: When the action is performed it's still the same entity's turn,
                 // so we can either pop the prompt and then push a new one, or just
                 // keep the current prompt in the queue. Functionally it's the same
@@ -463,16 +483,8 @@ impl Encounter {
     pub fn round(&self) -> usize {
         self.round
     }
+
+    pub fn combat_log(&self) -> &CombatLog {
+        &self.combat_log
+    }
 }
-
-// impl ActionProvider for Encounter<'_> {
-//     fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
-//         self.current_character().all_actions()
-//     }
-
-//     fn available_actions(
-//         &self,
-//     ) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
-//         self.current_character().available_actions()
-//     }
-// }

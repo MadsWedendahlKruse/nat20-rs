@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 
 use hecs::{Entity, World};
-use imgui::{TreeNodeFlags, sys};
+use imgui::{
+    ChildFlags, TreeNodeFlags, WindowFlags,
+    sys::{self, ImGuiChildFlags_AlwaysAutoResize},
+};
 use nat20_rs::{
     components::{
         actions::{
@@ -13,7 +16,8 @@ use nat20_rs::{
     },
     engine::{
         encounter::{
-            ActionData, ActionDecision, ActionDecisionResult, ActionPrompt, Encounter, ReactionData,
+            ActionData, ActionDecision, ActionDecisionResult, ActionPrompt, CombatLog, Encounter,
+            ReactionData,
         },
         game_state::GameState,
     },
@@ -23,8 +27,9 @@ use nat20_rs::{
 
 use crate::{
     render::utils::{
-        ImguiRenderable, ImguiRenderableMutWithContext, render_button_disabled_conditionally,
-        render_button_selectable, render_window_at_cursor,
+        ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
+        colored_inline_text, render_button_disabled_conditionally, render_button_selectable,
+        render_window_at_cursor,
     },
     table_with_columns,
 };
@@ -104,6 +109,7 @@ enum EncounterGuiState {
     },
     EncounterRunning {
         decision_progress: Option<ActionDecisionProgress>,
+        auto_scroll_combat_log: bool,
     },
     EncounterFinished,
 }
@@ -165,11 +171,15 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterGui {
                     game_state.start_encounter_with_id(participants.clone(), self.id);
                     self.state = EncounterGuiState::EncounterRunning {
                         decision_progress: None,
+                        auto_scroll_combat_log: true,
                     };
                 }
             }
 
-            EncounterGuiState::EncounterRunning { decision_progress } => {
+            EncounterGuiState::EncounterRunning {
+                decision_progress,
+                auto_scroll_combat_log,
+            } => {
                 // First borrow: get the encounter
                 let encounter_ptr = game_state
                     .encounters
@@ -182,7 +192,47 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterGui {
 
                     // SAFETY: we know no other mutable borrow of the encounter exists at this point
                     let encounter = unsafe { &mut *encounter_ptr };
-                    encounter.render_mut_with_context(ui, (world, decision_progress));
+
+                    ui.child_window(format!("Encounter: {}", self.id))
+                        .child_flags(
+                            ChildFlags::ALWAYS_AUTO_RESIZE
+                                | ChildFlags::AUTO_RESIZE_X
+                                | ChildFlags::AUTO_RESIZE_Y,
+                        )
+                        .build(|| {
+                            encounter.render_mut_with_context(ui, (world, decision_progress));
+                        });
+
+                    ui.same_line();
+
+                    ui.child_window(format!("Combat Log: {}", self.id))
+                        .child_flags(
+                            ChildFlags::ALWAYS_AUTO_RESIZE
+                                | ChildFlags::AUTO_RESIZE_X
+                                | ChildFlags::AUTO_RESIZE_Y,
+                        )
+                        .build(|| {
+                            ui.separator_with_text("Combat Log");
+
+                            ui.child_window("Combat Log Content")
+                                .child_flags(
+                                    ChildFlags::ALWAYS_AUTO_RESIZE
+                                        | ChildFlags::AUTO_RESIZE_X
+                                        | ChildFlags::BORDERS,
+                                )
+                                .size([0.0, 500.0])
+                                .build(|| {
+                                    encounter.combat_log().render_with_context(ui, world);
+
+                                    if *auto_scroll_combat_log
+                                        && ui.scroll_y() >= ui.scroll_max_y() - 5.0
+                                    {
+                                        ui.set_scroll_here_y_with_ratio(1.0);
+                                    }
+                                });
+
+                            ui.checkbox("Auto-scroll", auto_scroll_combat_log);
+                        });
                 } else {
                     ui.text("Encounter not found!");
                 }
@@ -410,5 +460,58 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
         }
 
         disabled_token.end();
+    }
+}
+
+impl ImguiRenderableWithContext<&World> for CombatLog {
+    fn render_with_context(&self, ui: &imgui::Ui, world: &World) {
+        for entry in self {
+            match entry {
+                ActionDecisionResult::ActionPerformed { action, results } => {
+                    // ui.text(format!("Action performed: {:?}", action));
+                    colored_inline_text(
+                        ui,
+                        &[
+                            (
+                                &systems::helpers::get_component::<String>(world, action.actor),
+                                [0.8, 1.0, 0.8, 1.0],
+                            ),
+                            ("used", [1.0, 1.0, 1.0, 1.0]),
+                            (&action.action_id.to_string(), [1.0, 1.0, 0.8, 1.0]),
+                        ],
+                    );
+
+                    if action.targets.len() == 1 && action.targets[0] != action.actor {
+                        ui.same_line();
+                        colored_inline_text(
+                            ui,
+                            &[
+                                ("on", [1.0, 1.0, 1.0, 1.0]),
+                                (
+                                    &systems::helpers::get_component::<String>(
+                                        world,
+                                        action.targets[0],
+                                    ),
+                                    [1.0, 0.8, 0.8, 1.0],
+                                ),
+                            ],
+                        );
+                    }
+
+                    for result in results {
+                        result.render_with_context(ui, (world, 0));
+                    }
+                }
+                ActionDecisionResult::ReactionTriggered { reactor, action } => {
+                    ui.text(format!("Reaction triggered: {:?}", action));
+                }
+                ActionDecisionResult::ActionCancelled { reaction, action } => {
+                    ui.text(format!("Action cancelled: {:?}", action));
+                }
+                _ => {
+                    ui.text(format!("Unhandled log entry: {:?}", entry));
+                }
+            }
+        }
     }
 }

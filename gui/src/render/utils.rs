@@ -135,3 +135,12 @@ pub fn render_window_at_cursor<R, F: FnOnce() -> R>(
         .always_auto_resize(always_auto_resize)
         .build(build_fn);
 }
+
+pub fn colored_inline_text(ui: &imgui::Ui, segments: &[(&str, [f32; 4])]) {
+    for (i, (text, color)) in segments.iter().enumerate() {
+        if i > 0 {
+            ui.same_line();
+        }
+        ui.text_colored(*color, text);
+    }
+}
