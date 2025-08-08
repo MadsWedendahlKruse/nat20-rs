@@ -3,7 +3,7 @@ use hecs::{Entity, World};
 use crate::{
     components::{
         ability::{Ability, AbilityScoreSet},
-        actions::action::ActionKindSnapshot,
+        actions::action::{ActionKindResult, ActionKindSnapshot},
         damage::{
             DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
             MitigationOperation,
@@ -51,7 +51,7 @@ pub fn damage(
     target: Entity,
     // TODO: Attacker?
     damage_source: &ActionKindSnapshot,
-) -> Option<DamageMitigationResult> {
+) -> ActionKindResult {
     let mut resistances = if let Ok(resistances) = world.get::<&mut DamageResistances>(target) {
         resistances.clone()
     } else {
@@ -60,7 +60,10 @@ pub fn damage(
 
     match damage_source {
         ActionKindSnapshot::UnconditionalDamage { damage_roll } => {
-            return damage_internal(world, target, damage_roll, &resistances);
+            ActionKindResult::UnconditionalDamage {
+                damage_roll: damage_roll.clone(),
+                damage_taken: damage_internal(world, target, damage_roll, &resistances),
+            }
         }
 
         ActionKindSnapshot::AttackRollDamage {
@@ -68,25 +71,36 @@ pub fn damage(
             damage_roll,
             damage_on_failure,
         } => {
-            if !systems::combat::attack_hits(world, target, attack_roll) {
+            let damage_taken = if !systems::combat::attack_hits(world, target, attack_roll) {
                 if let Some(damage_on_failure) = damage_on_failure {
-                    return damage_internal(world, target, damage_on_failure, &resistances);
+                    damage_internal(world, target, damage_on_failure, &resistances)
+                } else {
+                    None
                 }
-                return None;
+            } else {
+                damage_internal(world, target, damage_roll, &resistances)
+            };
+
+            ActionKindResult::AttackRollDamage {
+                armor_class: systems::loadout::armor_class(world, target),
+                attack_roll: attack_roll.clone(),
+                damage_roll: damage_roll.clone(),
+                damage_taken,
             }
-            damage_internal(world, target, damage_roll, &resistances)
         }
 
         ActionKindSnapshot::SavingThrowDamage {
-            saving_throw,
+            saving_throw_dc,
             half_damage_on_save,
             damage_roll,
         } => {
             let check_result = {
                 let saving_throws =
                     systems::helpers::get_component::<&SavingThrowSet>(world, target);
-                saving_throws.check_dc(&saving_throw, world, target)
+                saving_throws.check_dc(&saving_throw_dc, world, target)
             };
+
+            let mut damage_taken = None;
             if check_result.success {
                 if *half_damage_on_save {
                     // Apply half damage on successful save
@@ -95,17 +109,24 @@ pub fn damage(
                             component.damage_type,
                             DamageMitigationEffect {
                                 // TODO: Not sure if this is the best source
-                                source: ModifierSource::Ability(saving_throw.key),
+                                source: ModifierSource::Ability(saving_throw_dc.key),
                                 operation: MitigationOperation::Resistance,
                             },
                         );
                     }
-                    return damage_internal(world, target, &damage_roll, &resistances);
+                    damage_taken = damage_internal(world, target, &damage_roll, &resistances);
                 }
-                // No damage on successful save
-                return None;
+            } else {
+                damage_taken = damage_internal(world, target, damage_roll, &resistances);
             }
-            damage_internal(world, target, damage_roll, &resistances)
+
+            ActionKindResult::SavingThrowDamage {
+                saving_throw_dc: saving_throw_dc.clone(),
+                saving_throw_result: check_result,
+                half_damage_on_save: *half_damage_on_save,
+                damage_roll: damage_roll.clone(),
+                damage_taken,
+            }
         }
 
         // TODO: Not sure how to handle composite actions yet

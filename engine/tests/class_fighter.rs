@@ -18,7 +18,7 @@ mod tests {
     #[test]
     fn fighter_action_surge() {
         let mut world = World::new();
-        let (fighter, _) = fixtures::creatures::heroes::fighter(&mut world);
+        let fighter = fixtures::creatures::heroes::fighter(&mut world).id();
 
         // Check that the fighter has the Action Surge action
         let available_actions = systems::actions::available_actions(&world, fighter);
@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn fighter_second_wind() {
         let mut world = World::new();
-        let (fighter, _) = fixtures::creatures::heroes::fighter(&mut world);
+        let fighter = fixtures::creatures::heroes::fighter(&mut world).id();
 
         // Check that the fighter has the Second Wind action
         let available_actions = systems::actions::available_actions(&world, fighter);

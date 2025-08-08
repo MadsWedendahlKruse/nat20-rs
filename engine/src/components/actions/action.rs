@@ -9,12 +9,14 @@ use hecs::{Entity, World};
 use crate::{
     components::{
         actions::targeting::{TargetTypeInstance, TargetingContext},
+        d20_check::D20CheckResult,
         damage::{
             AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
         },
         dice::{DiceSetRoll, DiceSetRollResult},
-        id::{ActionId, EffectId, ResourceId},
+        id::{ActionId, EffectId, EntityIdentifier, ResourceId},
         items::equipment::{equipment::HandSlot, weapon::WeaponType},
+        modifier::ModifierSet,
         resource::{RechargeRule, ResourceCostMap, ResourceError, ResourceMap},
         saving_throw::{SavingThrowDC, SavingThrowSet},
         spells::spellbook::Spellbook,
@@ -117,7 +119,7 @@ pub enum ActionKindSnapshot {
         damage_on_failure: Option<DamageRollResult>,
     },
     SavingThrowDamage {
-        saving_throw: SavingThrowDC,
+        saving_throw_dc: SavingThrowDC,
         half_damage_on_save: bool,
         damage_roll: DamageRollResult,
     },
@@ -154,11 +156,14 @@ pub enum ActionKindResult {
     },
     AttackRollDamage {
         attack_roll: AttackRollResult,
+        /// Armor class of the target being attacked
+        armor_class: ModifierSet,
         damage_roll: DamageRollResult,
         damage_taken: Option<DamageMitigationResult>,
     },
     SavingThrowDamage {
-        saving_throw: SavingThrowDC,
+        saving_throw_dc: SavingThrowDC,
+        saving_throw_result: D20CheckResult,
         half_damage_on_save: bool,
         damage_roll: DamageRollResult,
         damage_taken: Option<DamageMitigationResult>,
@@ -218,6 +223,7 @@ pub struct Action {
     /// Optional cooldown for the action
     pub cooldown: Option<RechargeRule>,
     /// If the action is a reaction, this will describe what triggers the reaction.
+    /// * World: The game world in which the action is being performed.
     /// * (first)  Entity: The entity that is performing the reaction.
     /// * (second) Entity: The entity that is performing the action which triggers
     ///   the reaction.
@@ -294,7 +300,7 @@ impl ActionKind {
                 half_damage_on_save,
                 damage,
             } => ActionKindSnapshot::SavingThrowDamage {
-                saving_throw: saving_throw(world, entity, context),
+                saving_throw_dc: saving_throw(world, entity, context),
                 half_damage_on_save: *half_damage_on_save,
                 damage_roll: damage(world, entity, context).roll(),
             },
@@ -358,32 +364,20 @@ impl ActionKindSnapshot {
     pub fn apply_to_entity(&self, world: &mut World, entity: Entity) -> ActionResult {
         let result = match self {
             ActionKindSnapshot::UnconditionalDamage { damage_roll } => {
-                ActionKindResult::UnconditionalDamage {
-                    damage_roll: damage_roll.clone(),
-                    damage_taken: systems::health::damage(world, entity, self),
-                }
+                systems::health::damage(world, entity, self)
             }
 
             ActionKindSnapshot::AttackRollDamage {
                 attack_roll,
                 damage_roll,
                 damage_on_failure,
-            } => ActionKindResult::AttackRollDamage {
-                attack_roll: attack_roll.clone(),
-                damage_roll: damage_roll.clone(),
-                damage_taken: systems::health::damage(world, entity, self),
-            },
+            } => systems::health::damage(world, entity, self),
 
             ActionKindSnapshot::SavingThrowDamage {
-                saving_throw,
+                saving_throw_dc: saving_throw,
                 half_damage_on_save,
                 damage_roll,
-            } => ActionKindResult::SavingThrowDamage {
-                saving_throw: saving_throw.clone(),
-                half_damage_on_save: *half_damage_on_save,
-                damage_roll: damage_roll.clone(),
-                damage_taken: systems::health::damage(world, entity, self),
-            },
+            } => systems::health::damage(world, entity, self),
 
             ActionKindSnapshot::UnconditionalEffect { effect } => {
                 ActionKindResult::UnconditionalEffect {
@@ -433,7 +427,7 @@ impl ActionKindSnapshot {
         };
 
         ActionResult {
-            target: TargetTypeInstance::Entity(entity),
+            target: TargetTypeInstance::Entity(EntityIdentifier::from_world(world, entity)),
             result,
         }
     }
@@ -561,17 +555,20 @@ impl Display for ActionResult {
             }
             ActionKindResult::AttackRollDamage {
                 attack_roll,
+                armor_class,
                 damage_roll,
                 damage_taken,
             } => {
                 write!(f, "\tAttack Roll: {}\n", attack_roll)?;
+                write!(f, "\tArmor Class: {}\n", armor_class)?;
                 write!(f, "\tDamage Roll: {}\n", damage_roll)?;
                 if let Some(damage) = damage_taken {
                     write!(f, "\tDamage Taken: {}\n", damage)?;
                 }
             }
             ActionKindResult::SavingThrowDamage {
-                saving_throw,
+                saving_throw_dc,
+                saving_throw_result,
                 half_damage_on_save,
                 damage_roll,
                 damage_taken,
@@ -579,8 +576,9 @@ impl Display for ActionResult {
                 write!(
                     f,
                     "Saving Throw: {:?}, Half Damage on Save: {}\n",
-                    saving_throw, half_damage_on_save
+                    saving_throw_dc, half_damage_on_save
                 )?;
+                write!(f, "\tSaving Throw Result: {:?}\n", saving_throw_result)?;
                 write!(f, "\tDamage Roll: {}\n", damage_roll)?;
                 if let Some(damage) = damage_taken {
                     write!(f, "\tDamage Taken: {}\n", damage)?;

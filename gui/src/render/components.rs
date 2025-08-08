@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 
 use hecs::{Entity, World};
 use nat20_rs::{
@@ -8,11 +8,14 @@ use nat20_rs::{
             action::{ActionKindResult, ActionResult},
             targeting::TargetTypeInstance,
         },
-        d20_check::D20CheckResult,
-        damage::{DamageComponentMitigation, DamageMitigationResult, DamageRoll, DamageType},
+        d20_check::{D20CheckResult, RollMode},
+        damage::{
+            AttackRollResult, DamageComponentMitigation, DamageComponentResult,
+            DamageMitigationResult, DamageRoll, DamageRollResult, MitigationOperation,
+        },
         effects::effects::{Effect, EffectDuration},
         hit_points::HitPoints,
-        id::{CharacterId, SpellId},
+        id::SpellId,
         items::{
             equipment::{
                 equipment::{EquipmentSlot, GeneralEquipmentSlot, HandSlot},
@@ -36,9 +39,12 @@ use std::collections::HashSet;
 use strum::IntoEnumIterator;
 
 use crate::{
-    render::utils::{
-        ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-        ImguiRenderableWithContext, colored_inline_text,
+    render::{
+        text::{TextKind, TextSegment, TextSegments, indent_text},
+        utils::{
+            ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
+            ImguiRenderableWithContext,
+        },
     },
     table_with_columns,
 };
@@ -140,13 +146,12 @@ impl ImguiRenderable for Proficiency {
 impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, world: &mut World) {
         let (entity, _) = self;
-        let id = systems::helpers::get_component::<CharacterId>(world, *entity).to_string();
-        ui.text(format!("ID: {}", id));
+        ui.text(format!("ID: {:?}", entity));
 
         systems::helpers::get_component::<CharacterLevels>(world, *entity).render(ui);
         systems::helpers::get_component::<HitPoints>(world, *entity).render(ui);
 
-        if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{}", id)) {
+        if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
             if let Some(tab) = ui.tab_item("Abilities") {
                 systems::helpers::get_component::<AbilityScoreSet>(world, *entity)
                     .render_with_context(ui, (world, *entity));
@@ -567,24 +572,6 @@ impl ImguiRenderableWithContext<&LoadoutRenderContext> for Weapon {
     }
 }
 
-fn damage_type_color(damage_type: &DamageType) -> [f32; 4] {
-    match damage_type {
-        DamageType::Bludgeoning | DamageType::Piercing | DamageType::Slashing => {
-            [0.8, 0.8, 0.8, 1.0]
-        }
-        DamageType::Fire => [1.0, 0.5, 0.0, 1.0],
-        DamageType::Cold => [0.0, 1.0, 1.0, 1.0],
-        DamageType::Lightning => [0.25, 0.25, 1.0, 1.0],
-        DamageType::Acid => [0.0, 1.0, 0.0, 1.0],
-        DamageType::Poison => [0.5, 0.9, 0.0, 1.0],
-        DamageType::Force => [0.9, 0.0, 0.0, 1.0],
-        DamageType::Necrotic => [0.5, 1.0, 0.25, 1.0],
-        DamageType::Psychic => [1.0, 0.5, 1.0, 1.0],
-        DamageType::Radiant => [1.0, 0.9, 0.0, 1.0],
-        DamageType::Thunder => [0.5, 0.0, 1.0, 1.0],
-    }
-}
-
 impl ImguiRenderable for DamageRoll {
     fn render(&self, ui: &imgui::Ui) {
         let min_max_rolls = self.min_max_rolls();
@@ -602,28 +589,160 @@ impl ImguiRenderable for DamageRoll {
         damage_components.extend(self.bonus.clone());
 
         for component in damage_components {
-            ui.text_colored(
-                damage_type_color(&component.damage_type),
-                format!("\t{}", component.to_string()),
-            );
+            indent_text(ui, 1);
+            TextSegment::new(
+                &component.to_string(),
+                TextKind::Damage(component.damage_type),
+            )
+            .render(ui);
         }
+    }
+}
+
+impl ImguiRenderable for ModifierSet {
+    fn render(&self, ui: &imgui::Ui) {
+        if self.is_empty() {
+            return;
+        }
+        let mut segments = Vec::new();
+        for (source, value) in self.iter() {
+            if value == &0 {
+                continue;
+            }
+            let sign = if *value >= 0 { "+" } else { "-" };
+            segments.push((format!("{} {}", sign, value.abs()), TextKind::Normal));
+            segments.push((format!("({})", source), TextKind::Details));
+        }
+        TextSegments::new(segments).render(ui);
+    }
+}
+
+impl ImguiRenderable for DamageComponentResult {
+    fn render(&self, ui: &imgui::Ui) {
+        TextSegments::new(vec![
+            (
+                &format!("{} {}", self.result.subtotal, self.damage_type),
+                TextKind::Damage(self.damage_type),
+            ),
+            (
+                &format!(
+                    "({} ({}d{})",
+                    self.result.rolls.iter().sum::<u32>(),
+                    self.result.rolls.len(),
+                    self.result.die_size as u32,
+                ),
+                TextKind::Details,
+            ),
+        ])
+        .render(ui);
+        if !self.result.modifiers.is_empty() {
+            ui.same_line();
+            self.result.modifiers.render(ui);
+        }
+        ui.same_line();
+        TextSegment::new(")", TextKind::Details).render(ui);
+    }
+}
+
+impl ImguiRenderable for DamageRollResult {
+    fn render(&self, ui: &imgui::Ui) {
+        for (i, component) in self.components.iter().enumerate() {
+            if i > 0 {
+                ui.same_line();
+                ui.text("+");
+                ui.same_line();
+            }
+            component.render(ui);
+        }
+        ui.same_line();
+        ui.text(format!("= {}", self.total));
     }
 }
 
 impl ImguiRenderable for D20CheckResult {
     fn render(&self, ui: &imgui::Ui) {
-        ui.text(format!("{}", self.selected_roll));
+        let mut segments = vec![
+            (self.selected_roll.to_string(), TextKind::Normal),
+            ("(1d20)".to_string(), TextKind::Details),
+        ];
+        if self.advantage_tracker.roll_mode() != RollMode::Normal {
+            segments.push((
+                format!(
+                    " ({}, {}, {:?})",
+                    self.rolls[0],
+                    self.rolls[1],
+                    self.advantage_tracker.roll_mode()
+                ),
+                TextKind::Details,
+            ));
+        }
+        if self.is_crit {
+            segments.push(("(Critical Success!)".to_string(), TextKind::Normal));
+        }
+        if self.is_crit_fail {
+            segments.push(("(Critical Failure!)".to_string(), TextKind::Normal));
+        }
+        TextSegments::new(segments).render(ui);
+        if !self.modifier_breakdown.is_empty() {
+            ui.same_line();
+            self.modifier_breakdown.render(ui);
+        }
+        ui.same_line();
+        ui.text(format!("= {}", self.total));
     }
 }
 
-impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
-    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, u8)) {
-        let (world, indent_level) = context;
+impl ImguiRenderable for AttackRollResult {
+    fn render(&self, ui: &imgui::Ui) {
+        self.roll_result.render(ui);
+    }
+}
+
+impl ImguiRenderable for DamageComponentMitigation {
+    fn render(&self, ui: &imgui::Ui) {
+        let damage_color = TextKind::Damage(self.damage_type);
+
+        if self.original.subtotal == self.after_mods {
+            // No mitigation applied
+            TextSegment::new(
+                &format!("{} {}", self.original.subtotal, self.damage_type),
+                damage_color,
+            )
+            .render(ui);
+            return;
+        }
+
+        if self.after_mods == 0 {
+            // Immunity
+            TextSegments::new(vec![
+                (format!("0 {}", self.damage_type), damage_color),
+                (
+                    format!("({:?})", MitigationOperation::Immunity),
+                    TextKind::Details,
+                ),
+            ])
+            .render(ui);
+            return;
+        }
+
+        let mut amount = self.original.subtotal.to_string();
+        for modifier in &self.modifiers {
+            let explanation = match modifier.operation {
+                MitigationOperation::FlatReduction(_) => format!("{}", modifier.source),
+                _ => format!("{:?}", modifier.operation),
+            };
+            amount = format!("({} {} ({}))", amount, modifier.operation, explanation);
+        }
+        TextSegment::new(amount, TextKind::Details).render(ui);
+    }
+}
+
+impl ImguiRenderableWithContext<u8> for ActionResult {
+    fn render_with_context(&self, ui: &imgui::Ui, context: u8) {
+        let indent_level = context;
 
         let target_name = match &self.target {
-            TargetTypeInstance::Entity(entity) => {
-                systems::helpers::get_component::<String>(world, *entity)
-            }
+            TargetTypeInstance::Entity(entity) => entity.name(),
             TargetTypeInstance::Point(point) => todo!(),
             TargetTypeInstance::Area(area_shape) => {
                 todo!()
@@ -642,15 +761,48 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
 
             ActionKindResult::AttackRollDamage {
                 attack_roll,
+                armor_class,
                 damage_roll,
                 damage_taken,
             } => {
                 damage_taken
                     .render_with_context(ui, (&target_name, indent_level + 1, "was not hit"));
+
+                if ui.is_item_hovered() {
+                    ui.tooltip(|| {
+                        TextSegment::new(target_name, TextKind::Target).render(ui);
+                        ui.same_line();
+                        ui.text("Armor Class:");
+                        ui.same_line();
+                        // TODO: New type for armor class
+                        armor_class.render(ui);
+
+                        ui.text("");
+                        ui.text("Attack Roll:");
+                        ui.same_line();
+                        attack_roll.render(ui);
+
+                        if let Some(damage_taken) = damage_taken {
+                            ui.text("");
+                            ui.text("Damage Roll:");
+                            ui.same_line();
+                            damage_roll.render(ui);
+
+                            ui.text("");
+                            ui.text("Damage Taken:");
+                            ui.same_line();
+                            damage_taken.render(ui);
+                        } else {
+                            ui.text(format!("Attack did not hit. Attack roll ({}) was less than Armor Class ({})", 
+                                attack_roll.roll_result.total, armor_class.total()));
+                        }
+                    });
+                }
             }
 
             ActionKindResult::SavingThrowDamage {
-                saving_throw,
+                saving_throw_dc,
+                saving_throw_result,
                 half_damage_on_save,
                 damage_roll,
                 damage_taken,
@@ -665,27 +817,23 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
             } => todo!(),
 
             ActionKindResult::BeneficialEffect { effect, applied } => {
-                indent_text(ui, indent_level + 1);
-                colored_inline_text(
-                    ui,
-                    &[
-                        (&target_name, [1.0, 0.8, 0.8, 1.0]),
-                        ("gained effect", [1.0, 1.0, 1.0, 1.0]),
-                        (&effect.to_string(), [1.0, 1.0, 0.8, 1.0]),
-                    ],
-                );
+                TextSegments::new(vec![
+                    (target_name, TextKind::Target),
+                    ("gained effect", TextKind::Normal),
+                    (&effect.to_string(), TextKind::Effect),
+                ])
+                .with_indent(indent_level + 1)
+                .render(ui);
             }
 
             ActionKindResult::Healing { healing } => {
-                indent_text(ui, indent_level + 1);
-                colored_inline_text(
-                    ui,
-                    &[
-                        (&target_name, [1.0, 0.8, 0.8, 1.0]),
-                        ("was healed for", [1.0, 1.0, 1.0, 1.0]),
-                        (&format!("{} HP", healing.subtotal), [0.0, 1.0, 0.0, 1.0]),
-                    ],
-                );
+                TextSegments::new(vec![
+                    (target_name, TextKind::Target),
+                    ("was healed for", TextKind::Normal),
+                    (&format!("{} HP", healing.subtotal), TextKind::Healing),
+                ])
+                .with_indent(indent_level + 1)
+                .render(ui);
             }
 
             ActionKindResult::Utility => todo!(),
@@ -697,52 +845,55 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
     }
 }
 
-fn indent_text(ui: &imgui::Ui, indent_level: u8) {
-    for _ in 0..indent_level {
-        ui.text("\t");
-        ui.same_line();
-    }
-}
-
-fn render_no_damage(ui: &imgui::Ui, target_name: &str, indent_level: u8, no_damage_text: &str) {
-    indent_text(ui, indent_level);
-    colored_inline_text(
-        ui,
-        &[
-            (target_name, [1.0, 0.8, 0.8, 1.0]),
-            (no_damage_text, [1.0, 1.0, 1.0, 1.0]),
-        ],
-    );
-}
-
 impl ImguiRenderableWithContext<(&str, u8)> for DamageComponentMitigation {
     fn render_with_context(&self, ui: &imgui::Ui, context: (&str, u8)) {
         let (target_name, indent_level) = context;
-        indent_text(ui, indent_level);
-        colored_inline_text(
-            ui,
-            &[
-                (&target_name, [1.0, 0.8, 0.8, 1.0]),
-                ("was hit for", [1.0, 1.0, 1.0, 1.0]),
-                (
-                    &format!("{} {} damage", self.after_mods, self.damage_type),
-                    damage_type_color(&self.damage_type),
-                ),
-            ],
-        );
+
+        TextSegments::new(vec![
+            (target_name, TextKind::Target),
+            ("was hit for", TextKind::Normal),
+            (
+                &format!("{} {} damage", self.after_mods, self.damage_type),
+                TextKind::Damage(self.damage_type),
+            ),
+        ])
+        .with_indent(indent_level)
+        .render(ui);
     }
 }
 
 impl ImguiRenderableWithContext<(&str, u8, &str)> for Option<DamageMitigationResult> {
     fn render_with_context(&self, ui: &imgui::Ui, context: (&str, u8, &str)) {
         let (target_name, indent_level, no_damage_text) = context;
-        match self {
+        ui.group(|| match self {
             Some(result) => {
                 for component in &result.components {
                     component.render_with_context(ui, (target_name, indent_level));
                 }
             }
-            None => render_no_damage(ui, target_name, indent_level, no_damage_text),
+            None => {
+                TextSegments::new(vec![
+                    (target_name, TextKind::Target),
+                    (no_damage_text, TextKind::Normal),
+                ])
+                .with_indent(indent_level)
+                .render(ui);
+            }
+        });
+    }
+}
+
+impl ImguiRenderable for DamageMitigationResult {
+    fn render(&self, ui: &imgui::Ui) {
+        for (i, component) in self.components.iter().enumerate() {
+            if i > 0 {
+                ui.same_line();
+                ui.text("+");
+                ui.same_line();
+            }
+            component.render(ui);
         }
+        ui.same_line();
+        ui.text(format!("= {}", self.total));
     }
 }

@@ -215,7 +215,7 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
 const BASE_SPELL_SAVE_DC: i32 = 8;
 
 fn spell_save_dc(world: &World, caster: Entity, spell_id: &SpellId) -> D20CheckDC<Ability> {
-    let ability_scores = systems::helpers::get_component::<&AbilityScoreSet>(world, caster);
+    let ability_scores = systems::helpers::get_component::<AbilityScoreSet>(world, caster);
     let spellcasting_ability = systems::helpers::get_component::<Spellbook>(world, caster)
         .spellcasting_ability(spell_id)
         .unwrap()
@@ -250,7 +250,7 @@ fn spell_save_dc(world: &World, caster: Entity, spell_id: &SpellId) -> D20CheckD
 }
 
 fn spell_attack_roll(world: &World, caster: Entity, spell_id: &SpellId) -> AttackRoll {
-    let ability_scores = systems::helpers::get_component::<&AbilityScoreSet>(world, caster);
+    let ability_scores = systems::helpers::get_component::<AbilityScoreSet>(world, caster);
     let spellcasting_ability = systems::helpers::get_component::<Spellbook>(world, caster)
         .spellcasting_ability(spell_id)
         .unwrap()

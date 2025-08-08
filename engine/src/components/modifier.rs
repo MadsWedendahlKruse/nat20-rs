@@ -81,6 +81,10 @@ impl ModifierSet {
     pub fn is_empty(&self) -> bool {
         self.modifiers.is_empty()
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&ModifierSource, &i32)> {
+        self.modifiers.iter()
+    }
 }
 
 impl fmt::Display for ModifierSet {
@@ -94,8 +98,12 @@ impl fmt::Display for ModifierSet {
             if i != 0 {
                 s += " ";
             }
-            let sign = if *value >= 0 { "+" } else { "-" };
-            s += &format!("{} {} ({})", sign, value.abs(), source);
+            let sign = if i > 0 {
+                if *value >= 0 { "+" } else { "-" }
+            } else {
+                ""
+            };
+            s += &format!("{}{} ({})", sign, value.abs(), source);
         }
         write!(f, "{}", s)
     }

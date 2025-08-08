@@ -164,7 +164,7 @@ impl CharacterCreation {
         ];
 
         for spawner in spawners {
-            let (entity, _) = spawner(&mut world);
+            let entity = spawner(&mut world).id();
             // They spawn with zero health, so we heal them to full
             systems::health::heal_full(&mut world, entity);
         }

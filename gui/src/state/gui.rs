@@ -62,7 +62,7 @@ impl GameGui {
                     ui.separator();
                     if render_button_disabled_conditionally(
                         ui,
-                        "Start Encounter",
+                        "New Encounter",
                         characters.len() < 2,
                         "You must have at least two characters to create an encounter.",
                     ) {

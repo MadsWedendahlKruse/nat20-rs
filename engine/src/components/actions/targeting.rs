@@ -1,6 +1,6 @@
 use hecs::Entity;
 
-use crate::math::point::Point;
+use crate::{components::id::EntityIdentifier, math::point::Point};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TargetingKind {
@@ -45,7 +45,8 @@ pub enum TargetType {
 
 #[derive(Debug, Clone)]
 pub enum TargetTypeInstance {
-    Entity(Entity),
+    // TODO: Do we need all of these?
+    Entity(EntityIdentifier),
     Point(Point),
     Area(AreaShape),
     None,

@@ -9,7 +9,6 @@ use crate::{
         damage::DamageResistances,
         effects::effects::Effect,
         hit_points::HitPoints,
-        id::{ActionId, CharacterId},
         items::equipment::{loadout::Loadout, weapon::WeaponProficiencyMap},
         level::CharacterLevels,
         resource::{RechargeRule, Resource, ResourceMap},
@@ -60,7 +59,6 @@ from_world!(
     #[derive(Bundle, Clone)]
     pub struct Character {
         pub tag: CharacterTag,
-        pub id: CharacterId,
         pub name: String,
         pub levels: CharacterLevels,
         pub hp: HitPoints,
@@ -95,7 +93,6 @@ impl Character {
         }
         Self {
             tag: CharacterTag,
-            id: CharacterId::new_v4(),
             name: name.to_string(),
             levels: CharacterLevels::new(),
             hp: HitPoints::new(0),

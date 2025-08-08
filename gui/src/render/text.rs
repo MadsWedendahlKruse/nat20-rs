@@ -1,0 +1,120 @@
+use std::{borrow::Cow, fmt::Display};
+
+use nat20_rs::components::damage::DamageType;
+
+use crate::render::utils::ImguiRenderable;
+
+pub fn damage_type_color(damage_type: &DamageType) -> [f32; 4] {
+    match damage_type {
+        DamageType::Bludgeoning | DamageType::Piercing | DamageType::Slashing => {
+            [0.8, 0.8, 0.8, 1.0]
+        }
+        DamageType::Fire => [1.0, 0.5, 0.0, 1.0],
+        DamageType::Cold => [0.0, 1.0, 1.0, 1.0],
+        DamageType::Lightning => [0.25, 0.25, 1.0, 1.0],
+        DamageType::Acid => [0.0, 1.0, 0.0, 1.0],
+        DamageType::Poison => [0.5, 0.9, 0.0, 1.0],
+        DamageType::Force => [0.9, 0.0, 0.0, 1.0],
+        DamageType::Necrotic => [0.5, 1.0, 0.25, 1.0],
+        DamageType::Psychic => [1.0, 0.5, 1.0, 1.0],
+        DamageType::Radiant => [1.0, 0.9, 0.0, 1.0],
+        DamageType::Thunder => [0.5, 0.0, 1.0, 1.0],
+    }
+}
+
+pub fn indent_text(ui: &imgui::Ui, indent_level: u8) {
+    for _ in 0..indent_level {
+        ui.text("\t");
+        ui.same_line();
+    }
+}
+
+pub enum TextKind {
+    Actor,
+    Target,
+    Action,
+    Normal,
+    Damage(DamageType),
+    Healing,
+    Effect,
+    Details,
+}
+
+impl TextKind {
+    pub fn color(&self) -> [f32; 4] {
+        match self {
+            TextKind::Actor => [0.8, 1.0, 0.8, 1.0],
+            TextKind::Target => [1.0, 0.8, 0.8, 1.0],
+            TextKind::Action => [1.0, 1.0, 0.8, 1.0],
+            TextKind::Normal => [1.0, 1.0, 1.0, 1.0],
+            TextKind::Damage(damage_type) => damage_type_color(damage_type),
+            TextKind::Healing => [0.5, 1.0, 0.5, 1.0],
+            TextKind::Effect => [1.0, 0.8, 0.5, 1.0],
+            TextKind::Details => [0.75, 0.75, 0.75, 1.0],
+        }
+    }
+}
+
+pub struct TextSegment<'a> {
+    pub text: Cow<'a, str>,
+    pub kind: TextKind,
+}
+
+impl<'a> TextSegment<'a> {
+    pub fn new<T: Into<Cow<'a, str>>>(text: T, kind: TextKind) -> Self {
+        Self {
+            text: text.into(),
+            kind,
+        }
+    }
+
+    pub fn color(&self) -> [f32; 4] {
+        self.kind.color()
+    }
+}
+
+impl ImguiRenderable for TextSegment<'_> {
+    fn render(&self, ui: &imgui::Ui) {
+        ui.text_colored(self.color(), &self.text);
+    }
+}
+
+pub struct TextSegments<'a> {
+    segments: Vec<TextSegment<'a>>,
+    indent_level: u8,
+}
+
+impl<'a> TextSegments<'a> {
+    pub fn new<T, I>(segments: I) -> Self
+    where
+        T: Display,
+        I: IntoIterator<Item = (T, TextKind)>,
+    {
+        Self {
+            segments: segments
+                .into_iter()
+                .map(|(text, kind)| TextSegment::new(text.to_string(), kind))
+                .collect(),
+            indent_level: 0,
+        }
+    }
+
+    pub fn with_indent(mut self, indent_level: u8) -> Self {
+        self.indent_level = indent_level;
+        self
+    }
+}
+
+impl ImguiRenderable for TextSegments<'_> {
+    fn render(&self, ui: &imgui::Ui) {
+        ui.group(|| {
+            indent_text(ui, self.indent_level);
+            for (i, segment) in self.segments.iter().enumerate() {
+                if i > 0 {
+                    ui.same_line();
+                }
+                segment.render(ui);
+            }
+        });
+    }
+}

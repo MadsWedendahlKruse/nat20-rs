@@ -1,15 +1,12 @@
 use std::collections::HashSet;
 
 use hecs::{Entity, World};
-use imgui::{
-    ChildFlags, TreeNodeFlags, WindowFlags,
-    sys::{self, ImGuiChildFlags_AlwaysAutoResize},
-};
+use imgui::{ChildFlags, TreeNodeFlags};
 use nat20_rs::{
     components::{
         actions::{
             action::{ActionContext, ActionMap},
-            targeting::{TargetingContext, TargetingKind},
+            targeting::TargetingKind,
         },
         id::{ActionId, EncounterId},
         resource::ResourceMap,
@@ -26,10 +23,13 @@ use nat20_rs::{
 };
 
 use crate::{
-    render::utils::{
-        ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
-        colored_inline_text, render_button_disabled_conditionally, render_button_selectable,
-        render_window_at_cursor,
+    render::{
+        text::{TextKind, TextSegment, TextSegments},
+        utils::{
+            ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
+            render_button_disabled_conditionally, render_button_selectable,
+            render_window_at_cursor,
+        },
     },
     table_with_columns,
 };
@@ -274,7 +274,12 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
                 if let Ok((name, tag)) = world.query_one_mut::<(&String, &CharacterTag)>(*entity) {
                     // Initiative column
                     ui.table_next_column();
-                    initiative.render(ui);
+                    ui.text(initiative.total.to_string());
+                    if ui.is_item_hovered() {
+                        ui.tooltip(|| {
+                            initiative.render(ui);
+                        });
+                    }
                     if self.current_entity() == *entity {
                         ui.table_set_bg_color(imgui::TableBgTarget::all(), [0.2, 0.2, 0.7, 1.0]);
                     }
@@ -468,38 +473,34 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
         for entry in self {
             match entry {
                 ActionDecisionResult::ActionPerformed { action, results } => {
-                    // ui.text(format!("Action performed: {:?}", action));
-                    colored_inline_text(
-                        ui,
-                        &[
-                            (
-                                &systems::helpers::get_component::<String>(world, action.actor),
-                                [0.8, 1.0, 0.8, 1.0],
-                            ),
-                            ("used", [1.0, 1.0, 1.0, 1.0]),
-                            (&action.action_id.to_string(), [1.0, 1.0, 0.8, 1.0]),
-                        ],
-                    );
+                    TextSegments::new(vec![
+                        (
+                            &systems::helpers::get_component::<String>(world, action.actor)
+                                .to_string(),
+                            TextKind::Actor,
+                        ),
+                        (&"used".to_string(), TextKind::Normal),
+                        (&action.action_id.to_string(), TextKind::Action),
+                    ])
+                    .render(ui);
 
                     if action.targets.len() == 1 && action.targets[0] != action.actor {
                         ui.same_line();
-                        colored_inline_text(
-                            ui,
-                            &[
-                                ("on", [1.0, 1.0, 1.0, 1.0]),
-                                (
-                                    &systems::helpers::get_component::<String>(
-                                        world,
-                                        action.targets[0],
-                                    ),
-                                    [1.0, 0.8, 0.8, 1.0],
+                        TextSegments::new(vec![
+                            ("on", TextKind::Normal),
+                            (
+                                &systems::helpers::get_component::<String>(
+                                    world,
+                                    action.targets[0],
                                 ),
-                            ],
-                        );
+                                TextKind::Target,
+                            ),
+                        ])
+                        .render(ui);
                     }
 
                     for result in results {
-                        result.render_with_context(ui, (world, 0));
+                        result.render_with_context(ui, 0);
                     }
                 }
                 ActionDecisionResult::ReactionTriggered { reactor, action } => {

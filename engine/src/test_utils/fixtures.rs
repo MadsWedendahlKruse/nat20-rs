@@ -220,21 +220,15 @@ pub mod equipment {
 }
 
 pub mod creatures {
-    use std::collections::HashMap;
 
     use hecs::{Entity, World};
 
     use crate::{
         components::{
-            ability::{Ability, AbilityScore, AbilityScoreSet},
-            items::equipment::equipment::HandSlot,
-            modifier::ModifierSource,
+            ability::Ability, items::equipment::equipment::HandSlot, modifier::ModifierSource,
             skill::Skill,
         },
-        systems::{
-            self,
-            level_up::{LevelUpDecision, LevelUpError, LevelUpSession},
-        },
+        systems::{self, level_up::LevelUpDecision},
     };
 
     pub mod heroes {
@@ -243,7 +237,7 @@ pub mod creatures {
         use crate::{
             components::{
                 class::{ClassName, SubclassName},
-                id::CharacterId,
+                id::EntityIdentifier,
                 skill::SkillSet,
                 spells::spellbook::Spellbook,
             },
@@ -263,9 +257,9 @@ pub mod creatures {
         }
 
         // TODO: Should spawn an Entity in a World instead of returning a Character
-        pub fn fighter(world: &mut World) -> (Entity, CharacterId) {
-            let character = Character::new("Johnny Fighter");
-            let id = character.id.clone();
+        pub fn fighter(world: &mut World) -> EntityIdentifier {
+            let name = "Johnny Fighter";
+            let character = Character::new(name);
             let entity = world.spawn(character);
             systems::level_up::apply_level_up_decision(
                 world,
@@ -308,12 +302,12 @@ pub mod creatures {
                 HandSlot::Main,
             );
 
-            (entity, id)
+            EntityIdentifier::new(entity, name)
         }
 
-        pub fn wizard(world: &mut World) -> (Entity, CharacterId) {
-            let character = Character::new("Jimmy Wizard");
-            let id = character.id.clone();
+        pub fn wizard(world: &mut World) -> EntityIdentifier {
+            let name = "Jimmy Wizard";
+            let character = Character::new(name);
             let entity = world.spawn(character);
             systems::level_up::apply_level_up_decision(
                 world,
@@ -354,12 +348,12 @@ pub mod creatures {
             // TODO: This should be set automatically based on class
             spellbook.set_max_prepared_spells(5);
 
-            (entity, id)
+            EntityIdentifier::new(entity, name)
         }
 
-        pub fn warlock(world: &mut World) -> (Entity, CharacterId) {
-            let character = Character::new("Bobby Warlock");
-            let id = character.id.clone();
+        pub fn warlock(world: &mut World) -> EntityIdentifier {
+            let name = "Bobby Warlock";
+            let character = Character::new(name);
             let entity = world.spawn(character);
             systems::level_up::apply_level_up_decision(
                 world,
@@ -397,7 +391,7 @@ pub mod creatures {
             spellbook.update_spell_slots(5);
             spellbook.add_spell(&registry::spells::ELDRITCH_BLAST_ID, Ability::Charisma);
 
-            (entity, id)
+            EntityIdentifier::new(entity, name)
         }
     }
 
@@ -405,7 +399,7 @@ pub mod creatures {
         use std::collections::HashSet;
 
         use crate::{
-            components::{class::ClassName, id::CharacterId},
+            components::{class::ClassName, id::EntityIdentifier},
             entities::character::Character,
             registry,
             test_utils::fixtures,
@@ -413,9 +407,9 @@ pub mod creatures {
 
         use super::*;
 
-        pub fn goblin_warrior(world: &mut World) -> (Entity, CharacterId) {
-            let character = Character::new("Goblin Warrior");
-            let id = character.id.clone();
+        pub fn goblin_warrior(world: &mut World) -> EntityIdentifier {
+            let name = "Goblin Warrior";
+            let character = Character::new(name);
             let entity = world.spawn(character);
             // TODO: Not sure how to handle monster level-ups yet
             systems::level_up::apply_level_up_decision(
@@ -451,7 +445,7 @@ pub mod creatures {
                 HandSlot::Main,
             );
 
-            (entity, id)
+            EntityIdentifier::new(entity, name)
         }
     }
 }
