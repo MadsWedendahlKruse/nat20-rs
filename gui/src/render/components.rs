@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::format, vec};
 use hecs::{Entity, World};
 use nat20_rs::{
     components::{
-        ability::{Ability, AbilityScoreSet},
+        ability::{Ability, AbilityScore, AbilityScoreSet},
         actions::{
             action::{ActionKindResult, ActionResult},
             targeting::TargetTypeInstance,
@@ -207,6 +207,28 @@ impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
     }
 }
 
+impl ImguiRenderable for AbilityScore {
+    fn render(&self, ui: &imgui::Ui) {
+        ui.text(self.total().to_string());
+        if ui.is_item_hovered() {
+            ui.tooltip(|| {
+                TextSegment::new(self.base.to_string(), TextKind::Normal);
+                TextSegments::new(vec![
+                    (self.base.to_string(), TextKind::Normal),
+                    ("(Base)".to_string(), TextKind::Details),
+                ])
+                .render(ui);
+                if !self.modifiers.is_empty() {
+                    ui.same_line();
+                    ui.text("+");
+                    ui.same_line();
+                    self.modifiers.render(ui);
+                }
+            })
+        }
+    }
+}
+
 impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreSet {
     fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
         if let Some(table) = table_with_columns!(
@@ -231,7 +253,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreSet {
                 // Ability score
                 ui.table_next_column();
                 let ability_score = self.get(ability);
-                ability_score.modifiers.render_with_context(ui, false);
+                ability_score.render(ui);
                 // Ability modifier
                 ui.table_next_column();
                 ability_score
