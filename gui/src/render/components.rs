@@ -1,4 +1,4 @@
-use std::{collections::HashMap, vec};
+use std::{collections::HashMap, fmt::format, vec};
 
 use hecs::{Entity, World};
 use nat20_rs::{
@@ -30,7 +30,7 @@ use nat20_rs::{
         resource::ResourceMap,
         saving_throw::SavingThrowSet,
         skill::{Skill, SkillSet, skill_ability},
-        spells::spellbook::Spellbook,
+        spells::spellbook::{SpellSlotsMap, Spellbook},
     },
     entities::character::CharacterTag,
     registry, systems,
@@ -427,6 +427,23 @@ impl ImguiRenderableMut for Spellbook {
                 // Slots column
                 ui.table_next_column();
                 let slots = self.spell_slots_for_level(level);
+                ui.text(format!("{}/{}", slots.current(), slots.maximum()));
+            }
+            table.end();
+        }
+    }
+}
+
+impl ImguiRenderable for SpellSlotsMap {
+    fn render(&self, ui: &imgui::Ui) {
+        if let Some(table) = table_with_columns!(ui, "Spell Slots", "Level", "Slots") {
+            let mut sorted_levels: Vec<_> = self.keys().cloned().collect();
+            sorted_levels.sort();
+            for level in sorted_levels {
+                let slots = self.get(&level).unwrap();
+                ui.table_next_column();
+                ui.text(spell_level_roman_numeral(level));
+                ui.table_next_column();
                 ui.text(format!("{}/{}", slots.current(), slots.maximum()));
             }
             table.end();

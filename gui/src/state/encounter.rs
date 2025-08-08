@@ -10,6 +10,7 @@ use nat20_rs::{
         },
         id::{ActionId, EncounterId},
         resource::ResourceMap,
+        spells::spellbook::Spellbook,
     },
     engine::{
         encounter::{
@@ -328,8 +329,20 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
                 chosen_context,
                 targets,
             } => {
+                ui.separator_with_text("Resources");
                 systems::helpers::get_component::<ResourceMap>(world, current_entity).render(ui);
 
+                {
+                    let spellbook =
+                        systems::helpers::get_component::<Spellbook>(world, current_entity);
+                    let spell_slots = spellbook.spell_slots();
+                    if !spell_slots.is_empty() {
+                        ui.separator_with_text("Spell Slots");
+                        spell_slots.render(ui);
+                    }
+                }
+
+                ui.separator_with_text("Actions");
                 if action_options.is_empty() {
                     *action_options =
                         systems::actions::available_actions(world, self.current_entity());
@@ -405,12 +418,12 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
                                 for (i, target) in (&mut *targets).iter().enumerate() {
                                     if let Ok(name) = world.query_one_mut::<&String>(*target) {
                                         if ui.button(format!("{}##{}", name, i)) {
-                                            remove_target = Some(target.clone());
+                                            remove_target = Some(i);
                                         }
                                     }
                                 }
-                                if let Some(target) = remove_target {
-                                    targets.retain(|&e| e != target);
+                                if let Some(target_index) = remove_target {
+                                    targets.remove(target_index);
                                 }
                             }
 

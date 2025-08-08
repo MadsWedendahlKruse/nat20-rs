@@ -30,10 +30,12 @@ impl SpellSlots {
     }
 }
 
+pub type SpellSlotsMap = HashMap<u8, SpellSlots>;
+
 #[derive(Debug, Clone)]
 pub struct Spellbook {
     /// Set of learned spells
-    spells_by_spell_id: HashSet<SpellId>,
+    spells: HashSet<SpellId>,
     /// Spells that are currently prepared for casting.
     // TODO: Default prepared spells?
     prepared_spells: HashSet<SpellId>,
@@ -44,13 +46,13 @@ pub struct Spellbook {
     spellcasting_ability: HashMap<SpellId, Ability>,
     /// Spell slots available for each spell level.
     /// Spell slots could be treated as a resource, but that really overcomplicates things.
-    spell_slots: HashMap<u8, SpellSlots>,
+    spell_slots: SpellSlotsMap,
 }
 
 impl Spellbook {
     pub fn new() -> Self {
         Self {
-            spells_by_spell_id: HashSet::new(),
+            spells: HashSet::new(),
             prepared_spells: HashSet::new(),
             max_prepared_spells: 0,
             spellcasting_ability: HashMap::new(),
@@ -64,7 +66,7 @@ impl Spellbook {
             .get(spell_id)
             .unwrap()
             .clone();
-        self.spells_by_spell_id.insert(spell_id.clone());
+        self.spells.insert(spell_id.clone());
         self.spellcasting_ability
             .insert(spell_id.clone(), spellcasting_ability);
     }
@@ -75,23 +77,27 @@ impl Spellbook {
             .get(spell_id)
             .unwrap()
             .clone();
-        self.spells_by_spell_id.remove(spell_id);
+        self.spells.remove(spell_id);
         self.spellcasting_ability.remove(spell_id);
     }
 
     pub fn has_spell(&self, spell_id: &SpellId) -> bool {
-        self.spells_by_spell_id.contains(spell_id)
+        self.spells.contains(spell_id)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.spells.is_empty()
     }
 
     pub fn all_spells(&self) -> &HashSet<SpellId> {
-        &self.spells_by_spell_id
+        &self.spells
     }
 
     pub fn spellcasting_ability(&self, spell_id: &SpellId) -> Option<&Ability> {
         self.spellcasting_ability.get(spell_id)
     }
 
-    pub fn spell_slots(&self) -> &HashMap<u8, SpellSlots> {
+    pub fn spell_slots(&self) -> &SpellSlotsMap {
         &self.spell_slots
     }
 
@@ -190,7 +196,7 @@ impl Spellbook {
     /// If the spell is already prepared, it will not be added again.
     pub fn prepare_spell(&mut self, spell_id: &SpellId) -> bool {
         if self.prepared_spells.len() < self.max_prepared_spells {
-            if self.spells_by_spell_id.contains(spell_id) {
+            if self.spells.contains(spell_id) {
                 self.prepared_spells.insert(spell_id.clone());
                 return true;
             }
@@ -225,6 +231,10 @@ impl Spellbook {
                 } else {
                     slots.maximum()
                 };
+                if slots == 0 {
+                    // Skip levels with no slots
+                    continue;
+                }
                 spell_slots.insert(level, slots);
             }
         }
@@ -236,7 +246,7 @@ impl Spellbook {
         use_current_slots: bool,
     ) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
         let mut actions = HashMap::new();
-        for spell_id in &self.spells_by_spell_id {
+        for spell_id in &self.spells {
             let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
             let available_slots = if spell.base_level() == 0 {
                 // Cantrips always have 1 slot available
@@ -244,10 +254,14 @@ impl Spellbook {
             } else {
                 self.spell_slots_for_base_level(spell.base_level(), use_current_slots)
             };
-            let contexts = available_slots
+            let contexts: Vec<_> = available_slots
                 .iter()
                 .map(|(level, _)| ActionContext::Spell { level: *level })
                 .collect();
+            if contexts.is_empty() {
+                // Skip spells with no available slots
+                continue;
+            }
             actions.insert(
                 spell.action().id().clone(),
                 (contexts, spell.action().resource_cost().clone()),
