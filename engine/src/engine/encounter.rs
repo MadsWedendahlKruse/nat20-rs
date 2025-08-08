@@ -79,6 +79,7 @@ pub enum ActionDecisionResult {
         action: ActionData,
     },
     ActionCancelled {
+        reactor: Entity,
         reaction: ReactionData,
         action: ActionData,
     },
@@ -480,6 +481,7 @@ impl Encounter {
                         }
 
                         return Ok(ActionDecisionResult::ActionCancelled {
+                            reactor: *reactor,
                             reaction: reaction.clone(),
                             action: action.clone(),
                         });

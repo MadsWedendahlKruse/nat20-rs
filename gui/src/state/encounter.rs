@@ -653,12 +653,90 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                         result.render_with_context(ui, 0);
                     }
                 }
+
                 ActionDecisionResult::ReactionTriggered { reactor, action } => {
-                    ui.text(format!("Reaction triggered: {:?}", action));
+                    let mut segments = vec![
+                        (
+                            systems::helpers::get_component_clone::<String>(world, action.actor),
+                            TextKind::Actor,
+                        ),
+                        ("used".to_string(), TextKind::Normal),
+                        (action.action_id.to_string(), TextKind::Action),
+                    ];
+                    for (i, action_target) in action.targets.iter().enumerate() {
+                        if i == 0 {
+                            segments.push(("on".to_string(), TextKind::Normal));
+                        } else {
+                            segments.push((", ".to_string(), TextKind::Normal));
+                        }
+                        let target_name =
+                            systems::helpers::get_component_clone::<String>(world, *action_target);
+                        segments.push((target_name, TextKind::Target));
+                    }
+                    TextSegments::new(segments).render(ui);
+
+                    TextSegments::new(vec![
+                        (
+                            systems::helpers::get_component::<String>(world, *reactor).to_string(),
+                            TextKind::Actor,
+                        ),
+                        ("is reacting to".to_string(), TextKind::Normal),
+                        (
+                            format!(
+                                "{}'s",
+                                systems::helpers::get_component::<String>(world, action.actor),
+                            ),
+                            TextKind::Actor,
+                        ),
+                        (action.action_id.to_string(), TextKind::Action),
+                    ])
+                    .render(ui);
                 }
-                ActionDecisionResult::ActionCancelled { reaction, action } => {
-                    ui.text(format!("Action cancelled: {:?}", action));
+
+                ActionDecisionResult::ActionCancelled {
+                    reactor,
+                    reaction,
+                    action,
+                } => {
+                    TextSegments::new(vec![
+                        (
+                            systems::helpers::get_component::<String>(world, *reactor).to_string(),
+                            TextKind::Actor,
+                        ),
+                        ("cancelled".to_string(), TextKind::Normal),
+                        (
+                            format!(
+                                "{}'s",
+                                systems::helpers::get_component::<String>(world, action.actor),
+                            ),
+                            TextKind::Actor,
+                        ),
+                        (action.action_id.to_string(), TextKind::Action),
+                        ("using".to_string(), TextKind::Normal),
+                        (reaction.reaction_id.to_string(), TextKind::Action),
+                    ])
+                    .render(ui);
                 }
+
+                ActionDecisionResult::NoReactionTaken { reactor, action } => {
+                    TextSegments::new(vec![
+                        (
+                            systems::helpers::get_component::<String>(world, *reactor).to_string(),
+                            TextKind::Actor,
+                        ),
+                        ("did not react to".to_string(), TextKind::Normal),
+                        (
+                            format!(
+                                "{}'s",
+                                systems::helpers::get_component::<String>(world, action.actor),
+                            ),
+                            TextKind::Actor,
+                        ),
+                        (action.action_id.to_string(), TextKind::Action),
+                    ])
+                    .render(ui);
+                }
+
                 _ => {
                     ui.text(format!("Unhandled log entry: {:?}", entry));
                 }
