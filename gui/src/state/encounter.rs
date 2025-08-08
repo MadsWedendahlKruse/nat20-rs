@@ -27,14 +27,15 @@ use crate::{
     render::{
         text::{TextKind, TextSegment, TextSegments},
         utils::{
-            ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
-            render_button_disabled_conditionally, render_button_selectable,
-            render_window_at_cursor,
+            ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
+            ImguiRenderableWithContext, render_button_disabled_conditionally,
+            render_button_selectable, render_window_at_cursor,
         },
     },
     table_with_columns,
 };
 
+#[derive(Debug)]
 enum ActionDecisionProgress {
     Action {
         actor: Entity,
@@ -320,7 +321,31 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
 
         ui.separator_with_text(format!("Current turn: {}", current_name));
 
-        match decision_progress.as_mut().unwrap() {
+        decision_progress.render_mut_with_context(ui, (world, self));
+
+        ui.separator();
+
+        if ui.button("End Turn") {
+            decision_progress.take(); // Clear decision progress
+            self.end_turn(world, current_entity);
+        }
+
+        disabled_token.end();
+    }
+}
+
+impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
+    for Option<ActionDecisionProgress>
+{
+    fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: (&mut World, &mut Encounter)) {
+        if self.is_none() {
+            ui.text("No action decision in progress.");
+            return;
+        }
+
+        let (world, encounter) = context;
+        let current_entity = encounter.current_entity();
+        match self.as_mut().unwrap() {
             ActionDecisionProgress::Action {
                 actor: _,
                 action_options,
@@ -344,8 +369,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
 
                 ui.separator_with_text("Actions");
                 if action_options.is_empty() {
-                    *action_options =
-                        systems::actions::available_actions(world, self.current_entity());
+                    *action_options = systems::actions::available_actions(world, current_entity);
                 }
                 for (action_id, (contexts, resource_cost)) in action_options {
                     if ui.button(&action_id.to_string()) && chosen_action.is_none() {
@@ -373,72 +397,15 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
                     render_window_at_cursor(ui, "Target Selection", true, || {
                         let targeting_context = systems::actions::targeting_context(
                             world,
-                            self.current_entity(),
+                            current_entity,
                             chosen_action.as_ref().unwrap(),
                             chosen_context.as_ref().unwrap(),
                         );
-                        match targeting_context.kind {
-                            TargetingKind::Single => {
-                                ui.text("Select a single target:");
-                                for entity in self.participants() {
-                                    if let Ok(name) = world.query_one_mut::<&String>(*entity) {
-                                        if render_button_selectable(
-                                            ui,
-                                            name.clone(),
-                                            [100.0, 20.0],
-                                            targets.contains(entity),
-                                        ) {
-                                            if targets.len() > 0 {
-                                                targets.clear();
-                                            }
-                                            targets.push(*entity);
-                                        }
-                                    }
-                                }
-                            }
 
-                            TargetingKind::Multiple { max_targets } => {
-                                ui.text(format!(
-                                    "Selected {}/{} targets:",
-                                    targets.len(),
-                                    max_targets
-                                ));
-                                ui.separator_with_text("Possible targets");
-                                for entity in self.participants() {
-                                    if let Ok(name) = world.query_one_mut::<&String>(*entity) {
-                                        if ui.button(name.clone())
-                                            && targets.len() < max_targets.into()
-                                        {
-                                            targets.push(*entity);
-                                        }
-                                    }
-                                }
-                                ui.separator_with_text("Selected targets");
-                                let mut remove_target = None;
-                                for (i, target) in (&mut *targets).iter().enumerate() {
-                                    if let Ok(name) = world.query_one_mut::<&String>(*target) {
-                                        if ui.button(format!("{}##{}", name, i)) {
-                                            remove_target = Some(i);
-                                        }
-                                    }
-                                }
-                                if let Some(target_index) = remove_target {
-                                    targets.remove(target_index);
-                                }
-                            }
-
-                            TargetingKind::SelfTarget => {
-                                targets.push(current_entity);
-                                confirm_targets = true;
-                            }
-
-                            _ => {
-                                ui.text(format!(
-                                    "Targeting kind {:?} is not implemented yet.",
-                                    targeting_context.kind
-                                ));
-                            }
-                        }
+                        targeting_context.kind.render_with_context(
+                            ui,
+                            (world, encounter, targets, &mut confirm_targets),
+                        );
 
                         ui.separator();
                         if ui.button("Confirm Targets") {
@@ -447,8 +414,8 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
                     });
 
                     if confirm_targets {
-                        let decision = decision_progress.take().unwrap().finalize();
-                        let result = self.process(world, decision).unwrap();
+                        let decision = self.take().unwrap().finalize();
+                        let result = encounter.process(world, decision).unwrap();
                         match result {
                             ActionDecisionResult::ActionPerformed { action, results } => {
                                 // Handle action performed, e.g., apply effects, update state
@@ -466,18 +433,81 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
             }
 
             _ => {
-                ui.text(format!("{:?} is not implemented yet :^)", next_prompt));
+                ui.text(format!(
+                    "{:?} is not implemented yet :^)",
+                    self.as_ref().unwrap()
+                ));
             }
         }
+    }
+}
 
-        ui.separator();
+impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut bool)>
+    for TargetingKind
+{
+    fn render_with_context(
+        &self,
+        ui: &imgui::Ui,
+        context: (&mut World, &Encounter, &mut Vec<Entity>, &mut bool),
+    ) {
+        let (world, encounter, targets, confirm_targets) = context;
+        match self {
+            TargetingKind::Single => {
+                ui.text("Select a single target:");
+                for entity in encounter.participants() {
+                    if let Ok(name) = world.query_one_mut::<&String>(*entity) {
+                        if render_button_selectable(
+                            ui,
+                            name.clone(),
+                            [100.0, 20.0],
+                            targets.contains(entity),
+                        ) {
+                            if targets.len() > 0 {
+                                targets.clear();
+                            }
+                            targets.push(*entity);
+                        }
+                    }
+                }
+            }
 
-        if ui.button("End Turn") {
-            decision_progress.take(); // Clear decision progress
-            self.end_turn(world, current_entity);
+            TargetingKind::Multiple { max_targets } => {
+                ui.text(format!(
+                    "Selected {}/{} targets:",
+                    targets.len(),
+                    max_targets
+                ));
+                ui.separator_with_text("Possible targets");
+                for entity in encounter.participants() {
+                    if let Ok(name) = world.query_one_mut::<&String>(*entity) {
+                        if ui.button(name.clone()) && targets.len() < (*max_targets).into() {
+                            targets.push(*entity);
+                        }
+                    }
+                }
+                ui.separator_with_text("Selected targets");
+                let mut remove_target = None;
+                for (i, target) in (&mut *targets).iter().enumerate() {
+                    if let Ok(name) = world.query_one_mut::<&String>(*target) {
+                        if ui.button(format!("{}##{}", name, i)) {
+                            remove_target = Some(i);
+                        }
+                    }
+                }
+                if let Some(target_index) = remove_target {
+                    targets.remove(target_index);
+                }
+            }
+
+            TargetingKind::SelfTarget => {
+                targets.push(encounter.current_entity());
+                *confirm_targets = true;
+            }
+
+            _ => {
+                ui.text(format!("Targeting kind {:?} is not implemented yet.", self));
+            }
         }
-
-        disabled_token.end();
     }
 }
 
