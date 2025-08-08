@@ -25,7 +25,7 @@ pub struct ActionData {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReactionData {
     pub reaction_id: ActionId,
-    pub contexts: Vec<ActionContext>,
+    pub context: ActionContext,
     pub resource_cost: ResourceCostMap,
     pub kind: ReactionKind,
 }
@@ -71,6 +71,10 @@ pub enum ActionDecisionResult {
         results: Vec<ActionResult>,
     },
     ReactionTriggered {
+        reactor: Entity,
+        action: ActionData,
+    },
+    NoReactionTaken {
         reactor: Entity,
         action: ActionData,
     },
@@ -306,14 +310,10 @@ impl Encounter {
         }
 
         let prompt = self.pending_prompts.front().unwrap();
-        // Ensure the decision matches the current prompt
-        prompt.is_valid_decision(&decision)?;
 
         let result = self.resolve_decision(world, &prompt.clone(), decision);
 
-        if result.as_ref().is_ok() {
-            self.combat_log.push(result.as_ref().unwrap().clone());
-        }
+        self.log(&result);
 
         result
     }
@@ -324,13 +324,20 @@ impl Encounter {
         prompt: &ActionPrompt,
         decision: ActionDecision,
     ) -> Result<ActionDecisionResult, ActionError> {
+        // Ensure the decision matches the current prompt
+        prompt.is_valid_decision(&decision)?;
+
         match (prompt, &decision) {
             (ActionPrompt::Action { .. }, ActionDecision::Action { action }) => {
                 // If the decision is currently pending it has already been
-                // reacted to, so we can skip it
+                // reacted to, so we don't have to check for reactions
                 if !self.pending_decisions.contains(&decision) {
                     // Check if anyone can react to this action
                     for reactor in &self.participants {
+                        println!(
+                            "Checking for reactions for reactor: {:?} to action: {:?}",
+                            reactor, action
+                        );
                         let reactions = systems::actions::available_reactions_to_action(
                             world,
                             *reactor,
@@ -341,18 +348,18 @@ impl Encounter {
                         );
                         if !reactions.is_empty() {
                             // If available, prompt the reactor for a reaction
-                            self.pending_prompts.push_back(ActionPrompt::Reaction {
+                            self.pending_prompts.push_front(ActionPrompt::Reaction {
                                 reactor: *reactor,
                                 action: action.clone(),
                                 options: reactions
                                     .iter()
-                                    .map(|(reaction_id, contexts, resource_cost, kind)| {
-                                        ReactionData {
+                                    .flat_map(|(reaction_id, contexts, resource_cost, kind)| {
+                                        contexts.iter().map(move |context| ReactionData {
                                             reaction_id: reaction_id.clone(),
-                                            contexts: contexts.clone(),
+                                            context: context.clone(),
                                             resource_cost: resource_cost.clone(),
                                             kind: kind.clone(),
-                                        }
+                                        })
                                     })
                                     .collect(),
                             });
@@ -365,6 +372,9 @@ impl Encounter {
                             });
                         }
                     }
+                } else {
+                    // Remove the decision from pending decisions and process it
+                    self.pending_decisions.pop_front();
                 }
 
                 // Process the action decision
@@ -400,11 +410,37 @@ impl Encounter {
                 if choice.is_none() {
                     // If no reaction was chosen just process the pending decision
                     self.pending_prompts.pop_front();
-                    let pending_decision = self.pending_decisions.pop_front();
-                    return self.process(world, pending_decision.unwrap());
+                    // let result =
+                    //     self.process(world, self.pending_decisions.front().unwrap().clone())?;
+                    // return Ok(ActionDecisionResult::NoReactionTaken {
+                    //     reactor: *reactor,
+                    //     action: action.clone(),
+                    // });
+
+                    let result = self.resolve_decision(
+                        world,
+                        &self.pending_prompts.front().unwrap().clone(),
+                        self.pending_decisions.front().unwrap().clone(),
+                    );
+                    self.log(&Ok(ActionDecisionResult::NoReactionTaken {
+                        reactor: *reactor,
+                        action: action.clone(),
+                    }));
+                    return result;
                 }
 
                 let reaction = choice.as_ref().unwrap();
+
+                // TODO: Do we even need the snapshots here?
+                let snapshots = systems::actions::perform_action(
+                    world,
+                    *reactor,
+                    &reaction.reaction_id,
+                    &reaction.context,
+                    // TODO: How many snapshots to take?
+                    1,
+                );
+
                 match &reaction.kind {
                     ReactionKind::ModifyAction {
                         action,
@@ -425,18 +461,27 @@ impl Encounter {
                         action: action_id,
                         context,
                         targets,
+                        consume_resources,
                     } => {
                         // TODO: Not sure how much validation we need here?
                         self.pending_prompts.pop_front();
                         self.pending_decisions.pop_front().unwrap();
+
+                        if *consume_resources {
+                            // Easiest way to consume resources is to just perform
+                            // the action with the given context (and 0 targets)
+                            systems::actions::perform_action(
+                                world,
+                                action.actor,
+                                action_id,
+                                context,
+                                0,
+                            );
+                        }
+
                         return Ok(ActionDecisionResult::ActionCancelled {
                             reaction: reaction.clone(),
-                            action: ActionData {
-                                actor: action.actor,
-                                action_id: action_id.clone(),
-                                context: context.clone(),
-                                targets: targets.to_vec(),
-                            },
+                            action: action.clone(),
                         });
                     }
                 }
@@ -448,6 +493,14 @@ impl Encounter {
                     decision,
                 });
             }
+        }
+    }
+
+    fn log(&mut self, result: &Result<ActionDecisionResult, ActionError>) {
+        if let Ok(action_result) = result {
+            self.combat_log.push(action_result.clone());
+        } else if let Err(err) = result {
+            eprintln!("Error processing action: {:?}", err);
         }
     }
 

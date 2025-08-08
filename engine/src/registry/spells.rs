@@ -9,7 +9,7 @@ use crate::{
     components::{
         ability::{Ability, AbilityScoreSet},
         actions::{
-            action::{ActionContext, ActionKind},
+            action::{ActionContext, ActionKind, ReactionKind},
             targeting::{AreaShape, TargetType, TargetingContext, TargetingKind},
         },
         d20_check::{D20Check, D20CheckDC},
@@ -61,13 +61,12 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
                 }
                 // TODO: Can we just counterspell spells of any level?
                 if let ActionContext::Spell { level } = action_context {
-                    return Some(
-                        crate::components::actions::action::ReactionKind::CancelAction {
-                            action: action_id.clone(),
-                            context: action_context.clone(),
-                            targets: targets.to_vec(),
-                        },
-                    );
+                    return Some(ReactionKind::CancelAction {
+                        action: action_id.clone(),
+                        context: action_context.clone(),
+                        targets: targets.to_vec(),
+                        consume_resources: true,
+                    });
                 }
                 None
             },

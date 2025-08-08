@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use hecs::{Entity, World};
+use rand::rand_core::le;
 
 use crate::{
     components::{
@@ -193,16 +194,26 @@ pub fn available_reactions_to_action(
     for (reaction_id, (contexts, resource_cost)) in
         systems::actions::available_actions(world, reactor)
     {
-        if let Some((reaction, _)) = registry::actions::ACTION_REGISTRY.get(&reaction_id) {
-            if let Some(trigger) = &reaction.reaction_trigger {
-                if let Some(kind) = trigger(world, reactor, actor, action_id, context, targets) {
-                    reactions.push((
-                        reaction_id.clone(),
-                        contexts.clone(),
-                        resource_cost.clone(),
-                        kind,
-                    ));
-                }
+        // TODO: Would be nice if we didn't have to check two different registries
+        let reaction = if let Some((reaction, _)) =
+            registry::actions::ACTION_REGISTRY.get(&reaction_id)
+        {
+            reaction
+        } else if let Some(spell) = registry::spells::SPELL_REGISTRY.get(&reaction_id.to_spell_id())
+        {
+            spell.action()
+        } else {
+            continue; // Skip if no reaction found
+        };
+
+        if let Some(trigger) = &reaction.reaction_trigger {
+            if let Some(kind) = trigger(world, reactor, actor, action_id, context, targets) {
+                reactions.push((
+                    reaction_id.clone(),
+                    contexts.clone(),
+                    resource_cost.clone(),
+                    kind,
+                ));
             }
         }
     }

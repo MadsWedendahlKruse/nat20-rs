@@ -20,7 +20,7 @@ use nat20_rs::{
         game_state::GameState,
     },
     entities::character::CharacterTag,
-    systems,
+    registry, systems,
 };
 
 use crate::{
@@ -48,6 +48,7 @@ enum ActionDecisionProgress {
     Reaction {
         reactor: Entity,
         action: ActionData,
+        options: Vec<ReactionData>,
         choice: Option<ReactionData>,
     },
 }
@@ -70,7 +71,8 @@ impl ActionDecisionProgress {
             } => Self::Reaction {
                 reactor: *reactor,
                 action: action.clone(),
-                choice: options.first().cloned(),
+                options: options.clone(),
+                choice: None,
             },
         }
     }
@@ -95,6 +97,7 @@ impl ActionDecisionProgress {
             ActionDecisionProgress::Reaction {
                 reactor,
                 action,
+                options,
                 choice,
             } => ActionDecision::Reaction {
                 reactor,
@@ -307,21 +310,40 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
         let next_prompt = next_prompt.unwrap();
         if decision_progress.is_none() {
             *decision_progress = Some(ActionDecisionProgress::from_prompt(next_prompt));
+            println!(
+                "Starting action decision progress for prompt: {:?}",
+                next_prompt
+            );
         }
 
-        let reaction_prompt_active = match next_prompt {
-            ActionPrompt::Reaction { options, .. } => {
-                render_window_at_cursor(ui, "Reaction", true, || {});
-                true
-            }
-            _ => false,
-        };
+        // For the sake of visual clarity the current entity's available actions
+        // are always rendered. In the event of a reaction prompt, the actions
+        // will then be disabled. This requires a little bit of special treatment
 
-        let disabled_token = ui.begin_disabled(reaction_prompt_active);
+        let actions_disabled = !matches!(
+            decision_progress.as_ref().unwrap(),
+            ActionDecisionProgress::Action { .. }
+        );
 
         ui.separator_with_text(format!("Current turn: {}", current_name));
 
-        decision_progress.render_mut_with_context(ui, (world, self));
+        let disabled_token = if actions_disabled {
+            // Render whatever the actual decision progress is
+            decision_progress.render_mut_with_context(ui, (world, self));
+
+            // Render placeholder action selection UI
+            let token = Some(ui.begin_disabled(actions_disabled));
+            Some(ActionDecisionProgress::from_prompt(&ActionPrompt::Action {
+                actor: current_entity,
+            }))
+            .render_mut_with_context(ui, (world, self));
+
+            token
+        } else {
+            // Render the actual action selection UI
+            decision_progress.render_mut_with_context(ui, (world, self));
+            None
+        };
 
         ui.separator();
 
@@ -330,7 +352,9 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
             self.end_turn(world, current_entity);
         }
 
-        disabled_token.end();
+        if let Some(token) = disabled_token {
+            token.end();
+        }
     }
 }
 
@@ -372,6 +396,13 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                     *action_options = systems::actions::available_actions(world, current_entity);
                 }
                 for (action_id, (contexts, resource_cost)) in action_options {
+                    // Don't render reactions (actions that *only* cost a reaction)
+                    if resource_cost.len() == 1
+                        && resource_cost.contains_key(&registry::resources::REACTION)
+                    {
+                        continue;
+                    }
+
                     if ui.button(&action_id.to_string()) && chosen_action.is_none() {
                         *chosen_action = Some(action_id.clone());
                         if contexts.len() == 1 {
@@ -395,6 +426,20 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                 let mut confirm_targets = false;
                 if chosen_action.is_some() && chosen_context.is_some() {
                     render_window_at_cursor(ui, "Target Selection", true, || {
+                        TextSegments::new(vec![
+                            (
+                                systems::helpers::get_component::<String>(world, current_entity)
+                                    .to_string(),
+                                TextKind::Actor,
+                            ),
+                            ("is using".to_string(), TextKind::Normal),
+                            (
+                                chosen_action.as_ref().unwrap().to_string(),
+                                TextKind::Action,
+                            ),
+                        ])
+                        .render(ui);
+
                         let targeting_context = systems::actions::targeting_context(
                             world,
                             current_entity,
@@ -432,11 +477,73 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                 }
             }
 
-            _ => {
-                ui.text(format!(
-                    "{:?} is not implemented yet :^)",
-                    self.as_ref().unwrap()
-                ));
+            ActionDecisionProgress::Reaction {
+                reactor,
+                action,
+                options,
+                choice,
+            } => {
+                let mut confirm_reaction = false;
+                render_window_at_cursor(ui, "Reaction", true, || {
+                    let mut segments = vec![
+                        (
+                            systems::helpers::get_component_clone::<String>(world, action.actor),
+                            TextKind::Actor,
+                        ),
+                        ("used".to_string(), TextKind::Normal),
+                        (action.action_id.to_string(), TextKind::Action),
+                    ];
+                    for (i, action_target) in action.targets.iter().enumerate() {
+                        if i == 0 {
+                            segments.push(("on".to_string(), TextKind::Normal));
+                        } else {
+                            segments.push((", ".to_string(), TextKind::Normal));
+                        }
+                        let target_name =
+                            systems::helpers::get_component_clone::<String>(world, *action_target);
+                        segments.push((target_name, TextKind::Target));
+                    }
+                    TextSegments::new(segments).render(ui);
+
+                    ui.text("Choose how to react");
+
+                    ui.separator_with_text(systems::helpers::get_component_clone::<String>(
+                        world, *reactor,
+                    ));
+                    for option in options {
+                        if render_button_selectable(
+                            ui,
+                            format!(
+                                "{}: {:?}\nCost: {:?}",
+                                option.reaction_id, option.context, option.resource_cost
+                            ),
+                            [0., 0.],
+                            choice.as_ref() == Some(option),
+                        ) {
+                            if choice.as_ref() == Some(option) {
+                                *choice = None;
+                            } else {
+                                *choice = Some(option.clone());
+                            }
+                        }
+                    }
+
+                    ui.separator();
+
+                    if ui.button("Confirm Reaction") {
+                        confirm_reaction = true;
+                    }
+                });
+
+                if confirm_reaction {
+                    let decision = self.take().unwrap().finalize();
+                    let result = encounter.process(world, decision).unwrap();
+                    match result {
+                        _ => {
+                            println!("{:?}", result);
+                        }
+                    }
+                }
             }
         }
     }

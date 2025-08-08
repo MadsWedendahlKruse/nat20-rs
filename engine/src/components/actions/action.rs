@@ -210,6 +210,7 @@ pub enum ReactionKind {
         action: ActionId,
         context: ActionContext,
         targets: Vec<Entity>,
+        consume_resources: bool,
     },
 }
 
