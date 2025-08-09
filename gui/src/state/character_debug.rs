@@ -11,8 +11,11 @@ use nat20_rs::{
 };
 use strum::IntoEnumIterator;
 
-use crate::render::utils::{
-    ImguiRenderableMutWithContext, render_uniform_buttons, render_window_at_cursor,
+use crate::{
+    buttons,
+    render::utils::{
+        ImguiRenderableMutWithContext, render_uniform_buttons, render_window_at_cursor,
+    },
 };
 
 pub enum CheckKind {
@@ -47,28 +50,32 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CharacterDebugGui {
 
         render_window_at_cursor(ui, "Debug", true, || match self.state.as_mut().unwrap() {
             CharacterDebugState::MainMenu => {
-                if ui.button("Heal Full") {
-                    systems::health::heal_full(&mut game_state.world, self.character);
-                }
-
-                if ui.button("Saving Throw") {
-                    self.state = Some(CharacterDebugState::Check {
-                        kind: CheckKind::SavingThrow,
-                        dc_value: 10,
-                    });
-                }
-
-                if ui.button("Skill Check") {
-                    self.state = Some(CharacterDebugState::Check {
-                        kind: CheckKind::SkillCheck,
-                        dc_value: 10,
-                    });
-                }
-
-                ui.separator();
-
-                if ui.button("Cancel") {
-                    self.state.take();
+                if let Some(index) = render_uniform_buttons(
+                    ui,
+                    ["Heal Full", "Saving Throw", "Skill Check", "Cancel"],
+                    [20.0, 5.0],
+                ) {
+                    match index {
+                        0 => {
+                            systems::health::heal_full(&mut game_state.world, self.character);
+                        }
+                        1 => {
+                            self.state = Some(CharacterDebugState::Check {
+                                kind: CheckKind::SavingThrow,
+                                dc_value: 10,
+                            });
+                        }
+                        2 => {
+                            self.state = Some(CharacterDebugState::Check {
+                                kind: CheckKind::SkillCheck,
+                                dc_value: 10,
+                            });
+                        }
+                        3 => {
+                            self.state.take();
+                        }
+                        _ => unreachable!(),
+                    }
                 }
             }
 

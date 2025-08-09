@@ -170,6 +170,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterGui {
                 if render_button_disabled_conditionally(
                     ui,
                     "Start Encounter",
+                    [0.0, 0.0],
                     participants.len() < 2,
                     "You must have at least two participants to start an encounter.",
                 ) {

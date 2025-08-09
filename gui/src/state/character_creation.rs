@@ -22,9 +22,11 @@ use nat20_rs::{
 use strum::IntoEnumIterator;
 
 use crate::{
+    buttons,
     render::utils::{
         ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-        render_button_selectable, render_uniform_buttons, render_window_at_cursor,
+        render_button_disabled_conditionally, render_button_selectable, render_uniform_buttons_do,
+        render_window_at_cursor,
     },
     table_with_columns,
 };
@@ -266,18 +268,19 @@ impl ImguiRenderableMut for CharacterCreation {
         render_window_at_cursor(ui, "Character Creation", true, || {
             match self.state {
                 Some(CharacterCreationState::ChoosingMethod) => {
-                    let labels = ["From Predefined", "From Scratch", "Cancel"];
-                    if let Some(clicked_index) = render_uniform_buttons(ui, &labels, [20.0, 5.]) {
-                        match clicked_index {
-                            0 => self.state = Some(CharacterCreationState::FromPredefined),
-                            1 => {
-                                self.reset();
-                                self.state = Some(CharacterCreationState::FromScratch);
-                            }
-                            2 => self.state = None,
-                            _ => unreachable!(),
-                        }
-                    }
+                    let mut buttons = buttons![
+                        "From Predefined" => |s: &mut Self| {
+                            s.state = Some(CharacterCreationState::FromPredefined);
+                        },
+                        "From Scratch" => |s: &mut Self| {
+                            s.reset();
+                            s.state = Some(CharacterCreationState::FromScratch);
+                        },
+                        "Cancel" => |s: &mut Self| {
+                            s.state = None;
+                        },
+                    ];
+                    let _ = render_uniform_buttons_do(ui, &mut buttons, self, [20.0, 5.0]);
                 }
 
                 Some(CharacterCreationState::FromPredefined) => {
@@ -351,9 +354,24 @@ impl ImguiRenderableMut for CharacterCreation {
                     // TODO: Not terribly efficient, but works for now
                     let prompt_clones = self.pending_decisions.clone();
 
-                    let mut decision_selected = false;
+                    let mut decision_updated = false;
                     for pending_decision in &mut self.pending_decisions {
                         if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs")) {
+                            let style_tokens = if pending_decision.progress.is_complete() {
+                                Some(
+                                    [
+                                        (imgui::StyleColor::Tab, [0.0, 0.6, 0.0, 1.0]),
+                                        (imgui::StyleColor::TabHovered, [0.0, 0.75, 0.0, 1.0]),
+                                        (imgui::StyleColor::TabSelected, [0.0, 0.75, 0.0, 1.0]),
+                                    ]
+                                    .iter()
+                                    .map(|(style, color)| ui.push_style_color(*style, *color))
+                                    .collect::<Vec<_>>(),
+                                )
+                            } else {
+                                None
+                            };
+
                             if let Some(tab) =
                                 ui.tab_item(format!("{}", pending_decision.prompt.name()))
                             {
@@ -363,12 +381,20 @@ impl ImguiRenderableMut for CharacterCreation {
 
                             tab_bar.end();
 
-                            if pending_decision.progress.is_complete() {
-                                let decision = pending_decision.progress.clone().finalize();
-                                if let Some(level_up_session) = &mut self.level_up_session {
+                            if let Some(level_up_session) = &mut self.level_up_session {
+                                // Check if a decision has been revoked
+                                if level_up_session.is_complete()
+                                    && !pending_decision.progress.is_complete()
+                                {
+                                    decision_updated = true;
+                                }
+
+                                // Check if the decision is complete
+                                if pending_decision.progress.is_complete() {
+                                    let decision = pending_decision.progress.clone().finalize();
                                     if !level_up_session.decisions().contains(&decision) {
                                         println!("New decision: {:?}", decision);
-                                        decision_selected = true;
+                                        decision_updated = true;
                                     }
                                 }
                             }
@@ -377,24 +403,37 @@ impl ImguiRenderableMut for CharacterCreation {
 
                     // Check if any new pending prompts were triggered
                     // Or if there are no pending decisions to choose from
-                    if decision_selected || self.pending_decisions.is_empty() {
+                    if decision_updated || self.pending_decisions.is_empty() {
                         self.sync_pending_decisions();
                     }
 
-                    if self.level_up_session.as_ref().unwrap().is_complete() {
-                        ui.separator();
-                        if ui.button_with_size("Level up", [200.0, 35.0]) {
-                            self.initial_character = Some(Character::from_world(
-                                &self.world,
-                                self.current_character.unwrap(),
-                            ));
-                            self.pending_decisions.clear();
-                        }
+                    let buttons_disabled = !self.level_up_session.as_ref().unwrap().is_complete();
+                    let tooltip = "Please complete all required choices (*) before proceeding.";
 
-                        ui.separator();
-                        if ui.button_with_size("Finish Character Creation", [200.0, 35.0]) {
-                            self.state = Some(CharacterCreationState::CreationComplete);
-                        }
+                    ui.separator();
+                    if render_button_disabled_conditionally(
+                        ui,
+                        "Level Up",
+                        [200.0, 30.0],
+                        buttons_disabled,
+                        tooltip,
+                    ) {
+                        self.initial_character = Some(Character::from_world(
+                            &self.world,
+                            self.current_character.unwrap(),
+                        ));
+                        self.pending_decisions.clear();
+                    }
+
+                    ui.separator();
+                    if render_button_disabled_conditionally(
+                        ui,
+                        "Finish Character Creation",
+                        [200.0, 30.0],
+                        buttons_disabled,
+                        tooltip,
+                    ) {
+                        self.state = Some(CharacterCreationState::CreationComplete);
                     }
                 }
 

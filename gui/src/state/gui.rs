@@ -119,6 +119,7 @@ impl GameGui {
                             if render_button_disabled_conditionally(
                                 ui,
                                 "New Encounter",
+                                [0.0, 0.0],
                                 characters.len() < 2,
                                 "You must have at least two characters to create an encounter.",
                             ) {
