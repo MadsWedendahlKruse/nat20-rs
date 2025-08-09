@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::format, vec};
+use std::{collections::HashMap, vec};
 
 use hecs::{Entity, World};
 use nat20_rs::{
@@ -61,8 +61,13 @@ impl ImguiRenderableWithContext<bool> for ModifierSet {
             self.total().to_string()
         };
         ui.text(total);
+        if self.is_empty() {
+            return;
+        }
         if ui.is_item_hovered() {
-            ui.tooltip_text(self.to_string());
+            ui.tooltip(|| {
+                self.render(ui);
+            });
         }
     }
 }

@@ -107,6 +107,9 @@ impl<'a> TextSegments<'a> {
 
 impl ImguiRenderable for TextSegments<'_> {
     fn render(&self, ui: &imgui::Ui) {
+        if self.segments.is_empty() {
+            return;
+        }
         ui.group(|| {
             indent_text(ui, self.indent_level);
             for (i, segment) in self.segments.iter().enumerate() {

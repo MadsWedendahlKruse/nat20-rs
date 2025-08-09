@@ -79,7 +79,15 @@ impl ModifierSet {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.modifiers.is_empty()
+        if self.modifiers.is_empty() {
+            return true;
+        }
+        for value in self.modifiers.values() {
+            if *value != 0 {
+                return false;
+            }
+        }
+        true
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&ModifierSource, &i32)> {
