@@ -94,6 +94,9 @@ pub struct CharacterLevels {
     /// The class that was first leveled up. Occasionally this is relevant, e.g
     /// when calculating the HP of the character
     first_class: Option<ClassName>,
+    /// The latest class that was leveled up. Right now it's only used to have a
+    /// default class for level up decisions
+    latest_class: Option<ClassName>,
     experience: u32,
 }
 
@@ -102,6 +105,7 @@ impl CharacterLevels {
         Self {
             class_levels: HashMap::new(),
             first_class: None,
+            latest_class: None,
             experience: 0,
         }
     }
@@ -129,6 +133,7 @@ impl CharacterLevels {
         if self.first_class.is_none() {
             self.first_class = Some(class.clone());
         }
+        self.latest_class = Some(class.clone());
 
         self.class_levels.get(&class).unwrap().level
     }
@@ -177,6 +182,10 @@ impl CharacterLevels {
 
     pub fn first_class(&self) -> Option<&ClassName> {
         self.first_class.as_ref()
+    }
+
+    pub fn latest_class(&self) -> Option<&ClassName> {
+        self.latest_class.as_ref()
     }
 }
 

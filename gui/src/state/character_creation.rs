@@ -116,18 +116,76 @@ impl LevelUpDecisionProgress {
             },
         }
     }
+
+    fn default_from_prompt_and_character(
+        prompt: &LevelUpPrompt,
+        world: &World,
+        entity: Entity,
+    ) -> Self {
+        if let Ok(levels) = world.get::<&CharacterLevels>(entity) {
+            if levels.total_level() > 0 {
+                match prompt {
+                    LevelUpPrompt::Class(_) => {
+                        return LevelUpDecisionProgress::Class(Some(
+                            levels.latest_class().unwrap().clone(),
+                        ));
+                    }
+
+                    LevelUpPrompt::AbilityScores(_, _) => {
+                        let mut assignments = HashMap::new();
+                        if let Some(class) =
+                            registry::classes::CLASS_REGISTRY.get(levels.latest_class().unwrap())
+                        {
+                            // Reset assignments to class defaults
+                            for (ability, score) in class.default_abilities.iter() {
+                                assignments.insert(*ability, *score);
+                            }
+                        }
+                        return LevelUpDecisionProgress::AbilityScores {
+                            assignments,
+                            remaining_budget: 0,
+                            plus_2_bonus: None,
+                            plus_1_bonus: None,
+                        };
+                    }
+
+                    _ => {}
+                }
+            }
+        }
+        Self::from_prompt(prompt)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 struct LevelUpPromptWithProgress {
     prompt: LevelUpPrompt,
     progress: LevelUpDecisionProgress,
+    initial_value: LevelUpDecisionProgress,
 }
 
 impl LevelUpPromptWithProgress {
     fn new(prompt: LevelUpPrompt) -> Self {
         let progress = LevelUpDecisionProgress::from_prompt(&prompt);
-        Self { prompt, progress }
+        Self {
+            prompt,
+            progress: progress.clone(),
+            initial_value: progress,
+        }
+    }
+
+    fn new_from_prompt_and_character(prompt: LevelUpPrompt, world: &World, entity: Entity) -> Self {
+        let progress =
+            LevelUpDecisionProgress::default_from_prompt_and_character(&prompt, world, entity);
+        Self {
+            prompt: prompt,
+            progress: progress.clone(),
+            initial_value: progress,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.progress = self.initial_value.clone();
     }
 }
 
@@ -253,8 +311,13 @@ impl CharacterCreation {
         for prompt in pending_prompts {
             let already_present = self.pending_decisions.iter().any(|p| p.prompt == *prompt);
             if !already_present {
-                self.pending_decisions
-                    .push(LevelUpPromptWithProgress::new(prompt.clone()));
+                self.pending_decisions.push(
+                    LevelUpPromptWithProgress::new_from_prompt_and_character(
+                        prompt.clone(),
+                        &self.world,
+                        self.current_character.unwrap(),
+                    ),
+                );
             }
         }
     }
@@ -333,7 +396,6 @@ impl ImguiRenderableMut for CharacterCreation {
                         .enter_returns_true(true)
                         .build()
                     {
-                        // User pressed Enter, maybe commit name change here
                         systems::helpers::set_component(
                             &mut self.world,
                             self.current_character.unwrap(),
@@ -350,9 +412,6 @@ impl ImguiRenderableMut for CharacterCreation {
                     }
 
                     ui.separator();
-
-                    // TODO: Not terribly efficient, but works for now
-                    let prompt_clones = self.pending_decisions.clone();
 
                     let mut decision_updated = false;
                     for pending_decision in &mut self.pending_decisions {
@@ -375,7 +434,7 @@ impl ImguiRenderableMut for CharacterCreation {
                             if let Some(tab) =
                                 ui.tab_item(format!("{}", pending_decision.prompt.name()))
                             {
-                                pending_decision.render_mut_with_context(ui, &prompt_clones);
+                                pending_decision.render_mut(ui);
                                 tab.end();
                             }
 
@@ -408,7 +467,7 @@ impl ImguiRenderableMut for CharacterCreation {
                     }
 
                     let buttons_disabled = !self.level_up_session.as_ref().unwrap().is_complete();
-                    let tooltip = "Please complete all required choices (*) before proceeding.";
+                    let tooltip = "Please complete all required choices before proceeding.";
 
                     ui.separator();
                     if render_button_disabled_conditionally(
@@ -443,12 +502,8 @@ impl ImguiRenderableMut for CharacterCreation {
     }
 }
 
-impl ImguiRenderableMutWithContext<&Vec<LevelUpPromptWithProgress>> for LevelUpPromptWithProgress {
-    fn render_mut_with_context(
-        &mut self,
-        ui: &imgui::Ui,
-        all_prompts: &Vec<LevelUpPromptWithProgress>,
-    ) {
+impl ImguiRenderableMut for LevelUpPromptWithProgress {
+    fn render_mut(&mut self, ui: &imgui::Ui) {
         match self.prompt {
             LevelUpPrompt::Class(ref classes) => {
                 if let LevelUpDecisionProgress::Class(ref mut decision) = self.progress {
@@ -475,6 +530,7 @@ impl ImguiRenderableMutWithContext<&Vec<LevelUpPromptWithProgress>> for LevelUpP
             }
 
             LevelUpPrompt::AbilityScores(ref scores_cost, ref point_budget) => {
+                let mut reset = false;
                 if let LevelUpDecisionProgress::AbilityScores {
                     ref mut assignments,
                     ref mut remaining_budget,
@@ -490,8 +546,7 @@ impl ImguiRenderableMutWithContext<&Vec<LevelUpPromptWithProgress>> for LevelUpP
 
                     ui.text(format!("Remaining Budget: {}", remaining_budget));
 
-                    // Reset button
-                    if ui.button("Reset##Abilities") {
+                    if ui.button("Clear##Abilities") {
                         for ability in Ability::iter() {
                             assignments.insert(ability, 8);
                         }
@@ -500,26 +555,16 @@ impl ImguiRenderableMutWithContext<&Vec<LevelUpPromptWithProgress>> for LevelUpP
                         *plus_1_bonus = None;
                     }
 
-                    for prompt in all_prompts {
-                        match &prompt.progress {
-                            LevelUpDecisionProgress::Class(chosen_class) => {
-                                if let Some(class) = chosen_class {
-                                    ui.same_line();
-                                    if ui.button(format!("Default ({})", class)) {
-                                        if let Some(class) =
-                                            registry::classes::CLASS_REGISTRY.get(class)
-                                        {
-                                            // Reset assignments to class defaults
-                                            for (ability, score) in class.default_abilities.iter() {
-                                                assignments.insert(*ability, *score);
-                                            }
-                                            *remaining_budget = *point_budget;
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
+                    ui.same_line();
+
+                    if ui.button("Recommended##Abilities") {
+                        reset = true;
+                    }
+                    if ui.is_item_hovered() {
+                        ui.tooltip_text(
+                            "Click to reset to recommended abilities for your class.\n\
+                             This will clear any custom assignments.",
+                        );
                     }
 
                     if let Some(table) =
@@ -631,6 +676,10 @@ impl ImguiRenderableMutWithContext<&Vec<LevelUpPromptWithProgress>> for LevelUpP
                     }
                 } else {
                     ui.text("Mismatched progress type for Ability Scores prompt");
+                }
+
+                if reset {
+                    self.reset();
                 }
             }
 
