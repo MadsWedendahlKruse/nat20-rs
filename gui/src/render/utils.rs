@@ -1,5 +1,3 @@
-use nat20_rs::components::damage::DamageType;
-
 pub trait ImguiRenderable {
     fn render(&self, ui: &imgui::Ui);
 }
@@ -123,6 +121,14 @@ pub fn render_button_disabled_conditionally(
     }
 
     clicked && !condition // Only return true if clicked and not disabled
+}
+
+pub fn render_empty_button(ui: &imgui::Ui, label: &str) {
+    let disabled = ui.begin_disabled(true);
+    let color = ui.push_style_color(imgui::StyleColor::Button, [0.3, 0.3, 0.3, 1.0]);
+    ui.button(label);
+    color.pop();
+    disabled.end();
 }
 
 pub fn render_window_at_cursor<R, F: FnOnce() -> R>(

@@ -29,7 +29,7 @@ use crate::{
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
             ImguiRenderableWithContext, render_button_disabled_conditionally,
-            render_button_selectable, render_window_at_cursor,
+            render_button_selectable, render_empty_button, render_window_at_cursor,
         },
     },
     table_with_columns,
@@ -424,6 +424,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                 }
 
                 let mut confirm_targets = false;
+                let mut cancel_action = false;
                 if chosen_action.is_some() && chosen_context.is_some() {
                     render_window_at_cursor(ui, "Target Selection", true, || {
                         TextSegments::new(vec![
@@ -456,6 +457,10 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                         if ui.button("Confirm Targets") {
                             confirm_targets = true;
                         }
+                        ui.separator();
+                        if ui.button("Cancel Action") {
+                            cancel_action = true;
+                        }
                     });
 
                     if confirm_targets {
@@ -473,6 +478,10 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                                 println!("{:?}", result);
                             }
                         }
+                    }
+
+                    if cancel_action {
+                        self.take().unwrap();
                     }
                 }
             }
@@ -579,6 +588,7 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
             }
 
             TargetingKind::Multiple { max_targets } => {
+                let max_targets = *max_targets as usize;
                 ui.text(format!(
                     "Selected {}/{} targets:",
                     targets.len(),
@@ -587,7 +597,7 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
                 ui.separator_with_text("Possible targets");
                 for entity in encounter.participants() {
                     if let Ok(name) = world.query_one_mut::<&String>(*entity) {
-                        if ui.button(name.clone()) && targets.len() < (*max_targets).into() {
+                        if ui.button(name.clone()) && targets.len() < max_targets {
                             targets.push(*entity);
                         }
                     }
@@ -600,6 +610,9 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
                             remove_target = Some(i);
                         }
                     }
+                }
+                for i in targets.len()..max_targets {
+                    render_empty_button(ui, &format!("Empty##{}", i));
                 }
                 if let Some(target_index) = remove_target {
                     targets.remove(target_index);

@@ -43,7 +43,7 @@ use crate::{
         text::{TextKind, TextSegment, TextSegments, indent_text},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-            ImguiRenderableWithContext,
+            ImguiRenderableWithContext, render_empty_button,
         },
     },
     table_with_columns,
@@ -290,7 +290,6 @@ impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
                     ui.table_next_column();
 
                     let label = format!("{}", ability);
-                    // ui.set_cursor_pos([ui.cursor_pos()[0] + 10.0, ui.cursor_pos()[1]]);
                     ui.text_colored([0.7, 0.7, 0.7, 1.0], &label);
                     prev_ability = ability;
 
@@ -392,13 +391,7 @@ impl ImguiRenderableMut for Spellbook {
             rendered += 1;
         }
         for i in rendered..self.max_prepared_spells() {
-            // Render fake "Empty" buttons for empty slots
-            let disabled = ui.begin_disabled(true);
-            let color = ui.push_style_color(imgui::StyleColor::Button, [0.3, 0.3, 0.3, 1.0]);
-            // Use a unique ID for each button to avoid conflicts
-            ui.button(format!("Empty##{}", i));
-            color.pop();
-            disabled.end();
+            render_empty_button(ui, &format!("Empty##{}", i));
         }
 
         ui.separator_with_text("All Spells");
@@ -809,7 +802,7 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
 
                 if ui.is_item_hovered() {
                     ui.tooltip(|| {
-                        TextSegment::new(target_name, TextKind::Target).render(ui);
+                        TextSegment::new(format!("{}'s", target_name), TextKind::Target).render(ui);
                         ui.same_line();
                         ui.text("Armor Class:");
                         ui.same_line();
