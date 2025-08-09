@@ -69,30 +69,29 @@ pub fn render_button_selectable(
 
 /// Renders a vertical list of same-width buttons with centered text.
 /// Returns the index of the clicked button, if any.
-pub fn render_uniform_buttons(ui: &imgui::Ui, labels: &[&str], padding: [f32; 2]) -> Option<usize> {
-    if labels.is_empty() {
-        return None;
-    }
+pub fn render_uniform_buttons<I, S>(ui: &imgui::Ui, labels: I, padding: [f32; 2]) -> Option<usize>
+where
+    I: Clone + IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let iter = labels.clone().into_iter();
 
-    // Measure the widest label
-    let max_width = labels
-        .iter()
-        .map(|label| ui.calc_text_size(label)[0])
+    // Pass 1: find max width
+    let max_width = iter
+        .map(|label| ui.calc_text_size(label.as_ref())[0])
         .fold(0.0, f32::max)
         + padding[0] * 2.0;
 
     let mut clicked_index = None;
 
-    for (i, label) in labels.iter().enumerate() {
-        // Optional: push style to center-align text (cosmetic if font is monospaced)
+    // Pass 2: render
+    for (i, label) in labels.into_iter().enumerate() {
         let style = ui.push_style_var(imgui::StyleVar::ButtonTextAlign([0.5, 0.5]));
-
-        let height = ui.calc_text_size(label)[1] + padding[1] * 2.0;
-        if ui.button_with_size(label, [max_width, height]) {
+        let height = ui.calc_text_size(label.as_ref())[1] + padding[1] * 2.0;
+        if ui.button_with_size(label.as_ref(), [max_width, height]) {
             clicked_index = Some(i);
         }
-
-        style.pop(); // Remove the text align override
+        style.pop();
     }
 
     clicked_index

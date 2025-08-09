@@ -8,7 +8,7 @@ use nat20_rs::{
             action::{ActionKindResult, ActionResult},
             targeting::TargetTypeInstance,
         },
-        d20_check::{D20CheckResult, RollMode},
+        d20_check::{D20CheckDC, D20CheckResult, RollMode},
         damage::{
             AttackRollResult, DamageComponentMitigation, DamageComponentResult,
             DamageMitigationResult, DamageRoll, DamageRollResult, MitigationOperation,
@@ -932,5 +932,29 @@ impl ImguiRenderable for DamageMitigationResult {
         }
         ui.same_line();
         ui.text(format!("= {}", self.total));
+    }
+}
+
+impl ImguiRenderable for D20CheckDC<Ability> {
+    fn render(&self, ui: &imgui::Ui) {
+        self.dc.render(ui);
+        ui.same_line();
+        TextSegments::new(vec![
+            (format!("({})", self.key), TextKind::Ability),
+            (format!("= {}", self.dc.total()), TextKind::Normal),
+        ])
+        .render(ui);
+    }
+}
+
+impl ImguiRenderable for D20CheckDC<Skill> {
+    fn render(&self, ui: &imgui::Ui) {
+        self.dc.render(ui);
+        ui.same_line();
+        TextSegments::new(vec![
+            (format!("({})", self.key), TextKind::Skill),
+            (format!("= {}", self.dc.total()), TextKind::Normal),
+        ])
+        .render(ui);
     }
 }

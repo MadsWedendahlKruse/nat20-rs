@@ -44,6 +44,14 @@ impl ModifierSet {
         }
     }
 
+    pub fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = (ModifierSource, i32)>,
+    {
+        let modifiers = iter.into_iter().collect();
+        Self { modifiers }
+    }
+
     pub fn add_modifier(&mut self, source: ModifierSource, value: i32) {
         self.modifiers.insert(source.clone(), value);
     }

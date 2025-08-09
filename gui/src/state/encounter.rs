@@ -25,11 +25,11 @@ use nat20_rs::{
 
 use crate::{
     render::{
-        text::{TextKind, TextSegment, TextSegments},
+        text::{TextKind, TextSegments},
         utils::{
-            ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-            ImguiRenderableWithContext, render_button_disabled_conditionally,
-            render_button_selectable, render_empty_button, render_window_at_cursor,
+            ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
+            render_button_disabled_conditionally, render_button_selectable, render_empty_button,
+            render_window_at_cursor,
         },
     },
     table_with_columns,
@@ -245,13 +245,12 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterGui {
                 ui.separator();
                 if ui.button("End Encounter") {
                     self.state = EncounterGuiState::EncounterFinished;
+                    game_state.end_encounter(&self.id);
                 }
             }
 
             EncounterGuiState::EncounterFinished => {
-                // Handle finished encounter state
                 ui.text("Encounter finished!");
-                game_state.end_encounter(&self.id);
             }
         }
     }

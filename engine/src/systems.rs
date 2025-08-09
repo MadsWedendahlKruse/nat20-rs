@@ -1,5 +1,6 @@
 pub mod actions;
 pub mod combat;
+pub mod d20_check;
 pub mod effects;
 pub mod health;
 pub mod helpers;

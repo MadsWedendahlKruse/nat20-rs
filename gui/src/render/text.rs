@@ -38,6 +38,8 @@ pub enum TextKind {
     Healing,
     Effect,
     Details,
+    Ability,
+    Skill,
 }
 
 impl TextKind {
@@ -51,6 +53,8 @@ impl TextKind {
             TextKind::Healing => [0.5, 1.0, 0.5, 1.0],
             TextKind::Effect => [1.0, 0.8, 0.5, 1.0],
             TextKind::Details => [0.75, 0.75, 0.75, 1.0],
+            TextKind::Ability => [0.75, 0.5, 1.0, 1.0],
+            TextKind::Skill => [0.5, 0.75, 1.0, 1.0],
         }
     }
 }

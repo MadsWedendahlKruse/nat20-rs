@@ -4,31 +4,29 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        actions::action::ActionContext,
-        id::{ActionId, EncounterId},
+        ability::Ability,
+        d20_check::{D20CheckDC, D20CheckResult},
+        id::EncounterId,
+        skill::Skill,
     },
-    engine::encounter::{ActionDecision, ActionDecisionResult, ActionError, Encounter},
+    engine::encounter::{ActionDecision, ActionDecisionResult, ActionError, CombatLog, Encounter},
 };
 
-// pub enum GameEvent {
-//     ActionRequested {
-//         /// The entity that is requesting the action
-//         entity: Entity,
-//         /// The ID of the action being requested
-//         action_id: ActionId,
-//         /// The context for the action, e.g. spell level
-//         context: ActionContext,
-//     },
-//     ReactionRequested(ReactionRequest),   // A reaction might be triggered
-//     ActionCancelled(ActionId),            // Something (like counterspell) cancelled an action
-//     ActionExecuted(ResolvedAction),       // The action is actually performed
-//     // Maybe also: ResourceSpent, DamageDealt, etc.
-// }
+// TODO: Not 100% sure this is the best solution
+pub enum GameEvent {
+    EncounterStarted(EncounterId),
+    EncounterEnded(EncounterId, CombatLog),
+    SavingThrow(Entity, D20CheckResult, D20CheckDC<Ability>),
+    SkillCheck(Entity, D20CheckResult, D20CheckDC<Skill>),
+}
+
+pub type EventLog = Vec<GameEvent>;
 
 pub struct GameState {
     pub world: World,
     pub encounters: HashMap<EncounterId, Encounter>,
     pub in_combat: HashMap<Entity, EncounterId>,
+    pub event_log: EventLog,
 }
 
 impl GameState {
@@ -37,6 +35,7 @@ impl GameState {
             world: World::new(),
             encounters: HashMap::new(),
             in_combat: HashMap::new(),
+            event_log: Vec::new(),
         }
     }
 
@@ -50,6 +49,8 @@ impl GameState {
         }
         let encounter = Encounter::new(&mut self.world, participants, encounter_id.clone());
         self.encounters.insert(encounter_id.clone(), encounter);
+        self.event_log
+            .push(GameEvent::EncounterStarted(encounter_id.clone()));
         encounter_id
     }
 
@@ -72,6 +73,10 @@ impl GameState {
             for entity in encounter.participants() {
                 self.in_combat.remove(&entity);
             }
+            self.event_log.push(GameEvent::EncounterEnded(
+                encounter_id.clone(),
+                encounter.combat_log,
+            ));
         }
     }
 
@@ -88,5 +93,10 @@ impl GameState {
         } else {
             todo!("Handle entity not in combat");
         }
+    }
+
+    // TODO: Not sure if it should be possible to log events from outside of the game state
+    pub fn log_event(&mut self, event: GameEvent) {
+        self.event_log.push(event);
     }
 }
