@@ -9,6 +9,7 @@ use crate::{
         damage::DamageResistances,
         effects::effects::Effect,
         hit_points::HitPoints,
+        id::FeatId,
         items::equipment::{loadout::Loadout, weapon::WeaponProficiencyMap},
         level::CharacterLevels,
         resource::{RechargeRule, Resource, ResourceMap},
@@ -71,6 +72,7 @@ from_world!(
         pub spellbook: Spellbook,
         pub resources: ResourceMap,
         pub effects: Vec<Effect>,
+        pub feats: Vec<FeatId>,
         pub actions: ActionMap,
         pub cooldowns: ActionCooldownMap,
     }
@@ -105,6 +107,7 @@ impl Character {
             spellbook: Spellbook::new(),
             resources,
             effects: Vec::new(),
+            feats: Vec::new(),
             // TODO: Default actions like jump, dash, help, etc.
             actions: ActionMap::new(),
             cooldowns: HashMap::new(),

@@ -232,7 +232,7 @@ pub mod creatures {
     };
 
     pub mod heroes {
-        use std::collections::HashSet;
+        use std::collections::{HashMap, HashSet};
 
         use crate::{
             components::{
@@ -266,6 +266,7 @@ pub mod creatures {
                 entity,
                 5,
                 vec![
+                    // Level 1
                     LevelUpDecision::Class(ClassName::Fighter),
                     LevelUpDecision::AbilityScores {
                         scores: registry::classes::CLASS_REGISTRY
@@ -283,13 +284,22 @@ pub mod creatures {
                         Skill::Athletics,
                         Skill::Perception,
                     ])),
+                    // Level 2
                     LevelUpDecision::Class(ClassName::Fighter),
+                    // Level 3
                     LevelUpDecision::Class(ClassName::Fighter),
                     LevelUpDecision::Subclass(SubclassName {
                         class: ClassName::Fighter,
                         name: "Champion".to_string(),
                     }),
+                    // Level 4
                     LevelUpDecision::Class(ClassName::Fighter),
+                    LevelUpDecision::Feat(registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone()),
+                    LevelUpDecision::AbilityScoreImprovement(HashMap::from([(
+                        Ability::Strength,
+                        2,
+                    )])),
+                    // Level 5
                     LevelUpDecision::Class(ClassName::Fighter),
                 ],
             );
@@ -314,6 +324,7 @@ pub mod creatures {
                 entity,
                 5,
                 vec![
+                    // Level 1
                     LevelUpDecision::Class(ClassName::Wizard),
                     LevelUpDecision::AbilityScores {
                         scores: registry::classes::CLASS_REGISTRY
@@ -328,13 +339,22 @@ pub mod creatures {
                         Skill::Arcana,
                         Skill::History,
                     ])),
+                    // Level 2
                     LevelUpDecision::Class(ClassName::Wizard),
+                    // Level 3
                     LevelUpDecision::Class(ClassName::Wizard),
                     LevelUpDecision::Subclass(SubclassName {
                         class: ClassName::Wizard,
                         name: "Evoker".to_string(),
                     }),
+                    // Level 4
                     LevelUpDecision::Class(ClassName::Wizard),
+                    LevelUpDecision::Feat(registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone()),
+                    LevelUpDecision::AbilityScoreImprovement(HashMap::from([(
+                        Ability::Intelligence,
+                        2,
+                    )])),
+                    // Level 5
                     LevelUpDecision::Class(ClassName::Wizard),
                 ],
             );
@@ -361,6 +381,7 @@ pub mod creatures {
                 entity,
                 5,
                 vec![
+                    // Level 1
                     LevelUpDecision::Class(ClassName::Warlock),
                     LevelUpDecision::AbilityScores {
                         scores: registry::classes::CLASS_REGISTRY
@@ -375,13 +396,22 @@ pub mod creatures {
                         Skill::Arcana,
                         Skill::Deception,
                     ])),
+                    // Level 2
                     LevelUpDecision::Class(ClassName::Warlock),
+                    // Level 3
                     LevelUpDecision::Class(ClassName::Warlock),
                     LevelUpDecision::Subclass(SubclassName {
                         class: ClassName::Warlock,
                         name: "Fiend Patron".to_string(),
                     }),
+                    // Level 4
                     LevelUpDecision::Class(ClassName::Warlock),
+                    LevelUpDecision::Feat(registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone()),
+                    LevelUpDecision::AbilityScoreImprovement(HashMap::from([(
+                        Ability::Charisma,
+                        2,
+                    )])),
+                    // Level 5
                     LevelUpDecision::Class(ClassName::Warlock),
                 ],
             );
@@ -418,6 +448,7 @@ pub mod creatures {
                 entity,
                 1,
                 vec![
+                    // Level 1
                     LevelUpDecision::Class(ClassName::Fighter),
                     LevelUpDecision::AbilityScores {
                         scores: registry::classes::CLASS_REGISTRY

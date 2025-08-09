@@ -8,9 +8,10 @@ use crate::{
         ability::{Ability, AbilityScore, AbilityScoreSet},
         actions::action::{ActionContext, ActionMap},
         class::{Class, ClassBase, ClassName, SubclassName},
-        id::EffectId,
+        id::{EffectId, FeatId},
         level::CharacterLevels,
         level_up::LevelUpPrompt,
+        modifier::ModifierSource,
         proficiency::Proficiency,
         resource::{ResourceCostMap, ResourceMap},
         saving_throw::SavingThrowSet,
@@ -30,6 +31,8 @@ pub enum LevelUpDecision {
         plus_2_bonus: Ability,
         plus_1_bonus: Ability,
     },
+    Feat(FeatId),
+    AbilityScoreImprovement(HashMap<Ability, u8>),
     // Feat(FeatOption),
     // AbilityScoreImprovement(u8), // u8 = number of points to distribute
     // AbilityPoint(Ability),
@@ -45,10 +48,8 @@ impl LevelUpDecision {
             LevelUpDecision::Effect(_) => "Effect",
             LevelUpDecision::SkillProficiency(_) => "SkillProficiency",
             LevelUpDecision::AbilityScores { .. } => "AbilityScores",
-            // LevelUpSelection::Feat(_) => "Feat",
-            // LevelUpSelection::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
-            // LevelUpSelection::AbilityPoint(_) => "AbilityPoint",
-            // LevelUpSelection::Spell(_, _) => "Spell",
+            LevelUpDecision::Feat(_) => "Feat",
+            LevelUpDecision::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
         }
     }
 }
@@ -253,6 +254,63 @@ pub fn resolve_level_up_prompt(
             }
         }
 
+        (LevelUpPrompt::Feat(feats), LevelUpDecision::Feat(feat_id)) => {
+            if !feats.contains(&feat_id) {
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
+            }
+
+            if let Some(feat) = registry::feats::FEAT_REGISTRY.get(feat_id) {
+                if !feat.meets_pre_requisites(world, entity) {
+                    return Err(LevelUpError::InvalidDecision { prompt, decision });
+                }
+
+                let mut feats = systems::helpers::get_component_mut::<Vec<FeatId>>(world, entity);
+                if !feat.is_repeatable() && feats.contains(feat_id) {
+                    return Err(LevelUpError::InvalidDecision { prompt, decision });
+                }
+
+                prompts.extend(feat.prompts().iter().cloned());
+                feats.push(feat_id.clone());
+            } else {
+                return Err(LevelUpError::RegistryMissing(feat_id.to_string()));
+            }
+        }
+
+        (
+            LevelUpPrompt::AbilityScoreImprovement {
+                feat,
+                budget,
+                abilities,
+                max_score,
+            },
+            LevelUpDecision::AbilityScoreImprovement(decision_points),
+        ) => {
+            if decision_points.values().sum::<u8>() != *budget {
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
+            }
+
+            let mut ability_score_set =
+                systems::helpers::get_component_mut::<AbilityScoreSet>(world, entity);
+
+            for (ability, bonus) in decision_points {
+                if !abilities.contains(ability) {
+                    return Err(LevelUpError::InvalidDecision { prompt, decision });
+                }
+                let current_score = ability_score_set.get(*ability).total() as u8;
+                if current_score + bonus > *max_score {
+                    return Err(LevelUpError::InvalidDecision { prompt, decision });
+                }
+
+                // TODO: Not sure what the best way to apply the points is
+                let source = if let Some(feat_id) = feat {
+                    ModifierSource::Feat(feat_id.clone())
+                } else {
+                    ModifierSource::Custom("Ability Score Improvement".to_string())
+                };
+                ability_score_set.add_modifier(*ability, source, *bonus as i32);
+            }
+        }
+
         _ => {
             // If the prompt and decision are called the same, and we made it here,
             // it's probably just because it hasn't been implemented yet
@@ -410,7 +468,7 @@ pub fn apply_level_up_decision(
 
         if !level_up_session.is_complete() {
             panic!(
-                "Level up session for {} at level {} did not complete: {:?}",
+                "Level up session for {} at level {} did not complete. Pending prompts: {:?}",
                 name,
                 level,
                 level_up_session.pending_prompts()

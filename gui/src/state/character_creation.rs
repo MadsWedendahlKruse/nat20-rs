@@ -6,7 +6,7 @@ use nat20_rs::{
     components::{
         ability::Ability,
         class::{ClassName, SubclassName},
-        id::EffectId,
+        id::{EffectId, FeatId},
         level::CharacterLevels,
         level_up::LevelUpPrompt,
         skill::Skill,
@@ -25,8 +25,8 @@ use crate::{
     buttons,
     render::utils::{
         ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-        render_button_disabled_conditionally, render_button_selectable, render_uniform_buttons_do,
-        render_window_at_cursor,
+        render_button_disabled_conditionally, render_button_selectable, render_uniform_buttons,
+        render_uniform_buttons_do, render_window_at_cursor,
     },
     table_with_columns,
 };
@@ -46,7 +46,11 @@ enum LevelUpDecisionProgress {
         plus_2_bonus: Option<Ability>,
         plus_1_bonus: Option<Ability>,
     },
-    // Add more as needed
+    Feat(Option<FeatId>),
+    AbilityScoreImprovement {
+        assignments: HashMap<Ability, u8>,
+        remaining_points: u8,
+    },
 }
 
 impl LevelUpDecisionProgress {
@@ -71,19 +75,28 @@ impl LevelUpDecisionProgress {
                     && plus_2_bonus.is_some()
                     && plus_1_bonus.is_some()
             }
+            LevelUpDecisionProgress::Feat(feat) => feat.is_some(),
+            LevelUpDecisionProgress::AbilityScoreImprovement {
+                assignments,
+                remaining_points,
+            } => remaining_points == &0 && !assignments.is_empty(),
         }
     }
 
     fn finalize(self) -> LevelUpDecision {
         match self {
             LevelUpDecisionProgress::Class(class) => LevelUpDecision::Class(class.unwrap()),
+
             LevelUpDecisionProgress::Subclass(subclass) => {
                 LevelUpDecision::Subclass(subclass.unwrap())
             }
+
             LevelUpDecisionProgress::Effect(effect) => LevelUpDecision::Effect(effect.unwrap()),
+
             LevelUpDecisionProgress::SkillProficiency { selected, .. } => {
                 LevelUpDecision::SkillProficiency(selected)
             }
+
             LevelUpDecisionProgress::AbilityScores {
                 assignments,
                 plus_2_bonus,
@@ -94,25 +107,47 @@ impl LevelUpDecisionProgress {
                 plus_2_bonus: plus_2_bonus.unwrap(),
                 plus_1_bonus: plus_1_bonus.unwrap(),
             },
+
+            LevelUpDecisionProgress::Feat(feat) => LevelUpDecision::Feat(feat.unwrap()),
+
+            LevelUpDecisionProgress::AbilityScoreImprovement { assignments, .. } => {
+                LevelUpDecision::AbilityScoreImprovement(assignments)
+            }
         }
     }
 
     fn from_prompt(prompt: &LevelUpPrompt) -> Self {
         match prompt {
             LevelUpPrompt::Class(_) => LevelUpDecisionProgress::Class(None),
+
             LevelUpPrompt::Subclass(_) => LevelUpDecisionProgress::Subclass(None),
+
             LevelUpPrompt::Effect(_) => LevelUpDecisionProgress::Effect(None),
+
             LevelUpPrompt::SkillProficiency(_, required) => {
                 LevelUpDecisionProgress::SkillProficiency {
                     selected: HashSet::new(),
                     remaining_decisions: *required,
                 }
             }
+
             LevelUpPrompt::AbilityScores(_, budget) => LevelUpDecisionProgress::AbilityScores {
                 assignments: HashMap::new(),
                 remaining_budget: *budget,
                 plus_2_bonus: None,
                 plus_1_bonus: None,
+            },
+
+            LevelUpPrompt::Feat(_) => LevelUpDecisionProgress::Feat(None),
+
+            LevelUpPrompt::AbilityScoreImprovement {
+                feat: _,
+                budget: _,
+                abilities: _,
+                max_score: _,
+            } => LevelUpDecisionProgress::AbilityScoreImprovement {
+                assignments: HashMap::new(),
+                remaining_points: 0,
             },
         }
     }
@@ -744,6 +779,80 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                     }
                 } else {
                     ui.text("Mismatched progress type for Skill Proficiency prompt");
+                }
+            }
+
+            LevelUpPrompt::Feat(ref feats) => {
+                if let LevelUpDecisionProgress::Feat(ref mut decision) = self.progress {
+                    if let Some(index) =
+                        render_uniform_buttons(ui, feats.iter().map(|f| f.to_string()), [20.0, 0.0])
+                    {
+                        if index < feats.len() {
+                            *decision = Some(feats[index].clone());
+                        }
+                    }
+                } else {
+                    ui.text("Mismatched progress type for Feat prompt");
+                }
+            }
+
+            LevelUpPrompt::AbilityScoreImprovement {
+                ref feat,
+                ref budget,
+                ref abilities,
+                ref max_score,
+            } => {
+                if let LevelUpDecisionProgress::AbilityScoreImprovement {
+                    ref mut assignments,
+                    ref mut remaining_points,
+                } = self.progress
+                {
+                    ui.text(format!("Remaining Points: {}", remaining_points));
+
+                    if ui.button("Reset##ASI") {
+                        assignments.clear();
+                        *remaining_points = *budget;
+                    }
+
+                    if let Some(table) = table_with_columns!(ui, "Abilities", "Ability", "Score") {
+                        for ability in abilities {
+                            // Ability name
+                            ui.table_next_column();
+                            ui.text(ability.to_string());
+
+                            // Ability score
+                            ui.table_next_column();
+
+                            // Button for decreasing ability score
+                            ui.same_line();
+                            if ui.button_with_size(format!("-##{}", ability), [30.0, 0.0]) {
+                                if let Some(score) = assignments.get_mut(&ability) {
+                                    if *score > 8 {
+                                        *score -= 1;
+                                    }
+                                }
+                            }
+
+                            let ability_score = assignments.get(&ability).unwrap().clone();
+                            ui.same_line();
+
+                            ui.text(format!("{:^2}", ability_score));
+
+                            // Button for increasing ability score
+                            ui.same_line();
+                            if ui.button_with_size(format!("+##{}", ability), [30.0, 0.0]) {
+                                if let Some(score) = assignments.get_mut(&ability) {
+                                    if *score < *max_score && *remaining_points > 0 {
+                                        *score += 1;
+                                        *remaining_points -= 1;
+                                    }
+                                }
+                            }
+                        }
+                        table.end();
+                    }
+                } else {
+                    ui.text("Mismatched progress type for Ability Score Improvement prompt");
                 }
             }
 

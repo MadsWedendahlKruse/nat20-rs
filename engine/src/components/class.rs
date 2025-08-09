@@ -136,10 +136,11 @@ impl Class {
 
         // Add feat decisions
         for level in feat_levels.iter() {
-            // TODO: Implement feat decision
-            // prompts_by_level.entry(*level)
-            //     .or_default()
-            //     .push(LevelUpChoice::feat_decision());
+            prompts_by_level
+                .entry(*level)
+                .or_default()
+                // TODO: Don't use *all* feats in the future
+                .push(LevelUpPrompt::feats());
         }
 
         Self {

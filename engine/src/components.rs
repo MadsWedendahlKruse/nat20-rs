@@ -5,6 +5,7 @@ pub mod d20_check;
 pub mod damage;
 pub mod dice;
 pub mod effects;
+pub mod feat;
 pub mod hit_points;
 pub mod id;
 pub mod items;

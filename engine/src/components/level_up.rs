@@ -7,14 +7,15 @@ use strum::IntoEnumIterator;
 
 use crate::{
     components::{
+        ability::Ability,
         class::{ClassName, SubclassName},
-        id::EffectId,
+        id::{EffectId, FeatId},
         skill::Skill,
     },
     registry,
 };
 
-pub static ABILITY_SCORE_POINT_COST: LazyLock<HashMap<u8, u8>> = LazyLock::new(|| {
+static ABILITY_SCORE_POINT_COST: LazyLock<HashMap<u8, u8>> = LazyLock::new(|| {
     HashMap::from([
         (8, 0),
         (9, 1),
@@ -27,7 +28,7 @@ pub static ABILITY_SCORE_POINT_COST: LazyLock<HashMap<u8, u8>> = LazyLock::new(|
     ])
 });
 
-pub static ABILITY_SCORE_POINTS: u8 = 27;
+static ABILITY_SCORE_POINTS: u8 = 27;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LevelUpPrompt {
@@ -36,9 +37,14 @@ pub enum LevelUpPrompt {
     Effect(Vec<EffectId>),
     SkillProficiency(HashSet<Skill>, u8),
     AbilityScores(HashMap<u8, u8>, u8),
-    // FeatSelection(Vec<FeatOption>),
-    // AbilityScoreImprovement(u8), // u8 = number of points to distribute
-    // AbilityPointSelection(Vec<Ability>),
+    Feat(Vec<FeatId>),
+    AbilityScoreImprovement {
+        // TODO: Does it ever *not* come from a feat?
+        feat: Option<FeatId>,
+        budget: u8,
+        abilities: HashSet<Ability>,
+        max_score: u8,
+    },
     // SpellSelection(SpellcastingClass, Vec<SpellOption>),
     // etc.
 }
@@ -51,10 +57,8 @@ impl LevelUpPrompt {
             LevelUpPrompt::Effect(_) => "Effect",
             LevelUpPrompt::SkillProficiency(_, _) => "SkillProficiency",
             LevelUpPrompt::AbilityScores(_, _) => "AbilityScores",
-            // LevelUpChoice::FeatSelection(_) => "FeatSelection",
-            // LevelUpChoice::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
-            // LevelUpChoice::AbilityPointSelection(_) => "AbilityPointSelection",
-            // LevelUpChoice::SpellSelection(_, _) => "SpellSelection",
+            LevelUpPrompt::Feat(_) => "Feat",
+            LevelUpPrompt::AbilityScoreImprovement { .. } => "AbilityScoreImprovement",
         }
     }
 }
@@ -77,5 +81,10 @@ impl LevelUpPrompt {
 
     pub fn ability_scores() -> Self {
         LevelUpPrompt::AbilityScores(ABILITY_SCORE_POINT_COST.clone(), ABILITY_SCORE_POINTS)
+    }
+
+    pub fn feats() -> Self {
+        let feats = registry::feats::FEAT_REGISTRY.keys().cloned().collect();
+        LevelUpPrompt::Feat(feats)
     }
 }

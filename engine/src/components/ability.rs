@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    hash::Hash,
+};
 
 use super::modifier::{ModifierSet, ModifierSource};
 
@@ -24,6 +28,10 @@ impl Ability {
             Ability::Wisdom => "WIS",
             Ability::Charisma => "CHA",
         }
+    }
+
+    pub fn set() -> HashSet<Ability> {
+        Ability::iter().collect()
     }
 }
 

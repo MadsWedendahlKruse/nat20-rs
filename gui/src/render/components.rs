@@ -14,8 +14,9 @@ use nat20_rs::{
             DamageMitigationResult, DamageRoll, DamageRollResult, MitigationOperation,
         },
         effects::effects::{Effect, EffectDuration},
+        feat::Feat,
         hit_points::HitPoints,
-        id::SpellId,
+        id::{FeatId, SpellId},
         items::{
             equipment::{
                 equipment::{EquipmentSlot, GeneralEquipmentSlot, HandSlot},
@@ -197,13 +198,18 @@ impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
                 tab.end();
             }
 
+            if let Some(tab) = ui.tab_item("Resources") {
+                systems::helpers::get_component::<ResourceMap>(world, *entity).render(ui);
+                tab.end();
+            }
+
             if let Some(tab) = ui.tab_item("Effects") {
                 systems::effects::effects(world, *entity).render(ui);
                 tab.end();
             }
 
-            if let Some(tab) = ui.tab_item("Resources") {
-                systems::helpers::get_component::<ResourceMap>(world, *entity).render(ui);
+            if let Some(tab) = ui.tab_item("Feats") {
+                systems::helpers::get_component::<Vec<FeatId>>(world, *entity).render(ui);
                 tab.end();
             }
 
@@ -223,12 +229,8 @@ impl ImguiRenderable for AbilityScore {
                     ("(Base)".to_string(), TextKind::Details),
                 ])
                 .render(ui);
-                if !self.modifiers.is_empty() {
-                    ui.same_line();
-                    ui.text("+");
-                    ui.same_line();
-                    self.modifiers.render(ui);
-                }
+                ui.same_line();
+                self.modifiers.render(ui);
             })
         }
     }
@@ -500,6 +502,23 @@ impl ImguiRenderable for Vec<Effect> {
                 // Source column
                 ui.table_next_column();
                 ui.text(effect.source().to_string());
+            }
+            table.end();
+        }
+    }
+}
+
+impl ImguiRenderable for Vec<FeatId> {
+    fn render(&self, ui: &imgui::Ui) {
+        if let Some(table) = table_with_columns!(ui, "Feats", "Feat") {
+            for feat in self {
+                ui.table_next_column();
+                ui.text(feat.to_string());
+                if ui.is_item_hovered() {
+                    ui.tooltip(|| {
+                        ui.text("Placeholder for feat details");
+                    });
+                }
             }
             table.end();
         }
