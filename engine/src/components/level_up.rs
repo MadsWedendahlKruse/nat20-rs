@@ -39,8 +39,7 @@ pub enum LevelUpPrompt {
     AbilityScores(HashMap<u8, u8>, u8),
     Feat(Vec<FeatId>),
     AbilityScoreImprovement {
-        // TODO: Does it ever *not* come from a feat?
-        feat: Option<FeatId>,
+        feat: FeatId,
         budget: u8,
         abilities: HashSet<Ability>,
         max_score: u8,

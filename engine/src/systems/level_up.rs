@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use hecs::{Entity, World};
 use strum::IntoEnumIterator;
+use uuid::Uuid;
 
 use crate::{
     components::{
@@ -33,9 +34,6 @@ pub enum LevelUpDecision {
     },
     Feat(FeatId),
     AbilityScoreImprovement(HashMap<Ability, u8>),
-    // Feat(FeatOption),
-    // AbilityScoreImprovement(u8), // u8 = number of points to distribute
-    // AbilityPoint(Ability),
     // Spell(SpellcastingClass, SpellOption),
     // etc.
 }
@@ -302,12 +300,13 @@ pub fn resolve_level_up_prompt(
                 }
 
                 // TODO: Not sure what the best way to apply the points is
-                let source = if let Some(feat_id) = feat {
-                    ModifierSource::Feat(feat_id.clone())
-                } else {
-                    ModifierSource::Custom("Ability Score Improvement".to_string())
-                };
-                ability_score_set.add_modifier(*ability, source, *bonus as i32);
+                ability_score_set.add_modifier(
+                    *ability,
+                    // Since some feats are repeatable, we can't use the same source
+                    // every time, so we'll have to make it unique
+                    ModifierSource::Feat(format!("{}.{}", feat.to_string(), Uuid::new_v4())),
+                    *bonus as i32,
+                );
             }
         }
 

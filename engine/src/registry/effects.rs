@@ -172,11 +172,6 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
         EffectDuration::Permanent,
     );
 
-    // TODO: The logic seems sound, but we need to apply the hook when finding
-    // the resource cost of the action, not when it's performed!
-    // BUT we also need to give the "Extra Attack" resource when the Action is
-    // performed, so we need to do both??
-
     effect.on_action = Arc::new({
         // This closure captures the `charges` variable, so we can use it in the
         // closure without having to pass it as an argument.
@@ -246,6 +241,7 @@ fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
         }
 
         // If the character has any "Extra Attack" charges, we use those instead
+        // of the "Action" resource.
         let resources = systems::helpers::get_component::<ResourceMap>(world, performer);
         if let Some(extra_attack) = resources.get(&registry::resources::EXTRA_ATTACK) {
             if extra_attack.current_uses() > 0 {

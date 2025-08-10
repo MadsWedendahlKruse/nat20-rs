@@ -43,7 +43,7 @@ macro_rules! table_with_columns {
     }};
 }
 
-static SELECTED_BUTTON_COLOR: [f32; 4] = [0.6, 0.6, 1.0, 1.0];
+static SELECTED_BUTTON_COLOR: [f32; 4] = [0.25, 0.6, 1.0, 1.0];
 
 pub fn render_button_selectable(
     ui: &imgui::Ui,

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::components::id::{FeatId, SpellId};
+use crate::components::id::SpellId;
 
 use super::{ability::Ability, proficiency::Proficiency};
 
@@ -15,7 +15,7 @@ pub enum ModifierSource {
     Custom(String),       // fallback for ad-hoc things
     Ability(Ability),     // e.g. "Strength"
     Proficiency(Proficiency),
-    Feat(FeatId), // e.g. "Great Weapon Master"
+    Feat(String), // e.g. "Great Weapon Master"
 }
 
 impl fmt::Display for ModifierSource {
@@ -29,7 +29,7 @@ impl fmt::Display for ModifierSource {
             ModifierSource::Custom(name) => write!(f, "Custom: {}", name),
             ModifierSource::Ability(ability) => write!(f, "{:?} Modifier", ability),
             ModifierSource::Proficiency(proficiency) => write!(f, "Proficiency: {:?}", proficiency),
-            ModifierSource::Feat(feat_id) => write!(f, "Feat: {}", feat_id),
+            ModifierSource::Feat(feat) => write!(f, "Feat: {}", feat),
         }
     }
 }

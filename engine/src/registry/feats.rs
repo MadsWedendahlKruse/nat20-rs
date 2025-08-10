@@ -28,7 +28,7 @@ pub static ABILITY_SCORE_IMPROVEMENT: LazyLock<Feat> = LazyLock::new(|| {
         })),
         vec![],
         vec![LevelUpPrompt::AbilityScoreImprovement {
-            feat: Some(ABILITY_SCORE_IMPROVEMENT_ID.clone()),
+            feat: ABILITY_SCORE_IMPROVEMENT_ID.clone(),
             budget: 2,
             abilities: Ability::set(),
             max_score: 20,

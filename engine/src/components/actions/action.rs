@@ -231,6 +231,7 @@ pub struct Action {
     /// * ActionId: The ID of the action that is being performed.
     /// * ActionContext: The context in which the action is being performed.
     /// * &\[Entity\]: The targets of the action.
+    // TODO: Struct with a nice name instead of all these fields?
     pub reaction_trigger: Option<
         Arc<
             dyn Fn(
