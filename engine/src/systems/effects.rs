@@ -27,6 +27,9 @@ pub fn get_effect(effect_id: &EffectId) -> Effect {
 pub fn add_effect(world: &mut World, entity: Entity, effect_id: &EffectId) {
     let effect = get_effect(effect_id);
     (effect.on_apply)(world, entity);
+    if let Some(replaces) = &effect.replaces {
+        remove_effect(world, entity, replaces);
+    }
     effects_mut(world, entity).push(effect);
 }
 

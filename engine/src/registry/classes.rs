@@ -33,6 +33,21 @@ pub static CLASS_REGISTRY: LazyLock<HashMap<ClassName, Class>> = LazyLock::new(|
     ])
 });
 
+// TODO-LIST
+// [x] Level 1: Second Wind
+// [ ] Level 1: Weapon Mastery
+// [x] Level 2: Action Surge
+// [ ] Level 2: Tactical Mind
+// [x] Level 3: Fighter Subclass
+// [x] Level 4: Ability Score Improvement
+// [x] Level 5: Extra Attack
+// [ ] Level 5: Tactical Shift
+// [ ] Level 9: Indomitable
+// [ ] Level 9: Tactical Master
+// [ ] Level 11: Two Extra Attacks
+// [ ] Level 13: Studied Attacks
+// [ ] Level 19: Epic Boon
+// [ ] Level 20: Three Extra Attacks
 static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
     Class::new(
         ClassName::Fighter,
@@ -116,6 +131,12 @@ fn second_wind(charges: u8) -> Resource {
     .unwrap()
 }
 
+// [x] Level 3: Improved Critical
+// [ ] Level 3: Remarkable Athlete
+// [ ] Level 7: Additional Fighting Style
+// [ ] Level 10: Heroic Warrior
+// [x] Level 15: Superior Critical
+// [ ] Level 18: Survivor
 static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
     name: SubclassName {
         class: ClassName::Fighter,
@@ -127,10 +148,10 @@ static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
         armor_proficiencies: HashSet::new(),
         weapon_proficiencies: HashSet::new(),
         spellcasting: SpellcastingProgression::None,
-        effects_by_level: HashMap::from([(
-            3,
-            vec![registry::effects::IMPROVED_CRITICAL_ID.clone()],
-        )]),
+        effects_by_level: HashMap::from([
+            (3, vec![registry::effects::IMPROVED_CRITICAL_ID.clone()]),
+            (15, vec![registry::effects::SUPERIOR_CRITICAL_ID.clone()]),
+        ]),
         resources_by_level: HashMap::new(),
         prompts_by_level: HashMap::new(),
         actions_by_level: HashMap::new(),

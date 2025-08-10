@@ -50,6 +50,7 @@ pub static EFFECT_REGISTRY: LazyLock<HashMap<EffectId, Effect>> = LazyLock::new(
         ),
         (IMPROVED_CRITICAL_ID.clone(), IMPROVED_CRITICAL.to_owned()),
         (RING_OF_ATTACKING_ID.clone(), RING_OF_ATTACKING.to_owned()),
+        (SUPERIOR_CRITICAL_ID.clone(), SUPERIOR_CRITICAL.to_owned()),
     ])
 });
 
@@ -376,5 +377,21 @@ static RING_OF_ATTACKING: LazyLock<Effect> = LazyLock::new(|| {
             ModifierSource::Item("Ring of Attacking".to_string()),
         );
     });
+    effect
+});
+
+pub static SUPERIOR_CRITICAL_ID: LazyLock<EffectId> =
+    LazyLock::new(|| EffectId::from_str("effect.fighter.champion.superior_critical"));
+
+static SUPERIOR_CRITICAL: LazyLock<Effect> = LazyLock::new(|| {
+    let mut effect = Effect::new(
+        SUPERIOR_CRITICAL_ID.clone(),
+        ModifierSource::ClassFeature("Superior Critical".to_string()),
+        EffectDuration::Permanent,
+    );
+    effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
+        attack_roll.reduce_crit_threshold(2);
+    });
+    effect.replaces = Some(IMPROVED_CRITICAL_ID.clone());
     effect
 });

@@ -84,6 +84,7 @@ pub struct Effect {
     pub post_damage_roll: DamageRollResultHook,
     pub on_action: ActionHook,
     pub on_resource_cost: ResourceCostHook,
+    pub replaces: Option<EffectId>,
 }
 
 impl Effect {
@@ -113,6 +114,7 @@ impl Effect {
             on_resource_cost: Arc::new(
                 |_: &World, _: Entity, _: &ActionContext, _: &mut HashMap<ResourceId, u8>| {},
             ) as ResourceCostHook,
+            replaces: None,
         }
     }
 

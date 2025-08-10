@@ -338,10 +338,16 @@ fn resolve_level_up_prompt(
 }
 
 fn increment_class_level(world: &mut World, entity: Entity, class: &Class) -> Vec<LevelUpPrompt> {
-    let new_level = {
+    let (new_level, subclass) = {
         let mut character_levels =
             systems::helpers::get_component_mut::<CharacterLevels>(world, entity);
-        character_levels.level_up(class.name.clone())
+        let new_level = character_levels.level_up(class.name.clone());
+        let subclass = if let Some(subclass_name) = character_levels.subclass(&class.name) {
+            class.subclass(&subclass_name)
+        } else {
+            None
+        };
+        (new_level, subclass)
     };
 
     for ability in class.saving_throw_proficiencies.iter() {
@@ -356,7 +362,11 @@ fn increment_class_level(world: &mut World, entity: Entity, class: &Class) -> Ve
 
     systems::spells::update_spell_slots(world, entity);
 
-    apply_class_base(world, entity, &class.base, new_level)
+    let mut prompts = apply_class_base(world, entity, &class.base, new_level);
+    if let Some(subclass) = subclass {
+        prompts.extend(apply_class_base(world, entity, subclass.base(), new_level));
+    }
+    prompts
 }
 
 fn set_subclass(
