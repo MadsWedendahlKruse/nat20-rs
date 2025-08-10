@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
+use glutin::api::egl::context;
 use hecs::{Entity, World};
-use imgui::TreeNodeFlags;
+use imgui::{ChildFlags, TreeNodeFlags};
 use nat20_rs::{
     components::{
         ability::{Ability, AbilityScoreSet},
@@ -10,13 +11,14 @@ use nat20_rs::{
         id::{EffectId, FeatId},
         level::CharacterLevels,
         level_up::LevelUpPrompt,
+        resource,
         skill::Skill,
     },
     entities::character::{Character, CharacterTag},
     registry,
     systems::{
         self,
-        level_up::{LevelUpDecision, LevelUpSession},
+        level_up::{LevelUpDecision, LevelUpGains, LevelUpSession},
     },
     test_utils::fixtures,
 };
@@ -26,8 +28,8 @@ use crate::{
     buttons,
     render::utils::{
         ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-        render_button_disabled_conditionally, render_button_selectable, render_uniform_buttons,
-        render_uniform_buttons_do, render_window_at_cursor,
+        ImguiRenderableWithContext, render_button_disabled_conditionally, render_button_selectable,
+        render_uniform_buttons, render_uniform_buttons_do, render_window_at_cursor,
     },
     table_with_columns,
 };
@@ -474,14 +476,26 @@ impl ImguiRenderableMut for CharacterCreation {
                     }
 
                     {
-                        let level = systems::helpers::get_component::<CharacterLevels>(
+                        let levels = systems::helpers::get_component::<CharacterLevels>(
                             &self.world,
                             self.current_character.unwrap(),
                         );
-                        level.render(ui);
-                    }
+                        levels.render(ui);
 
-                    ui.separator();
+                        // If a class has been chosen, show what will be gained at the next level
+                        if let Some(level_up_session) = &self.level_up_session {
+                            if let Some(class) = level_up_session.chosen_class() {
+                                systems::level_up::level_up_gains(
+                                    &self.world,
+                                    self.current_character.unwrap(),
+                                    &class,
+                                    levels.class_level(&class).unwrap().level(),
+                                )
+                                .render(ui);
+                            }
+                        }
+                        ui.separator();
+                    }
 
                     let mut decision_updated = None;
                     for pending_decision in &mut self.pending_decisions {
@@ -939,6 +953,38 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
 
             _ => {
                 ui.text(format!("Not implemented yet :^)",));
+            }
+        }
+    }
+}
+
+impl ImguiRenderable for LevelUpGains {
+    fn render(&self, ui: &imgui::Ui) {
+        ui.separator_with_text("Gained this level");
+
+        ui.bullet_text(format!(
+            "Hit Points increased to: {}",
+            self.hit_points.max()
+        ));
+
+        if !self.actions.is_empty() {
+            ui.separator();
+            for action in &self.actions {
+                ui.bullet_text(format!("Action: {}", action));
+            }
+        }
+
+        if !self.effects.is_empty() {
+            ui.separator();
+            for effect in &self.effects {
+                ui.bullet_text(format!("Effect: {}", effect));
+            }
+        }
+
+        if !self.resources.is_empty() {
+            ui.separator();
+            for resource in &self.resources {
+                ui.bullet_text(format!("Resource: {}", resource.kind()));
             }
         }
     }

@@ -9,12 +9,13 @@ use crate::{
         ability::{Ability, AbilityScore, AbilityScoreSet},
         actions::action::{ActionContext, ActionMap},
         class::{Class, ClassBase, ClassName, SubclassName},
-        id::{EffectId, FeatId},
+        hit_points::HitPoints,
+        id::{ActionId, EffectId, FeatId},
         level::CharacterLevels,
         level_up::LevelUpPrompt,
         modifier::ModifierSource,
         proficiency::Proficiency,
-        resource::{ResourceCostMap, ResourceMap},
+        resource::{Resource, ResourceCostMap, ResourceMap},
         saving_throw::SavingThrowSet,
         skill::{Skill, SkillSet},
     },
@@ -134,9 +135,16 @@ impl LevelUpSession {
         self.pending_prompts.extend(new_prompts);
         Ok(())
     }
+
+    pub fn chosen_class(&self) -> Option<ClassName> {
+        self.decisions.iter().find_map(|d| match d {
+            LevelUpDecision::Class(class_name) => Some(class_name.clone()),
+            _ => None,
+        })
+    }
 }
 
-pub fn resolve_level_up_prompt(
+fn resolve_level_up_prompt(
     world: &mut World,
     entity: Entity,
     prompt: LevelUpPrompt,
@@ -405,9 +413,9 @@ fn apply_class_base(
                     let resource_cost = &action.resource_cost().clone();
                     actions
                         .entry(action_id.clone())
-                        .and_modify(|a: &mut (Vec<ActionContext>, ResourceCostMap)| {
-                            a.0.push(context.clone().unwrap());
-                            a.1.extend(resource_cost.clone());
+                        .and_modify(|(action_context, action_resource_cost)| {
+                            action_context.push(context.clone().unwrap());
+                            action_resource_cost.extend(resource_cost.clone());
                         })
                         .or_insert((vec![context.clone().unwrap()], resource_cost.clone()));
                 } else {
@@ -474,5 +482,50 @@ pub fn apply_level_up_decision(
                 level_up_session.pending_prompts()
             );
         }
+    }
+}
+
+pub struct LevelUpGains {
+    pub hit_points: HitPoints,
+    pub actions: Vec<ActionId>,
+    pub effects: Vec<EffectId>,
+    pub resources: Vec<Resource>,
+}
+
+pub fn level_up_gains(
+    world: &World,
+    entity: Entity,
+    class_name: &ClassName,
+    level: u8,
+) -> LevelUpGains {
+    let class = registry::classes::CLASS_REGISTRY
+        .get(class_name)
+        .expect("Class should exist in the registry");
+
+    let hit_points = systems::helpers::get_component_clone::<HitPoints>(world, entity);
+    let effects = class
+        .base
+        .effects_by_level
+        .get(&level)
+        .cloned()
+        .unwrap_or_default();
+    let resources = class
+        .base
+        .resources_by_level
+        .get(&level)
+        .cloned()
+        .unwrap_or_default();
+    let actions = class
+        .base
+        .actions_by_level
+        .get(&level)
+        .cloned()
+        .unwrap_or_default();
+
+    LevelUpGains {
+        hit_points,
+        actions,
+        effects,
+        resources,
     }
 }
