@@ -80,11 +80,6 @@ impl LevelUpSession {
         let mut pending = Vec::new();
         pending.push(LevelUpPrompt::class());
 
-        // Special level up prompts when creating a new character
-        if systems::helpers::get_component::<CharacterLevels>(world, character).total_level() == 0 {
-            pending.push(LevelUpPrompt::ability_scores());
-        }
-
         LevelUpSession {
             character,
             pending_prompts: pending,
@@ -153,6 +148,12 @@ pub fn resolve_level_up_prompt(
         (LevelUpPrompt::Class(classes), LevelUpDecision::Class(class_name)) => {
             if !classes.contains(&class_name) {
                 return Err(LevelUpError::InvalidDecision { prompt, decision });
+            }
+
+            // Special prompt when creating a new character
+            if systems::helpers::get_component::<CharacterLevels>(world, entity).total_level() == 0
+            {
+                prompts.push(LevelUpPrompt::ability_scores());
             }
 
             if let Some(class) = registry::classes::CLASS_REGISTRY.get(&class_name) {

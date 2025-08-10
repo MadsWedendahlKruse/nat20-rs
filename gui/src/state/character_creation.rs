@@ -86,20 +86,30 @@ impl LevelUpDecisionProgress {
         }
     }
 
+    fn is_empty(&self) -> bool {
+        match self {
+            LevelUpDecisionProgress::Class(class) => class.is_none(),
+            LevelUpDecisionProgress::Subclass(subclass) => subclass.is_none(),
+            LevelUpDecisionProgress::Effect(effect) => effect.is_none(),
+            LevelUpDecisionProgress::SkillProficiency { selected, .. } => selected.is_empty(),
+            LevelUpDecisionProgress::AbilityScores { assignments, .. } => assignments.is_empty(),
+            LevelUpDecisionProgress::Feat(feat) => feat.is_none(),
+            LevelUpDecisionProgress::AbilityScoreImprovement { assignments, .. } => {
+                assignments.is_empty()
+            }
+        }
+    }
+
     fn finalize(self) -> LevelUpDecision {
         match self {
             LevelUpDecisionProgress::Class(class) => LevelUpDecision::Class(class.unwrap()),
-
             LevelUpDecisionProgress::Subclass(subclass) => {
                 LevelUpDecision::Subclass(subclass.unwrap())
             }
-
             LevelUpDecisionProgress::Effect(effect) => LevelUpDecision::Effect(effect.unwrap()),
-
             LevelUpDecisionProgress::SkillProficiency { selected, .. } => {
                 LevelUpDecision::SkillProficiency(selected)
             }
-
             LevelUpDecisionProgress::AbilityScores {
                 assignments,
                 plus_2_bonus,
@@ -110,9 +120,7 @@ impl LevelUpDecisionProgress {
                 plus_2_bonus: plus_2_bonus.unwrap(),
                 plus_1_bonus: plus_1_bonus.unwrap(),
             },
-
             LevelUpDecisionProgress::Feat(feat) => LevelUpDecision::Feat(feat.unwrap()),
-
             LevelUpDecisionProgress::AbilityScoreImprovement { assignments, .. } => {
                 LevelUpDecision::AbilityScoreImprovement(assignments)
             }
@@ -122,27 +130,21 @@ impl LevelUpDecisionProgress {
     fn from_prompt(prompt: &LevelUpPrompt) -> Self {
         match prompt {
             LevelUpPrompt::Class(_) => LevelUpDecisionProgress::Class(None),
-
             LevelUpPrompt::Subclass(_) => LevelUpDecisionProgress::Subclass(None),
-
             LevelUpPrompt::Effect(_) => LevelUpDecisionProgress::Effect(None),
-
             LevelUpPrompt::SkillProficiency(_, required) => {
                 LevelUpDecisionProgress::SkillProficiency {
                     selected: HashSet::new(),
                     remaining_decisions: *required,
                 }
             }
-
             LevelUpPrompt::AbilityScores(_, budget) => LevelUpDecisionProgress::AbilityScores {
                 assignments: HashMap::new(),
                 remaining_budget: *budget,
                 plus_2_bonus: None,
                 plus_1_bonus: None,
             },
-
             LevelUpPrompt::Feat(_) => LevelUpDecisionProgress::Feat(None),
-
             LevelUpPrompt::AbilityScoreImprovement { budget, .. } => {
                 LevelUpDecisionProgress::AbilityScoreImprovement {
                     base_scores: HashMap::new(),
@@ -339,25 +341,43 @@ impl CharacterCreation {
             self.current_character.unwrap(),
         ));
 
+        // TODO: Naming seems all over the place here (both variables and structs)
         // Check if any of the current decisions are still valid
-        let mut valid_in_progress = Vec::new();
-        for prompt_progress in &self.pending_decisions {
-            if prompt_progress.progress.is_complete() {
-                let decision = prompt_progress.progress.clone().finalize();
-                let result = self
-                    .level_up_session
-                    .as_mut()
-                    .unwrap()
-                    .advance(&mut self.world, &decision);
-                if result.is_ok() {
-                    valid_in_progress.push(prompt_progress.clone());
-                }
+        let mut valid_decisions = Vec::new();
+
+        // Split decisions by whether they are completed or still pending
+        let (completed_decisions, pending_decisions) = self
+            .pending_decisions
+            .iter()
+            .partition::<Vec<_>, _>(|p| p.progress.is_complete());
+
+        // Keep all the decisions which are still valid for the new level-up session
+        for prompt_progress in completed_decisions {
+            let decision = prompt_progress.progress.clone().finalize();
+            let result = self
+                .level_up_session
+                .as_mut()
+                .unwrap()
+                .advance(&mut self.world, &decision);
+            if result.is_ok() {
+                valid_decisions.push(prompt_progress.clone());
             }
         }
-        self.pending_decisions = valid_in_progress;
 
         let pending_prompts = self.level_up_session.as_ref().unwrap().pending_prompts();
 
+        // Keep all the decisions in progress which are still valid for the new level-up session
+        for promp_progress in pending_decisions {
+            if pending_prompts.iter().any(|p| *p == promp_progress.prompt)
+                && !promp_progress.progress.is_empty()
+            {
+                valid_decisions.push(promp_progress.clone());
+            }
+        }
+
+        self.pending_decisions = valid_decisions;
+
+        // Add any new pending prompts that were triggered by the level-up session
         for prompt in pending_prompts {
             let already_present = self.pending_decisions.iter().any(|p| p.prompt == *prompt);
             if !already_present {
@@ -463,7 +483,7 @@ impl ImguiRenderableMut for CharacterCreation {
 
                     ui.separator();
 
-                    let mut decision_updated = false;
+                    let mut decision_updated = None;
                     for pending_decision in &mut self.pending_decisions {
                         if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs")) {
                             let style_tokens = if pending_decision.progress.is_complete() {
@@ -495,7 +515,7 @@ impl ImguiRenderableMut for CharacterCreation {
                                 if level_up_session.is_complete()
                                     && !pending_decision.progress.is_complete()
                                 {
-                                    decision_updated = true;
+                                    decision_updated = Some(pending_decision.clone());
                                 }
 
                                 // Check if the decision is complete
@@ -503,16 +523,25 @@ impl ImguiRenderableMut for CharacterCreation {
                                     let decision = pending_decision.progress.clone().finalize();
                                     if !level_up_session.decisions().contains(&decision) {
                                         println!("New decision: {:?}", decision);
-                                        decision_updated = true;
+                                        decision_updated = Some(pending_decision.clone());
                                     }
                                 }
                             }
                         }
                     }
 
+                    // All the other decisions arise from what class is chosen,
+                    // so if the class decision is updated, we can reset the
+                    // other decisions (little bit of a hack)
+                    if let Some(decision) = decision_updated.as_ref() {
+                        if matches!(decision.prompt, LevelUpPrompt::Class(_)) {
+                            self.pending_decisions = vec![decision.clone()];
+                        }
+                    }
+
                     // Check if any new pending prompts were triggered
                     // Or if there are no pending decisions to choose from
-                    if decision_updated || self.pending_decisions.is_empty() {
+                    if decision_updated.is_some() || self.pending_decisions.is_empty() {
                         self.sync_pending_decisions();
                     }
 
