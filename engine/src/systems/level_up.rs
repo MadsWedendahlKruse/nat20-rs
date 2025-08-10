@@ -503,24 +503,40 @@ pub fn level_up_gains(
         .expect("Class should exist in the registry");
 
     let hit_points = systems::helpers::get_component_clone::<HitPoints>(world, entity);
-    let effects = class
+    let mut effects = class
         .base
         .effects_by_level
         .get(&level)
         .cloned()
         .unwrap_or_default();
-    let resources = class
+    let mut resources = class
         .base
         .resources_by_level
         .get(&level)
         .cloned()
         .unwrap_or_default();
-    let actions = class
+    let mut actions = class
         .base
         .actions_by_level
         .get(&level)
         .cloned()
         .unwrap_or_default();
+
+    if let Some(subclass) =
+        systems::helpers::get_component::<CharacterLevels>(world, entity).subclass(class_name)
+    {
+        if let Some(subclass) = class.subclass(&subclass) {
+            if let Some(subclass_effects) = subclass.base.effects_by_level.get(&level) {
+                effects.extend(subclass_effects.clone());
+            }
+            if let Some(subclass_resources) = subclass.base.resources_by_level.get(&level) {
+                resources.extend(subclass_resources.clone());
+            }
+            if let Some(subclass_actions) = subclass.base.actions_by_level.get(&level) {
+                actions.extend(subclass_actions.clone());
+            }
+        }
+    }
 
     LevelUpGains {
         hit_points,
