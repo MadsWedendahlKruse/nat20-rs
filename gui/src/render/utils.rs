@@ -147,23 +147,20 @@ pub fn render_button_disabled_conditionally(
     condition: bool,
     tooltip: &str,
 ) -> bool {
-    let style = if condition {
-        Some(ui.push_style_var(imgui::StyleVar::Alpha(0.5))) // make it look disabled
-    } else {
-        None
-    };
+    let disabled_token = ui.begin_disabled(condition);
 
     let clicked = ui.button_with_size(label, size);
 
-    if let Some(s) = style {
-        s.pop();
-    }
+    disabled_token.end();
 
-    if ui.is_item_hovered() && condition && !tooltip.is_empty() {
+    if ui.is_item_hovered_with_flags(imgui::HoveredFlags::ALLOW_WHEN_DISABLED)
+        && condition
+        && !tooltip.is_empty()
+    {
         ui.tooltip_text(tooltip);
     }
 
-    clicked && !condition // Only return true if clicked and not disabled
+    clicked
 }
 
 pub fn render_empty_button(ui: &imgui::Ui, label: &str) {
