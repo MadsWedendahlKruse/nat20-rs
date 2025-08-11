@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    vec,
+};
 
 use hecs::{Entity, World};
 use imgui::TreeNodeFlags;
@@ -9,7 +12,8 @@ use nat20_rs::{
         id::{BackgroundId, EffectId, FeatId},
         level::CharacterLevels,
         level_up::LevelUpPrompt,
-        skill::Skill,
+        proficiency::{Proficiency, ProficiencyLevel},
+        skill::{Skill, SkillSet},
     },
     entities::character::{Character, CharacterTag},
     registry,
@@ -23,10 +27,13 @@ use strum::IntoEnumIterator;
 
 use crate::{
     buttons,
-    render::utils::{
-        ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-        render_button_disabled_conditionally, render_button_selectable, render_uniform_buttons_do,
-        render_window_at_cursor,
+    render::{
+        text::{TextKind, TextSegments},
+        utils::{
+            ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
+            render_button_disabled_conditionally, render_button_selectable,
+            render_uniform_buttons_do, render_window_at_cursor,
+        },
     },
     table_with_columns,
 };
@@ -40,6 +47,8 @@ enum LevelUpDecisionProgress {
     SkillProficiency {
         selected: HashSet<Skill>,
         remaining_decisions: u8,
+        /// For visual clarity when rendering
+        all_skills: HashMap<Skill, Proficiency>,
     },
     AbilityScores {
         assignments: HashMap<Ability, u8>,
@@ -66,6 +75,7 @@ impl LevelUpDecisionProgress {
             LevelUpDecisionProgress::SkillProficiency {
                 selected,
                 remaining_decisions,
+                ..
             } => remaining_decisions == &0 && selected.len() > 0,
             LevelUpDecisionProgress::AbilityScores {
                 assignments,
@@ -142,6 +152,7 @@ impl LevelUpDecisionProgress {
                 LevelUpDecisionProgress::SkillProficiency {
                     selected: HashSet::new(),
                     remaining_decisions: *required,
+                    all_skills: HashMap::new(),
                 }
             }
             LevelUpPrompt::AbilityScores(_, budget) => LevelUpDecisionProgress::AbilityScores {
@@ -209,6 +220,18 @@ impl LevelUpDecisionProgress {
                             base_scores,
                             assignments: HashMap::new(),
                             remaining_points: *budget,
+                        };
+                    }
+
+                    LevelUpPrompt::SkillProficiency(_, num_options, _) => {
+                        let skill_set = systems::helpers::get_component::<SkillSet>(world, entity);
+                        let all_skills = Skill::iter()
+                            .map(|skill| (skill, skill_set.get(skill).proficiency().clone()))
+                            .collect();
+                        return LevelUpDecisionProgress::SkillProficiency {
+                            selected: HashSet::new(),
+                            remaining_decisions: *num_options,
+                            all_skills,
                         };
                     }
 
@@ -821,42 +844,70 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                 }
             }
 
-            LevelUpPrompt::SkillProficiency(skills, num_prompts, source) => {
+            LevelUpPrompt::SkillProficiency(skill_options, num_options, source) => {
                 if let LevelUpDecisionProgress::SkillProficiency {
                     ref mut selected,
                     ref mut remaining_decisions,
+                    ref all_skills,
                 } = self.progress
                 {
                     ui.text(format!(
                         "Select up to {} skills ({} selected):",
-                        num_prompts,
+                        num_options,
                         selected.len()
                     ));
 
                     if ui.button("Reset##Skills") {
                         selected.clear();
-                        *remaining_decisions = *num_prompts;
+                        *remaining_decisions = *num_options;
                     }
 
-                    if let Some(table) = table_with_columns!(ui, "Skills", "Skill", "") {
-                        for skill in skills {
+                    if let Some(table) = table_with_columns!(ui, "Skills", "", "Skill", "") {
+                        for skill in Skill::iter() {
+                            ui.table_next_column();
+                            let proficiency = all_skills.get(&skill).unwrap();
+                            proficiency.render(ui);
+
                             ui.table_next_column();
                             ui.text(skill.to_string());
 
                             ui.table_next_column();
-                            let is_selected = selected.contains(skill);
-                            let mut checked = is_selected;
+                            if skill_options.contains(&skill) {
+                                let mut checked = selected.contains(&skill);
 
-                            if ui.checkbox(format!("##{}", skill), &mut checked) {
-                                if checked {
-                                    // Only add if we have room and it's not already selected
-                                    if selected.len() < *num_prompts as usize {
-                                        selected.insert(*skill);
-                                        *remaining_decisions -= 1;
+                                let already_proficient =
+                                    proficiency.level() != &ProficiencyLevel::None;
+
+                                let disabled_token = ui.begin_disabled(already_proficient);
+
+                                if ui.checkbox(format!("##{}", skill), &mut checked) {
+                                    if checked {
+                                        // Only add if we have room and it's not already selected
+                                        if *remaining_decisions > 0 {
+                                            selected.insert(skill);
+                                            *remaining_decisions -= 1;
+                                        }
+                                    } else {
+                                        selected.remove(&skill);
+                                        *remaining_decisions += 1;
                                     }
-                                } else {
-                                    selected.remove(skill);
-                                    *remaining_decisions += 1;
+                                }
+
+                                disabled_token.end();
+
+                                if ui.is_item_hovered_with_flags(
+                                    imgui::HoveredFlags::ALLOW_WHEN_DISABLED,
+                                ) && already_proficient
+                                {
+                                    ui.tooltip(|| {
+                                        TextSegments::new(vec![
+                                            ("Already proficient in", TextKind::Normal),
+                                            (&format!("{}", skill), TextKind::Skill),
+                                        ])
+                                        .render(ui);
+                                        // ui.same_line();
+                                        // proficiency.render(ui);
+                                    });
                                 }
                             }
                         }

@@ -481,15 +481,6 @@ fn apply_class_base(
                 });
             }
 
-            // Skill proficieny can be acquired e.g. through a Background, so we need
-            // to filter out the skills that the character already has.
-            LevelUpPrompt::SkillProficiency(skills, _, _) => {
-                let skill_set = systems::helpers::get_component::<SkillSet>(world, entity);
-                skills.retain(|skill| {
-                    skill_set.get(*skill).proficiency().level() == &ProficiencyLevel::None
-                });
-            }
-
             _ => {}
         }
     }
