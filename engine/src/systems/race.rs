@@ -21,9 +21,7 @@ pub fn set_race(world: &mut World, entity: Entity, race: &RaceId) -> Vec<LevelUp
     systems::helpers::set_component::<Option<RaceId>>(world, entity, Some(race.id.clone()));
 
     // TODO: The race is presumably always set at level 1?
-    let level = 1;
-    // TODO: Subrace handling?
-    apply_race_base(world, entity, &race.base, level);
+    apply_race_base(world, entity, &race.base, 1);
 
     if !race.subraces.is_empty() {
         prompts.push(LevelUpPrompt::Subrace(
@@ -51,6 +49,9 @@ pub fn set_subrace(world: &mut World, entity: Entity, subrace: &SubraceId) {
     ));
 
     systems::helpers::set_component::<Option<SubraceId>>(world, entity, Some(subrace.id.clone()));
+
+    // TODO: Always level 1?
+    apply_race_base(world, entity, &subrace.base, 1);
 }
 
 fn apply_race_base(world: &mut World, entity: Entity, base: &RaceBase, level: u8) {

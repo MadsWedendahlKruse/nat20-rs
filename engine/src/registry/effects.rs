@@ -547,6 +547,21 @@ mod helpers {
             }
         });
 
+        // TODO: Implement!
+        // effect.on_unapply = Arc::new({
+        //     move |world, entity| {
+        //         let mut damage_resistances =
+        //             systems::helpers::get_component_mut::<DamageResistances>(world, entity);
+        //         damage_resistances.remove_effect(
+        //             damage_type,
+        //             &DamageMitigationEffect {
+        //                 source: ModifierSource::Effect(effect_id.clone()),
+        //                 operation: MitigationOperation::Resistance,
+        //             },
+        //         );
+        //     }
+        // });
+
         effect
     }
 }
