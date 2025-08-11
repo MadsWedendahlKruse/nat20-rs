@@ -9,7 +9,7 @@ use crate::{
     components::{
         ability::Ability,
         class::{ClassName, SubclassName},
-        id::{BackgroundId, EffectId, FeatId},
+        id::{BackgroundId, EffectId, FeatId, RaceId, SubraceId},
         modifier::ModifierSource,
         skill::Skill,
     },
@@ -33,19 +33,21 @@ static ABILITY_SCORE_POINTS: u8 = 27;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LevelUpPrompt {
-    Background(Vec<BackgroundId>),
-    Class(Vec<ClassName>),
-    Subclass(Vec<SubclassName>),
-    Effect(Vec<EffectId>),
-    SkillProficiency(HashSet<Skill>, u8, ModifierSource),
     AbilityScores(HashMap<u8, u8>, u8),
-    Feat(Vec<FeatId>),
     AbilityScoreImprovement {
         feat: FeatId,
         budget: u8,
         abilities: HashSet<Ability>,
         max_score: u8,
     },
+    Background(Vec<BackgroundId>),
+    Class(Vec<ClassName>),
+    Effect(Vec<EffectId>),
+    Feat(Vec<FeatId>),
+    Race(Vec<RaceId>),
+    SkillProficiency(HashSet<Skill>, u8, ModifierSource),
+    Subclass(Vec<SubclassName>),
+    Subrace(Vec<SubraceId>),
     // SpellSelection(SpellcastingClass, Vec<SpellOption>),
     // etc.
 }
@@ -53,30 +55,48 @@ pub enum LevelUpPrompt {
 impl LevelUpPrompt {
     pub fn name(&self) -> &'static str {
         match self {
+            LevelUpPrompt::AbilityScores(_, _) => "AbilityScores",
+            LevelUpPrompt::AbilityScoreImprovement { .. } => "AbilityScoreImprovement",
             LevelUpPrompt::Background(_) => "Background",
             LevelUpPrompt::Class(_) => "Class",
-            LevelUpPrompt::Subclass(_) => "Subclass",
             LevelUpPrompt::Effect(_) => "Effect",
-            LevelUpPrompt::SkillProficiency(_, _, _) => "SkillProficiency",
-            LevelUpPrompt::AbilityScores(_, _) => "AbilityScores",
             LevelUpPrompt::Feat(_) => "Feat",
-            LevelUpPrompt::AbilityScoreImprovement { .. } => "AbilityScoreImprovement",
+            LevelUpPrompt::Race(_) => "Race",
+            LevelUpPrompt::SkillProficiency(_, _, _) => "SkillProficiency",
+            LevelUpPrompt::Subclass(_) => "Subclass",
+            LevelUpPrompt::Subrace(_) => "Subrace",
         }
     }
 }
 
 impl LevelUpPrompt {
+    pub fn ability_scores() -> Self {
+        LevelUpPrompt::AbilityScores(ABILITY_SCORE_POINT_COST.clone(), ABILITY_SCORE_POINTS)
+    }
+
     pub fn background() -> Self {
-        let backgrounds = registry::backgrounds::BACKGROUND_REGISTRY
-            .keys()
-            .cloned()
-            .collect();
-        LevelUpPrompt::Background(backgrounds)
+        LevelUpPrompt::Background(
+            registry::backgrounds::BACKGROUND_REGISTRY
+                .keys()
+                .cloned()
+                .collect(),
+        )
     }
 
     pub fn class() -> Self {
         let classes = ClassName::iter().collect();
         LevelUpPrompt::Class(classes)
+    }
+
+    pub fn feats() -> Self {
+        let mut feats: Vec<_> = registry::feats::FEAT_REGISTRY.keys().cloned().collect();
+        // TODO: Bit of a dirty hack to remove fighting styles from the list of feats.
+        feats.retain(|feat_id| !feat_id.to_string().starts_with("feat.fighting_style."));
+        LevelUpPrompt::Feat(feats)
+    }
+
+    pub fn race() -> Self {
+        LevelUpPrompt::Race(registry::races::RACE_REGISTRY.keys().cloned().collect())
     }
 
     pub fn subclass(class_name: ClassName) -> Self {
@@ -89,14 +109,10 @@ impl LevelUpPrompt {
         LevelUpPrompt::Subclass(subclasses)
     }
 
-    pub fn ability_scores() -> Self {
-        LevelUpPrompt::AbilityScores(ABILITY_SCORE_POINT_COST.clone(), ABILITY_SCORE_POINTS)
-    }
-
-    pub fn feats() -> Self {
-        let mut feats: Vec<_> = registry::feats::FEAT_REGISTRY.keys().cloned().collect();
-        // TODO: Bit of a dirty hack to remove fighting styles from the list of feats.
-        feats.retain(|feat_id| !feat_id.to_string().starts_with("feat.fighting_style."));
-        LevelUpPrompt::Feat(feats)
+    pub fn subrace(race: RaceId) -> Self {
+        let subraces = registry::races::RACE_REGISTRY
+            .get(&race)
+            .map_or_else(Vec::new, |r| r.subraces.keys().cloned().collect());
+        LevelUpPrompt::Subrace(subraces)
     }
 }

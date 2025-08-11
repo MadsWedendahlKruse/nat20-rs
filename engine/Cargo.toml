@@ -10,6 +10,7 @@ rand = "0.9.1"
 rstest = "0.25.0"
 strum = { version = "0.27.1", features = ["derive"] }
 uuid = { version = "1.16.0", features = ["v4"] }
+paste = "1"
 
 [lib]
 name = "nat20_rs"

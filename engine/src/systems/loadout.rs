@@ -26,7 +26,7 @@ pub fn equip_armor(world: &mut World, entity: Entity, armor: Armor) -> Option<Ar
     if let Some(armor) = &unequipped_armor {
         systems::effects::remove_effects(world, entity, armor.effects());
     }
-    systems::effects::add_effects(world, entity, armor.effects().clone());
+    systems::effects::add_effects(world, entity, armor.effects());
     unequipped_armor
 }
 
@@ -57,7 +57,7 @@ pub fn equip_item(
         .unwrap()
         .effects()
         .clone();
-    systems::effects::add_effects(world, entity, effects);
+    systems::effects::add_effects(world, entity, &effects);
     Ok(unequipped_item)
 }
 
@@ -89,7 +89,7 @@ pub fn equip_weapon(
         .unwrap()
         .effects()
         .clone();
-    systems::effects::add_effects(world, entity, effects);
+    systems::effects::add_effects(world, entity, &effects);
     Ok(unequipped_weapons)
 }
 

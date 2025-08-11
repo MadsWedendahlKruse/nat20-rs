@@ -267,6 +267,9 @@ pub mod creatures {
                 5,
                 vec![
                     // Level 1
+                    // TODO: Everyone is dragonborn for now
+                    LevelUpDecision::Race(registry::races::DRAGONBORN_ID.clone()),
+                    LevelUpDecision::Subrace(registry::races::DRAGONBORN_WHITE_ID.clone()),
                     LevelUpDecision::Background(registry::backgrounds::SOLDIER_ID.clone()),
                     LevelUpDecision::Class(ClassName::Fighter),
                     LevelUpDecision::AbilityScores(
@@ -324,6 +327,9 @@ pub mod creatures {
                 5,
                 vec![
                     // Level 1
+                    // TODO: Everyone is dragonborn for now
+                    LevelUpDecision::Race(registry::races::DRAGONBORN_ID.clone()),
+                    LevelUpDecision::Subrace(registry::races::DRAGONBORN_RED_ID.clone()),
                     LevelUpDecision::Background(registry::backgrounds::SAGE_ID.clone()),
                     LevelUpDecision::Class(ClassName::Wizard),
                     LevelUpDecision::AbilityScores(
@@ -380,6 +386,9 @@ pub mod creatures {
                 5,
                 vec![
                     // Level 1
+                    // TODO: Everyone is dragonborn for now
+                    LevelUpDecision::Race(registry::races::DRAGONBORN_ID.clone()),
+                    LevelUpDecision::Subrace(registry::races::DRAGONBORN_BLACK_ID.clone()),
                     LevelUpDecision::Background(registry::backgrounds::ACOLYTE_ID.clone()),
                     LevelUpDecision::Class(ClassName::Warlock),
                     LevelUpDecision::AbilityScores(
@@ -446,6 +455,9 @@ pub mod creatures {
                 1,
                 vec![
                     // Level 1
+                    // TODO: Everyone is dragonborn for now (even the goblins)
+                    LevelUpDecision::Race(registry::races::DRAGONBORN_ID.clone()),
+                    LevelUpDecision::Subrace(registry::races::DRAGONBORN_GREEN_ID.clone()),
                     LevelUpDecision::Background(registry::backgrounds::SOLDIER_ID.clone()),
                     LevelUpDecision::Class(ClassName::Fighter),
                     LevelUpDecision::AbilityScores(

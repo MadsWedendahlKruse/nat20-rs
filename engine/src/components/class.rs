@@ -5,15 +5,18 @@ use std::{
 
 use strum::EnumIter;
 
-use crate::components::{
-    ability::{Ability, AbilityScoreDistribution},
-    dice::DieSize,
-    id::{ActionId, EffectId},
-    items::equipment::{armor::ArmorType, weapon::WeaponCategory},
-    level_up::LevelUpPrompt,
-    modifier::ModifierSource,
-    resource::Resource,
-    skill::Skill,
+use crate::{
+    components::{
+        ability::{Ability, AbilityScoreDistribution},
+        dice::DieSize,
+        id::{ActionId, EffectId},
+        items::equipment::{armor::ArmorType, weapon::WeaponCategory},
+        level_up::LevelUpPrompt,
+        modifier::ModifierSource,
+        resource::Resource,
+        skill::Skill,
+    },
+    systems,
 };
 
 // TODO: Better name
@@ -128,7 +131,7 @@ impl Class {
                 ModifierSource::ClassFeature(name.to_string()),
             ));
 
-        // Add subclass prompts
+        // Add subclass prompt
         prompts_by_level
             .entry(subclass_level)
             .or_default()
@@ -144,6 +147,8 @@ impl Class {
                 // TODO: Don't use *all* feats in the future
                 .push(LevelUpPrompt::feats());
         }
+
+        // TODO: What if the subclass triggers its own prompts?
 
         Self {
             name,
@@ -181,42 +186,6 @@ impl Class {
             return subclass.base.spellcasting.clone();
         }
         SpellcastingProgression::None
-    }
-
-    pub fn effects_by_level(&self, level: u8, subclass_name: &SubclassName) -> Vec<EffectId> {
-        let subclass_map = self
-            .subclass(subclass_name)
-            .map(|subclass| &subclass.base.effects_by_level);
-        self.merge_by_level(level, &self.base.effects_by_level, subclass_map)
-    }
-
-    pub fn resources_by_level(&self, level: u8, subclass_name: &SubclassName) -> Vec<Resource> {
-        let subclass_map = self
-            .subclass(subclass_name)
-            .map(|subclass| &subclass.base.resources_by_level);
-        self.merge_by_level(level, &self.base.resources_by_level, subclass_map)
-    }
-
-    pub fn actions_by_level(&self, level: u8, subclass_name: &SubclassName) -> Vec<ActionId> {
-        let subclass_map = self
-            .subclass(subclass_name)
-            .map(|subclass| &subclass.base.actions_by_level);
-        self.merge_by_level(level, &self.base.actions_by_level, subclass_map)
-    }
-
-    fn merge_by_level<T: Clone>(
-        &self,
-        level: u8,
-        base_map: &HashMap<u8, Vec<T>>,
-        subclass_map: Option<&HashMap<u8, Vec<T>>>,
-    ) -> Vec<T> {
-        let mut items = base_map.get(&level).cloned().unwrap_or_default();
-        if let Some(subclass_map) = subclass_map {
-            if let Some(subclass_items) = subclass_map.get(&level) {
-                items.extend(subclass_items.clone());
-            }
-        }
-        items
     }
 
     pub fn base(&self) -> &ClassBase {

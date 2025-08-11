@@ -61,6 +61,13 @@ static SOLDIER: LazyLock<Background> = LazyLock::new(|| {
         SOLDIER_ID.clone(),
         [Ability::Strength, Ability::Constitution, Ability::Charisma],
         // TODO: Placeholder
+        // Savage Attacker could be a reaction that's triggered on a melee attack
+        // (in the SRD it says "when you hit a target with a weapon"), which costs
+        // a charge of "Savage Attacker", which is recharged every turn, and then
+        // it would re-roll the damage dice of the attack and use the highest roll
+        // Gameplay wise I feel like it would be a bit annoying to have a reaction
+        // pop-up every turn, so maybe it should just be a passive? In that case,
+        // it's a bit too powerful to be a background feat.
         registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
         [Skill::Athletics, Skill::Intimidation],
     )

@@ -7,18 +7,14 @@ use uuid::Uuid;
 use crate::{
     components::{
         ability::{Ability, AbilityScore, AbilityScoreDistribution, AbilityScoreMap},
-        actions::action::ActionMap,
-        background::Background,
-        class::{Class, ClassBase, ClassName, SubclassName},
-        feat::Feat,
+        class::{ClassName, SubclassName},
         hit_points::HitPoints,
-        id::{ActionId, BackgroundId, EffectId, FeatId},
+        id::{ActionId, BackgroundId, EffectId, FeatId, RaceId, SubraceId},
         level::CharacterLevels,
         level_up::LevelUpPrompt,
         modifier::ModifierSource,
         proficiency::{Proficiency, ProficiencyLevel},
-        resource::{Resource, ResourceMap},
-        saving_throw::SavingThrowSet,
+        resource::Resource,
         skill::{Skill, SkillSet},
     },
     registry, systems,
@@ -26,14 +22,16 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LevelUpDecision {
+    AbilityScores(AbilityScoreDistribution),
+    AbilityScoreImprovement(HashMap<Ability, u8>),
     Background(BackgroundId),
     Class(ClassName),
-    Subclass(SubclassName),
     Effect(EffectId),
-    SkillProficiency(HashSet<Skill>),
-    AbilityScores(AbilityScoreDistribution),
     Feat(FeatId),
-    AbilityScoreImprovement(HashMap<Ability, u8>),
+    Race(RaceId),
+    SkillProficiency(HashSet<Skill>),
+    Subclass(SubclassName),
+    Subrace(SubraceId),
     // Spell(SpellcastingClass, SpellOption),
     // etc.
 }
@@ -41,14 +39,16 @@ pub enum LevelUpDecision {
 impl LevelUpDecision {
     pub fn name(&self) -> &'static str {
         match self {
+            LevelUpDecision::AbilityScores { .. } => "AbilityScores",
+            LevelUpDecision::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
             LevelUpDecision::Background(_) => "Background",
             LevelUpDecision::Class(_) => "Class",
-            LevelUpDecision::Subclass(_) => "Subclass",
             LevelUpDecision::Effect(_) => "Effect",
-            LevelUpDecision::SkillProficiency(_) => "SkillProficiency",
-            LevelUpDecision::AbilityScores { .. } => "AbilityScores",
             LevelUpDecision::Feat(_) => "Feat",
-            LevelUpDecision::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
+            LevelUpDecision::Race(_) => "Race",
+            LevelUpDecision::SkillProficiency(_) => "SkillProficiency",
+            LevelUpDecision::Subclass(_) => "Subclass",
+            LevelUpDecision::Subrace(_) => "Subrace",
         }
     }
 }
@@ -82,7 +82,11 @@ impl LevelUpSession {
 
         let levels = systems::helpers::get_component::<CharacterLevels>(world, character);
         if levels.total_level() == 0 {
-            pending_prompts.push(LevelUpPrompt::background());
+            [LevelUpPrompt::race(), LevelUpPrompt::background()]
+                .iter()
+                .for_each(|prompt| {
+                    pending_prompts.push(prompt.clone());
+                });
         }
 
         pending_prompts.push(LevelUpPrompt::class());
@@ -186,7 +190,7 @@ fn resolve_level_up_prompt(
             }
 
             if let Some(class) = registry::classes::CLASS_REGISTRY.get(&class_name) {
-                prompts.extend(increment_class_level(world, entity, &class));
+                prompts.extend(systems::class::increment_class_level(world, entity, &class));
             } else {
                 return Err(LevelUpError::RegistryMissing(class_name.to_string()));
             }
@@ -202,7 +206,12 @@ fn resolve_level_up_prompt(
                     return Err(LevelUpError::InvalidDecision { prompt, decision });
                 }
 
-                prompts.extend(set_subclass(world, entity, class, subclass_name.clone()));
+                prompts.extend(systems::class::set_subclass(
+                    world,
+                    entity,
+                    class,
+                    subclass_name.clone(),
+                ));
             } else {
                 return Err(LevelUpError::RegistryMissing(
                     subclass_name.class.to_string(),
@@ -215,7 +224,6 @@ fn resolve_level_up_prompt(
                 return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
-            // TODO: Unnecessary check?
             systems::effects::add_effect(world, entity, effect_id);
         }
 
@@ -335,6 +343,22 @@ fn resolve_level_up_prompt(
             }
         }
 
+        (LevelUpPrompt::Race(races), LevelUpDecision::Race(race_id)) => {
+            if !races.contains(&race_id) {
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
+            }
+
+            prompts.extend(systems::race::set_race(world, entity, race_id))
+        }
+
+        (LevelUpPrompt::Subrace(subraces), LevelUpDecision::Subrace(subrace_id)) => {
+            if !subraces.contains(&subrace_id) {
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
+            }
+
+            systems::race::set_subrace(world, entity, subrace_id)
+        }
+
         _ => {
             // If the prompt and decision are called the same, and we made it here,
             // it's probably just because it hasn't been implemented yet
@@ -351,141 +375,6 @@ fn resolve_level_up_prompt(
     }
 
     Ok(prompts)
-}
-
-fn increment_class_level(world: &mut World, entity: Entity, class: &Class) -> Vec<LevelUpPrompt> {
-    let (new_level, subclass) = {
-        let mut character_levels =
-            systems::helpers::get_component_mut::<CharacterLevels>(world, entity);
-        let new_level = character_levels.level_up(class.name.clone());
-        let subclass = if let Some(subclass_name) = character_levels.subclass(&class.name) {
-            class.subclass(&subclass_name)
-        } else {
-            None
-        };
-        (new_level, subclass)
-    };
-
-    for ability in class.saving_throw_proficiencies.iter() {
-        systems::helpers::get_component_mut::<SavingThrowSet>(world, entity).set_proficiency(
-            *ability,
-            Proficiency::new(
-                ProficiencyLevel::Proficient,
-                ModifierSource::ClassFeature(class.name.to_string().clone()),
-            ),
-        );
-    }
-
-    // TODO: If it's a level that triggers a feat prompt, and ability score improvement
-    // is selected, then the Constitution modifier might increase, in which case we need to
-    // recalculate hit points.
-    systems::health::update_hit_points(world, entity);
-
-    systems::spells::update_spell_slots(world, entity);
-
-    let mut prompts = apply_class_base(world, entity, &class.base, new_level);
-    if let Some(subclass) = subclass {
-        prompts.extend(apply_class_base(world, entity, subclass.base(), new_level));
-    }
-    prompts
-}
-
-fn set_subclass(
-    world: &mut World,
-    entity: Entity,
-    class: &Class,
-    subclass_name: SubclassName,
-) -> Vec<LevelUpPrompt> {
-    let (subclass, level) = {
-        let mut character_levels =
-            systems::helpers::get_component_mut::<CharacterLevels>(world, entity);
-        character_levels.set_subclass(subclass_name.class, subclass_name.clone());
-
-        let subclass = class
-            .subclass(&subclass_name)
-            .expect("Subclass should exist in the class registry");
-        let level = character_levels.class_level(&class.name).unwrap().level();
-
-        (subclass, level)
-    };
-
-    apply_class_base(world, entity, subclass.base(), level)
-}
-
-fn apply_class_base(
-    world: &mut World,
-    entity: Entity,
-    class_base: &ClassBase,
-    level: u8,
-) -> Vec<LevelUpPrompt> {
-    // Effect
-    if let Some(effects_for_level) = class_base.effects_by_level.get(&level) {
-        for effect in effects_for_level {
-            systems::effects::add_effect(world, entity, effect);
-        }
-    }
-
-    // Resources
-    {
-        let mut resources = systems::helpers::get_component_mut::<ResourceMap>(world, entity);
-        if let Some(resources_for_level) = class_base.resources_by_level.get(&level) {
-            for resource in resources_for_level {
-                resources.add(resource.clone(), false);
-            }
-        }
-    }
-
-    // Actions
-    {
-        let mut actions = systems::helpers::get_component_mut::<ActionMap>(world, entity);
-        if let Some(actions_for_level) = class_base.actions_by_level.get(&level) {
-            for action_id in actions_for_level {
-                if let Some((action, context)) = registry::actions::ACTION_REGISTRY.get(action_id) {
-                    let resource_cost = &action.resource_cost().clone();
-                    actions
-                        .entry(action_id.clone())
-                        .and_modify(|(action_context, action_resource_cost)| {
-                            action_context.push(context.clone().unwrap());
-                            action_resource_cost.extend(resource_cost.clone());
-                        })
-                        .or_insert((vec![context.clone().unwrap()], resource_cost.clone()));
-                } else {
-                    panic!("Action {} not found in registry", action_id);
-                }
-            }
-        }
-    }
-
-    // Return any additional prompts that should be presented to the player
-    let mut new_prompts = class_base
-        .prompts_by_level
-        .get(&level)
-        .cloned()
-        .unwrap_or_default();
-
-    // Some prompts have to be filtered based on the current state of the character
-    for prompt in new_prompts.iter_mut() {
-        match prompt {
-            // Feats need special handling since they can have prerequisites and
-            // can (or can't) be repeatable.
-            LevelUpPrompt::Feat(feats) => {
-                feats.retain(|feat_id| {
-                    let feat = registry::feats::FEAT_REGISTRY.get(feat_id).unwrap();
-                    if !feat.meets_prerequisite(world, entity) {
-                        return false;
-                    }
-                    if feat.is_repeatable() {
-                        return true;
-                    }
-                    !systems::helpers::get_component::<Vec<FeatId>>(world, entity).contains(feat_id)
-                });
-            }
-
-            _ => {}
-        }
-    }
-
-    new_prompts
 }
 
 pub fn apply_level_up_decision(

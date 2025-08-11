@@ -97,8 +97,10 @@ pub fn get_skill_hooks(skill: Skill, world: &World, entity: Entity) -> Vec<D20Ch
         .collect()
 }
 
-pub fn create_skill_set() -> SkillSet {
-    SkillSet::new(skill_ability, get_skill_hooks)
+impl Default for SkillSet {
+    fn default() -> Self {
+        SkillSet::new(skill_ability, get_skill_hooks)
+    }
 }
 
 #[cfg(test)]

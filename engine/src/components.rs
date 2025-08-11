@@ -14,6 +14,7 @@ pub mod level;
 pub mod level_up;
 pub mod modifier;
 pub mod proficiency;
+pub mod race;
 pub mod resource;
 pub mod saving_throw;
 pub mod skill;

@@ -9,7 +9,7 @@ use nat20_rs::{
     components::{
         ability::{Ability, AbilityScoreDistribution, AbilityScoreMap},
         class::{ClassName, SubclassName},
-        id::{BackgroundId, EffectId, FeatId},
+        id::{BackgroundId, EffectId, FeatId, RaceId, SubraceId},
         level::CharacterLevels,
         level_up::LevelUpPrompt,
         proficiency::{Proficiency, ProficiencyLevel},
@@ -62,6 +62,8 @@ enum LevelUpDecisionProgress {
         assignments: HashMap<Ability, u8>,
         remaining_points: u8,
     },
+    Race(Option<RaceId>),
+    Subrace(Option<SubraceId>),
 }
 
 impl LevelUpDecisionProgress {
@@ -94,6 +96,8 @@ impl LevelUpDecisionProgress {
                 remaining_points,
                 ..
             } => remaining_points == &0 && !assignments.is_empty(),
+            LevelUpDecisionProgress::Race(race) => race.is_some(),
+            LevelUpDecisionProgress::Subrace(subrace) => subrace.is_some(),
         }
     }
 
@@ -109,6 +113,8 @@ impl LevelUpDecisionProgress {
             LevelUpDecisionProgress::AbilityScoreImprovement { assignments, .. } => {
                 assignments.is_empty()
             }
+            LevelUpDecisionProgress::Race(race) => race.is_none(),
+            LevelUpDecisionProgress::Subrace(subrace) => subrace.is_none(),
         }
     }
 
@@ -139,6 +145,8 @@ impl LevelUpDecisionProgress {
             LevelUpDecisionProgress::AbilityScoreImprovement { assignments, .. } => {
                 LevelUpDecision::AbilityScoreImprovement(assignments)
             }
+            LevelUpDecisionProgress::Race(race) => LevelUpDecision::Race(race.unwrap()),
+            LevelUpDecisionProgress::Subrace(subrace) => LevelUpDecision::Subrace(subrace.unwrap()),
         }
     }
 
@@ -169,6 +177,8 @@ impl LevelUpDecisionProgress {
                     remaining_points: *budget,
                 }
             }
+            LevelUpPrompt::Race(_) => LevelUpDecisionProgress::Race(None),
+            LevelUpPrompt::Subrace(_) => LevelUpDecisionProgress::Subrace(None),
         }
     }
 
@@ -400,6 +410,8 @@ impl CharacterCreation {
 
         let pending_prompts = self.level_up_session.as_ref().unwrap().pending_prompts();
 
+        println!("Pending prompts: {:?}", pending_prompts);
+
         // Keep all the decisions in progress which are still valid for the new level-up session
         for promp_progress in pending_decisions {
             if pending_prompts.iter().any(|p| *p == promp_progress.prompt)
@@ -490,21 +502,39 @@ impl ImguiRenderableMut for CharacterCreation {
                         );
                     }
 
-                    let mut name = systems::helpers::get_component_clone::<String>(
-                        &self.world,
-                        self.current_character.unwrap(),
-                    );
-                    ui.text("Name:");
-                    if ui
-                        .input_text("##", &mut name)
-                        .enter_returns_true(true)
-                        .build()
                     {
-                        systems::helpers::set_component(
+                        let mut name = systems::helpers::get_component_mut::<String>(
                             &mut self.world,
                             self.current_character.unwrap(),
-                            name,
                         );
+                        ui.text("Name:");
+                        if ui
+                            .input_text("##", &mut name)
+                            .enter_returns_true(true)
+                            .build()
+                        {
+                            // systems::helpers::set_component(
+                            //     &mut self.world,
+                            //     self.current_character.unwrap(),
+                            //     name,
+                            // );
+                        }
+                    }
+
+                    {
+                        let race = systems::helpers::get_component::<Option<RaceId>>(
+                            &self.world,
+                            self.current_character.unwrap(),
+                        );
+                        let subrace = systems::helpers::get_component::<Option<SubraceId>>(
+                            &self.world,
+                            self.current_character.unwrap(),
+                        );
+                        if subrace.is_some() {
+                            ui.text(subrace.as_ref().unwrap().to_string())
+                        } else if race.is_some() {
+                            ui.text(race.as_ref().unwrap().to_string())
+                        }
                     }
 
                     {
@@ -514,7 +544,8 @@ impl ImguiRenderableMut for CharacterCreation {
                         );
                         levels.render(ui);
 
-                        // If a class has been chosen, show what will be gained at the next level
+                        // If a class has been chosen, show what will be gained at this level
+                        // TODO: Include race and subrace gains
                         if let Some(level_up_session) = &self.level_up_session {
                             if let Some(class) = level_up_session.chosen_class() {
                                 systems::level_up::level_up_gains(
@@ -1027,6 +1058,36 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                     }
                 } else {
                     ui.text("Mismatched progress type for Subclass prompt");
+                }
+            }
+
+            LevelUpPrompt::Race(races) => {
+                if let LevelUpDecisionProgress::Race(ref mut decision) = self.progress {
+                    for race in races {
+                        if render_button_selectable(
+                            ui,
+                            format!("{}", race),
+                            [0., 0.],
+                            decision.as_ref().is_some_and(|s| s == race),
+                        ) {
+                            *decision = Some(race.clone());
+                        }
+                    }
+                }
+            }
+
+            LevelUpPrompt::Subrace(subraces) => {
+                if let LevelUpDecisionProgress::Subrace(ref mut decision) = self.progress {
+                    for subrace in subraces {
+                        if render_button_selectable(
+                            ui,
+                            format!("{}", subrace),
+                            [0., 0.],
+                            decision.as_ref().is_some_and(|s| s == subrace),
+                        ) {
+                            *decision = Some(subrace.clone());
+                        }
+                    }
                 }
             }
         }

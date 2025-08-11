@@ -33,6 +33,33 @@ pub fn get_action(action_id: &ActionId) -> Option<Action> {
     None
 }
 
+pub fn add_actions(world: &mut World, entity: Entity, actions: &[ActionId]) {
+    let mut action_map = systems::helpers::get_component_mut::<ActionMap>(world, entity);
+    for action_id in actions {
+        if let Some((action, context)) = registry::actions::ACTION_REGISTRY.get(action_id) {
+            add_action_to_map(&mut action_map, action_id, action, context.clone());
+        } else {
+            panic!("Action {} not found in registry", action_id);
+        }
+    }
+}
+
+fn add_action_to_map(
+    action_map: &mut ActionMap,
+    action_id: &ActionId,
+    action: &Action,
+    context: Option<ActionContext>,
+) {
+    let resource_cost = &action.resource_cost().clone();
+    action_map
+        .entry(action_id.clone())
+        .and_modify(|(action_context, action_resource_cost)| {
+            action_context.push(context.clone().unwrap());
+            action_resource_cost.extend(resource_cost.clone());
+        })
+        .or_insert((vec![context.clone().unwrap()], resource_cost.clone()));
+}
+
 pub fn on_cooldown(world: &World, entity: Entity, action_id: &ActionId) -> Option<RechargeRule> {
     if let Some(cooldowns) = world.get::<&ActionCooldownMap>(entity).ok() {
         cooldowns.get(action_id).cloned()

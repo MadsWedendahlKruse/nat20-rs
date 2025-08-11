@@ -43,7 +43,7 @@ impl Display for RechargeRule {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Resource {
     kind: ResourceId,
     max_uses: u8,

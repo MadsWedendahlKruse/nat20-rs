@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::components::id::{BackgroundId, SpellId};
+use crate::components::id::{BackgroundId, EffectId, SpellId};
 
 use super::{ability::Ability, proficiency::ProficiencyLevel};
 
@@ -12,7 +12,7 @@ pub enum ModifierSource {
     Item(String),         // e.g. "Belt of Strength"
     Condition(String),    // e.g. "Poisoned"
     ClassFeature(String), // e.g. "Rage"
-    EffectId(u32),        // optional: unique ID for internal tracking
+    Effect(EffectId),     // optional: unique ID for internal tracking
     Custom(String),       // fallback for ad-hoc things
     Ability(Ability),     // e.g. "Strength"
     Proficiency(ProficiencyLevel),
@@ -28,7 +28,7 @@ impl fmt::Display for ModifierSource {
             ModifierSource::Item(name) => write!(f, "Item: {}", name),
             ModifierSource::Condition(name) => write!(f, "Condition: {}", name),
             ModifierSource::ClassFeature(name) => write!(f, "Class Feature: {}", name),
-            ModifierSource::EffectId(id) => write!(f, "Effect ID: {}", id),
+            ModifierSource::Effect(id) => write!(f, "Effect: {}", id),
             ModifierSource::Custom(name) => write!(f, "Custom: {}", name),
             ModifierSource::Ability(ability) => write!(f, "{:?} Modifier", ability),
             ModifierSource::Proficiency(proficiency) => write!(f, "Proficiency: {:?}", proficiency),

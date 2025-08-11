@@ -25,6 +25,8 @@ pub fn get_saving_throw_hooks(
         .collect()
 }
 
-pub fn create_saving_throw_set() -> SavingThrowSet {
-    SavingThrowSet::new(|k| k, get_saving_throw_hooks)
+impl Default for SavingThrowSet {
+    fn default() -> Self {
+        Self::new(|k| k, get_saving_throw_hooks)
+    }
 }

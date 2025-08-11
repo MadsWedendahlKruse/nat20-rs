@@ -33,9 +33,9 @@ pub fn add_effect(world: &mut World, entity: Entity, effect_id: &EffectId) {
     effects_mut(world, entity).push(effect);
 }
 
-pub fn add_effects(world: &mut World, entity: Entity, effects: Vec<EffectId>) {
+pub fn add_effects(world: &mut World, entity: Entity, effects: &Vec<EffectId>) {
     for effect in effects {
-        add_effect(world, entity, &effect);
+        add_effect(world, entity, effect);
     }
 }
 

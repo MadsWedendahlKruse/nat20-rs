@@ -34,7 +34,9 @@ id_newtypes!(
     ActionId,
     SpellId,
     FeatId,
-    BackgroundId
+    BackgroundId,
+    RaceId,
+    SubraceId
 );
 
 impl SpellId {
