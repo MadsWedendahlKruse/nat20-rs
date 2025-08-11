@@ -98,16 +98,37 @@ impl fmt::Display for AbilityScore {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AbilityScoreDistribution {
+    pub scores: HashMap<Ability, u8>,
+    pub plus_2_bonus: Ability,
+    pub plus_1_bonus: Ability,
+}
+
 #[derive(Debug, Clone)]
-pub struct AbilityScoreSet {
+pub struct AbilityScoreMap {
     pub scores: HashMap<Ability, AbilityScore>,
 }
 
-impl AbilityScoreSet {
+impl AbilityScoreMap {
     pub fn new() -> Self {
         let mut scores = HashMap::new();
         for ability in Ability::iter() {
             scores.insert(ability, AbilityScore::default(ability));
+        }
+        Self { scores }
+    }
+
+    pub fn from_distribution(distribution: AbilityScoreDistribution) -> Self {
+        let mut scores = HashMap::new();
+        for (ability, score) in distribution.scores {
+            let mut base = score;
+            if ability == distribution.plus_2_bonus {
+                base += 2;
+            } else if ability == distribution.plus_1_bonus {
+                base += 1;
+            }
+            scores.insert(ability, AbilityScore::new(ability, base as i32));
         }
         Self { scores }
     }
@@ -166,7 +187,7 @@ mod tests {
 
     #[test]
     fn ability_score_set() {
-        let mut ability_scores = AbilityScoreSet::new();
+        let mut ability_scores = AbilityScoreMap::new();
         ability_scores.set(
             Ability::Dexterity,
             AbilityScore::new(Ability::Dexterity, 15),
@@ -186,7 +207,7 @@ mod tests {
 
     #[test]
     fn ability_score_set_modifier() {
-        let mut ability_scores = AbilityScoreSet::new();
+        let mut ability_scores = AbilityScoreMap::new();
         ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
         ability_scores.add_modifier(
             Ability::Strength,
@@ -203,7 +224,7 @@ mod tests {
 
     #[test]
     fn ability_score_set_multiple_abilities() {
-        let mut ability_scores = AbilityScoreSet::new();
+        let mut ability_scores = AbilityScoreMap::new();
         ability_scores.set(
             Ability::Dexterity,
             AbilityScore::new(Ability::Dexterity, 15),
@@ -218,7 +239,7 @@ mod tests {
 
     #[test]
     fn ability_score_set_remove_modifier() {
-        let mut ability_scores = AbilityScoreSet::new();
+        let mut ability_scores = AbilityScoreMap::new();
         ability_scores.set(
             Ability::Dexterity,
             AbilityScore::new(Ability::Dexterity, 15),

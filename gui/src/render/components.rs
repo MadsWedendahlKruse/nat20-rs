@@ -3,7 +3,7 @@ use std::{collections::HashMap, vec};
 use hecs::{Entity, World};
 use nat20_rs::{
     components::{
-        ability::{Ability, AbilityScore, AbilityScoreSet},
+        ability::{Ability, AbilityScore, AbilityScoreMap},
         actions::{
             action::{ActionKindResult, ActionResult},
             targeting::TargetTypeInstance,
@@ -159,7 +159,7 @@ impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
 
         if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
             if let Some(tab) = ui.tab_item("Abilities") {
-                systems::helpers::get_component::<AbilityScoreSet>(world, *entity)
+                systems::helpers::get_component::<AbilityScoreMap>(world, *entity)
                     .render_with_context(ui, (world, *entity));
                 tab.end();
             }
@@ -181,7 +181,7 @@ impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
                 }
 
                 let context = LoadoutRenderContext {
-                    ability_scores: systems::helpers::get_component_clone::<AbilityScoreSet>(
+                    ability_scores: systems::helpers::get_component_clone::<AbilityScoreMap>(
                         world, *entity,
                     ),
                     wielding_both_hands,
@@ -236,7 +236,7 @@ impl ImguiRenderable for AbilityScore {
     }
 }
 
-impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreSet {
+impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreMap {
     fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
         if let Some(table) = table_with_columns!(
             ui,
@@ -526,7 +526,7 @@ impl ImguiRenderable for Vec<FeatId> {
 }
 
 struct LoadoutRenderContext {
-    ability_scores: AbilityScoreSet,
+    ability_scores: AbilityScoreMap,
     wielding_both_hands: HashMap<WeaponType, bool>,
 }
 

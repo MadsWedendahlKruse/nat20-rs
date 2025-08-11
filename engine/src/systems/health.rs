@@ -2,7 +2,7 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        ability::{Ability, AbilityScoreSet},
+        ability::{Ability, AbilityScoreMap},
         actions::action::{ActionKindResult, ActionKindSnapshot},
         damage::{
             DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
@@ -173,7 +173,7 @@ pub fn update_hit_points(world: &mut World, entity: Entity) {
             //   amount based on the class + Constitution modifier.
 
             let constitution_modifier =
-                systems::helpers::get_component::<AbilityScoreSet>(world, entity)
+                systems::helpers::get_component::<AbilityScoreMap>(world, entity)
                     .get(Ability::Constitution)
                     .ability_modifier()
                     .total();

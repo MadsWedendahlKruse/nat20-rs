@@ -8,7 +8,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     components::{
-        ability::{Ability, AbilityScoreSet},
+        ability::{Ability, AbilityScoreMap},
         effects::hooks::D20CheckHooks,
         modifier::{ModifierSet, ModifierSource},
         proficiency::Proficiency,
@@ -311,7 +311,7 @@ where
     pub fn check(&self, key: K, world: &World, entity: Entity) -> D20CheckResult {
         let mut d20 = self.get(key).clone();
         let ability = (self.ability_mapper)(key);
-        let ability_scores = systems::helpers::get_component::<AbilityScoreSet>(world, entity);
+        let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, entity);
         d20.add_modifier(
             ModifierSource::Ability(ability),
             ability_scores.ability_modifier(ability).total(),

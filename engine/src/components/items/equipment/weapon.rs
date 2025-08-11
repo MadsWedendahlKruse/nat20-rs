@@ -7,7 +7,7 @@ use strum::{Display, EnumIter};
 
 use crate::{
     components::{
-        ability::{Ability, AbilityScoreSet},
+        ability::{Ability, AbilityScoreMap},
         d20_check::D20Check,
         damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
         dice::{DiceSet, DieSize},
@@ -183,7 +183,7 @@ impl Weapon {
 
     pub fn attack_roll(
         &self,
-        ability_scores: &AbilityScoreSet,
+        ability_scores: &AbilityScoreMap,
         weapon_proficiency: &Proficiency,
     ) -> AttackRoll {
         let mut attack_roll = D20Check::new(weapon_proficiency.clone());
@@ -203,7 +203,7 @@ impl Weapon {
 
     pub fn damage_roll(
         &self,
-        ability_scores: &AbilityScoreSet,
+        ability_scores: &AbilityScoreMap,
         wielding_both_hands: bool,
     ) -> DamageRoll {
         let mut damage_roll = self.damage_roll.clone();
@@ -233,7 +233,7 @@ impl Weapon {
         damage_roll
     }
 
-    fn add_ability_modifier(&self, ability_scores: &AbilityScoreSet, modifiers: &mut ModifierSet) {
+    fn add_ability_modifier(&self, ability_scores: &AbilityScoreMap, modifiers: &mut ModifierSet) {
         let ability = self.determine_ability(ability_scores);
         modifiers.add_modifier(
             ModifierSource::Ability(ability),
@@ -254,7 +254,7 @@ impl Weapon {
             .unwrap_or(0)
     }
 
-    pub fn determine_ability(&self, ability_scores: &AbilityScoreSet) -> Ability {
+    pub fn determine_ability(&self, ability_scores: &AbilityScoreMap) -> Ability {
         if self.has_property(&WeaponProperties::Finesse) {
             // Return the higher of the two abilities
             let str = ability_scores.total(Ability::Strength);
@@ -419,7 +419,7 @@ mod tests {
             vec![(1, DieSize::D8, DamageType::Piercing)],
             vec![],
         );
-        let mut ability_scores = AbilityScoreSet::new();
+        let mut ability_scores = AbilityScoreMap::new();
         ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 10));
         ability_scores.set(
             Ability::Dexterity,

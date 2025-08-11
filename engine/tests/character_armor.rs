@@ -4,7 +4,7 @@ mod tests {
     use hecs::World;
     use nat20_rs::{
         components::{
-            ability::{Ability, AbilityScore, AbilityScoreSet},
+            ability::{Ability, AbilityScore, AbilityScoreMap},
             items::{
                 equipment::{
                     armor::Armor,
@@ -57,7 +57,7 @@ mod tests {
 
         {
             let mut ability_scores =
-                systems::helpers::get_component_mut::<AbilityScoreSet>(&mut world, character);
+                systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, character);
             ability_scores.set(
                 Ability::Dexterity,
                 AbilityScore::new(Ability::Dexterity, 15),

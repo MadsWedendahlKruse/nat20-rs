@@ -1,6 +1,6 @@
 use crate::{
     components::{
-        ability::{Ability, AbilityScoreSet},
+        ability::{Ability, AbilityScoreMap},
         id::EffectId,
         items::item::Item,
         modifier::{ModifierSet, ModifierSource},
@@ -80,7 +80,7 @@ impl Armor {
         Armor::new(equipment, ArmorType::Heavy, armor_class, 0, true)
     }
 
-    pub fn armor_class(&self, ability_scores: &AbilityScoreSet) -> ModifierSet {
+    pub fn armor_class(&self, ability_scores: &AbilityScoreMap) -> ModifierSet {
         if self.max_dexterity_bonus == 0 {
             return self.armor_class.clone();
         }

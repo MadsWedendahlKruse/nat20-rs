@@ -268,15 +268,13 @@ pub mod creatures {
                 vec![
                     // Level 1
                     LevelUpDecision::Class(ClassName::Fighter),
-                    LevelUpDecision::AbilityScores {
-                        scores: registry::classes::CLASS_REGISTRY
+                    LevelUpDecision::AbilityScores(
+                        registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Fighter)
                             .unwrap()
                             .default_abilities
                             .clone(),
-                        plus_2_bonus: Ability::Strength,
-                        plus_1_bonus: Ability::Constitution,
-                    },
+                    ),
                     LevelUpDecision::Feat(
                         registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                     ),
@@ -326,15 +324,13 @@ pub mod creatures {
                 vec![
                     // Level 1
                     LevelUpDecision::Class(ClassName::Wizard),
-                    LevelUpDecision::AbilityScores {
-                        scores: registry::classes::CLASS_REGISTRY
+                    LevelUpDecision::AbilityScores(
+                        registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Wizard)
                             .unwrap()
                             .default_abilities
                             .clone(),
-                        plus_2_bonus: Ability::Intelligence,
-                        plus_1_bonus: Ability::Constitution,
-                    },
+                    ),
                     LevelUpDecision::SkillProficiency(HashSet::from([
                         Skill::Arcana,
                         Skill::History,
@@ -383,15 +379,13 @@ pub mod creatures {
                 vec![
                     // Level 1
                     LevelUpDecision::Class(ClassName::Warlock),
-                    LevelUpDecision::AbilityScores {
-                        scores: registry::classes::CLASS_REGISTRY
+                    LevelUpDecision::AbilityScores(
+                        registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Warlock)
                             .unwrap()
                             .default_abilities
                             .clone(),
-                        plus_2_bonus: Ability::Charisma,
-                        plus_1_bonus: Ability::Constitution,
-                    },
+                    ),
                     LevelUpDecision::SkillProficiency(HashSet::from([
                         Skill::Arcana,
                         Skill::Deception,
@@ -450,15 +444,13 @@ pub mod creatures {
                 vec![
                     // Level 1
                     LevelUpDecision::Class(ClassName::Fighter),
-                    LevelUpDecision::AbilityScores {
-                        scores: registry::classes::CLASS_REGISTRY
+                    LevelUpDecision::AbilityScores(
+                        registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Fighter)
                             .unwrap()
                             .default_abilities
                             .clone(),
-                        plus_2_bonus: Ability::Strength,
-                        plus_1_bonus: Ability::Constitution,
-                    },
+                    ),
                     LevelUpDecision::Feat(
                         registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                     ),

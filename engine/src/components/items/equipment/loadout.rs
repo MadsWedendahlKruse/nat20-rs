@@ -4,7 +4,7 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        ability::AbilityScoreSet,
+        ability::AbilityScoreMap,
         actions::action::{ActionContext, ActionProvider},
         damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
         id::{ActionId, ResourceId},
@@ -64,7 +64,7 @@ impl Loadout {
 
     pub fn armor_class(&self, world: &World, entity: Entity) -> ModifierSet {
         if let Some(armor) = &self.armor {
-            let ability_scores = systems::helpers::get_component::<AbilityScoreSet>(world, entity);
+            let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, entity);
             let mut armor_class = armor.armor_class(&ability_scores);
             for effect in systems::effects::effects(world, entity).iter() {
                 (effect.on_armor_class)(world, entity, &mut armor_class);
@@ -194,7 +194,7 @@ impl Loadout {
             .weapon_in_hand(weapon_type, hand)
             .expect("No weapon equipped in the specified hand");
         weapon.attack_roll(
-            &systems::helpers::get_component::<AbilityScoreSet>(world, entity),
+            &systems::helpers::get_component::<AbilityScoreMap>(world, entity),
             &systems::helpers::get_component::<WeaponProficiencyMap>(world, entity)
                 .proficiency(&weapon.category()),
         )
@@ -211,7 +211,7 @@ impl Loadout {
             .weapon_in_hand(weapon_type, hand)
             .expect("No weapon equipped in the specified hand");
         weapon.damage_roll(
-            &systems::helpers::get_component::<AbilityScoreSet>(world, entity),
+            &systems::helpers::get_component::<AbilityScoreMap>(world, entity),
             self.is_wielding_weapon_with_both_hands(weapon_type),
         )
     }

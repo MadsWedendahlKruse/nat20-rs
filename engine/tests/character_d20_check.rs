@@ -5,7 +5,7 @@ mod tests {
     use hecs::World;
     use nat20_rs::{
         components::{
-            ability::{Ability, AbilityScore, AbilityScoreSet},
+            ability::{Ability, AbilityScore, AbilityScoreMap},
             d20_check::RollMode,
             items::{
                 equipment::{
@@ -32,7 +32,7 @@ mod tests {
 
         {
             let mut ability_scores =
-                systems::helpers::get_component_mut::<AbilityScoreSet>(&mut world, entity);
+                systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity);
             ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
             ability_scores.add_modifier(
                 Ability::Strength,
@@ -59,7 +59,7 @@ mod tests {
         // Easiest way is to use one of the fixtures.
         let entity = fixtures::creatures::heroes::wizard(&mut world).id();
 
-        systems::helpers::get_component_mut::<AbilityScoreSet>(&mut world, entity)
+        systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity)
             .set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
         systems::helpers::get_component_mut::<SavingThrowSet>(&mut world, entity)
             .set_proficiency(Ability::Strength, Proficiency::Proficient);
@@ -81,7 +81,7 @@ mod tests {
         // Easiest way is to use one of the fixtures.
         let entity = fixtures::creatures::heroes::wizard(&mut world).id();
 
-        systems::helpers::get_component_mut::<AbilityScoreSet>(&mut world, entity)
+        systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity)
             .set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
         systems::helpers::get_component_mut::<SavingThrowSet>(&mut world, entity)
             .set_proficiency(Ability::Strength, Proficiency::Expertise);

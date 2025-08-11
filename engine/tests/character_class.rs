@@ -7,7 +7,7 @@ mod tests {
     use hecs::World;
     use nat20_rs::{
         components::{
-            ability::Ability,
+            ability::{Ability, AbilityScoreDistribution},
             class::{ClassName, SubclassName},
             level::CharacterLevels,
             proficiency::Proficiency,
@@ -30,7 +30,7 @@ mod tests {
             3,
             vec![
                 LevelUpDecision::Class(ClassName::Fighter),
-                LevelUpDecision::AbilityScores {
+                LevelUpDecision::AbilityScores(AbilityScoreDistribution {
                     scores: HashMap::from([
                         (Ability::Strength, 15),
                         (Ability::Dexterity, 14),
@@ -41,7 +41,7 @@ mod tests {
                     ]),
                     plus_2_bonus: Ability::Strength,
                     plus_1_bonus: Ability::Constitution,
-                },
+                }),
                 LevelUpDecision::Effect(
                     registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                 ),

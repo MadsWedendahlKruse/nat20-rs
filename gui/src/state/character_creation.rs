@@ -1,17 +1,14 @@
 use std::collections::{HashMap, HashSet};
 
-use glutin::api::egl::context;
 use hecs::{Entity, World};
-use imgui::{ChildFlags, TreeNodeFlags};
+use imgui::TreeNodeFlags;
 use nat20_rs::{
     components::{
-        ability::{Ability, AbilityScoreSet},
+        ability::{Ability, AbilityScoreDistribution, AbilityScoreMap},
         class::{ClassName, SubclassName},
-        feat,
         id::{EffectId, FeatId},
         level::CharacterLevels,
         level_up::LevelUpPrompt,
-        resource,
         skill::Skill,
     },
     entities::character::{Character, CharacterTag},
@@ -28,8 +25,8 @@ use crate::{
     buttons,
     render::utils::{
         ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-        ImguiRenderableWithContext, render_button_disabled_conditionally, render_button_selectable,
-        render_uniform_buttons, render_uniform_buttons_do, render_window_at_cursor,
+        render_button_disabled_conditionally, render_button_selectable, render_uniform_buttons_do,
+        render_window_at_cursor,
     },
     table_with_columns,
 };
@@ -117,11 +114,11 @@ impl LevelUpDecisionProgress {
                 plus_2_bonus,
                 plus_1_bonus,
                 ..
-            } => LevelUpDecision::AbilityScores {
+            } => LevelUpDecision::AbilityScores(AbilityScoreDistribution {
                 scores: assignments,
                 plus_2_bonus: plus_2_bonus.unwrap(),
                 plus_1_bonus: plus_1_bonus.unwrap(),
-            },
+            }),
             LevelUpDecisionProgress::Feat(feat) => LevelUpDecision::Feat(feat.unwrap()),
             LevelUpDecisionProgress::AbilityScoreImprovement { assignments, .. } => {
                 LevelUpDecision::AbilityScoreImprovement(assignments)
@@ -173,25 +170,30 @@ impl LevelUpDecisionProgress {
 
                     LevelUpPrompt::AbilityScores(_, _) => {
                         let mut assignments = HashMap::new();
+                        let mut plus_2_bonus = None;
+                        let mut plus_1_bonus = None;
                         if let Some(class) =
                             registry::classes::CLASS_REGISTRY.get(levels.latest_class().unwrap())
                         {
+                            let default_abilities = &class.default_abilities;
                             // Reset assignments to class defaults
-                            for (ability, score) in class.default_abilities.iter() {
+                            for (ability, score) in default_abilities.scores.iter() {
                                 assignments.insert(*ability, *score);
                             }
+                            plus_2_bonus = Some(default_abilities.plus_2_bonus);
+                            plus_1_bonus = Some(default_abilities.plus_1_bonus);
                         }
                         return LevelUpDecisionProgress::AbilityScores {
                             assignments,
                             remaining_budget: 0,
-                            plus_2_bonus: None,
-                            plus_1_bonus: None,
+                            plus_2_bonus: plus_2_bonus,
+                            plus_1_bonus: plus_1_bonus,
                         };
                     }
 
                     LevelUpPrompt::AbilityScoreImprovement { budget, .. } => {
                         let base_scores =
-                            systems::helpers::get_component::<AbilityScoreSet>(world, entity)
+                            systems::helpers::get_component::<AbilityScoreMap>(world, entity)
                                 .scores
                                 .iter()
                                 .map(|(ability, score)| (*ability, score.total() as u8))

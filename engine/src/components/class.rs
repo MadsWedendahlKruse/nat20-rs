@@ -6,7 +6,7 @@ use std::{
 use strum::EnumIter;
 
 use crate::components::{
-    ability::Ability,
+    ability::{Ability, AbilityScoreDistribution},
     dice::DieSize,
     id::{ActionId, EffectId},
     items::equipment::{armor::ArmorType, weapon::WeaponCategory},
@@ -87,7 +87,7 @@ pub struct Class {
     pub hit_die: DieSize,
     pub hp_per_level: u8,
 
-    pub default_abilities: HashMap<Ability, u8>,
+    pub default_abilities: AbilityScoreDistribution,
 
     /// Saving throw proficiencies granted at level 1 (e.g. STR + CON for Fighter)
     pub saving_throw_proficiencies: [Ability; 2],
@@ -102,7 +102,7 @@ impl Class {
         name: ClassName,
         hit_die: DieSize,
         hp_per_level: u8,
-        default_abilities: HashMap<Ability, u8>,
+        default_abilities: AbilityScoreDistribution,
         saving_throw_proficiencies: [Ability; 2],
         subclass_level: u8,
         subclasses: HashMap<SubclassName, Subclass>,

@@ -6,7 +6,7 @@ mod tests {
     use hecs::World;
     use nat20_rs::{
         components::{
-            ability::{Ability, AbilityScore, AbilityScoreSet},
+            ability::{Ability, AbilityScore, AbilityScoreMap},
             damage::DamageType,
             dice::{DiceSet, DieSize},
             items::{
@@ -31,7 +31,7 @@ mod tests {
 
         // Set Strength 14, Dexterity 16
         {
-            let mut scores = helpers::get_component_mut::<AbilityScoreSet>(&mut world, entity);
+            let mut scores = helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity);
             scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 14));
             scores.set(
                 Ability::Dexterity,
@@ -55,7 +55,7 @@ mod tests {
             vec![],
         );
 
-        let ability_scores = systems::helpers::get_component::<AbilityScoreSet>(&world, entity);
+        let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(&world, entity);
         assert_eq!(
             weapon.determine_ability(&ability_scores),
             Ability::Dexterity
@@ -228,7 +228,7 @@ mod tests {
         let entity = world.spawn(Character::default());
 
         {
-            let mut scores = helpers::get_component_mut::<AbilityScoreSet>(&mut world, entity);
+            let mut scores = helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity);
             scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 14));
             scores.set(
                 Ability::Dexterity,

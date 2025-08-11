@@ -4,7 +4,7 @@ use hecs::Bundle;
 
 use crate::{
     components::{
-        ability::AbilityScoreSet,
+        ability::AbilityScoreMap,
         actions::action::{ActionCooldownMap, ActionMap},
         damage::DamageResistances,
         effects::effects::Effect,
@@ -63,7 +63,7 @@ from_world!(
         pub name: String,
         pub levels: CharacterLevels,
         pub hp: HitPoints,
-        pub ability_scores: AbilityScoreSet,
+        pub ability_scores: AbilityScoreMap,
         pub skills: SkillSet,
         pub saving_throws: SavingThrowSet,
         pub resistances: DamageResistances,
@@ -98,7 +98,7 @@ impl Character {
             name: name.to_string(),
             levels: CharacterLevels::new(),
             hp: HitPoints::new(0),
-            ability_scores: AbilityScoreSet::new(),
+            ability_scores: AbilityScoreMap::new(),
             skills: create_skill_set(),
             saving_throws: create_saving_throw_set(),
             resistances: DamageResistances::new(),

@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     components::{
-        ability::{Ability, AbilityScore, AbilityScoreSet},
+        ability::{Ability, AbilityScore, AbilityScoreDistribution, AbilityScoreMap},
         actions::action::{ActionContext, ActionMap},
         class::{Class, ClassBase, ClassName, SubclassName},
         hit_points::HitPoints,
@@ -28,11 +28,7 @@ pub enum LevelUpDecision {
     Subclass(SubclassName),
     Effect(EffectId),
     SkillProficiency(HashSet<Skill>),
-    AbilityScores {
-        scores: HashMap<Ability, u8>,
-        plus_2_bonus: Ability,
-        plus_1_bonus: Ability,
-    },
+    AbilityScores(AbilityScoreDistribution),
     Feat(FeatId),
     AbilityScoreImprovement(HashMap<Ability, u8>),
     // Spell(SpellcastingClass, SpellOption),
@@ -215,24 +211,22 @@ fn resolve_level_up_prompt(
 
         (
             LevelUpPrompt::AbilityScores(score_point_cost, num_points),
-            LevelUpDecision::AbilityScores {
-                scores,
-                plus_2_bonus,
-                plus_1_bonus,
-            },
+            LevelUpDecision::AbilityScores(distribution),
         ) => {
-            if scores.len() != Ability::iter().count() {
+            if distribution.scores.len() != Ability::iter().count() {
                 return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
-            if scores
+            if distribution
+                .scores
                 .values()
                 .any(|&score| !score_point_cost.contains_key(&score))
             {
                 return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
-            let total_cost = scores
+            let total_cost = distribution
+                .scores
                 .iter()
                 .map(|(_, score)| {
                     score_point_cost
@@ -246,12 +240,12 @@ fn resolve_level_up_prompt(
             }
 
             let mut ability_score_set =
-                systems::helpers::get_component_mut::<AbilityScoreSet>(world, entity);
-            for (ability, score) in scores {
+                systems::helpers::get_component_mut::<AbilityScoreMap>(world, entity);
+            for (ability, score) in &distribution.scores {
                 let mut final_score = *score as i32;
-                if ability == plus_2_bonus {
+                if *ability == distribution.plus_2_bonus {
                     final_score += 2;
-                } else if ability == plus_1_bonus {
+                } else if *ability == distribution.plus_1_bonus {
                     final_score += 1;
                 }
                 ability_score_set.set(*ability, AbilityScore::new(*ability, final_score));
@@ -294,7 +288,7 @@ fn resolve_level_up_prompt(
             }
 
             let mut ability_score_set =
-                systems::helpers::get_component_mut::<AbilityScoreSet>(world, entity);
+                systems::helpers::get_component_mut::<AbilityScoreMap>(world, entity);
 
             for (ability, bonus) in decision_points {
                 if !abilities.contains(ability) {
