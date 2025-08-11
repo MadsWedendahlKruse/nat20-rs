@@ -78,12 +78,9 @@ pub struct LevelUpSession {
 
 impl LevelUpSession {
     pub fn new(world: &World, character: Entity) -> Self {
-        let mut pending = Vec::new();
-        pending.push(LevelUpPrompt::class());
-
         LevelUpSession {
             character,
-            pending_prompts: pending,
+            pending_prompts: vec![LevelUpPrompt::class()],
             decisions: Vec::new(),
         }
     }
@@ -267,7 +264,7 @@ fn resolve_level_up_prompt(
             }
 
             if let Some(feat) = registry::feats::FEAT_REGISTRY.get(feat_id) {
-                if !feat.meets_pre_requisites(world, entity) {
+                if !feat.meets_prerequisite(world, entity) {
                     return Err(LevelUpError::InvalidDecision { prompt, decision });
                 }
 
@@ -436,11 +433,30 @@ fn apply_class_base(
     }
 
     // Return any additional prompts that should be presented to the player
-    class_base
+    let mut new_prompts = class_base
         .prompts_by_level
         .get(&level)
         .cloned()
-        .unwrap_or_default()
+        .unwrap_or_default();
+
+    // Feats need special handling since they can have prerequisites and
+    // can (or can't) be repeatable.
+    for prompt in new_prompts.iter_mut() {
+        if let LevelUpPrompt::Feat(feats) = prompt {
+            feats.retain(|feat_id| {
+                let feat = registry::feats::FEAT_REGISTRY.get(feat_id).unwrap();
+                if !feat.meets_prerequisite(world, entity) {
+                    return false;
+                }
+                if feat.is_repeatable() {
+                    return true;
+                }
+                !systems::helpers::get_component::<Vec<FeatId>>(world, entity).contains(feat_id)
+            });
+        }
+    }
+
+    new_prompts
 }
 
 pub fn apply_level_up_decision(

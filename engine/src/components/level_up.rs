@@ -83,7 +83,9 @@ impl LevelUpPrompt {
     }
 
     pub fn feats() -> Self {
-        let feats = registry::feats::FEAT_REGISTRY.keys().cloned().collect();
+        let mut feats: Vec<_> = registry::feats::FEAT_REGISTRY.keys().cloned().collect();
+        // TODO: Bit of a dirty hack to remove fighting styles from the list of feats.
+        feats.retain(|feat_id| !feat_id.to_string().starts_with("feat.fighting_style."));
         LevelUpPrompt::Feat(feats)
     }
 }

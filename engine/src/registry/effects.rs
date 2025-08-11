@@ -49,8 +49,14 @@ pub static EFFECT_REGISTRY: LazyLock<HashMap<EffectId, Effect>> = LazyLock::new(
             FIGHTING_STYLE_GREAT_WEAPON_FIGHTING.to_owned(),
         ),
         (IMPROVED_CRITICAL_ID.clone(), IMPROVED_CRITICAL.to_owned()),
+        (REMARKABLE_ATHLETE_ID.clone(), REMARKABLE_ATHLETE.to_owned()),
         (RING_OF_ATTACKING_ID.clone(), RING_OF_ATTACKING.to_owned()),
         (SUPERIOR_CRITICAL_ID.clone(), SUPERIOR_CRITICAL.to_owned()),
+        (
+            THREE_EXTRA_ATTACKS_ID.clone(),
+            THREE_EXTRA_ATTACKS.to_owned(),
+        ),
+        (TWO_EXTRA_ATTACKS_ID.clone(), TWO_EXTRA_ATTACKS.to_owned()),
     ])
 });
 
@@ -362,6 +368,32 @@ static IMPROVED_CRITICAL: LazyLock<Effect> = LazyLock::new(|| {
     effect
 });
 
+pub static REMARKABLE_ATHLETE_ID: LazyLock<EffectId> =
+    LazyLock::new(|| EffectId::from_str("effect.fighter.champion.remarkable_athlete"));
+
+static REMARKABLE_ATHLETE: LazyLock<Effect> = LazyLock::new(|| {
+    let mut effect = Effect::new(
+        REMARKABLE_ATHLETE_ID.clone(),
+        ModifierSource::ClassFeature("Remarkable Athlete".to_string()),
+        EffectDuration::Permanent,
+    );
+
+    [Skill::Athletics, Skill::Initiative]
+        .iter()
+        .for_each(|skill| {
+            effect.on_skill_check.insert(
+                *skill,
+                D20CheckHooks::with_check_hook(|_, _, d20_check| {
+                    d20_check.advantage_tracker_mut().add(
+                        AdvantageType::Advantage,
+                        ModifierSource::ClassFeature("Remarkable Athlete".to_string()),
+                    );
+                }),
+            );
+        });
+    effect
+});
+
 pub static RING_OF_ATTACKING_ID: LazyLock<EffectId> =
     LazyLock::new(|| EffectId::from_str("effect.item.ring_of_attacking"));
 
@@ -393,5 +425,23 @@ static SUPERIOR_CRITICAL: LazyLock<Effect> = LazyLock::new(|| {
         attack_roll.reduce_crit_threshold(2);
     });
     effect.replaces = Some(IMPROVED_CRITICAL_ID.clone());
+    effect
+});
+
+pub static THREE_EXTRA_ATTACKS_ID: LazyLock<EffectId> =
+    LazyLock::new(|| EffectId::from_str("effect.fighter.three_extra_attacks"));
+
+static THREE_EXTRA_ATTACKS: LazyLock<Effect> = LazyLock::new(|| {
+    let mut effect = extra_attack_effect(THREE_EXTRA_ATTACKS_ID.clone(), 3);
+    effect.replaces = Some(TWO_EXTRA_ATTACKS_ID.clone());
+    effect
+});
+
+pub static TWO_EXTRA_ATTACKS_ID: LazyLock<EffectId> =
+    LazyLock::new(|| EffectId::from_str("effect.fighter.two_extra_attacks"));
+
+static TWO_EXTRA_ATTACKS: LazyLock<Effect> = LazyLock::new(|| {
+    let mut effect = extra_attack_effect(TWO_EXTRA_ATTACKS_ID.clone(), 3);
+    effect.replaces = Some(EXTRA_ATTACK_ID.clone());
     effect
 });

@@ -277,8 +277,8 @@ pub mod creatures {
                         plus_2_bonus: Ability::Strength,
                         plus_1_bonus: Ability::Constitution,
                     },
-                    LevelUpDecision::Effect(
-                        registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                    LevelUpDecision::Feat(
+                        registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                     ),
                     LevelUpDecision::SkillProficiency(HashSet::from([
                         Skill::Athletics,
@@ -459,8 +459,8 @@ pub mod creatures {
                         plus_2_bonus: Ability::Strength,
                         plus_1_bonus: Ability::Constitution,
                     },
-                    LevelUpDecision::Effect(
-                        registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                    LevelUpDecision::Feat(
+                        registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                     ),
                     LevelUpDecision::SkillProficiency(HashSet::from([
                         Skill::Acrobatics,

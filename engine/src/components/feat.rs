@@ -2,13 +2,16 @@ use std::sync::Arc;
 
 use hecs::{Entity, World};
 
-use crate::components::{effects::effects::Effect, id::FeatId, level_up::LevelUpPrompt};
+use crate::components::{
+    id::{EffectId, FeatId},
+    level_up::LevelUpPrompt,
+};
 
 #[derive(Clone)]
 pub struct Feat {
     id: FeatId,
-    pre_requisites: Option<Arc<dyn Fn(&World, Entity) -> bool + Send + Sync>>,
-    effects: Vec<Effect>,
+    prerequisite: Option<Arc<dyn Fn(&World, Entity) -> bool + Send + Sync>>,
+    effects: Vec<EffectId>,
     /// Some feats might require a choice to be made when selected.
     /// In most cases this will be some kind of ability score increase, but could
     /// also be a choice between learning a new spell etc.
@@ -22,14 +25,14 @@ pub struct Feat {
 impl Feat {
     pub fn new(
         id: FeatId,
-        pre_requisites: Option<Arc<dyn Fn(&World, Entity) -> bool + Send + Sync>>,
-        effects: Vec<Effect>,
+        prerequisite: Option<Arc<dyn Fn(&World, Entity) -> bool + Send + Sync>>,
+        effects: Vec<EffectId>,
         prompts: Vec<LevelUpPrompt>,
         repeatable: bool,
     ) -> Self {
         Self {
             id,
-            pre_requisites,
+            prerequisite,
             effects,
             prompts,
             repeatable,
@@ -40,15 +43,15 @@ impl Feat {
         &self.id
     }
 
-    pub fn meets_pre_requisites(&self, world: &World, entity: Entity) -> bool {
-        if let Some(pre_requisites) = &self.pre_requisites {
-            pre_requisites(world, entity)
+    pub fn meets_prerequisite(&self, world: &World, entity: Entity) -> bool {
+        if let Some(prerequisite) = &self.prerequisite {
+            prerequisite(world, entity)
         } else {
             true
         }
     }
 
-    pub fn effects(&self) -> &[Effect] {
+    pub fn effects(&self) -> &[EffectId] {
         &self.effects
     }
 

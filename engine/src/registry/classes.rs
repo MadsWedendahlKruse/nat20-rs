@@ -43,11 +43,12 @@ pub static CLASS_REGISTRY: LazyLock<HashMap<ClassName, Class>> = LazyLock::new(|
 // [x] Level 5: Extra Attack
 // [ ] Level 5: Tactical Shift
 // [ ] Level 9: Indomitable
+//     Requires that a reaction can be triggered outside of combat
 // [ ] Level 9: Tactical Master
-// [ ] Level 11: Two Extra Attacks
+// [x] Level 11: Two Extra Attacks
 // [ ] Level 13: Studied Attacks
 // [ ] Level 19: Epic Boon
-// [ ] Level 20: Three Extra Attacks
+// [x] Level 20: Three Extra Attacks
 static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
     Class::new(
         ClassName::Fighter,
@@ -79,7 +80,11 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         HashSet::from([ArmorType::Light, ArmorType::Medium, ArmorType::Heavy]),
         HashSet::from([WeaponCategory::Simple, WeaponCategory::Martial]),
         SpellcastingProgression::None,
-        HashMap::from([(5, vec![registry::effects::EXTRA_ATTACK_ID.clone()])]),
+        HashMap::from([
+            (5, vec![registry::effects::EXTRA_ATTACK_ID.clone()]),
+            (11, vec![registry::effects::TWO_EXTRA_ATTACKS_ID.clone()]),
+            (20, vec![registry::effects::THREE_EXTRA_ATTACKS_ID.clone()]),
+        ]),
         HashMap::from([
             (1, vec![second_wind(2)]),
             (
@@ -109,10 +114,10 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         ]),
         HashMap::from([(
             1,
-            vec![LevelUpPrompt::Effect(vec![
-                registry::effects::FIGHTING_STYLE_ARCHERY_ID.clone(),
-                registry::effects::FIGHTING_STYLE_DEFENSE_ID.clone(),
-                registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+            vec![LevelUpPrompt::Feat(vec![
+                registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
+                registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone(),
+                registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
             ])],
         )]),
         HashMap::from([
@@ -132,9 +137,11 @@ fn second_wind(charges: u8) -> Resource {
 }
 
 // [x] Level 3: Improved Critical
-// [ ] Level 3: Remarkable Athlete
-// [ ] Level 7: Additional Fighting Style
+// [~] Level 3: Remarkable Athlete
+//     Missing the part about crits not provoking opportunity attacks
+// [x] Level 7: Additional Fighting Style
 // [ ] Level 10: Heroic Warrior
+///    Pretty complicated to implement
 // [x] Level 15: Superior Critical
 // [ ] Level 18: Survivor
 static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
@@ -149,11 +156,24 @@ static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
         weapon_proficiencies: HashSet::new(),
         spellcasting: SpellcastingProgression::None,
         effects_by_level: HashMap::from([
-            (3, vec![registry::effects::IMPROVED_CRITICAL_ID.clone()]),
+            (
+                3,
+                vec![
+                    registry::effects::IMPROVED_CRITICAL_ID.clone(),
+                    registry::effects::REMARKABLE_ATHLETE_ID.clone(),
+                ],
+            ),
             (15, vec![registry::effects::SUPERIOR_CRITICAL_ID.clone()]),
         ]),
         resources_by_level: HashMap::new(),
-        prompts_by_level: HashMap::new(),
+        prompts_by_level: HashMap::from([(
+            7,
+            vec![LevelUpPrompt::Feat(vec![
+                registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
+                registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone(),
+                registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+            ])],
+        )]),
         actions_by_level: HashMap::new(),
     },
 });
