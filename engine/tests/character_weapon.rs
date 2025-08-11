@@ -18,7 +18,7 @@ mod tests {
                 item::ItemRarity,
             },
             modifier::ModifierSource,
-            proficiency::Proficiency,
+            proficiency::ProficiencyLevel,
         },
         entities::character::Character,
         systems::{self, helpers},
@@ -266,7 +266,7 @@ mod tests {
             !roll
                 .d20_check
                 .modifiers()
-                .contains_key(&ModifierSource::Proficiency(Proficiency::Proficient))
+                .contains_key(&ModifierSource::Proficiency(ProficiencyLevel::Proficient))
         );
         assert!(
             !roll

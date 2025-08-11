@@ -17,7 +17,7 @@ use crate::{
         dice::DieSize,
         id::SpellId,
         modifier::{ModifierSet, ModifierSource},
-        proficiency::Proficiency,
+        proficiency::{Proficiency, ProficiencyLevel},
         resource::ResourceCostMap,
         spells::{
             spell::{MagicSchool, Spell},
@@ -238,7 +238,7 @@ fn spell_save_dc(world: &World, caster: Entity, spell_id: &SpellId) -> D20CheckD
     // TODO: Not sure if Proficiency is the correct modifier source here, since I don't think
     // you can have e.g. Expertise in spell save DCs.
     spell_save_dc.add_modifier(
-        ModifierSource::Proficiency(Proficiency::Proficient),
+        ModifierSource::Proficiency(ProficiencyLevel::Proficient),
         proficiency_bonus as i32,
     );
 
@@ -258,7 +258,10 @@ fn spell_attack_roll(world: &World, caster: Entity, spell_id: &SpellId) -> Attac
         .unwrap()
         .proficiency_bonus();
 
-    let mut roll = D20Check::new(Proficiency::Proficient);
+    let mut roll = D20Check::new(Proficiency::new(
+        ProficiencyLevel::Proficient,
+        ModifierSource::None,
+    ));
     let spellcasting_modifier = ability_scores
         .ability_modifier(spellcasting_ability)
         .total();
@@ -267,7 +270,7 @@ fn spell_attack_roll(world: &World, caster: Entity, spell_id: &SpellId) -> Attac
         spellcasting_modifier,
     );
     roll.add_modifier(
-        ModifierSource::Proficiency(Proficiency::Proficient),
+        ModifierSource::Proficiency(ProficiencyLevel::Proficient),
         proficiency_bonus as i32,
     );
 

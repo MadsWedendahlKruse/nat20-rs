@@ -28,7 +28,14 @@ macro_rules! id_newtypes {
     };
 }
 
-id_newtypes!(EffectId, ResourceId, ActionId, SpellId, FeatId);
+id_newtypes!(
+    EffectId,
+    ResourceId,
+    ActionId,
+    SpellId,
+    FeatId,
+    BackgroundId
+);
 
 impl SpellId {
     pub fn to_action_id(&self) -> ActionId {

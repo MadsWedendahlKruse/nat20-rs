@@ -10,7 +10,7 @@ mod tests {
             ability::{Ability, AbilityScoreDistribution},
             class::{ClassName, SubclassName},
             level::CharacterLevels,
-            proficiency::Proficiency,
+            proficiency::ProficiencyLevel,
             saving_throw::SavingThrowSet,
             skill::{Skill, SkillSet},
         },
@@ -87,7 +87,10 @@ mod tests {
         {
             let skills = systems::helpers::get_component::<SkillSet>(&mut world, character);
             for skill in [Skill::Athletics, Skill::Perception] {
-                assert_eq!(skills.get(skill).proficiency(), &Proficiency::Proficient);
+                assert_eq!(
+                    skills.get(skill).proficiency().level(),
+                    &ProficiencyLevel::Proficient
+                );
             }
         }
 
@@ -96,8 +99,8 @@ mod tests {
                 systems::helpers::get_component::<SavingThrowSet>(&mut world, character);
             for ability in [Ability::Strength, Ability::Constitution] {
                 assert_eq!(
-                    saving_throws.get(ability).proficiency(),
-                    &Proficiency::Proficient
+                    saving_throws.get(ability).proficiency().level(),
+                    &ProficiencyLevel::Proficient
                 );
             }
         }

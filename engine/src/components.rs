@@ -1,5 +1,6 @@
 pub mod ability;
 pub mod actions;
+pub mod background;
 pub mod class;
 pub mod d20_check;
 pub mod damage;

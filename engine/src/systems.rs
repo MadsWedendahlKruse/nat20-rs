@@ -1,7 +1,9 @@
 pub mod actions;
+pub mod backgrounds;
 pub mod combat;
 pub mod d20_check;
 pub mod effects;
+pub mod feats;
 pub mod health;
 pub mod helpers;
 pub mod level_up;

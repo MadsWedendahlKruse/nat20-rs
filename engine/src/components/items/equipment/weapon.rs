@@ -13,7 +13,7 @@ use crate::{
         dice::{DiceSet, DieSize},
         id::{ActionId, EffectId},
         modifier::{ModifierSet, ModifierSource},
-        proficiency::Proficiency,
+        proficiency::{Proficiency, ProficiencyLevel},
     },
     registry,
 };
@@ -97,7 +97,10 @@ impl WeaponProficiencyMap {
     }
 
     pub fn proficiency(&self, category: &WeaponCategory) -> Proficiency {
-        self.map.get(category).cloned().unwrap_or(Proficiency::None)
+        self.map.get(category).cloned().unwrap_or(Proficiency::new(
+            ProficiencyLevel::None,
+            ModifierSource::None,
+        ))
     }
 }
 

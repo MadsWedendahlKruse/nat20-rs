@@ -9,7 +9,8 @@ use crate::{
     components::{
         ability::Ability,
         class::{ClassName, SubclassName},
-        id::{EffectId, FeatId},
+        id::{BackgroundId, EffectId, FeatId},
+        modifier::ModifierSource,
         skill::Skill,
     },
     registry,
@@ -32,10 +33,11 @@ static ABILITY_SCORE_POINTS: u8 = 27;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LevelUpPrompt {
+    Background(Vec<BackgroundId>),
     Class(Vec<ClassName>),
     Subclass(Vec<SubclassName>),
     Effect(Vec<EffectId>),
-    SkillProficiency(HashSet<Skill>, u8),
+    SkillProficiency(HashSet<Skill>, u8, ModifierSource),
     AbilityScores(HashMap<u8, u8>, u8),
     Feat(Vec<FeatId>),
     AbilityScoreImprovement {
@@ -51,10 +53,11 @@ pub enum LevelUpPrompt {
 impl LevelUpPrompt {
     pub fn name(&self) -> &'static str {
         match self {
+            LevelUpPrompt::Background(_) => "Background",
             LevelUpPrompt::Class(_) => "Class",
             LevelUpPrompt::Subclass(_) => "Subclass",
             LevelUpPrompt::Effect(_) => "Effect",
-            LevelUpPrompt::SkillProficiency(_, _) => "SkillProficiency",
+            LevelUpPrompt::SkillProficiency(_, _, _) => "SkillProficiency",
             LevelUpPrompt::AbilityScores(_, _) => "AbilityScores",
             LevelUpPrompt::Feat(_) => "Feat",
             LevelUpPrompt::AbilityScoreImprovement { .. } => "AbilityScoreImprovement",
@@ -63,6 +66,14 @@ impl LevelUpPrompt {
 }
 
 impl LevelUpPrompt {
+    pub fn background() -> Self {
+        let backgrounds = registry::backgrounds::BACKGROUND_REGISTRY
+            .keys()
+            .cloned()
+            .collect();
+        LevelUpPrompt::Background(backgrounds)
+    }
+
     pub fn class() -> Self {
         let classes = ClassName::iter().collect();
         LevelUpPrompt::Class(classes)

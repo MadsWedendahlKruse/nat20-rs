@@ -11,6 +11,7 @@ use crate::components::{
     id::{ActionId, EffectId},
     items::equipment::{armor::ArmorType, weapon::WeaponCategory},
     level_up::LevelUpPrompt,
+    modifier::ModifierSource,
     resource::Resource,
     skill::Skill,
 };
@@ -124,6 +125,7 @@ impl Class {
             .push(LevelUpPrompt::SkillProficiency(
                 skill_proficiencies.clone(),
                 skill_prompts,
+                ModifierSource::ClassFeature(name.to_string()),
             ));
 
         // Add subclass prompts

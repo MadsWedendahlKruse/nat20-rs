@@ -267,6 +267,7 @@ pub mod creatures {
                 5,
                 vec![
                     // Level 1
+                    LevelUpDecision::Background(registry::backgrounds::SOLDIER_ID.clone()),
                     LevelUpDecision::Class(ClassName::Fighter),
                     LevelUpDecision::AbilityScores(
                         registry::classes::CLASS_REGISTRY
@@ -279,7 +280,7 @@ pub mod creatures {
                         registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
                     ),
                     LevelUpDecision::SkillProficiency(HashSet::from([
-                        Skill::Athletics,
+                        Skill::Acrobatics,
                         Skill::Perception,
                     ])),
                     // Level 2
@@ -323,6 +324,7 @@ pub mod creatures {
                 5,
                 vec![
                     // Level 1
+                    LevelUpDecision::Background(registry::backgrounds::SAGE_ID.clone()),
                     LevelUpDecision::Class(ClassName::Wizard),
                     LevelUpDecision::AbilityScores(
                         registry::classes::CLASS_REGISTRY
@@ -332,8 +334,8 @@ pub mod creatures {
                             .clone(),
                     ),
                     LevelUpDecision::SkillProficiency(HashSet::from([
-                        Skill::Arcana,
-                        Skill::History,
+                        Skill::Investigation,
+                        Skill::Insight,
                     ])),
                     // Level 2
                     LevelUpDecision::Class(ClassName::Wizard),
@@ -378,6 +380,7 @@ pub mod creatures {
                 5,
                 vec![
                     // Level 1
+                    LevelUpDecision::Background(registry::backgrounds::ACOLYTE_ID.clone()),
                     LevelUpDecision::Class(ClassName::Warlock),
                     LevelUpDecision::AbilityScores(
                         registry::classes::CLASS_REGISTRY
@@ -443,6 +446,7 @@ pub mod creatures {
                 1,
                 vec![
                     // Level 1
+                    LevelUpDecision::Background(registry::backgrounds::SOLDIER_ID.clone()),
                     LevelUpDecision::Class(ClassName::Fighter),
                     LevelUpDecision::AbilityScores(
                         registry::classes::CLASS_REGISTRY

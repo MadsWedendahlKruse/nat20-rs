@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::components::id::SpellId;
+use crate::components::id::{BackgroundId, SpellId};
 
-use super::{ability::Ability, proficiency::Proficiency};
+use super::{ability::Ability, proficiency::ProficiencyLevel};
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum ModifierSource {
+    Background(BackgroundId),
     Spell(SpellId),       // e.g. "Bless"
     Item(String),         // e.g. "Belt of Strength"
     Condition(String),    // e.g. "Poisoned"
@@ -14,13 +15,15 @@ pub enum ModifierSource {
     EffectId(u32),        // optional: unique ID for internal tracking
     Custom(String),       // fallback for ad-hoc things
     Ability(Ability),     // e.g. "Strength"
-    Proficiency(Proficiency),
+    Proficiency(ProficiencyLevel),
     Feat(String), // e.g. "Great Weapon Master"
+    None,         // Used for cases where no modifier is applicable
 }
 
 impl fmt::Display for ModifierSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ModifierSource::Background(id) => write!(f, "Background: {}", id),
             ModifierSource::Spell(id) => write!(f, "Spell: {}", id),
             ModifierSource::Item(name) => write!(f, "Item: {}", name),
             ModifierSource::Condition(name) => write!(f, "Condition: {}", name),
@@ -30,6 +33,7 @@ impl fmt::Display for ModifierSource {
             ModifierSource::Ability(ability) => write!(f, "{:?} Modifier", ability),
             ModifierSource::Proficiency(proficiency) => write!(f, "Proficiency: {:?}", proficiency),
             ModifierSource::Feat(feat) => write!(f, "Feat: {}", feat),
+            ModifierSource::None => write!(f, "No Modifier"),
         }
     }
 }

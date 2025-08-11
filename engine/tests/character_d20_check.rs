@@ -15,7 +15,7 @@ mod tests {
                 item::ItemRarity,
             },
             modifier::ModifierSource,
-            proficiency::Proficiency,
+            proficiency::{Proficiency, ProficiencyLevel},
             saving_throw::SavingThrowSet,
             skill::{Skill, SkillSet},
         },
@@ -61,8 +61,10 @@ mod tests {
 
         systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity)
             .set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
-        systems::helpers::get_component_mut::<SavingThrowSet>(&mut world, entity)
-            .set_proficiency(Ability::Strength, Proficiency::Proficient);
+        systems::helpers::get_component_mut::<SavingThrowSet>(&mut world, entity).set_proficiency(
+            Ability::Strength,
+            Proficiency::new(ProficiencyLevel::Proficient, ModifierSource::None),
+        );
 
         let result = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
             Ability::Strength,
@@ -83,8 +85,10 @@ mod tests {
 
         systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity)
             .set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
-        systems::helpers::get_component_mut::<SavingThrowSet>(&mut world, entity)
-            .set_proficiency(Ability::Strength, Proficiency::Expertise);
+        systems::helpers::get_component_mut::<SavingThrowSet>(&mut world, entity).set_proficiency(
+            Ability::Strength,
+            Proficiency::new(ProficiencyLevel::Expertise, ModifierSource::None),
+        );
 
         let result = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
             Ability::Strength,

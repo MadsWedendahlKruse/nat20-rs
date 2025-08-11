@@ -11,7 +11,7 @@ use crate::{
         ability::{Ability, AbilityScoreMap},
         effects::hooks::D20CheckHooks,
         modifier::{ModifierSet, ModifierSource},
-        proficiency::Proficiency,
+        proficiency::{Proficiency, ProficiencyLevel},
     },
     systems,
 };
@@ -124,7 +124,7 @@ impl D20Check {
     pub fn roll(&self, proficiency_bonus: u8) -> D20CheckResult {
         let mut modifiers = self.modifiers.clone();
         modifiers.add_modifier(
-            ModifierSource::Proficiency(self.proficiency),
+            ModifierSource::Proficiency(self.proficiency.level().clone()),
             self.proficiency.bonus(proficiency_bonus) as i32,
         );
 
@@ -210,8 +210,8 @@ impl D20Check {
 impl fmt::Display for D20Check {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "1d20")?;
-        if self.proficiency != Proficiency::None {
-            write!(f, " + {}", self.proficiency)?;
+        if self.proficiency.level() != &ProficiencyLevel::None {
+            write!(f, " + {}", self.proficiency.level())?;
         }
         if self.modifiers.is_empty() {
             return Ok(());
@@ -279,7 +279,15 @@ where
         get_hooks: fn(K, &World, Entity) -> Vec<D20CheckHooks>,
     ) -> Self {
         let checks = K::iter()
-            .map(|k| (k, D20Check::new(Proficiency::None)))
+            .map(|k| {
+                (
+                    k,
+                    D20Check::new(Proficiency::new(
+                        ProficiencyLevel::None,
+                        ModifierSource::None,
+                    )),
+                )
+            })
             .collect();
         Self {
             checks,
@@ -296,8 +304,8 @@ where
         self.checks.get_mut(&key).unwrap()
     }
 
-    pub fn set_proficiency(&mut self, key: K, prof: Proficiency) {
-        self.get_mut(key).set_proficiency(prof);
+    pub fn set_proficiency(&mut self, key: K, proficiency: Proficiency) {
+        self.get_mut(key).set_proficiency(proficiency);
     }
 
     pub fn add_modifier(&mut self, key: K, source: ModifierSource, value: i32) {
@@ -352,7 +360,10 @@ mod tests {
 
     #[test]
     fn d20_check() {
-        let mut check = D20Check::new(Proficiency::Proficient);
+        let mut check = D20Check::new(Proficiency::new(
+            ProficiencyLevel::Proficient,
+            ModifierSource::None,
+        ));
         check
             .modifiers
             .add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
@@ -370,7 +381,10 @@ mod tests {
 
     #[test]
     fn d20_check_with_advantage() {
-        let mut check = D20Check::new(Proficiency::Proficient);
+        let mut check = D20Check::new(Proficiency::new(
+            ProficiencyLevel::Proficient,
+            ModifierSource::None,
+        ));
         check
             .modifiers
             .add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
@@ -396,7 +410,10 @@ mod tests {
 
     #[test]
     fn d20_check_with_disadvantage() {
-        let mut check = D20Check::new(Proficiency::Expertise);
+        let mut check = D20Check::new(Proficiency::new(
+            ProficiencyLevel::Expertise,
+            ModifierSource::Custom("Somewhere".to_string()),
+        ));
         check.advantage_tracker.add(
             AdvantageType::Disadvantage,
             ModifierSource::Item("Cursed Ring".to_string()),
@@ -419,7 +436,10 @@ mod tests {
 
     #[test]
     fn d20_check_with_advantage_and_disadvantage() {
-        let mut check = D20Check::new(Proficiency::Expertise);
+        let mut check = D20Check::new(Proficiency::new(
+            ProficiencyLevel::Expertise,
+            ModifierSource::Custom("Genetics".to_string()),
+        ));
         check.advantage_tracker.add(
             AdvantageType::Advantage,
             ModifierSource::Item("Lucky Charm".to_string()),
@@ -441,7 +461,10 @@ mod tests {
 
     #[test]
     fn d20_check_critical_success() {
-        let mut check = D20Check::new(Proficiency::Proficient);
+        let mut check = D20Check::new(Proficiency::new(
+            ProficiencyLevel::Proficient,
+            ModifierSource::None,
+        ));
         check
             .modifiers
             .add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);

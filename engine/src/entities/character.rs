@@ -9,7 +9,7 @@ use crate::{
         damage::DamageResistances,
         effects::effects::Effect,
         hit_points::HitPoints,
-        id::FeatId,
+        id::{BackgroundId, FeatId},
         items::equipment::{loadout::Loadout, weapon::WeaponProficiencyMap},
         level::CharacterLevels,
         resource::{RechargeRule, Resource, ResourceMap},
@@ -61,6 +61,9 @@ from_world!(
     pub struct Character {
         pub tag: CharacterTag,
         pub name: String,
+        // TODO: Not sure if Option makes sense here, it would only be at the
+        // very beginning of character creation where it's not set
+        pub background: Option<BackgroundId>,
         pub levels: CharacterLevels,
         pub hp: HitPoints,
         pub ability_scores: AbilityScoreMap,
@@ -96,6 +99,7 @@ impl Character {
         Self {
             tag: CharacterTag,
             name: name.to_string(),
+            background: None,
             levels: CharacterLevels::new(),
             hp: HitPoints::new(0),
             ability_scores: AbilityScoreMap::new(),

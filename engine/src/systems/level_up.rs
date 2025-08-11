@@ -7,15 +7,17 @@ use uuid::Uuid;
 use crate::{
     components::{
         ability::{Ability, AbilityScore, AbilityScoreDistribution, AbilityScoreMap},
-        actions::action::{ActionContext, ActionMap},
+        actions::action::ActionMap,
+        background::Background,
         class::{Class, ClassBase, ClassName, SubclassName},
+        feat::Feat,
         hit_points::HitPoints,
-        id::{ActionId, EffectId, FeatId},
+        id::{ActionId, BackgroundId, EffectId, FeatId},
         level::CharacterLevels,
         level_up::LevelUpPrompt,
         modifier::ModifierSource,
-        proficiency::Proficiency,
-        resource::{Resource, ResourceCostMap, ResourceMap},
+        proficiency::{Proficiency, ProficiencyLevel},
+        resource::{Resource, ResourceMap},
         saving_throw::SavingThrowSet,
         skill::{Skill, SkillSet},
     },
@@ -24,6 +26,7 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LevelUpDecision {
+    Background(BackgroundId),
     Class(ClassName),
     Subclass(SubclassName),
     Effect(EffectId),
@@ -38,6 +41,7 @@ pub enum LevelUpDecision {
 impl LevelUpDecision {
     pub fn name(&self) -> &'static str {
         match self {
+            LevelUpDecision::Background(_) => "Background",
             LevelUpDecision::Class(_) => "Class",
             LevelUpDecision::Subclass(_) => "Subclass",
             LevelUpDecision::Effect(_) => "Effect",
@@ -74,9 +78,18 @@ pub struct LevelUpSession {
 
 impl LevelUpSession {
     pub fn new(world: &World, character: Entity) -> Self {
+        let mut pending_prompts = Vec::new();
+
+        let levels = systems::helpers::get_component::<CharacterLevels>(world, character);
+        if levels.total_level() == 0 {
+            pending_prompts.push(LevelUpPrompt::background());
+        }
+
+        pending_prompts.push(LevelUpPrompt::class());
+
         LevelUpSession {
             character,
-            pending_prompts: vec![LevelUpPrompt::class()],
+            pending_prompts,
             decisions: Vec::new(),
         }
     }
@@ -146,6 +159,21 @@ fn resolve_level_up_prompt(
     let mut prompts = Vec::new();
 
     match (&prompt, &decision) {
+        (LevelUpPrompt::Background(backgrounds), LevelUpDecision::Background(background_id)) => {
+            if !backgrounds.contains(background_id) {
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
+            }
+
+            if let Some(background) = registry::backgrounds::BACKGROUND_REGISTRY.get(background_id)
+            {
+                prompts.extend(systems::backgrounds::set_background(
+                    world, entity, background,
+                ));
+            } else {
+                return Err(LevelUpError::RegistryMissing(background_id.to_string()));
+            }
+        }
+
         (LevelUpPrompt::Class(classes), LevelUpDecision::Class(class_name)) => {
             if !classes.contains(&class_name) {
                 return Err(LevelUpError::InvalidDecision { prompt, decision });
@@ -192,7 +220,7 @@ fn resolve_level_up_prompt(
         }
 
         (
-            LevelUpPrompt::SkillProficiency(skills, num_prompts),
+            LevelUpPrompt::SkillProficiency(skills, num_prompts, source),
             LevelUpDecision::SkillProficiency(selected_skills),
         ) => {
             if selected_skills.len() != *num_prompts as usize {
@@ -204,8 +232,10 @@ fn resolve_level_up_prompt(
                     return Err(LevelUpError::InvalidDecision { prompt, decision });
                 }
                 // TODO: Expertise handling
-                systems::helpers::get_component_mut::<SkillSet>(world, entity)
-                    .set_proficiency(*skill, Proficiency::Proficient);
+                systems::helpers::get_component_mut::<SkillSet>(world, entity).set_proficiency(
+                    *skill,
+                    Proficiency::new(ProficiencyLevel::Proficient, source.clone()),
+                );
             }
         }
 
@@ -257,21 +287,16 @@ fn resolve_level_up_prompt(
                 return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
-            if let Some(feat) = registry::feats::FEAT_REGISTRY.get(feat_id) {
-                if !feat.meets_prerequisite(world, entity) {
-                    return Err(LevelUpError::InvalidDecision { prompt, decision });
-                }
-
-                let mut feats = systems::helpers::get_component_mut::<Vec<FeatId>>(world, entity);
-                if !feat.is_repeatable() && feats.contains(feat_id) {
-                    return Err(LevelUpError::InvalidDecision { prompt, decision });
-                }
-
-                prompts.extend(feat.prompts().iter().cloned());
-                feats.push(feat_id.clone());
-            } else {
-                return Err(LevelUpError::RegistryMissing(feat_id.to_string()));
+            let result = systems::feats::add_feat(world, entity, feat_id);
+            if result.is_err() {
+                eprintln!(
+                    "Failed to add feat {}: {:?}",
+                    feat_id,
+                    result.as_ref().err().unwrap()
+                );
+                return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
+            prompts.extend(result.unwrap());
         }
 
         (
@@ -342,8 +367,13 @@ fn increment_class_level(world: &mut World, entity: Entity, class: &Class) -> Ve
     };
 
     for ability in class.saving_throw_proficiencies.iter() {
-        systems::helpers::get_component_mut::<SavingThrowSet>(world, entity)
-            .set_proficiency(*ability, Proficiency::Proficient);
+        systems::helpers::get_component_mut::<SavingThrowSet>(world, entity).set_proficiency(
+            *ability,
+            Proficiency::new(
+                ProficiencyLevel::Proficient,
+                ModifierSource::ClassFeature(class.name.to_string().clone()),
+            ),
+        );
     }
 
     // TODO: If it's a level that triggers a feat prompt, and ability score improvement
@@ -433,20 +463,34 @@ fn apply_class_base(
         .cloned()
         .unwrap_or_default();
 
-    // Feats need special handling since they can have prerequisites and
-    // can (or can't) be repeatable.
+    // Some prompts have to be filtered based on the current state of the character
     for prompt in new_prompts.iter_mut() {
-        if let LevelUpPrompt::Feat(feats) = prompt {
-            feats.retain(|feat_id| {
-                let feat = registry::feats::FEAT_REGISTRY.get(feat_id).unwrap();
-                if !feat.meets_prerequisite(world, entity) {
-                    return false;
-                }
-                if feat.is_repeatable() {
-                    return true;
-                }
-                !systems::helpers::get_component::<Vec<FeatId>>(world, entity).contains(feat_id)
-            });
+        match prompt {
+            // Feats need special handling since they can have prerequisites and
+            // can (or can't) be repeatable.
+            LevelUpPrompt::Feat(feats) => {
+                feats.retain(|feat_id| {
+                    let feat = registry::feats::FEAT_REGISTRY.get(feat_id).unwrap();
+                    if !feat.meets_prerequisite(world, entity) {
+                        return false;
+                    }
+                    if feat.is_repeatable() {
+                        return true;
+                    }
+                    !systems::helpers::get_component::<Vec<FeatId>>(world, entity).contains(feat_id)
+                });
+            }
+
+            // Skill proficieny can be acquired e.g. through a Background, so we need
+            // to filter out the skills that the character already has.
+            LevelUpPrompt::SkillProficiency(skills, _, _) => {
+                let skill_set = systems::helpers::get_component::<SkillSet>(world, entity);
+                skills.retain(|skill| {
+                    skill_set.get(*skill).proficiency().level() == &ProficiencyLevel::None
+                });
+            }
+
+            _ => {}
         }
     }
 

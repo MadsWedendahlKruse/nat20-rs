@@ -27,7 +27,7 @@ use nat20_rs::{
         },
         level::CharacterLevels,
         modifier::ModifierSet,
-        proficiency::Proficiency,
+        proficiency::{Proficiency, ProficiencyLevel},
         resource::ResourceMap,
         saving_throw::SavingThrowSet,
         skill::{Skill, SkillSet, skill_ability},
@@ -123,21 +123,31 @@ impl ImguiRenderable for HitPoints {
     }
 }
 
-fn proficiency_icon(proficiency: &Proficiency) -> &'static str {
+fn proficiency_icon(proficiency: &ProficiencyLevel) -> &'static str {
     match proficiency {
-        Proficiency::None => "",
-        Proficiency::Half => "½",
-        Proficiency::Proficient => "*",
-        Proficiency::Expertise => "**",
+        ProficiencyLevel::None => "",
+        ProficiencyLevel::Half => "½",
+        ProficiencyLevel::Proficient => "*",
+        ProficiencyLevel::Expertise => "**",
     }
 }
 
 impl ImguiRenderableWithContext<&str> for Proficiency {
     fn render_with_context(&self, ui: &imgui::Ui, context: &str) {
-        if self != &Proficiency::None {
-            ui.text(proficiency_icon(self));
+        let level = self.level();
+        if level != &ProficiencyLevel::None {
+            ui.text(proficiency_icon(level));
             if ui.is_item_hovered() {
-                ui.tooltip_text(format!("{}{}", self, context));
+                ui.tooltip(|| {
+                    let mut segments = vec![
+                        (format!("{}", level), TextKind::Normal),
+                        (format!("({})", self.source()), TextKind::Details),
+                    ];
+                    if !context.is_empty() {
+                        segments.push((context.to_string(), TextKind::Details));
+                    }
+                    TextSegments::new(segments).render(ui);
+                });
             }
         }
     }

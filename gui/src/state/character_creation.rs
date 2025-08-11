@@ -6,7 +6,7 @@ use nat20_rs::{
     components::{
         ability::{Ability, AbilityScoreDistribution, AbilityScoreMap},
         class::{ClassName, SubclassName},
-        id::{EffectId, FeatId},
+        id::{BackgroundId, EffectId, FeatId},
         level::CharacterLevels,
         level_up::LevelUpPrompt,
         skill::Skill,
@@ -33,6 +33,7 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq)]
 enum LevelUpDecisionProgress {
+    Background(Option<BackgroundId>),
     Class(Option<ClassName>),
     Subclass(Option<SubclassName>),
     Effect(Option<EffectId>),
@@ -58,6 +59,7 @@ impl LevelUpDecisionProgress {
     // TODO: Might need more complex validation
     fn is_complete(&self) -> bool {
         match self {
+            LevelUpDecisionProgress::Background(background) => background.is_some(),
             LevelUpDecisionProgress::Class(class) => class.is_some(),
             LevelUpDecisionProgress::Subclass(subclass) => subclass.is_some(),
             LevelUpDecisionProgress::Effect(effect) => effect.is_some(),
@@ -87,6 +89,7 @@ impl LevelUpDecisionProgress {
 
     fn is_empty(&self) -> bool {
         match self {
+            LevelUpDecisionProgress::Background(background) => background.is_none(),
             LevelUpDecisionProgress::Class(class) => class.is_none(),
             LevelUpDecisionProgress::Subclass(subclass) => subclass.is_none(),
             LevelUpDecisionProgress::Effect(effect) => effect.is_none(),
@@ -101,6 +104,9 @@ impl LevelUpDecisionProgress {
 
     fn finalize(self) -> LevelUpDecision {
         match self {
+            LevelUpDecisionProgress::Background(background) => {
+                LevelUpDecision::Background(background.unwrap())
+            }
             LevelUpDecisionProgress::Class(class) => LevelUpDecision::Class(class.unwrap()),
             LevelUpDecisionProgress::Subclass(subclass) => {
                 LevelUpDecision::Subclass(subclass.unwrap())
@@ -128,10 +134,11 @@ impl LevelUpDecisionProgress {
 
     fn from_prompt(prompt: &LevelUpPrompt) -> Self {
         match prompt {
+            LevelUpPrompt::Background(_) => LevelUpDecisionProgress::Background(None),
             LevelUpPrompt::Class(_) => LevelUpDecisionProgress::Class(None),
             LevelUpPrompt::Subclass(_) => LevelUpDecisionProgress::Subclass(None),
             LevelUpPrompt::Effect(_) => LevelUpDecisionProgress::Effect(None),
-            LevelUpPrompt::SkillProficiency(_, required) => {
+            LevelUpPrompt::SkillProficiency(_, required, _) => {
                 LevelUpDecisionProgress::SkillProficiency {
                     selected: HashSet::new(),
                     remaining_decisions: *required,
@@ -500,7 +507,7 @@ impl ImguiRenderableMut for CharacterCreation {
                     }
 
                     let mut decision_updated = None;
-                    for pending_decision in &mut self.pending_decisions {
+                    for (i, pending_decision) in self.pending_decisions.iter_mut().enumerate() {
                         if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs")) {
                             let style_tokens = if pending_decision.progress.is_complete() {
                                 Some(
@@ -531,7 +538,7 @@ impl ImguiRenderableMut for CharacterCreation {
                                 if level_up_session.is_complete()
                                     && !pending_decision.progress.is_complete()
                                 {
-                                    decision_updated = Some(pending_decision.clone());
+                                    decision_updated = Some((i, pending_decision.clone()));
                                 }
 
                                 // Check if the decision is complete
@@ -539,19 +546,20 @@ impl ImguiRenderableMut for CharacterCreation {
                                     let decision = pending_decision.progress.clone().finalize();
                                     if !level_up_session.decisions().contains(&decision) {
                                         println!("New decision: {:?}", decision);
-                                        decision_updated = Some(pending_decision.clone());
+                                        decision_updated = Some((i, pending_decision.clone()));
                                     }
                                 }
                             }
                         }
                     }
 
-                    // All the other decisions arise from what class is chosen,
-                    // so if the class decision is updated, we can reset the
-                    // other decisions (little bit of a hack)
-                    if let Some(decision) = decision_updated.as_ref() {
+                    // All the decisions that come *after* choosing a class arise
+                    // from what class is chosen, so if the class decision is
+                    // updated, we can reset the subsequent decisions
+                    // (little bit of a hack)
+                    if let Some((index, decision)) = decision_updated.as_ref() {
                         if matches!(decision.prompt, LevelUpPrompt::Class(_)) {
-                            self.pending_decisions = vec![decision.clone()];
+                            self.pending_decisions.truncate(*index + 1);
                         }
                     }
 
@@ -600,6 +608,24 @@ impl ImguiRenderableMut for CharacterCreation {
 impl ImguiRenderableMut for LevelUpPromptWithProgress {
     fn render_mut(&mut self, ui: &imgui::Ui) {
         match &self.prompt {
+            LevelUpPrompt::Background(backgrounds) => {
+                if let LevelUpDecisionProgress::Background(ref mut decision) = self.progress {
+                    let button_size = [100.0, 30.0];
+                    for background in backgrounds {
+                        if render_button_selectable(
+                            ui,
+                            format!("{}", background.to_string()),
+                            button_size,
+                            decision.as_ref().is_some_and(|s| s == background),
+                        ) {
+                            *decision = Some(background.clone());
+                        }
+                    }
+                } else {
+                    ui.text("Mismatched progress type for Background prompt");
+                }
+            }
+
             LevelUpPrompt::Class(classes) => {
                 if let LevelUpDecisionProgress::Class(ref mut decision) = self.progress {
                     let button_size = [100.0, 30.0];
@@ -795,7 +821,7 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                 }
             }
 
-            LevelUpPrompt::SkillProficiency(skills, num_prompts) => {
+            LevelUpPrompt::SkillProficiency(skills, num_prompts, source) => {
                 if let LevelUpDecisionProgress::SkillProficiency {
                     ref mut selected,
                     ref mut remaining_decisions,
@@ -951,10 +977,6 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                 } else {
                     ui.text("Mismatched progress type for Subclass prompt");
                 }
-            }
-
-            _ => {
-                ui.text(format!("Not implemented yet :^)",));
             }
         }
     }
