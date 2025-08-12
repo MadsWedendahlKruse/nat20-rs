@@ -795,8 +795,10 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                 damage_roll,
                 damage_taken,
             } => {
-                damage_taken
-                    .render_with_context(ui, (&target_name, indent_level + 1, "took no damage"));
+                damage_taken.render_with_context(
+                    ui,
+                    (&target_name, indent_level + 1, "took no damage", None),
+                );
             }
 
             ActionKindResult::AttackRollDamage {
@@ -805,8 +807,15 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                 damage_roll,
                 damage_taken,
             } => {
-                damage_taken
-                    .render_with_context(ui, (&target_name, indent_level + 1, "was not hit"));
+                damage_taken.render_with_context(
+                    ui,
+                    (
+                        &target_name,
+                        indent_level + 1,
+                        "was not hit",
+                        Some(attack_roll.clone()),
+                    ),
+                );
 
                 if ui.is_item_hovered() {
                     ui.tooltip(|| {
@@ -902,9 +911,15 @@ impl ImguiRenderableWithContext<(&str, u8)> for DamageComponentMitigation {
     }
 }
 
-impl ImguiRenderableWithContext<(&str, u8, &str)> for Option<DamageMitigationResult> {
-    fn render_with_context(&self, ui: &imgui::Ui, context: (&str, u8, &str)) {
-        let (target_name, indent_level, no_damage_text) = context;
+impl ImguiRenderableWithContext<(&str, u8, &str, Option<AttackRollResult>)>
+    for Option<DamageMitigationResult>
+{
+    fn render_with_context(
+        &self,
+        ui: &imgui::Ui,
+        context: (&str, u8, &str, Option<AttackRollResult>),
+    ) {
+        let (target_name, indent_level, no_damage_text, attack_roll) = context;
         ui.group(|| match self {
             Some(result) => {
                 for component in &result.components {
@@ -912,12 +927,20 @@ impl ImguiRenderableWithContext<(&str, u8, &str)> for Option<DamageMitigationRes
                 }
             }
             None => {
-                TextSegments::new(vec![
-                    (target_name, TextKind::Target),
-                    (no_damage_text, TextKind::Normal),
-                ])
-                .with_indent(indent_level)
-                .render(ui);
+                let mut segments = vec![
+                    (target_name.to_string(), TextKind::Target),
+                    (no_damage_text.to_string(), TextKind::Normal),
+                ];
+                if let Some(attack_roll) = attack_roll {
+                    if attack_roll.roll_result.is_crit {
+                        segments.push(("(Critical Hit!)".to_string(), TextKind::Details));
+                    } else if attack_roll.roll_result.is_crit_fail {
+                        segments.push(("(Critical Miss!)".to_string(), TextKind::Details));
+                    }
+                }
+                TextSegments::new(segments)
+                    .with_indent(indent_level)
+                    .render(ui);
             }
         });
     }

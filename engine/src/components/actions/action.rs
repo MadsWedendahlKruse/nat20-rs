@@ -289,13 +289,17 @@ impl ActionKind {
                 attack_roll,
                 damage,
                 damage_on_failure,
-            } => ActionKindSnapshot::AttackRollDamage {
-                attack_roll: attack_roll(world, entity, context).roll(world, entity),
-                damage_roll: damage(world, entity, context).roll(),
-                damage_on_failure: damage_on_failure
-                    .as_ref()
-                    .map(|f| f(world, entity, context).roll()),
-            },
+            } => {
+                let attack_roll_result = attack_roll(world, entity, context).roll(world, entity);
+                let is_crit = attack_roll_result.roll_result.is_crit;
+                ActionKindSnapshot::AttackRollDamage {
+                    attack_roll: attack_roll_result,
+                    damage_roll: damage(world, entity, context).roll_crit_damage(is_crit),
+                    damage_on_failure: damage_on_failure
+                        .as_ref()
+                        .map(|f| f(world, entity, context).roll()),
+                }
+            }
 
             ActionKind::SavingThrowDamage {
                 saving_throw,
