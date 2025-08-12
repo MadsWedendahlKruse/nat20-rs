@@ -387,11 +387,11 @@ pub mod creatures {
 
             // TODO: Spellcasting ability should be set automatically based on class
             let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
+            // TODO: This should be set automatically based on class
+            spellbook.set_max_prepared_spells(5);
             spellbook.add_spell(&registry::spells::MAGIC_MISSILE_ID, Ability::Intelligence);
             spellbook.add_spell(&registry::spells::FIREBALL_ID, Ability::Intelligence);
             spellbook.add_spell(&registry::spells::COUNTERSPELL_ID, Ability::Intelligence);
-            // TODO: This should be set automatically based on class
-            spellbook.set_max_prepared_spells(5);
 
             EntityIdentifier::new(entity, name)
         }

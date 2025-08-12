@@ -97,13 +97,14 @@ impl ImguiRenderableWithContext<ModifierSetRenderMode> for ModifierSet {
             }
 
             ModifierSetRenderMode::Hoverable => {
-                let total = format!("{}{}", sign(self.total()), self.total());
+                let total = format!("{}{}", sign(self.total()), self.total().abs());
                 ui.text(total);
                 if self.is_empty() {
                     return;
                 }
                 if ui.is_item_hovered() {
                     ui.tooltip(|| {
+                        ui.text(format!("Total: {}", self.total()));
                         self.render_with_context(ui, ModifierSetRenderMode::List(1));
                     });
                 }
@@ -805,13 +806,13 @@ impl ImguiRenderable for AttackRollResult {
 
 impl ImguiRenderable for DamageComponentMitigation {
     fn render(&self, ui: &imgui::Ui) {
-        let damage_color = TextKind::Damage(self.damage_type);
+        let text_kind = TextKind::Damage(self.damage_type);
 
         if self.original.subtotal == self.after_mods {
             // No mitigation applied
             TextSegment::new(
                 &format!("{} {}", self.original.subtotal, self.damage_type),
-                damage_color,
+                text_kind,
             )
             .render(ui);
             return;
@@ -820,7 +821,7 @@ impl ImguiRenderable for DamageComponentMitigation {
         if self.after_mods == 0 {
             // Immunity
             TextSegments::new(vec![
-                (format!("0 {}", self.damage_type), damage_color),
+                (format!("0 {}", self.damage_type), text_kind),
                 (
                     format!("({:?})", MitigationOperation::Immunity),
                     TextKind::Details,
@@ -838,7 +839,14 @@ impl ImguiRenderable for DamageComponentMitigation {
             };
             amount = format!("({} {} ({}))", amount, modifier.operation, explanation);
         }
-        TextSegment::new(amount, TextKind::Details).render(ui);
+        TextSegments::new(vec![
+            (
+                format!("{} {}", self.after_mods, self.damage_type),
+                text_kind,
+            ),
+            (amount, TextKind::Details),
+        ])
+        .render(ui);
     }
 }
 
@@ -1049,12 +1057,13 @@ impl ImguiRenderable for DamageResistances {
             return;
         }
 
-        if let Some(table) = table_with_columns!(ui, "Resistances", "Type", "Details") {
+        if let Some(table) = table_with_columns!(ui, "Resistances", "Type", "Effect") {
             for (damage_type, resistances) in self.effects.iter() {
                 if resistances.is_empty() {
                     continue; // Skip empty resistances
                 }
 
+                // TODO: Multiple resistances for the same damage type?
                 let effective_resistance = self.effective_resistance(*damage_type).unwrap();
 
                 ui.table_next_column();

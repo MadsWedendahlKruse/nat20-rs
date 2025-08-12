@@ -62,23 +62,20 @@ impl Spellbook {
 
     pub fn add_spell(&mut self, spell_id: &SpellId, spellcasting_ability: Ability) {
         // TODO: Handle missing spells
-        let spell = registry::spells::SPELL_REGISTRY
-            .get(spell_id)
-            .unwrap()
-            .clone();
+        let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
         self.spells.insert(spell_id.clone());
         self.spellcasting_ability
             .insert(spell_id.clone(), spellcasting_ability);
+        if !spell.is_cantrip() && self.prepared_spells.len() < self.max_prepared_spells {
+            // Automatically prepare the spell if we have space
+            self.prepared_spells.insert(spell_id.clone());
+        }
     }
 
     pub fn remove_spell(&mut self, spell_id: &SpellId) {
-        // TODO: Handle missing spells
-        let spell = registry::spells::SPELL_REGISTRY
-            .get(spell_id)
-            .unwrap()
-            .clone();
         self.spells.remove(spell_id);
         self.spellcasting_ability.remove(spell_id);
+        self.prepared_spells.remove(spell_id);
     }
 
     pub fn has_spell(&self, spell_id: &SpellId) -> bool {
@@ -248,6 +245,10 @@ impl Spellbook {
         let mut actions = HashMap::new();
         for spell_id in &self.spells {
             let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
+            if !spell.is_cantrip() && !self.prepared_spells.contains(spell_id) {
+                // Skip spells that are not prepared
+                continue;
+            }
             let available_slots = if spell.base_level() == 0 {
                 // Cantrips always have 1 slot available
                 HashMap::from([(0, 1)])
