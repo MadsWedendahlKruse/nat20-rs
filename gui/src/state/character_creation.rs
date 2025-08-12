@@ -27,6 +27,7 @@ use strum::IntoEnumIterator;
 use crate::{
     buttons,
     render::{
+        components::render_race,
         text::{TextKind, TextSegments},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
@@ -518,21 +519,7 @@ impl ImguiRenderableMut for CharacterCreation {
                         }
                     }
 
-                    {
-                        let race = systems::helpers::get_component::<Option<RaceId>>(
-                            &self.world,
-                            self.current_character.unwrap(),
-                        );
-                        let subrace = systems::helpers::get_component::<Option<SubraceId>>(
-                            &self.world,
-                            self.current_character.unwrap(),
-                        );
-                        if subrace.is_some() {
-                            ui.text(subrace.as_ref().unwrap().to_string())
-                        } else if race.is_some() {
-                            ui.text(race.as_ref().unwrap().to_string())
-                        }
-                    }
+                    render_race(ui, &self.world, self.current_character.unwrap());
 
                     {
                         let levels = systems::helpers::get_component::<CharacterLevels>(

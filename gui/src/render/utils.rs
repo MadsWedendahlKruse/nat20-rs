@@ -85,14 +85,14 @@ where
     let mut clicked_index = None;
 
     // Pass 2: render
+    let style = ui.push_style_var(imgui::StyleVar::ButtonTextAlign([0.5, 0.5]));
     for (i, label) in labels.into_iter().enumerate() {
-        let style = ui.push_style_var(imgui::StyleVar::ButtonTextAlign([0.5, 0.5]));
         let height = ui.calc_text_size(label.as_ref())[1] + padding[1] * 2.0;
         if ui.button_with_size(label.as_ref(), [max_width, height]) {
             clicked_index = Some(i);
         }
-        style.pop();
     }
+    style.pop();
 
     clicked_index
 }

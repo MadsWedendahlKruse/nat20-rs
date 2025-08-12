@@ -153,6 +153,9 @@ impl LevelUpSession {
         self.decisions.push(decision.clone());
 
         self.pending_prompts.extend(new_prompts);
+
+        self.pending_prompts.sort_by_key(|p| p.priority());
+
         Ok(())
     }
 

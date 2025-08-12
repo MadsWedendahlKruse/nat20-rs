@@ -60,6 +60,20 @@ impl ChoiceItem {
             ChoiceItem::Subrace(_) => "choice.subrace",
         }
     }
+
+    /// Primarily used for visualization purposes.
+    pub fn priority(&self) -> u8 {
+        match self {
+            ChoiceItem::Race(_) => 0,
+            ChoiceItem::Subrace(_) => 1,
+            ChoiceItem::Background(_) => 2,
+            ChoiceItem::Class(_) => 3,
+            ChoiceItem::Subclass(_) => 4,
+            ChoiceItem::Action(_) => 5,
+            ChoiceItem::Effect(_) => 6,
+            ChoiceItem::Feat(_) => 7,
+        }
+    }
 }
 
 impl std::fmt::Display for ChoiceItem {
@@ -107,6 +121,14 @@ impl ChoiceSpec {
         self.id = id.into();
         self
     }
+
+    pub fn priority(&self) -> u8 {
+        self.options
+            .iter()
+            .map(ChoiceItem::priority)
+            .max()
+            .unwrap_or(0)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,6 +147,15 @@ pub enum LevelUpPrompt {
 }
 
 impl LevelUpPrompt {
+    pub fn priority(&self) -> u8 {
+        match self {
+            LevelUpPrompt::Choice(spec) => spec.priority(),
+            LevelUpPrompt::AbilityScores(_, _) => 4,
+            LevelUpPrompt::SkillProficiency(_, _, _) => 5,
+            LevelUpPrompt::AbilityScoreImprovement { .. } => 8,
+        }
+    }
+
     pub fn ability_scores() -> Self {
         LevelUpPrompt::AbilityScores(ABILITY_SCORE_POINT_COST.clone(), ABILITY_SCORE_POINTS)
     }

@@ -15,7 +15,7 @@ use nat20_rs::{
         },
         effects::effects::{Effect, EffectDuration},
         hit_points::HitPoints,
-        id::{FeatId, SpellId},
+        id::{FeatId, RaceId, SpellId, SubraceId},
         items::{
             equipment::{
                 equipment::{EquipmentSlot, GeneralEquipmentSlot, HandSlot},
@@ -27,6 +27,7 @@ use nat20_rs::{
         level::CharacterLevels,
         modifier::ModifierSet,
         proficiency::{Proficiency, ProficiencyLevel},
+        race::Race,
         resource::ResourceMap,
         saving_throw::SavingThrowSet,
         skill::{Skill, SkillSet, skill_ability},
@@ -49,25 +50,63 @@ use crate::{
     table_with_columns,
 };
 
-impl ImguiRenderableWithContext<bool> for ModifierSet {
-    fn render_with_context(&self, ui: &imgui::Ui, render_plus: bool) {
-        let total = if render_plus {
-            format!(
-                "{}{}",
-                if self.total() >= 0 { "+" } else { "" },
-                self.total()
-            )
-        } else {
-            self.total().to_string()
-        };
-        ui.text(total);
-        if self.is_empty() {
-            return;
-        }
-        if ui.is_item_hovered() {
-            ui.tooltip(|| {
-                self.render(ui);
-            });
+pub enum ModifierSetRenderMode {
+    Line,
+    List(u8),
+    Hoverable,
+}
+
+fn sign(value: i32) -> &'static str {
+    if value >= 0 { "+" } else { "-" }
+}
+
+impl ImguiRenderableWithContext<ModifierSetRenderMode> for ModifierSet {
+    fn render_with_context(&self, ui: &imgui::Ui, mode: ModifierSetRenderMode) {
+        match mode {
+            ModifierSetRenderMode::Line => {
+                if self.is_empty() {
+                    return;
+                }
+                let mut segments = Vec::new();
+                for (source, value) in self.iter() {
+                    if value == &0 {
+                        continue;
+                    }
+                    segments.push((
+                        format!("{} {}", sign(*value), value.abs()),
+                        TextKind::Normal,
+                    ));
+                    segments.push((format!("({})", source), TextKind::Details));
+                }
+                TextSegments::new(segments).render(ui);
+            }
+
+            ModifierSetRenderMode::List(indent_level) => {
+                for (source, value) in self.iter() {
+                    if value == &0 {
+                        continue;
+                    }
+                    TextSegments::new(vec![
+                        (format!("{}{}", sign(*value), value.abs()), TextKind::Normal),
+                        (source.to_string(), TextKind::Details),
+                    ])
+                    .with_indent(indent_level)
+                    .render(ui);
+                }
+            }
+
+            ModifierSetRenderMode::Hoverable => {
+                let total = format!("{}{}", sign(self.total()), self.total());
+                ui.text(total);
+                if self.is_empty() {
+                    return;
+                }
+                if ui.is_item_hovered() {
+                    ui.tooltip(|| {
+                        self.render_with_context(ui, ModifierSetRenderMode::List(1));
+                    });
+                }
+            }
         }
     }
 }
@@ -160,22 +199,19 @@ impl ImguiRenderable for Proficiency {
 
 impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, world: &mut World) {
-        let (entity, _) = self;
+        let (entity, _) = *self;
         ui.text(format!("ID: {:?}", entity));
 
-        systems::helpers::get_component::<CharacterLevels>(world, *entity).render(ui);
-        systems::helpers::get_component::<HitPoints>(world, *entity).render(ui);
+        render_race(ui, world, entity);
+        systems::helpers::get_component::<CharacterLevels>(world, entity).render(ui);
+        systems::helpers::get_component::<HitPoints>(world, entity).render(ui);
+        systems::helpers::get_component::<AbilityScoreMap>(world, entity)
+            .render_with_context(ui, (world, entity));
 
         if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
-            if let Some(tab) = ui.tab_item("Abilities") {
-                systems::helpers::get_component::<AbilityScoreMap>(world, *entity)
-                    .render_with_context(ui, (world, *entity));
-                tab.end();
-            }
-
             if let Some(tab) = ui.tab_item("Skills") {
-                systems::helpers::get_component::<SkillSet>(world, *entity)
-                    .render_with_context(ui, (world, *entity));
+                systems::helpers::get_component::<SkillSet>(world, entity)
+                    .render_with_context(ui, (world, entity));
                 tab.end();
             }
 
@@ -184,41 +220,41 @@ impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
                 for weapon_type in WeaponType::iter() {
                     wielding_both_hands.insert(
                         weapon_type.clone(),
-                        systems::helpers::get_component::<Loadout>(world, *entity)
+                        systems::helpers::get_component::<Loadout>(world, entity)
                             .is_wielding_weapon_with_both_hands(&weapon_type),
                     );
                 }
 
                 let context = LoadoutRenderContext {
                     ability_scores: systems::helpers::get_component_clone::<AbilityScoreMap>(
-                        world, *entity,
+                        world, entity,
                     ),
                     wielding_both_hands,
                 };
 
-                systems::helpers::get_component_mut::<Loadout>(world, *entity)
+                systems::helpers::get_component_mut::<Loadout>(world, entity)
                     .render_mut_with_context(ui, &context);
 
                 tab.end();
             }
 
             if let Some(tab) = ui.tab_item("Spellbook") {
-                systems::helpers::get_component_mut::<Spellbook>(world, *entity).render_mut(ui);
+                systems::helpers::get_component_mut::<Spellbook>(world, entity).render_mut(ui);
                 tab.end();
             }
 
             if let Some(tab) = ui.tab_item("Resources") {
-                systems::helpers::get_component::<ResourceMap>(world, *entity).render(ui);
+                systems::helpers::get_component::<ResourceMap>(world, entity).render(ui);
                 tab.end();
             }
 
             if let Some(tab) = ui.tab_item("Effects") {
-                systems::effects::effects(world, *entity).render(ui);
+                systems::effects::effects(world, entity).render(ui);
                 tab.end();
             }
 
             if let Some(tab) = ui.tab_item("Feats") {
-                systems::helpers::get_component::<Vec<FeatId>>(world, *entity).render(ui);
+                systems::helpers::get_component::<Vec<FeatId>>(world, entity).render(ui);
                 tab.end();
             }
 
@@ -229,61 +265,76 @@ impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
 
 impl ImguiRenderable for AbilityScore {
     fn render(&self, ui: &imgui::Ui) {
-        ui.text(self.total().to_string());
-        if ui.is_item_hovered() {
-            ui.tooltip(|| {
-                TextSegment::new(self.base.to_string(), TextKind::Normal);
-                TextSegments::new(vec![
-                    (self.base.to_string(), TextKind::Normal),
-                    ("(Base)".to_string(), TextKind::Details),
-                ])
-                .render(ui);
-                ui.same_line();
-                self.modifiers.render(ui);
-            })
-        }
+        ui.separator_with_text(self.ability.to_string());
+
+        let modifier = self.ability_modifier().total();
+        TextSegments::new(vec![
+            (format!("Total: {}", self.total()), TextKind::Normal),
+            (
+                format!("(Modifier: {}{})", sign(modifier), modifier),
+                TextKind::Details,
+            ),
+        ])
+        .render(ui);
+
+        TextSegments::new(vec![
+            (self.base.to_string(), TextKind::Normal),
+            ("Base".to_string(), TextKind::Details),
+        ])
+        .with_indent(1)
+        .render(ui);
+
+        self.modifiers
+            .render_with_context(ui, ModifierSetRenderMode::List(1));
     }
 }
 
 impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreMap {
     fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
-        if let Some(table) = table_with_columns!(
-            ui,
-            "Abilities",
-            "", // Empty column for saving throw proficiency
-            "Ability",
-            "Score",
-            "Modifier",
-            "Saving Throw"
-        ) {
-            for ability in Ability::iter() {
-                // Saving throw proficiency column
-                ui.table_next_column();
-                let saving_throws =
-                    systems::helpers::get_component::<SavingThrowSet>(context.0, context.1);
-                let proficiency = saving_throws.get(ability).proficiency();
-                proficiency.render_with_context(ui, &" (Saving Throw)".to_string());
-                // Ability name
-                ui.table_next_column();
-                ui.text(ability.to_string());
-                // Ability score
-                ui.table_next_column();
-                let ability_score = self.get(ability);
-                ability_score.render(ui);
-                // Ability modifier
-                ui.table_next_column();
-                ability_score
-                    .ability_modifier()
-                    .render_with_context(ui, true);
-                // Saving throw
-                ui.table_next_column();
-                let result = saving_throws.check(ability, context.0, context.1);
-                let modifiers = &result.modifier_breakdown;
-                modifiers.render_with_context(ui, true);
-            }
+        ui.separator_with_text("Abilities");
 
-            table.end();
+        let saving_throws = systems::helpers::get_component::<SavingThrowSet>(context.0, context.1);
+
+        let style = ui.push_style_var(imgui::StyleVar::ButtonTextAlign([0.5, 0.5]));
+        for (i, ability) in Ability::iter().enumerate() {
+            let ability_score = self.get(ability);
+            let saving_throw_proficiency = saving_throws.get(ability).proficiency();
+
+            if i > 0 {
+                ui.same_line();
+            }
+            ui.button_with_size(
+                format!("{}\n{}", ability.acronym(), ability_score.total()),
+                [30.0, 30.0],
+            );
+            if ui.is_item_hovered() {
+                ui.tooltip(|| {
+                    ability_score.render(ui);
+
+                    ui.separator_with_text("Saving Throw");
+
+                    if saving_throw_proficiency.level() != &ProficiencyLevel::None {
+                        TextSegments::new(vec![
+                            (
+                                format!("{}", saving_throw_proficiency.level()),
+                                TextKind::Normal,
+                            ),
+                            (
+                                format!("({})", saving_throw_proficiency.source()),
+                                TextKind::Details,
+                            ),
+                        ])
+                        .render(ui);
+                    }
+                    let result = saving_throws.check(ability, context.0, context.1);
+                    let modifiers = &result.modifier_breakdown;
+                    let total = modifiers.total();
+                    ui.text(format!("Bonus: {}{}", sign(total), total.abs()));
+                    modifiers.render_with_context(ui, ModifierSetRenderMode::List(1));
+                });
+            }
         }
+        style.pop();
     }
 }
 
@@ -323,7 +374,9 @@ impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
                 ui.table_next_column();
                 // TODO: Avoid doing an actual skill check here every time
                 let result = self.check(skill, context.0, context.1);
-                result.modifier_breakdown.render_with_context(ui, true);
+                result
+                    .modifier_breakdown
+                    .render_with_context(ui, ModifierSetRenderMode::Hoverable);
             }
 
             table.end();
@@ -664,24 +717,6 @@ impl ImguiRenderable for DamageRoll {
     }
 }
 
-impl ImguiRenderable for ModifierSet {
-    fn render(&self, ui: &imgui::Ui) {
-        if self.is_empty() {
-            return;
-        }
-        let mut segments = Vec::new();
-        for (source, value) in self.iter() {
-            if value == &0 {
-                continue;
-            }
-            let sign = if *value >= 0 { "+" } else { "-" };
-            segments.push((format!("{} {}", sign, value.abs()), TextKind::Normal));
-            segments.push((format!("({})", source), TextKind::Details));
-        }
-        TextSegments::new(segments).render(ui);
-    }
-}
-
 impl ImguiRenderable for DamageComponentResult {
     fn render(&self, ui: &imgui::Ui) {
         TextSegments::new(vec![
@@ -702,7 +737,9 @@ impl ImguiRenderable for DamageComponentResult {
         .render(ui);
         if !self.result.modifiers.is_empty() {
             ui.same_line();
-            self.result.modifiers.render(ui);
+            self.result
+                .modifiers
+                .render_with_context(ui, ModifierSetRenderMode::Line);
         }
         ui.same_line();
         TextSegment::new(")", TextKind::Details).render(ui);
@@ -750,7 +787,8 @@ impl ImguiRenderable for D20CheckResult {
         TextSegments::new(segments).render(ui);
         if !self.modifier_breakdown.is_empty() {
             ui.same_line();
-            self.modifier_breakdown.render(ui);
+            self.modifier_breakdown
+                .render_with_context(ui, ModifierSetRenderMode::Line);
         }
         ui.same_line();
         ui.text(format!("= {}", self.total));
@@ -840,7 +878,7 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                         ui.text("Armor Class:");
                         ui.same_line();
                         // TODO: New type for armor class
-                        armor_class.render(ui);
+                        armor_class.render_with_context(ui, ModifierSetRenderMode::Line);
 
                         ui.text("");
                         ui.text("Attack Roll:");
@@ -965,7 +1003,7 @@ impl ImguiRenderable for DamageMitigationResult {
 
 impl ImguiRenderable for D20CheckDC<Ability> {
     fn render(&self, ui: &imgui::Ui) {
-        self.dc.render(ui);
+        self.dc.render_with_context(ui, ModifierSetRenderMode::Line);
         ui.same_line();
         TextSegments::new(vec![
             (format!("({})", self.key), TextKind::Ability),
@@ -977,7 +1015,7 @@ impl ImguiRenderable for D20CheckDC<Ability> {
 
 impl ImguiRenderable for D20CheckDC<Skill> {
     fn render(&self, ui: &imgui::Ui) {
-        self.dc.render(ui);
+        self.dc.render_with_context(ui, ModifierSetRenderMode::Line);
         ui.same_line();
         TextSegments::new(vec![
             (format!("({})", self.key), TextKind::Skill),
@@ -985,4 +1023,17 @@ impl ImguiRenderable for D20CheckDC<Skill> {
         ])
         .render(ui);
     }
+}
+
+pub fn render_race(ui: &imgui::Ui, world: &World, entity: Entity) {
+    let race = systems::helpers::get_component::<Option<RaceId>>(world, entity);
+    let subrace = systems::helpers::get_component::<Option<SubraceId>>(world, entity);
+    let text = if subrace.is_some() {
+        subrace.as_ref().unwrap().to_string()
+    } else if race.is_some() {
+        race.as_ref().unwrap().to_string()
+    } else {
+        "".to_string()
+    };
+    TextSegment::new(text, TextKind::Details).render(ui);
 }
