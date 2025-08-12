@@ -25,11 +25,12 @@ use nat20_rs::{
 
 use crate::{
     render::{
+        components::CharacterRenderMode,
         text::{TextKind, TextSegments},
         utils::{
             ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
-            render_button_disabled_conditionally, render_button_selectable, render_empty_button,
-            render_window_at_cursor,
+            SELECTED_BUTTON_COLOR, render_button_disabled_conditionally, render_button_selectable,
+            render_empty_button, render_window_at_cursor,
         },
     },
     table_with_columns,
@@ -272,9 +273,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
         let current_entity = self.current_entity();
         let current_name = systems::helpers::get_component_clone::<String>(world, current_entity);
 
-        if let Some(table) =
-            table_with_columns!(ui, "Initiative Order", "Initiative", "Participant")
-        {
+        if let Some(table) = table_with_columns!(ui, "Initiative Order", "", "Participant",) {
             for (entity, initiative) in initiative_order {
                 if let Ok((name, tag)) = world.query_one_mut::<(&String, &CharacterTag)>(*entity) {
                     // Initiative column
@@ -282,16 +281,16 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
                     ui.text(initiative.total.to_string());
                     if ui.is_item_hovered() {
                         ui.tooltip(|| {
+                            ui.separator_with_text("Initiative");
                             initiative.render(ui);
                         });
                     }
-                    if self.current_entity() == *entity {
-                        ui.table_set_bg_color(imgui::TableBgTarget::all(), [0.2, 0.2, 0.7, 1.0]);
-                    }
                     // Participant column
                     ui.table_next_column();
-                    if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
-                        (*entity, tag.clone()).render_mut_with_context(ui, world);
+                    (*entity, tag.clone())
+                        .render_with_context(ui, (world, CharacterRenderMode::Compact));
+                    if self.current_entity() == *entity {
+                        ui.table_set_bg_color(imgui::TableBgTarget::all(), SELECTED_BUTTON_COLOR);
                     }
                 }
             }

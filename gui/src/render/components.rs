@@ -1,5 +1,6 @@
 use std::{collections::HashMap, vec};
 
+use glutin::context;
 use hecs::{Entity, World};
 use nat20_rs::{
     components::{
@@ -45,7 +46,7 @@ use crate::{
         text::{TextKind, TextSegment, TextSegments, indent_text},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-            ImguiRenderableWithContext, render_empty_button,
+            ImguiRenderableWithContext, SELECTED_BUTTON_COLOR, render_empty_button,
         },
     },
     table_with_columns,
@@ -196,73 +197,6 @@ impl ImguiRenderableWithContext<&str> for Proficiency {
 impl ImguiRenderable for Proficiency {
     fn render(&self, ui: &imgui::Ui) {
         self.render_with_context(ui, &"");
-    }
-}
-
-impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, world: &mut World) {
-        let (entity, _) = *self;
-        ui.text(format!("ID: {:?}", entity));
-
-        render_race(ui, world, entity);
-        systems::helpers::get_component::<CharacterLevels>(world, entity).render(ui);
-        systems::helpers::get_component::<HitPoints>(world, entity).render(ui);
-        systems::helpers::get_component::<AbilityScoreMap>(world, entity)
-            .render_with_context(ui, (world, entity));
-        systems::helpers::get_component::<DamageResistances>(world, entity).render(ui);
-
-        if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
-            if let Some(tab) = ui.tab_item("Skills") {
-                systems::helpers::get_component::<SkillSet>(world, entity)
-                    .render_with_context(ui, (world, entity));
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Inventory") {
-                let mut wielding_both_hands = HashMap::new();
-                for weapon_type in WeaponType::iter() {
-                    wielding_both_hands.insert(
-                        weapon_type.clone(),
-                        systems::helpers::get_component::<Loadout>(world, entity)
-                            .is_wielding_weapon_with_both_hands(&weapon_type),
-                    );
-                }
-
-                let context = LoadoutRenderContext {
-                    ability_scores: systems::helpers::get_component_clone::<AbilityScoreMap>(
-                        world, entity,
-                    ),
-                    wielding_both_hands,
-                };
-
-                systems::helpers::get_component_mut::<Loadout>(world, entity)
-                    .render_mut_with_context(ui, &context);
-
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Spellbook") {
-                systems::helpers::get_component_mut::<Spellbook>(world, entity).render_mut(ui);
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Resources") {
-                systems::helpers::get_component::<ResourceMap>(world, entity).render(ui);
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Effects") {
-                systems::effects::effects(world, entity).render(ui);
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Feats") {
-                systems::helpers::get_component::<Vec<FeatId>>(world, entity).render(ui);
-                tab.end();
-            }
-
-            tab_bar.end();
-        }
     }
 }
 
@@ -495,17 +429,23 @@ impl ImguiRenderableMut for Spellbook {
                         let is_prepared = self.is_spell_prepared(spell_id);
 
                         // You can set different colors here based on "prepared" status
-                        let style_color = if is_prepared {
-                            ui.push_style_color(imgui::StyleColor::Button, [0.2, 0.6, 0.2, 1.0])
-                        } else {
-                            ui.push_style_color(imgui::StyleColor::Button, [0.2, 0.2, 0.6, 1.0])
-                        };
+                        let style_color =
+                            if is_prepared {
+                                Some(ui.push_style_color(
+                                    imgui::StyleColor::Button,
+                                    SELECTED_BUTTON_COLOR,
+                                ))
+                            } else {
+                                None
+                            };
 
                         if ui.button(label) {
                             self.prepare_spell(spell_id);
                         }
 
-                        style_color.pop();
+                        if let Some(color) = style_color {
+                            color.pop();
+                        }
 
                         ui.same_line();
                     }
@@ -818,19 +758,6 @@ impl ImguiRenderable for DamageComponentMitigation {
             return;
         }
 
-        if self.after_mods == 0 {
-            // Immunity
-            TextSegments::new(vec![
-                (format!("0 {}", self.damage_type), text_kind),
-                (
-                    format!("({:?})", MitigationOperation::Immunity),
-                    TextKind::Details,
-                ),
-            ])
-            .render(ui);
-            return;
-        }
-
         let mut amount = self.original.subtotal.to_string();
         for modifier in &self.modifiers {
             let explanation = match modifier.operation {
@@ -1086,6 +1013,94 @@ impl ImguiRenderable for DamageMitigationEffect {
             ui.tooltip(|| {
                 TextSegment::new(format!("{}", self.source), TextKind::Details).render(ui);
             });
+        }
+    }
+}
+
+pub enum CharacterRenderMode {
+    Full,
+    Compact,
+}
+
+impl ImguiRenderableWithContext<(&mut World, CharacterRenderMode)> for (Entity, CharacterTag) {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&mut World, CharacterRenderMode)) {
+        let (entity, _) = *self;
+        let (world, mode) = context;
+
+        match mode {
+            CharacterRenderMode::Full => todo!(),
+            CharacterRenderMode::Compact => {
+                ui.text(systems::helpers::get_component::<String>(world, entity).to_string());
+                systems::helpers::get_component::<CharacterLevels>(world, entity).render(ui);
+                systems::helpers::get_component::<HitPoints>(world, entity).render(ui);
+            }
+        }
+    }
+}
+
+impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
+    fn render_mut_with_context(&mut self, ui: &imgui::Ui, world: &mut World) {
+        let (entity, _) = *self;
+        ui.text(format!("ID: {:?}", entity));
+
+        render_race(ui, world, entity);
+        systems::helpers::get_component::<CharacterLevels>(world, entity).render(ui);
+        systems::helpers::get_component::<HitPoints>(world, entity).render(ui);
+        systems::helpers::get_component::<AbilityScoreMap>(world, entity)
+            .render_with_context(ui, (world, entity));
+        systems::helpers::get_component::<DamageResistances>(world, entity).render(ui);
+
+        if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
+            if let Some(tab) = ui.tab_item("Skills") {
+                systems::helpers::get_component::<SkillSet>(world, entity)
+                    .render_with_context(ui, (world, entity));
+                tab.end();
+            }
+
+            if let Some(tab) = ui.tab_item("Inventory") {
+                let mut wielding_both_hands = HashMap::new();
+                for weapon_type in WeaponType::iter() {
+                    wielding_both_hands.insert(
+                        weapon_type.clone(),
+                        systems::helpers::get_component::<Loadout>(world, entity)
+                            .is_wielding_weapon_with_both_hands(&weapon_type),
+                    );
+                }
+
+                let context = LoadoutRenderContext {
+                    ability_scores: systems::helpers::get_component_clone::<AbilityScoreMap>(
+                        world, entity,
+                    ),
+                    wielding_both_hands,
+                };
+
+                systems::helpers::get_component_mut::<Loadout>(world, entity)
+                    .render_mut_with_context(ui, &context);
+
+                tab.end();
+            }
+
+            if let Some(tab) = ui.tab_item("Spellbook") {
+                systems::helpers::get_component_mut::<Spellbook>(world, entity).render_mut(ui);
+                tab.end();
+            }
+
+            if let Some(tab) = ui.tab_item("Resources") {
+                systems::helpers::get_component::<ResourceMap>(world, entity).render(ui);
+                tab.end();
+            }
+
+            if let Some(tab) = ui.tab_item("Effects") {
+                systems::effects::effects(world, entity).render(ui);
+                tab.end();
+            }
+
+            if let Some(tab) = ui.tab_item("Feats") {
+                systems::helpers::get_component::<Vec<FeatId>>(world, entity).render(ui);
+                tab.end();
+            }
+
+            tab_bar.end();
         }
     }
 }
