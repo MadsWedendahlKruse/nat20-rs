@@ -10,7 +10,7 @@ use nat20_rs::{
         ability::{Ability, AbilityScoreDistribution, AbilityScoreMap},
         id::{RaceId, SubraceId},
         level::CharacterLevels,
-        level_up::{ChoiceItem, LevelUpPrompt},
+        level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         proficiency::{Proficiency, ProficiencyLevel},
         skill::{Skill, SkillSet},
     },
@@ -657,6 +657,13 @@ impl ImguiRenderableMut for CharacterCreation {
     }
 }
 
+fn spec_style(spec: &ChoiceSpec) -> ([f32; 2], usize) {
+    match spec.id.as_str() {
+        "choice.class" => ([100.0, 30.0], 4),
+        _ => ([0.0, 0.0], 0), // Default style
+    }
+}
+
 impl ImguiRenderableMut for LevelUpPromptWithProgress {
     fn render_mut(&mut self, ui: &imgui::Ui) {
         match &self.prompt {
@@ -667,21 +674,25 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                     ..
                 } = &mut self.progress
                 {
-                    for option in &spec.options {
+                    let (button_size, columns) = spec_style(spec);
+                    for (i, option) in spec.options.iter().enumerate() {
                         let selected = decisions.contains(option);
-                        if render_button_selectable(ui, option.to_string(), [0.0, 0.0], selected) {
+                        if render_button_selectable(ui, option.to_string(), button_size, selected) {
                             // Special case for only one allowed choice
                             if required == &1 {
                                 decisions.clear();
                                 decisions.push(option.clone());
-                                continue;
+                            } else {
+                                if selected {
+                                    decisions.retain(|item| item != option);
+                                } else if decisions.len() < *required as usize {
+                                    decisions.push(option.clone());
+                                }
                             }
+                        }
 
-                            if selected {
-                                decisions.retain(|item| item != option);
-                            } else if decisions.len() < *required as usize {
-                                decisions.push(option.clone());
-                            }
+                        if columns > 0 && (i + 1) % columns != 0 && i != spec.options.len() - 1 {
+                            ui.same_line();
                         }
                     }
                 } else {
@@ -689,29 +700,6 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                 }
             }
 
-            // LevelUpPrompt::Class(classes) => {
-            //     if let LevelUpDecisionProgress::Class(ref mut decision) = self.progress {
-            //         let button_size = [100.0, 30.0];
-            //         let buttons_per_row = 4;
-
-            //         for (i, class) in classes.iter().enumerate() {
-            //             if render_button_selectable(
-            //                 ui,
-            //                 format!("{}", class),
-            //                 button_size,
-            //                 decision.is_some_and(|s| s == *class),
-            //             ) {
-            //                 *decision = Some(class.clone());
-            //             }
-
-            //             if (i + 1) % buttons_per_row != 0 {
-            //                 ui.same_line();
-            //             }
-            //         }
-            //     } else {
-            //         ui.text("Mismatched progress type for Class prompt");
-            //     }
-            // }
             LevelUpPrompt::AbilityScores(scores_cost, point_budget) => {
                 let mut reset = false;
                 if let LevelUpDecisionProgress::AbilityScores {

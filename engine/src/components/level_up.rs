@@ -4,6 +4,8 @@ use std::{
     sync::LazyLock,
 };
 
+use strum::IntoEnumIterator;
+
 use crate::{
     components::{
         ability::Ability,
@@ -141,11 +143,12 @@ impl LevelUpPrompt {
     pub fn class() -> Self {
         LevelUpPrompt::Choice(ChoiceSpec::single(
             "Class",
-            registry::classes::CLASS_REGISTRY
-                .keys()
-                .cloned()
-                .map(ChoiceItem::Class)
-                .collect(),
+            // registry::classes::CLASS_REGISTRY
+            //     .keys()
+            //     .cloned()
+            //     .map(ChoiceItem::Class)
+            //     .collect(),
+            ClassName::iter().map(ChoiceItem::Class).collect(),
         ))
     }
 
