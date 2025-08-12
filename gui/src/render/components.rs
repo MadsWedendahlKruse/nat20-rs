@@ -11,7 +11,8 @@ use nat20_rs::{
         d20_check::{D20CheckDC, D20CheckResult, RollMode},
         damage::{
             AttackRollResult, DamageComponentMitigation, DamageComponentResult,
-            DamageMitigationResult, DamageRoll, DamageRollResult, MitigationOperation,
+            DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRoll,
+            DamageRollResult, MitigationOperation,
         },
         effects::effects::{Effect, EffectDuration},
         hit_points::HitPoints,
@@ -207,6 +208,7 @@ impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
         systems::helpers::get_component::<HitPoints>(world, entity).render(ui);
         systems::helpers::get_component::<AbilityScoreMap>(world, entity)
             .render_with_context(ui, (world, entity));
+        systems::helpers::get_component::<DamageResistances>(world, entity).render(ui);
 
         if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
             if let Some(tab) = ui.tab_item("Skills") {
@@ -1036,4 +1038,45 @@ pub fn render_race(ui: &imgui::Ui, world: &World, entity: Entity) {
         "".to_string()
     };
     TextSegment::new(text, TextKind::Details).render(ui);
+}
+
+impl ImguiRenderable for DamageResistances {
+    fn render(&self, ui: &imgui::Ui) {
+        ui.separator_with_text("Restistances");
+
+        if self.is_empty() {
+            ui.text("None");
+            return;
+        }
+
+        if let Some(table) = table_with_columns!(ui, "Resistances", "Type", "Details") {
+            for (damage_type, resistances) in self.effects.iter() {
+                if resistances.is_empty() {
+                    continue; // Skip empty resistances
+                }
+
+                let effective_resistance = self.effective_resistance(*damage_type).unwrap();
+
+                ui.table_next_column();
+                TextSegment::new(damage_type.to_string(), TextKind::Damage(*damage_type))
+                    .render(ui);
+
+                ui.table_next_column();
+
+                effective_resistance.render(ui);
+            }
+            table.end();
+        }
+    }
+}
+
+impl ImguiRenderable for DamageMitigationEffect {
+    fn render(&self, ui: &imgui::Ui) {
+        ui.text(format!("{:?}", self.operation));
+        if ui.is_item_hovered() {
+            ui.tooltip(|| {
+                TextSegment::new(format!("{}", self.source), TextKind::Details).render(ui);
+            });
+        }
+    }
 }

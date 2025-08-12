@@ -293,6 +293,15 @@ impl DamageResistances {
         }
     }
 
+    pub fn effective_resistance(&self, dtype: DamageType) -> Option<DamageMitigationEffect> {
+        self.effects.get(&dtype).and_then(|effects| {
+            effects
+                .iter()
+                .min_by_key(|e| e.operation.priority())
+                .cloned()
+        })
+    }
+
     pub fn apply(&self, roll: &DamageRollResult) -> DamageMitigationResult {
         let mut components = Vec::new();
         let mut total = 0;
@@ -326,6 +335,10 @@ impl DamageResistances {
         }
 
         DamageMitigationResult { components, total }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.effects.is_empty()
     }
 }
 
