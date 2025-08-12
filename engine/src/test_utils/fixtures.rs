@@ -238,6 +238,7 @@ pub mod creatures {
             components::{
                 class::{ClassName, SubclassName},
                 id::EntityIdentifier,
+                level_up::ChoiceItem,
                 skill::SkillSet,
                 spells::spellbook::Spellbook,
             },
@@ -268,10 +269,16 @@ pub mod creatures {
                 vec![
                     // Level 1
                     // TODO: Everyone is dragonborn for now
-                    LevelUpDecision::Race(registry::races::DRAGONBORN_ID.clone()),
-                    LevelUpDecision::Subrace(registry::races::DRAGONBORN_WHITE_ID.clone()),
-                    LevelUpDecision::Background(registry::backgrounds::SOLDIER_ID.clone()),
-                    LevelUpDecision::Class(ClassName::Fighter),
+                    LevelUpDecision::single_choice(ChoiceItem::Race(
+                        registry::races::DRAGONBORN_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Subrace(
+                        registry::races::DRAGONBORN_WHITE_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Background(
+                        registry::backgrounds::SOLDIER_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
                     LevelUpDecision::AbilityScores(
                         registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Fighter)
@@ -279,30 +286,35 @@ pub mod creatures {
                             .default_abilities
                             .clone(),
                     ),
-                    LevelUpDecision::Feat(
-                        registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                    LevelUpDecision::single_choice_with_id(
+                        "choice.fighting_style",
+                        ChoiceItem::Feat(
+                            registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                        ),
                     ),
                     LevelUpDecision::SkillProficiency(HashSet::from([
                         Skill::Acrobatics,
                         Skill::Perception,
                     ])),
                     // Level 2
-                    LevelUpDecision::Class(ClassName::Fighter),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
                     // Level 3
-                    LevelUpDecision::Class(ClassName::Fighter),
-                    LevelUpDecision::Subclass(SubclassName {
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                    LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassName {
                         class: ClassName::Fighter,
                         name: "Champion".to_string(),
-                    }),
+                    })),
                     // Level 4
-                    LevelUpDecision::Class(ClassName::Fighter),
-                    LevelUpDecision::Feat(registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone()),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                    LevelUpDecision::single_choice(ChoiceItem::Feat(
+                        registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
+                    )),
                     LevelUpDecision::AbilityScoreImprovement(HashMap::from([(
                         Ability::Strength,
                         2,
                     )])),
                     // Level 5
-                    LevelUpDecision::Class(ClassName::Fighter),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
                 ],
             );
 
@@ -328,10 +340,16 @@ pub mod creatures {
                 vec![
                     // Level 1
                     // TODO: Everyone is dragonborn for now
-                    LevelUpDecision::Race(registry::races::DRAGONBORN_ID.clone()),
-                    LevelUpDecision::Subrace(registry::races::DRAGONBORN_RED_ID.clone()),
-                    LevelUpDecision::Background(registry::backgrounds::SAGE_ID.clone()),
-                    LevelUpDecision::Class(ClassName::Wizard),
+                    LevelUpDecision::single_choice(ChoiceItem::Race(
+                        registry::races::DRAGONBORN_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Subrace(
+                        registry::races::DRAGONBORN_RED_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Background(
+                        registry::backgrounds::SAGE_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Wizard)),
                     LevelUpDecision::AbilityScores(
                         registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Wizard)
@@ -344,22 +362,24 @@ pub mod creatures {
                         Skill::Insight,
                     ])),
                     // Level 2
-                    LevelUpDecision::Class(ClassName::Wizard),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Wizard)),
                     // Level 3
-                    LevelUpDecision::Class(ClassName::Wizard),
-                    LevelUpDecision::Subclass(SubclassName {
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Wizard)),
+                    LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassName {
                         class: ClassName::Wizard,
                         name: "Evoker".to_string(),
-                    }),
+                    })),
                     // Level 4
-                    LevelUpDecision::Class(ClassName::Wizard),
-                    LevelUpDecision::Feat(registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone()),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Wizard)),
+                    LevelUpDecision::single_choice(ChoiceItem::Feat(
+                        registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
+                    )),
                     LevelUpDecision::AbilityScoreImprovement(HashMap::from([(
                         Ability::Intelligence,
                         2,
                     )])),
                     // Level 5
-                    LevelUpDecision::Class(ClassName::Wizard),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Wizard)),
                 ],
             );
 
@@ -387,10 +407,16 @@ pub mod creatures {
                 vec![
                     // Level 1
                     // TODO: Everyone is dragonborn for now
-                    LevelUpDecision::Race(registry::races::DRAGONBORN_ID.clone()),
-                    LevelUpDecision::Subrace(registry::races::DRAGONBORN_BLACK_ID.clone()),
-                    LevelUpDecision::Background(registry::backgrounds::ACOLYTE_ID.clone()),
-                    LevelUpDecision::Class(ClassName::Warlock),
+                    LevelUpDecision::single_choice(ChoiceItem::Race(
+                        registry::races::DRAGONBORN_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Subrace(
+                        registry::races::DRAGONBORN_BLACK_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Background(
+                        registry::backgrounds::ACOLYTE_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Warlock)),
                     LevelUpDecision::AbilityScores(
                         registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Warlock)
@@ -403,22 +429,24 @@ pub mod creatures {
                         Skill::Deception,
                     ])),
                     // Level 2
-                    LevelUpDecision::Class(ClassName::Warlock),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Warlock)),
                     // Level 3
-                    LevelUpDecision::Class(ClassName::Warlock),
-                    LevelUpDecision::Subclass(SubclassName {
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Warlock)),
+                    LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassName {
                         class: ClassName::Warlock,
                         name: "Fiend Patron".to_string(),
-                    }),
+                    })),
                     // Level 4
-                    LevelUpDecision::Class(ClassName::Warlock),
-                    LevelUpDecision::Feat(registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone()),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Warlock)),
+                    LevelUpDecision::single_choice(ChoiceItem::Feat(
+                        registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
+                    )),
                     LevelUpDecision::AbilityScoreImprovement(HashMap::from([(
                         Ability::Charisma,
                         2,
                     )])),
                     // Level 5
-                    LevelUpDecision::Class(ClassName::Warlock),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Warlock)),
                 ],
             );
 
@@ -436,7 +464,7 @@ pub mod creatures {
         use std::collections::HashSet;
 
         use crate::{
-            components::{class::ClassName, id::EntityIdentifier},
+            components::{class::ClassName, id::EntityIdentifier, level_up::ChoiceItem},
             entities::character::Character,
             registry,
             test_utils::fixtures,
@@ -456,10 +484,16 @@ pub mod creatures {
                 vec![
                     // Level 1
                     // TODO: Everyone is dragonborn for now (even the goblins)
-                    LevelUpDecision::Race(registry::races::DRAGONBORN_ID.clone()),
-                    LevelUpDecision::Subrace(registry::races::DRAGONBORN_GREEN_ID.clone()),
-                    LevelUpDecision::Background(registry::backgrounds::SOLDIER_ID.clone()),
-                    LevelUpDecision::Class(ClassName::Fighter),
+                    LevelUpDecision::single_choice(ChoiceItem::Race(
+                        registry::races::DRAGONBORN_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Subrace(
+                        registry::races::DRAGONBORN_GREEN_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Background(
+                        registry::backgrounds::SOLDIER_ID.clone(),
+                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
                     LevelUpDecision::AbilityScores(
                         registry::classes::CLASS_REGISTRY
                             .get(&ClassName::Fighter)
@@ -467,8 +501,11 @@ pub mod creatures {
                             .default_abilities
                             .clone(),
                     ),
-                    LevelUpDecision::Feat(
-                        registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                    LevelUpDecision::single_choice_with_id(
+                        "choice.fighting_style",
+                        ChoiceItem::Feat(
+                            registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                        ),
                     ),
                     LevelUpDecision::SkillProficiency(HashSet::from([
                         Skill::Acrobatics,

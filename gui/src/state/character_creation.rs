@@ -8,10 +8,9 @@ use imgui::TreeNodeFlags;
 use nat20_rs::{
     components::{
         ability::{Ability, AbilityScoreDistribution, AbilityScoreMap},
-        class::{ClassName, SubclassName},
-        id::{BackgroundId, EffectId, FeatId, RaceId, SubraceId},
+        id::{RaceId, SubraceId},
         level::CharacterLevels,
-        level_up::LevelUpPrompt,
+        level_up::{ChoiceItem, LevelUpPrompt},
         proficiency::{Proficiency, ProficiencyLevel},
         skill::{Skill, SkillSet},
     },
@@ -40,10 +39,11 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq)]
 enum LevelUpDecisionProgress {
-    Background(Option<BackgroundId>),
-    Class(Option<ClassName>),
-    Subclass(Option<SubclassName>),
-    Effect(Option<EffectId>),
+    Choice {
+        id: String,
+        decisions: Vec<ChoiceItem>,
+        required: u8,
+    },
     SkillProficiency {
         selected: HashSet<Skill>,
         remaining_decisions: u8,
@@ -56,24 +56,22 @@ enum LevelUpDecisionProgress {
         plus_2_bonus: Option<Ability>,
         plus_1_bonus: Option<Ability>,
     },
-    Feat(Option<FeatId>),
     AbilityScoreImprovement {
         base_scores: HashMap<Ability, u8>,
         assignments: HashMap<Ability, u8>,
         remaining_points: u8,
     },
-    Race(Option<RaceId>),
-    Subrace(Option<SubraceId>),
 }
 
 impl LevelUpDecisionProgress {
     // TODO: Might need more complex validation
     fn is_complete(&self) -> bool {
         match self {
-            LevelUpDecisionProgress::Background(background) => background.is_some(),
-            LevelUpDecisionProgress::Class(class) => class.is_some(),
-            LevelUpDecisionProgress::Subclass(subclass) => subclass.is_some(),
-            LevelUpDecisionProgress::Effect(effect) => effect.is_some(),
+            LevelUpDecisionProgress::Choice {
+                decisions: items,
+                required,
+                ..
+            } => items.len() == *required as usize,
             LevelUpDecisionProgress::SkillProficiency {
                 selected,
                 remaining_decisions,
@@ -90,44 +88,37 @@ impl LevelUpDecisionProgress {
                     && plus_2_bonus.is_some()
                     && plus_1_bonus.is_some()
             }
-            LevelUpDecisionProgress::Feat(feat) => feat.is_some(),
             LevelUpDecisionProgress::AbilityScoreImprovement {
                 assignments,
                 remaining_points,
                 ..
             } => remaining_points == &0 && !assignments.is_empty(),
-            LevelUpDecisionProgress::Race(race) => race.is_some(),
-            LevelUpDecisionProgress::Subrace(subrace) => subrace.is_some(),
         }
     }
 
     fn is_empty(&self) -> bool {
         match self {
-            LevelUpDecisionProgress::Background(background) => background.is_none(),
-            LevelUpDecisionProgress::Class(class) => class.is_none(),
-            LevelUpDecisionProgress::Subclass(subclass) => subclass.is_none(),
-            LevelUpDecisionProgress::Effect(effect) => effect.is_none(),
+            LevelUpDecisionProgress::Choice {
+                decisions: items, ..
+            } => items.is_empty(),
             LevelUpDecisionProgress::SkillProficiency { selected, .. } => selected.is_empty(),
             LevelUpDecisionProgress::AbilityScores { assignments, .. } => assignments.is_empty(),
-            LevelUpDecisionProgress::Feat(feat) => feat.is_none(),
             LevelUpDecisionProgress::AbilityScoreImprovement { assignments, .. } => {
                 assignments.is_empty()
             }
-            LevelUpDecisionProgress::Race(race) => race.is_none(),
-            LevelUpDecisionProgress::Subrace(subrace) => subrace.is_none(),
         }
     }
 
     fn finalize(self) -> LevelUpDecision {
         match self {
-            LevelUpDecisionProgress::Background(background) => {
-                LevelUpDecision::Background(background.unwrap())
-            }
-            LevelUpDecisionProgress::Class(class) => LevelUpDecision::Class(class.unwrap()),
-            LevelUpDecisionProgress::Subclass(subclass) => {
-                LevelUpDecision::Subclass(subclass.unwrap())
-            }
-            LevelUpDecisionProgress::Effect(effect) => LevelUpDecision::Effect(effect.unwrap()),
+            LevelUpDecisionProgress::Choice {
+                id,
+                decisions: items,
+                ..
+            } => LevelUpDecision::Choice {
+                id,
+                selected: items,
+            },
             LevelUpDecisionProgress::SkillProficiency { selected, .. } => {
                 LevelUpDecision::SkillProficiency(selected)
             }
@@ -141,21 +132,19 @@ impl LevelUpDecisionProgress {
                 plus_2_bonus: plus_2_bonus.unwrap(),
                 plus_1_bonus: plus_1_bonus.unwrap(),
             }),
-            LevelUpDecisionProgress::Feat(feat) => LevelUpDecision::Feat(feat.unwrap()),
             LevelUpDecisionProgress::AbilityScoreImprovement { assignments, .. } => {
                 LevelUpDecision::AbilityScoreImprovement(assignments)
             }
-            LevelUpDecisionProgress::Race(race) => LevelUpDecision::Race(race.unwrap()),
-            LevelUpDecisionProgress::Subrace(subrace) => LevelUpDecision::Subrace(subrace.unwrap()),
         }
     }
 
     fn from_prompt(prompt: &LevelUpPrompt) -> Self {
         match prompt {
-            LevelUpPrompt::Background(_) => LevelUpDecisionProgress::Background(None),
-            LevelUpPrompt::Class(_) => LevelUpDecisionProgress::Class(None),
-            LevelUpPrompt::Subclass(_) => LevelUpDecisionProgress::Subclass(None),
-            LevelUpPrompt::Effect(_) => LevelUpDecisionProgress::Effect(None),
+            LevelUpPrompt::Choice(spec) => LevelUpDecisionProgress::Choice {
+                id: spec.id.clone(),
+                decisions: Vec::new(),
+                required: spec.picks,
+            },
             LevelUpPrompt::SkillProficiency(_, required, _) => {
                 LevelUpDecisionProgress::SkillProficiency {
                     selected: HashSet::new(),
@@ -169,7 +158,6 @@ impl LevelUpDecisionProgress {
                 plus_2_bonus: None,
                 plus_1_bonus: None,
             },
-            LevelUpPrompt::Feat(_) => LevelUpDecisionProgress::Feat(None),
             LevelUpPrompt::AbilityScoreImprovement { budget, .. } => {
                 LevelUpDecisionProgress::AbilityScoreImprovement {
                     base_scores: HashMap::new(),
@@ -177,8 +165,6 @@ impl LevelUpDecisionProgress {
                     remaining_points: *budget,
                 }
             }
-            LevelUpPrompt::Race(_) => LevelUpDecisionProgress::Race(None),
-            LevelUpPrompt::Subrace(_) => LevelUpDecisionProgress::Subrace(None),
         }
     }
 
@@ -190,10 +176,21 @@ impl LevelUpDecisionProgress {
         if let Ok(levels) = world.get::<&CharacterLevels>(entity) {
             if levels.total_level() > 0 {
                 match prompt {
-                    LevelUpPrompt::Class(_) => {
-                        return LevelUpDecisionProgress::Class(Some(
-                            levels.latest_class().unwrap().clone(),
-                        ));
+                    LevelUpPrompt::Choice(spec) => {
+                        if spec
+                            .options
+                            .iter()
+                            .any(|item| matches!(item, ChoiceItem::Class(_)))
+                        {
+                            // If the prompt is a class choice, we can default to the latest class
+                            return LevelUpDecisionProgress::Choice {
+                                id: spec.id.clone(),
+                                decisions: vec![ChoiceItem::Class(
+                                    levels.latest_class().unwrap().clone(),
+                                )],
+                                required: spec.picks,
+                            };
+                        }
                     }
 
                     LevelUpPrompt::AbilityScores(_, _) => {
@@ -578,9 +575,7 @@ impl ImguiRenderableMut for CharacterCreation {
                                 None
                             };
 
-                            if let Some(tab) =
-                                ui.tab_item(format!("{}", pending_decision.prompt.name()))
-                            {
+                            if let Some(tab) = ui.tab_item(format!("{}", pending_decision.prompt)) {
                                 pending_decision.render_mut(ui);
                                 tab.end();
                             }
@@ -612,8 +607,11 @@ impl ImguiRenderableMut for CharacterCreation {
                     // updated, we can reset the subsequent decisions
                     // (little bit of a hack)
                     if let Some((index, decision)) = decision_updated.as_ref() {
-                        if matches!(decision.prompt, LevelUpPrompt::Class(_)) {
-                            self.pending_decisions.truncate(*index + 1);
+                        if let LevelUpPrompt::Choice(item) = &decision.prompt {
+                            // TODO: first().unwrap() is a bit hacky
+                            if matches!(&item.options.first().unwrap(), ChoiceItem::Class(_)) {
+                                self.pending_decisions.truncate(*index + 1);
+                            }
                         }
                     }
 
@@ -662,48 +660,58 @@ impl ImguiRenderableMut for CharacterCreation {
 impl ImguiRenderableMut for LevelUpPromptWithProgress {
     fn render_mut(&mut self, ui: &imgui::Ui) {
         match &self.prompt {
-            LevelUpPrompt::Background(backgrounds) => {
-                if let LevelUpDecisionProgress::Background(ref mut decision) = self.progress {
-                    let button_size = [100.0, 30.0];
-                    for background in backgrounds {
-                        if render_button_selectable(
-                            ui,
-                            format!("{}", background.to_string()),
-                            button_size,
-                            decision.as_ref().is_some_and(|s| s == background),
-                        ) {
-                            *decision = Some(background.clone());
+            LevelUpPrompt::Choice(spec) => {
+                if let LevelUpDecisionProgress::Choice {
+                    decisions,
+                    required,
+                    ..
+                } = &mut self.progress
+                {
+                    for option in &spec.options {
+                        let selected = decisions.contains(option);
+                        if render_button_selectable(ui, option.to_string(), [0.0, 0.0], selected) {
+                            // Special case for only one allowed choice
+                            if required == &1 {
+                                decisions.clear();
+                                decisions.push(option.clone());
+                                continue;
+                            }
+
+                            if selected {
+                                decisions.retain(|item| item != option);
+                            } else if decisions.len() < *required as usize {
+                                decisions.push(option.clone());
+                            }
                         }
                     }
                 } else {
-                    ui.text("Mismatched progress type for Background prompt");
+                    ui.text("Mismatched progress type for Choice prompt");
                 }
             }
 
-            LevelUpPrompt::Class(classes) => {
-                if let LevelUpDecisionProgress::Class(ref mut decision) = self.progress {
-                    let button_size = [100.0, 30.0];
-                    let buttons_per_row = 4;
+            // LevelUpPrompt::Class(classes) => {
+            //     if let LevelUpDecisionProgress::Class(ref mut decision) = self.progress {
+            //         let button_size = [100.0, 30.0];
+            //         let buttons_per_row = 4;
 
-                    for (i, class) in classes.iter().enumerate() {
-                        if render_button_selectable(
-                            ui,
-                            format!("{}", class),
-                            button_size,
-                            decision.is_some_and(|s| s == *class),
-                        ) {
-                            *decision = Some(class.clone());
-                        }
+            //         for (i, class) in classes.iter().enumerate() {
+            //             if render_button_selectable(
+            //                 ui,
+            //                 format!("{}", class),
+            //                 button_size,
+            //                 decision.is_some_and(|s| s == *class),
+            //             ) {
+            //                 *decision = Some(class.clone());
+            //             }
 
-                        if (i + 1) % buttons_per_row != 0 {
-                            ui.same_line();
-                        }
-                    }
-                } else {
-                    ui.text("Mismatched progress type for Class prompt");
-                }
-            }
-
+            //             if (i + 1) % buttons_per_row != 0 {
+            //                 ui.same_line();
+            //             }
+            //         }
+            //     } else {
+            //         ui.text("Mismatched progress type for Class prompt");
+            //     }
+            // }
             LevelUpPrompt::AbilityScores(scores_cost, point_budget) => {
                 let mut reset = false;
                 if let LevelUpDecisionProgress::AbilityScores {
@@ -858,23 +866,6 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                 }
             }
 
-            LevelUpPrompt::Effect(effects) => {
-                if let LevelUpDecisionProgress::Effect(ref mut decision) = self.progress {
-                    for effect in effects {
-                        if render_button_selectable(
-                            ui,
-                            format!("{}", effect),
-                            [0., 0.],
-                            decision.as_ref().is_some_and(|s| *s == *effect),
-                        ) {
-                            *decision = Some(effect.clone());
-                        }
-                    }
-                } else {
-                    ui.text("Mismatched progress type for Effect prompt");
-                }
-            }
-
             LevelUpPrompt::SkillProficiency(skill_options, num_options, source) => {
                 if let LevelUpDecisionProgress::SkillProficiency {
                     ref mut selected,
@@ -947,23 +938,6 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                     }
                 } else {
                     ui.text("Mismatched progress type for Skill Proficiency prompt");
-                }
-            }
-
-            LevelUpPrompt::Feat(feats) => {
-                if let LevelUpDecisionProgress::Feat(ref mut decision) = self.progress {
-                    for feat in feats {
-                        if render_button_selectable(
-                            ui,
-                            format!("{}", feat),
-                            [0., 0.],
-                            decision.as_ref().is_some_and(|s| s == feat),
-                        ) {
-                            *decision = Some(feat.clone());
-                        }
-                    }
-                } else {
-                    ui.text("Mismatched progress type for Feat prompt");
                 }
             }
 
@@ -1041,53 +1015,6 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                     }
                 } else {
                     ui.text("Mismatched progress type for Ability Score Improvement prompt");
-                }
-            }
-
-            LevelUpPrompt::Subclass(subclasses) => {
-                if let LevelUpDecisionProgress::Subclass(ref mut decision) = self.progress {
-                    for subclass in subclasses {
-                        if render_button_selectable(
-                            ui,
-                            format!("{}", subclass.name),
-                            [0., 0.],
-                            decision.as_ref().is_some_and(|s| s == subclass),
-                        ) {
-                            *decision = Some(subclass.clone());
-                        }
-                    }
-                } else {
-                    ui.text("Mismatched progress type for Subclass prompt");
-                }
-            }
-
-            LevelUpPrompt::Race(races) => {
-                if let LevelUpDecisionProgress::Race(ref mut decision) = self.progress {
-                    for race in races {
-                        if render_button_selectable(
-                            ui,
-                            format!("{}", race),
-                            [0., 0.],
-                            decision.as_ref().is_some_and(|s| s == race),
-                        ) {
-                            *decision = Some(race.clone());
-                        }
-                    }
-                }
-            }
-
-            LevelUpPrompt::Subrace(subraces) => {
-                if let LevelUpDecisionProgress::Subrace(ref mut decision) = self.progress {
-                    for subrace in subraces {
-                        if render_button_selectable(
-                            ui,
-                            format!("{}", subrace),
-                            [0., 0.],
-                            decision.as_ref().is_some_and(|s| s == subrace),
-                        ) {
-                            *decision = Some(subrace.clone());
-                        }
-                    }
                 }
             }
         }

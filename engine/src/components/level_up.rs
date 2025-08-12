@@ -1,15 +1,14 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     sync::LazyLock,
 };
-
-use strum::IntoEnumIterator;
 
 use crate::{
     components::{
         ability::Ability,
         class::{ClassName, SubclassName},
-        id::{BackgroundId, EffectId, FeatId, RaceId, SubraceId},
+        id::{ActionId, BackgroundId, EffectId, FeatId, RaceId, SubraceId},
         modifier::ModifierSource,
         skill::Skill,
     },
@@ -31,8 +30,86 @@ static ABILITY_SCORE_POINT_COST: LazyLock<HashMap<u8, u8>> = LazyLock::new(|| {
 
 static ABILITY_SCORE_POINTS: u8 = 27;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ChoiceItem {
+    Action(ActionId),
+    Background(BackgroundId),
+    Class(ClassName),
+    Subclass(SubclassName),
+    Effect(EffectId),
+    Feat(FeatId),
+    Race(RaceId),
+    Subrace(SubraceId),
+    // SubPrompt(Box<LevelUpPrompt>), // cascade
+    // Escape hatch if you need something truly custom
+    // Custom(String),
+}
+
+impl ChoiceItem {
+    pub fn id(&self) -> &'static str {
+        match self {
+            ChoiceItem::Action(_) => "choice.action",
+            ChoiceItem::Background(_) => "choice.background",
+            ChoiceItem::Class(_) => "choice.class",
+            ChoiceItem::Subclass(_) => "choice.subclass",
+            ChoiceItem::Effect(_) => "choice.effect",
+            ChoiceItem::Feat(_) => "choice.feat",
+            ChoiceItem::Race(_) => "choice.race",
+            ChoiceItem::Subrace(_) => "choice.subrace",
+        }
+    }
+}
+
+impl std::fmt::Display for ChoiceItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ChoiceItem::Effect(id) => write!(f, "{}", id),
+            ChoiceItem::Feat(id) => write!(f, "{}", id),
+            ChoiceItem::Action(id) => write!(f, "{}", id),
+            ChoiceItem::Background(id) => write!(f, "{}", id),
+            ChoiceItem::Class(id) => write!(f, "{}", id),
+            ChoiceItem::Subclass(id) => write!(f, "{}", id.name),
+            ChoiceItem::Race(id) => write!(f, "{}", id),
+            ChoiceItem::Subrace(id) => write!(f, "{}", id),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChoiceSpec {
+    pub id: String,
+    pub label: String,
+    pub options: Vec<ChoiceItem>,
+    pub picks: u8,
+    pub allow_duplicates: bool,
+}
+
+impl ChoiceSpec {
+    pub fn single(label: impl Into<String>, options: Vec<ChoiceItem>) -> Self {
+        if options.is_empty() {
+            panic!("ChoiceSpec must have at least one option");
+        }
+
+        Self {
+            // Assuming all the options have the same type we can just infer the
+            // id from the first option.
+            id: options.first().map(|item| item.id().to_string()).unwrap(),
+            label: label.into(),
+            options,
+            picks: 1,
+            allow_duplicates: false,
+        }
+    }
+
+    pub fn with_id(&mut self, id: impl Into<String>) -> &mut Self {
+        self.id = id.into();
+        self
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LevelUpPrompt {
+    Choice(ChoiceSpec),
     AbilityScores(HashMap<u8, u8>, u8),
     AbilityScoreImprovement {
         feat: FeatId,
@@ -40,33 +117,9 @@ pub enum LevelUpPrompt {
         abilities: HashSet<Ability>,
         max_score: u8,
     },
-    Background(Vec<BackgroundId>),
-    Class(Vec<ClassName>),
-    Effect(Vec<EffectId>),
-    Feat(Vec<FeatId>),
-    Race(Vec<RaceId>),
     SkillProficiency(HashSet<Skill>, u8, ModifierSource),
-    Subclass(Vec<SubclassName>),
-    Subrace(Vec<SubraceId>),
     // SpellSelection(SpellcastingClass, Vec<SpellOption>),
     // etc.
-}
-
-impl LevelUpPrompt {
-    pub fn name(&self) -> &'static str {
-        match self {
-            LevelUpPrompt::AbilityScores(_, _) => "AbilityScores",
-            LevelUpPrompt::AbilityScoreImprovement { .. } => "AbilityScoreImprovement",
-            LevelUpPrompt::Background(_) => "Background",
-            LevelUpPrompt::Class(_) => "Class",
-            LevelUpPrompt::Effect(_) => "Effect",
-            LevelUpPrompt::Feat(_) => "Feat",
-            LevelUpPrompt::Race(_) => "Race",
-            LevelUpPrompt::SkillProficiency(_, _, _) => "SkillProficiency",
-            LevelUpPrompt::Subclass(_) => "Subclass",
-            LevelUpPrompt::Subrace(_) => "Subrace",
-        }
-    }
 }
 
 impl LevelUpPrompt {
@@ -75,44 +128,70 @@ impl LevelUpPrompt {
     }
 
     pub fn background() -> Self {
-        LevelUpPrompt::Background(
+        LevelUpPrompt::Choice(ChoiceSpec::single(
+            "Background",
             registry::backgrounds::BACKGROUND_REGISTRY
                 .keys()
                 .cloned()
+                .map(ChoiceItem::Background)
                 .collect(),
-        )
+        ))
     }
 
     pub fn class() -> Self {
-        let classes = ClassName::iter().collect();
-        LevelUpPrompt::Class(classes)
+        LevelUpPrompt::Choice(ChoiceSpec::single(
+            "Class",
+            registry::classes::CLASS_REGISTRY
+                .keys()
+                .cloned()
+                .map(ChoiceItem::Class)
+                .collect(),
+        ))
     }
 
     pub fn feats() -> Self {
         let mut feats: Vec<_> = registry::feats::FEAT_REGISTRY.keys().cloned().collect();
         // TODO: Bit of a dirty hack to remove fighting styles from the list of feats.
         feats.retain(|feat_id| !feat_id.to_string().starts_with("feat.fighting_style."));
-        LevelUpPrompt::Feat(feats)
+        LevelUpPrompt::Choice(ChoiceSpec::single(
+            "Feat",
+            feats.into_iter().map(ChoiceItem::Feat).collect(),
+        ))
     }
 
     pub fn race() -> Self {
-        LevelUpPrompt::Race(registry::races::RACE_REGISTRY.keys().cloned().collect())
-    }
-
-    pub fn subclass(class_name: ClassName) -> Self {
-        let subclasses = registry::classes::CLASS_REGISTRY
-            .get(&class_name)
-            .map_or_else(Vec::new, |class| class.subclasses.keys().cloned().collect());
-        if subclasses.is_empty() {
-            panic!("No subclasses found for class: {:?}", class_name);
-        }
-        LevelUpPrompt::Subclass(subclasses)
+        LevelUpPrompt::Choice(ChoiceSpec::single(
+            "Race",
+            registry::races::RACE_REGISTRY
+                .keys()
+                .cloned()
+                .map(ChoiceItem::Race)
+                .collect(),
+        ))
     }
 
     pub fn subrace(race: RaceId) -> Self {
         let subraces = registry::races::RACE_REGISTRY
             .get(&race)
             .map_or_else(Vec::new, |r| r.subraces.keys().cloned().collect());
-        LevelUpPrompt::Subrace(subraces)
+        LevelUpPrompt::Choice(ChoiceSpec::single(
+            "Subrace",
+            subraces.into_iter().map(ChoiceItem::Subrace).collect(),
+        ))
+    }
+}
+
+impl Display for LevelUpPrompt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LevelUpPrompt::Choice(spec) => write!(f, "{}", spec.label),
+            LevelUpPrompt::AbilityScores(_, _) => write!(f, "Ability Scores"),
+            LevelUpPrompt::AbilityScoreImprovement { .. } => {
+                write!(f, "Ability Score Improvement")
+            }
+            LevelUpPrompt::SkillProficiency(_, _, _) => {
+                write!(f, "Skill Proficiency")
+            }
+        }
     }
 }

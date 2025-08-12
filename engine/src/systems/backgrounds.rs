@@ -2,14 +2,14 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        background::Background,
+        background::{self, Background},
         id::BackgroundId,
         level_up::LevelUpPrompt,
         modifier::ModifierSource,
         proficiency::{Proficiency, ProficiencyLevel},
         skill::SkillSet,
     },
-    systems,
+    registry, systems,
 };
 
 pub fn background(world: &World, entity: Entity) -> hecs::Ref<'_, Option<BackgroundId>> {
@@ -23,9 +23,16 @@ pub fn background_mut(world: &mut World, entity: Entity) -> hecs::RefMut<'_, Opt
 pub fn set_background(
     world: &mut World,
     entity: Entity,
-    background: &Background,
+    background_id: &BackgroundId,
 ) -> Vec<LevelUpPrompt> {
-    *background_mut(world, entity) = Some(background.id().clone());
+    let background = registry::backgrounds::BACKGROUND_REGISTRY
+        .get(background_id)
+        .expect(&format!(
+            "Background with ID `{}` not found in the registry",
+            background_id
+        ));
+
+    *background_mut(world, entity) = Some(background_id.clone());
 
     let feat_result = systems::feats::add_feat(world, entity, background.feat());
     if let Err(e) = feat_result {
@@ -40,7 +47,7 @@ pub fn set_background(
             *skill,
             Proficiency::new(
                 ProficiencyLevel::Proficient,
-                ModifierSource::Background(background.id().clone()),
+                ModifierSource::Background(background_id.clone()),
             ),
         );
     }

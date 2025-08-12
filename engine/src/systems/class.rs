@@ -1,8 +1,8 @@
 use crate::{
     components::{
-        actions::action::ActionMap,
-        class::{ClassBase, SubclassName},
+        class::{ClassBase, ClassName, SubclassName},
         id::FeatId,
+        level_up::{ChoiceItem, ChoiceSpec},
         proficiency::ProficiencyLevel,
         resource::ResourceMap,
     },
@@ -21,13 +21,20 @@ use crate::{
 pub fn increment_class_level(
     world: &mut World,
     entity: Entity,
-    class: &Class,
+    class_name: &ClassName,
 ) -> Vec<LevelUpPrompt> {
+    let class = registry::classes::CLASS_REGISTRY
+        .get(class_name)
+        .expect(&format!(
+            "Class with name `{}` not found in the registry",
+            class_name
+        ));
+
     let (new_level, subclass) = {
         let mut character_levels =
             systems::helpers::get_component_mut::<CharacterLevels>(world, entity);
-        let new_level = character_levels.level_up(class.name.clone());
-        let subclass = if let Some(subclass_name) = character_levels.subclass(&class.name) {
+        let new_level = character_levels.level_up(class_name.clone());
+        let subclass = if let Some(subclass_name) = character_levels.subclass(&class_name) {
             class.subclass(&subclass_name)
         } else {
             None
@@ -40,7 +47,7 @@ pub fn increment_class_level(
             *ability,
             Proficiency::new(
                 ProficiencyLevel::Proficient,
-                ModifierSource::ClassFeature(class.name.to_string().clone()),
+                ModifierSource::ClassFeature(class_name.to_string().clone()),
             ),
         );
     }
@@ -62,9 +69,15 @@ pub fn increment_class_level(
 pub fn set_subclass(
     world: &mut World,
     entity: Entity,
-    class: &Class,
-    subclass_name: SubclassName,
+    subclass_name: &SubclassName,
 ) -> Vec<LevelUpPrompt> {
+    let class = registry::classes::CLASS_REGISTRY
+        .get(&subclass_name.class)
+        .expect(&format!(
+            "Class with name `{}` not found in the registry",
+            subclass_name.class
+        ));
+
     let (subclass, level) = {
         let mut character_levels =
             systems::helpers::get_component_mut::<CharacterLevels>(world, entity);
@@ -123,16 +136,20 @@ fn apply_class_base(
         match prompt {
             // Feats need special handling since they can have prerequisites and
             // can (or can't) be repeatable.
-            LevelUpPrompt::Feat(feats) => {
-                feats.retain(|feat_id| {
-                    let feat = registry::feats::FEAT_REGISTRY.get(feat_id).unwrap();
-                    if !feat.meets_prerequisite(world, entity) {
-                        return false;
+            LevelUpPrompt::Choice(choice_spec) => {
+                choice_spec.options.retain(|item| match item {
+                    ChoiceItem::Feat(feat_id) => {
+                        let feat = registry::feats::FEAT_REGISTRY.get(feat_id).unwrap();
+                        if !feat.meets_prerequisite(world, entity) {
+                            return false;
+                        }
+                        if feat.is_repeatable() {
+                            return true;
+                        }
+                        !systems::helpers::get_component::<Vec<FeatId>>(world, entity)
+                            .contains(feat_id)
                     }
-                    if feat.is_repeatable() {
-                        return true;
-                    }
-                    !systems::helpers::get_component::<Vec<FeatId>>(world, entity).contains(feat_id)
+                    _ => true,
                 });
             }
 

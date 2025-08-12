@@ -10,6 +10,7 @@ mod tests {
             ability::{Ability, AbilityScoreDistribution},
             class::{ClassName, SubclassName},
             level::CharacterLevels,
+            level_up::ChoiceItem,
             proficiency::ProficiencyLevel,
             saving_throw::SavingThrowSet,
             skill::{Skill, SkillSet},
@@ -29,7 +30,7 @@ mod tests {
             character,
             3,
             vec![
-                LevelUpDecision::Class(ClassName::Fighter),
+                LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
                 LevelUpDecision::AbilityScores(AbilityScoreDistribution {
                     scores: HashMap::from([
                         (Ability::Strength, 15),
@@ -42,19 +43,19 @@ mod tests {
                     plus_2_bonus: Ability::Strength,
                     plus_1_bonus: Ability::Constitution,
                 }),
-                LevelUpDecision::Effect(
+                LevelUpDecision::single_choice(ChoiceItem::Effect(
                     registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
-                ),
+                )),
                 LevelUpDecision::SkillProficiency(HashSet::from([
                     Skill::Athletics,
                     Skill::Perception,
                 ])),
-                LevelUpDecision::Class(ClassName::Fighter),
-                LevelUpDecision::Class(ClassName::Fighter),
-                LevelUpDecision::Subclass(SubclassName {
+                LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassName {
                     class: ClassName::Fighter,
                     name: "Champion".to_string(),
-                }),
+                })),
             ],
         );
 

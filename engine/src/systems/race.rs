@@ -4,7 +4,7 @@ use crate::{
     components::{
         actions::action::ActionMap,
         id::{RaceId, SubraceId},
-        level_up::LevelUpPrompt,
+        level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         race::RaceBase,
     },
     registry, systems,
@@ -24,9 +24,14 @@ pub fn set_race(world: &mut World, entity: Entity, race: &RaceId) -> Vec<LevelUp
     apply_race_base(world, entity, &race.base, 1);
 
     if !race.subraces.is_empty() {
-        prompts.push(LevelUpPrompt::Subrace(
-            race.subraces.keys().cloned().collect(),
-        ));
+        prompts.push(LevelUpPrompt::Choice(ChoiceSpec::single(
+            "Subrace",
+            race.subraces
+                .keys()
+                .cloned()
+                .map(ChoiceItem::Subrace)
+                .collect(),
+        )));
     }
 
     prompts

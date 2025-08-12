@@ -14,7 +14,6 @@ use nat20_rs::{
             DamageMitigationResult, DamageRoll, DamageRollResult, MitigationOperation,
         },
         effects::effects::{Effect, EffectDuration},
-        feat::Feat,
         hit_points::HitPoints,
         id::{FeatId, SpellId},
         items::{

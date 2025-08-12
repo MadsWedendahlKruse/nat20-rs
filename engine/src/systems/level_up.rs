@@ -9,9 +9,9 @@ use crate::{
         ability::{Ability, AbilityScore, AbilityScoreDistribution, AbilityScoreMap},
         class::{ClassName, SubclassName},
         hit_points::HitPoints,
-        id::{ActionId, BackgroundId, EffectId, FeatId, RaceId, SubraceId},
+        id::{ActionId, EffectId},
         level::CharacterLevels,
-        level_up::LevelUpPrompt,
+        level_up::{ChoiceItem, LevelUpPrompt},
         modifier::ModifierSource,
         proficiency::{Proficiency, ProficiencyLevel},
         resource::Resource,
@@ -22,34 +22,44 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LevelUpDecision {
+    Choice {
+        id: String,
+        selected: Vec<ChoiceItem>,
+    },
     AbilityScores(AbilityScoreDistribution),
     AbilityScoreImprovement(HashMap<Ability, u8>),
-    Background(BackgroundId),
-    Class(ClassName),
-    Effect(EffectId),
-    Feat(FeatId),
-    Race(RaceId),
     SkillProficiency(HashSet<Skill>),
-    Subclass(SubclassName),
-    Subrace(SubraceId),
-    // Spell(SpellcastingClass, SpellOption),
-    // etc.
 }
 
 impl LevelUpDecision {
-    pub fn name(&self) -> &'static str {
-        match self {
-            LevelUpDecision::AbilityScores { .. } => "AbilityScores",
-            LevelUpDecision::AbilityScoreImprovement(_) => "AbilityScoreImprovement",
-            LevelUpDecision::Background(_) => "Background",
-            LevelUpDecision::Class(_) => "Class",
-            LevelUpDecision::Effect(_) => "Effect",
-            LevelUpDecision::Feat(_) => "Feat",
-            LevelUpDecision::Race(_) => "Race",
-            LevelUpDecision::SkillProficiency(_) => "SkillProficiency",
-            LevelUpDecision::Subclass(_) => "Subclass",
-            LevelUpDecision::Subrace(_) => "Subrace",
+    pub fn matches(&self, prompt: &LevelUpPrompt) -> bool {
+        match (self, prompt) {
+            (LevelUpDecision::Choice { id, .. }, LevelUpPrompt::Choice(spec)) => id == &spec.id,
+            (LevelUpDecision::AbilityScores(_), LevelUpPrompt::AbilityScores(_, _)) => true,
+            (
+                LevelUpDecision::AbilityScoreImprovement(_),
+                LevelUpPrompt::AbilityScoreImprovement { .. },
+            ) => true,
+            (LevelUpDecision::SkillProficiency(_), LevelUpPrompt::SkillProficiency(_, _, _)) => {
+                true
+            }
+            _ => false,
         }
+    }
+
+    pub fn from_choice(id: impl Into<String>, selected: Vec<ChoiceItem>) -> Self {
+        LevelUpDecision::Choice {
+            id: id.into(),
+            selected,
+        }
+    }
+
+    pub fn single_choice_with_id(id: impl Into<String>, selected: ChoiceItem) -> Self {
+        LevelUpDecision::from_choice(id, vec![selected])
+    }
+
+    pub fn single_choice(selected: ChoiceItem) -> Self {
+        LevelUpDecision::single_choice_with_id(selected.id(), selected)
     }
 }
 
@@ -120,7 +130,7 @@ impl LevelUpSession {
         let mut resolved_prompt = None;
 
         for prompt in self.pending_prompts.iter() {
-            if prompt.name() != decision.name() {
+            if !decision.matches(prompt) {
                 continue;
             }
 
@@ -148,7 +158,12 @@ impl LevelUpSession {
 
     pub fn chosen_class(&self) -> Option<ClassName> {
         self.decisions.iter().find_map(|d| match d {
-            LevelUpDecision::Class(class_name) => Some(class_name.clone()),
+            LevelUpDecision::Choice { selected, .. } => {
+                selected.iter().find_map(|item| match item {
+                    ChoiceItem::Class(class_name) => Some(class_name.clone()),
+                    _ => None,
+                })
+            }
             _ => None,
         })
     }
@@ -163,68 +178,76 @@ fn resolve_level_up_prompt(
     let mut prompts = Vec::new();
 
     match (&prompt, &decision) {
-        (LevelUpPrompt::Background(backgrounds), LevelUpDecision::Background(background_id)) => {
-            if !backgrounds.contains(background_id) {
+        (LevelUpPrompt::Choice(spec), LevelUpDecision::Choice { id, selected }) => {
+            if &spec.id != id {
+                return Err(LevelUpError::PrompDecisionMismatch { prompt, decision });
+            }
+
+            if selected.len() as u8 != spec.picks {
                 return Err(LevelUpError::InvalidDecision { prompt, decision });
             }
 
-            if let Some(background) = registry::backgrounds::BACKGROUND_REGISTRY.get(background_id)
-            {
-                prompts.extend(systems::backgrounds::set_background(
-                    world, entity, background,
-                ));
-            } else {
-                return Err(LevelUpError::RegistryMissing(background_id.to_string()));
-            }
-        }
-
-        (LevelUpPrompt::Class(classes), LevelUpDecision::Class(class_name)) => {
-            if !classes.contains(&class_name) {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
-            }
-
-            // Special prompt when creating a new character
-            if systems::helpers::get_component::<CharacterLevels>(world, entity).total_level() == 0
-            {
-                prompts.push(LevelUpPrompt::ability_scores());
-            }
-
-            if let Some(class) = registry::classes::CLASS_REGISTRY.get(&class_name) {
-                prompts.extend(systems::class::increment_class_level(world, entity, &class));
-            } else {
-                return Err(LevelUpError::RegistryMissing(class_name.to_string()));
-            }
-        }
-
-        (LevelUpPrompt::Subclass(subclasses), LevelUpDecision::Subclass(subclass_name)) => {
-            if !subclasses.contains(&subclass_name) {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
-            }
-
-            if let Some(class) = registry::classes::CLASS_REGISTRY.get(&subclass_name.class) {
-                if !class.subclasses.contains_key(&subclass_name) {
+            let mut seen = HashMap::new();
+            for item in selected {
+                if !spec.options.contains(item) {
                     return Err(LevelUpError::InvalidDecision { prompt, decision });
                 }
-
-                prompts.extend(systems::class::set_subclass(
-                    world,
-                    entity,
-                    class,
-                    subclass_name.clone(),
-                ));
-            } else {
-                return Err(LevelUpError::RegistryMissing(
-                    subclass_name.class.to_string(),
-                ));
-            }
-        }
-
-        (LevelUpPrompt::Effect(effects), LevelUpDecision::Effect(effect_id)) => {
-            if !effects.contains(&effect_id) {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
+                let count = seen.entry(item).or_insert(0);
+                *count += 1;
+                if !spec.allow_duplicates && *count > 1 {
+                    return Err(LevelUpError::InvalidDecision { prompt, decision });
+                }
             }
 
-            systems::effects::add_effect(world, entity, effect_id);
+            for item in selected {
+                match item {
+                    ChoiceItem::Effect(effect_id) => {
+                        systems::effects::add_effect(world, entity, effect_id);
+                    }
+
+                    ChoiceItem::Feat(feat_id) => {
+                        let result = systems::feats::add_feat(world, entity, feat_id);
+                        if let Ok(new_prompts) = result {
+                            prompts.extend(new_prompts);
+                        } else {
+                            return Err(LevelUpError::InvalidDecision { prompt, decision });
+                        }
+                    }
+
+                    ChoiceItem::Action(action_id) => {
+                        systems::actions::add_actions(world, entity, &[action_id.clone()]);
+                    }
+
+                    ChoiceItem::Background(background_id) => {
+                        systems::backgrounds::set_background(world, entity, background_id);
+                    }
+
+                    ChoiceItem::Class(class_name) => {
+                        // Special prompt when creating a new character
+                        if systems::helpers::get_component::<CharacterLevels>(world, entity)
+                            .total_level()
+                            == 0
+                        {
+                            prompts.push(LevelUpPrompt::ability_scores());
+                        }
+
+                        prompts.extend(systems::class::increment_class_level(
+                            world, entity, class_name,
+                        ));
+                    }
+                    ChoiceItem::Subclass(subclass_name) => {
+                        systems::class::set_subclass(world, entity, subclass_name);
+                    }
+
+                    ChoiceItem::Race(race_id) => {
+                        prompts.extend(systems::race::set_race(world, entity, race_id));
+                    }
+
+                    ChoiceItem::Subrace(subrace_id) => {
+                        systems::race::set_subrace(world, entity, subrace_id);
+                    }
+                }
+            }
         }
 
         (
@@ -290,23 +313,6 @@ fn resolve_level_up_prompt(
             }
         }
 
-        (LevelUpPrompt::Feat(feats), LevelUpDecision::Feat(feat_id)) => {
-            if !feats.contains(&feat_id) {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
-            }
-
-            let result = systems::feats::add_feat(world, entity, feat_id);
-            if result.is_err() {
-                eprintln!(
-                    "Failed to add feat {}: {:?}",
-                    feat_id,
-                    result.as_ref().err().unwrap()
-                );
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
-            }
-            prompts.extend(result.unwrap());
-        }
-
         (
             LevelUpPrompt::AbilityScoreImprovement {
                 feat,
@@ -343,26 +349,10 @@ fn resolve_level_up_prompt(
             }
         }
 
-        (LevelUpPrompt::Race(races), LevelUpDecision::Race(race_id)) => {
-            if !races.contains(&race_id) {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
-            }
-
-            prompts.extend(systems::race::set_race(world, entity, race_id))
-        }
-
-        (LevelUpPrompt::Subrace(subraces), LevelUpDecision::Subrace(subrace_id)) => {
-            if !subraces.contains(&subrace_id) {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
-            }
-
-            systems::race::set_subrace(world, entity, subrace_id)
-        }
-
         _ => {
             // If the prompt and decision are called the same, and we made it here,
             // it's probably just because it hasn't been implemented yet
-            if prompt.name() == decision.name() {
+            if decision.matches(&prompt) {
                 todo!(
                     "Implement prompt: {:?} with decision: {:?}",
                     prompt,

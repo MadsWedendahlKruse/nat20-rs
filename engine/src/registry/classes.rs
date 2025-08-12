@@ -9,7 +9,7 @@ use crate::{
         class::{Class, ClassBase, ClassName, SpellcastingProgression, Subclass, SubclassName},
         dice::DieSize,
         items::equipment::{armor::ArmorType, weapon::WeaponCategory},
-        level_up::LevelUpPrompt,
+        level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         resource::{RechargeRule, Resource},
         skill::Skill,
     },
@@ -118,11 +118,21 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         ]),
         HashMap::from([(
             1,
-            vec![LevelUpPrompt::Feat(vec![
-                registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
-                registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone(),
-                registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
-            ])],
+            vec![LevelUpPrompt::Choice(
+                ChoiceSpec::single(
+                    "Fighting Style",
+                    [
+                        registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
+                        registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone(),
+                        registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                    ]
+                    .into_iter()
+                    .map(ChoiceItem::Feat)
+                    .collect(),
+                )
+                .with_id("choice.fighting_style")
+                .clone(),
+            )],
         )]),
         HashMap::from([
             (1, vec![registry::actions::SECOND_WIND_ID.clone()]),
@@ -172,11 +182,21 @@ static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
         resources_by_level: HashMap::new(),
         prompts_by_level: HashMap::from([(
             7,
-            vec![LevelUpPrompt::Feat(vec![
-                registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
-                registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone(),
-                registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
-            ])],
+            vec![LevelUpPrompt::Choice(
+                ChoiceSpec::single(
+                    "Fighting Style",
+                    [
+                        registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
+                        registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone(),
+                        registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                    ]
+                    .into_iter()
+                    .map(ChoiceItem::Feat)
+                    .collect(),
+                )
+                .with_id("choice.fighting_style")
+                .clone(),
+            )],
         )]),
         actions_by_level: HashMap::new(),
     },

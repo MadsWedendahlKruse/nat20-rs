@@ -5,18 +5,15 @@ use std::{
 
 use strum::EnumIter;
 
-use crate::{
-    components::{
-        ability::{Ability, AbilityScoreDistribution},
-        dice::DieSize,
-        id::{ActionId, EffectId},
-        items::equipment::{armor::ArmorType, weapon::WeaponCategory},
-        level_up::LevelUpPrompt,
-        modifier::ModifierSource,
-        resource::Resource,
-        skill::Skill,
-    },
-    systems,
+use crate::components::{
+    ability::{Ability, AbilityScoreDistribution},
+    dice::DieSize,
+    id::{ActionId, EffectId},
+    items::equipment::{armor::ArmorType, weapon::WeaponCategory},
+    level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
+    modifier::ModifierSource,
+    resource::Resource,
+    skill::Skill,
 };
 
 // TODO: Better name
@@ -132,12 +129,20 @@ impl Class {
             ));
 
         // Add subclass prompt
+        // NOTE: *DON'T* make a helper method in LevelUpPrompt for subclass prompts.
+        // you've done it twice, and every time it creates a lookup in the class
+        // registry while it's being initialized, so it just creates an infinite loop.
         prompts_by_level
             .entry(subclass_level)
             .or_default()
-            .push(LevelUpPrompt::Subclass(
-                subclasses.keys().cloned().collect(),
-            ));
+            .push(LevelUpPrompt::Choice(ChoiceSpec::single(
+                "Subclass",
+                subclasses
+                    .keys()
+                    .cloned()
+                    .map(ChoiceItem::Subclass)
+                    .collect(),
+            )));
 
         // Add feat decisions
         for level in feat_levels.iter() {
