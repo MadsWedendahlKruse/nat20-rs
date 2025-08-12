@@ -9,7 +9,7 @@ use crate::{
         id::EncounterId,
         skill::Skill,
     },
-    engine::encounter::{ActionDecision, ActionDecisionResult, ActionError, CombatLog, Encounter},
+    engine::encounter::{ActionDecision, CombatEvents, ActionError, CombatLog, Encounter},
 };
 
 // TODO: Not 100% sure this is the best solution
@@ -83,7 +83,7 @@ impl GameState {
     pub fn process(
         &mut self,
         decision: ActionDecision,
-    ) -> Result<ActionDecisionResult, ActionError> {
+    ) -> Result<CombatEvents, ActionError> {
         let entity = decision.actor();
         if let Some(encounter_id) = self.in_combat.get(&entity) {
             if let Some(encounter) = self.encounters.get_mut(encounter_id) {

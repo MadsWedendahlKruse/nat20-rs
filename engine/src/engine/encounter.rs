@@ -64,7 +64,10 @@ pub enum ActionDecision {
 }
 
 #[derive(Debug, Clone)]
-pub enum ActionDecisionResult {
+pub enum CombatEvents {
+    NewRound {
+        round: usize,
+    },
     /// The action was successfully performed, and the results are applied to the targets.
     ActionPerformed {
         action: ActionData,
@@ -229,7 +232,7 @@ impl ActionDecision {
     }
 }
 
-pub type CombatLog = Vec<ActionDecisionResult>;
+pub type CombatLog = Vec<CombatEvents>;
 
 pub struct Encounter {
     pub id: EncounterId,
@@ -259,6 +262,9 @@ impl Encounter {
         };
         engine.roll_initiative(world);
         engine.start_turn(world);
+        engine.combat_log.push(CombatEvents::NewRound {
+            round: engine.round,
+        });
         engine
     }
 
@@ -305,7 +311,7 @@ impl Encounter {
         &mut self,
         world: &mut World,
         decision: ActionDecision,
-    ) -> Result<ActionDecisionResult, ActionError> {
+    ) -> Result<CombatEvents, ActionError> {
         if self.pending_prompts.is_empty() {
             return Err(ActionError::MissingPrompt { decision });
         }
@@ -324,7 +330,7 @@ impl Encounter {
         world: &mut World,
         prompt: &ActionPrompt,
         decision: ActionDecision,
-    ) -> Result<ActionDecisionResult, ActionError> {
+    ) -> Result<CombatEvents, ActionError> {
         // Ensure the decision matches the current prompt
         prompt.is_valid_decision(&decision)?;
 
@@ -367,7 +373,7 @@ impl Encounter {
                             // Add the decision to pending decisions and resolve it
                             // after the reaction is resolved
                             self.pending_decisions.push_back(decision.clone());
-                            return Ok(ActionDecisionResult::ReactionTriggered {
+                            return Ok(CombatEvents::ReactionTriggered {
                                 reactor: *reactor,
                                 action: action.clone(),
                             });
@@ -394,7 +400,7 @@ impl Encounter {
                 // self.pending_prompts.pop_front();
 
                 let results = systems::actions::apply_to_targets(world, snapshots, &action.targets);
-                return Ok(ActionDecisionResult::ActionPerformed {
+                return Ok(CombatEvents::ActionPerformed {
                     action: action.clone(),
                     results,
                 });
@@ -423,7 +429,7 @@ impl Encounter {
                         &self.pending_prompts.front().unwrap().clone(),
                         self.pending_decisions.front().unwrap().clone(),
                     );
-                    self.log(&Ok(ActionDecisionResult::NoReactionTaken {
+                    self.log(&Ok(CombatEvents::NoReactionTaken {
                         reactor: *reactor,
                         action: action.clone(),
                     }));
@@ -480,7 +486,7 @@ impl Encounter {
                             );
                         }
 
-                        return Ok(ActionDecisionResult::ActionCancelled {
+                        return Ok(CombatEvents::ActionCancelled {
                             reactor: *reactor,
                             reaction: reaction.clone(),
                             action: action.clone(),
@@ -498,7 +504,7 @@ impl Encounter {
         }
     }
 
-    fn log(&mut self, result: &Result<ActionDecisionResult, ActionError>) {
+    fn log(&mut self, result: &Result<CombatEvents, ActionError>) {
         if let Ok(action_result) = result {
             self.combat_log.push(action_result.clone());
         } else if let Err(err) = result {
@@ -522,6 +528,8 @@ impl Encounter {
         self.turn_index = (self.turn_index + 1) % self.participants.len();
         if self.turn_index == 0 {
             self.round += 1;
+            self.combat_log
+                .push(CombatEvents::NewRound { round: self.round });
         }
 
         self.start_turn(world);

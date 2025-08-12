@@ -1040,6 +1040,24 @@ impl ImguiRenderable for DamageMitigationEffect {
     }
 }
 
+impl ImguiRenderable for EffectDuration {
+    fn render(&self, ui: &imgui::Ui) {
+        match self {
+            EffectDuration::Temporary {
+                duration,
+                turns_elapsed,
+            } => {
+                let remaining = duration - turns_elapsed;
+                if remaining > 0 {
+                    ui.text(format!("{} turns", remaining));
+                }
+            }
+            // TODO: Does it make sense to render the other durations?
+            _ => {}
+        }
+    }
+}
+
 pub enum CharacterRenderMode {
     Full,
     Compact,
@@ -1052,10 +1070,41 @@ impl ImguiRenderableWithContext<(&mut World, CharacterRenderMode)> for (Entity, 
 
         match mode {
             CharacterRenderMode::Full => todo!(),
+
             CharacterRenderMode::Compact => {
                 ui.text(systems::helpers::get_component::<String>(world, entity).to_string());
                 systems::helpers::get_component::<CharacterLevels>(world, entity).render(ui);
                 systems::helpers::get_component::<HitPoints>(world, entity).render(ui);
+                {
+                    let effects = systems::effects::effects(world, entity);
+                    if !effects.is_empty() {
+                        let conditions = effects
+                            .iter()
+                            .filter(|e| {
+                                matches!(
+                                    e.duration(),
+                                    EffectDuration::Temporary { .. } | EffectDuration::Conditional
+                                )
+                            })
+                            .collect::<Vec<_>>();
+                        ui.separator_with_text("Condtions");
+                        if !conditions.is_empty() {
+                            if let Some(table) =
+                                table_with_columns!(ui, "Conditions", "Condition", "Duration")
+                            {
+                                for effect in conditions {
+                                    ui.table_next_column();
+                                    ui.text(effect.id().to_string());
+                                    ui.table_next_column();
+                                    effect.duration().render(ui);
+                                }
+                                table.end();
+                            }
+                        } else {
+                            ui.text("None");
+                        }
+                    }
+                }
             }
         }
     }

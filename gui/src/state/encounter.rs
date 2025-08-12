@@ -14,7 +14,7 @@ use nat20_rs::{
     },
     engine::{
         encounter::{
-            ActionData, ActionDecision, ActionDecisionResult, ActionPrompt, CombatLog, Encounter,
+            ActionData, ActionDecision, ActionPrompt, CombatEvents, CombatLog, Encounter,
             ReactionData,
         },
         game_state::GameState,
@@ -285,13 +285,15 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
                             initiative.render(ui);
                         });
                     }
+
+                    if self.current_entity() == *entity {
+                        ui.table_set_bg_color(imgui::TableBgTarget::all(), SELECTED_BUTTON_COLOR);
+                    }
+
                     // Participant column
                     ui.table_next_column();
                     (*entity, tag.clone())
                         .render_with_context(ui, (world, CharacterRenderMode::Compact));
-                    if self.current_entity() == *entity {
-                        ui.table_set_bg_color(imgui::TableBgTarget::all(), SELECTED_BUTTON_COLOR);
-                    }
                 }
             }
 
@@ -466,7 +468,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                         let decision = self.take().unwrap().finalize();
                         let result = encounter.process(world, decision).unwrap();
                         match result {
-                            ActionDecisionResult::ActionPerformed { action, results } => {
+                            CombatEvents::ActionPerformed { action, results } => {
                                 // Handle action performed, e.g., apply effects, update state
                                 println!("Action performed: {:?}", action);
                                 for result in results {
@@ -634,7 +636,7 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
     fn render_with_context(&self, ui: &imgui::Ui, world: &World) {
         for entry in self {
             match entry {
-                ActionDecisionResult::ActionPerformed { action, results } => {
+                CombatEvents::ActionPerformed { action, results } => {
                     TextSegments::new(vec![
                         (
                             &systems::helpers::get_component::<String>(world, action.actor)
@@ -666,7 +668,7 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                     }
                 }
 
-                ActionDecisionResult::ReactionTriggered { reactor, action } => {
+                CombatEvents::ReactionTriggered { reactor, action } => {
                     let mut segments = vec![
                         (
                             systems::helpers::get_component_clone::<String>(world, action.actor),
@@ -705,7 +707,7 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                     .render(ui);
                 }
 
-                ActionDecisionResult::ActionCancelled {
+                CombatEvents::ActionCancelled {
                     reactor,
                     reaction,
                     action,
@@ -730,7 +732,7 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                     .render(ui);
                 }
 
-                ActionDecisionResult::NoReactionTaken { reactor, action } => {
+                CombatEvents::NoReactionTaken { reactor, action } => {
                     TextSegments::new(vec![
                         (
                             systems::helpers::get_component::<String>(world, *reactor).to_string(),
@@ -749,8 +751,8 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                     .render(ui);
                 }
 
-                _ => {
-                    ui.text(format!("Unhandled log entry: {:?}", entry));
+                CombatEvents::NewRound { round } => {
+                    ui.separator_with_text(format!("Round {}", round));
                 }
             }
         }
