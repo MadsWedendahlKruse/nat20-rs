@@ -30,27 +30,38 @@ mod tests {
             character,
             3,
             vec![
-                LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
-                LevelUpDecision::AbilityScores(AbilityScoreDistribution {
-                    scores: HashMap::from([
-                        (Ability::Strength, 15),
-                        (Ability::Dexterity, 14),
-                        (Ability::Constitution, 13),
-                        (Ability::Intelligence, 8),
-                        (Ability::Wisdom, 10),
-                        (Ability::Charisma, 12),
-                    ]),
-                    plus_2_bonus: Ability::Strength,
-                    plus_1_bonus: Ability::Constitution,
-                }),
-                LevelUpDecision::single_choice(ChoiceItem::Effect(
-                    registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                // Level 1
+                // TODO: Everyone is dragonborn for now
+                LevelUpDecision::single_choice(ChoiceItem::Race(
+                    registry::races::DRAGONBORN_ID.clone(),
                 )),
+                LevelUpDecision::single_choice(ChoiceItem::Subrace(
+                    registry::races::DRAGONBORN_WHITE_ID.clone(),
+                )),
+                LevelUpDecision::single_choice(ChoiceItem::Background(
+                    registry::backgrounds::SOLDIER_ID.clone(),
+                )),
+                LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                LevelUpDecision::AbilityScores(
+                    registry::classes::CLASS_REGISTRY
+                        .get(&ClassName::Fighter)
+                        .unwrap()
+                        .default_abilities
+                        .clone(),
+                ),
+                LevelUpDecision::single_choice_with_id(
+                    "choice.fighting_style",
+                    ChoiceItem::Feat(
+                        registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                    ),
+                ),
                 LevelUpDecision::SkillProficiency(HashSet::from([
-                    Skill::Athletics,
+                    Skill::Acrobatics,
                     Skill::Perception,
                 ])),
+                // Level 2
                 LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                // Level 3
                 LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
                 LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassName {
                     class: ClassName::Fighter,
@@ -74,7 +85,7 @@ mod tests {
 
         {
             let effects = systems::effects::effects(&mut world, character);
-            assert_eq!(effects.len(), 2);
+            assert_eq!(effects.len(), 5);
             for effect_id in [
                 &registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID,
                 &registry::effects::IMPROVED_CRITICAL_ID,

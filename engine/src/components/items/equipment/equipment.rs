@@ -98,21 +98,20 @@ pub enum EquipmentType {
 }
 
 impl EquipmentType {
-    pub fn can_equip_in_slot(&self, slot: EquipmentSlot) -> bool {
-        match (self, slot) {
-            (EquipmentType::Headwear, EquipmentSlot::General(GeneralEquipmentSlot::Headwear)) => {
-                true
-            }
-            (EquipmentType::Cloak, EquipmentSlot::General(GeneralEquipmentSlot::Cloak)) => true,
-            (EquipmentType::Armor, EquipmentSlot::Armor) => true,
-            (EquipmentType::Gloves, EquipmentSlot::General(GeneralEquipmentSlot::Gloves)) => true,
-            (EquipmentType::Boots, EquipmentSlot::General(GeneralEquipmentSlot::Boots)) => true,
-            (EquipmentType::Amulet, EquipmentSlot::General(GeneralEquipmentSlot::Amulet)) => true,
-            (EquipmentType::Ring, EquipmentSlot::General(GeneralEquipmentSlot::Ring(0)))
-            | (EquipmentType::Ring, EquipmentSlot::General(GeneralEquipmentSlot::Ring(1))) => true,
-            (EquipmentType::MeleeWeapon, EquipmentSlot::Melee(_)) => true,
-            (EquipmentType::RangedWeapon, EquipmentSlot::Ranged(_)) => true,
-            _ => false,
+    pub fn valid_slots(&self) -> Vec<EquipmentSlot> {
+        match self {
+            EquipmentType::Headwear => vec![EquipmentSlot::General(GeneralEquipmentSlot::Headwear)],
+            EquipmentType::Cloak => vec![EquipmentSlot::General(GeneralEquipmentSlot::Cloak)],
+            EquipmentType::Armor => vec![EquipmentSlot::Armor],
+            EquipmentType::Gloves => vec![EquipmentSlot::General(GeneralEquipmentSlot::Gloves)],
+            EquipmentType::Boots => vec![EquipmentSlot::General(GeneralEquipmentSlot::Boots)],
+            EquipmentType::Amulet => vec![EquipmentSlot::General(GeneralEquipmentSlot::Amulet)],
+            EquipmentType::Ring => vec![
+                EquipmentSlot::General(GeneralEquipmentSlot::Ring(0)),
+                EquipmentSlot::General(GeneralEquipmentSlot::Ring(1)),
+            ],
+            EquipmentType::MeleeWeapon => vec![EquipmentSlot::Melee(HandSlot::Main)],
+            EquipmentType::RangedWeapon => vec![EquipmentSlot::Ranged(HandSlot::Main)],
         }
     }
 }

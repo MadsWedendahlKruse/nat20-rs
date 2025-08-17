@@ -7,6 +7,7 @@ pub mod effects;
 pub mod feats;
 pub mod health;
 pub mod helpers;
+pub mod inventory;
 pub mod level_up;
 pub mod loadout;
 pub mod race;

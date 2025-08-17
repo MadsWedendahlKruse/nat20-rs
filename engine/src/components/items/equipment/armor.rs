@@ -18,7 +18,7 @@ pub enum ArmorType {
     Heavy,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Armor {
     pub equipment: EquipmentItem,
     pub armor_type: ArmorType,

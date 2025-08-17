@@ -6,8 +6,8 @@ use crate::{
     components::{
         ability::AbilityScoreMap,
         actions::action::{ActionContext, ActionProvider},
-        damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
-        id::{ActionId, ResourceId},
+        damage::{AttackRoll, AttackRollResult, DamageRoll},
+        id::ActionId,
         items::equipment::{
             armor::Armor,
             equipment::{EquipmentItem, EquipmentSlot, GeneralEquipmentSlot, HandSlot},
@@ -22,7 +22,7 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TryEquipError {
-    InvalidSlot,
+    InvalidSlot { slot: EquipmentSlot, item: String },
     SlotOccupied,
     NotProficient,
     WrongWeaponType,
@@ -31,8 +31,8 @@ pub enum TryEquipError {
 #[derive(Debug, Clone, Default)]
 pub struct Loadout {
     armor: Option<Armor>,
-    weapons: HashMap<WeaponType, HashMap<HandSlot, Option<Weapon>>>,
-    equipment: HashMap<GeneralEquipmentSlot, Option<EquipmentItem>>,
+    weapons: HashMap<WeaponType, HashMap<HandSlot, Weapon>>,
+    equipment: HashMap<GeneralEquipmentSlot, EquipmentItem>,
 }
 
 impl Loadout {
@@ -98,24 +98,23 @@ impl Loadout {
         item: EquipmentItem,
     ) -> Result<Option<EquipmentItem>, TryEquipError> {
         let equip_slot = EquipmentSlot::General(*slot);
-        if !item.kind.can_equip_in_slot(equip_slot) {
-            return Err(TryEquipError::InvalidSlot);
+        if !item.kind.valid_slots().contains(&equip_slot) {
+            return Err(TryEquipError::InvalidSlot {
+                slot: equip_slot,
+                item: item.item.name.clone(),
+            });
         }
         let unequipped = self.unequip_item(slot);
-        self.equipment.insert(*slot, Some(item));
+        self.equipment.insert(*slot, item);
         Ok(unequipped)
     }
 
     pub fn unequip_item(&mut self, slot: &GeneralEquipmentSlot) -> Option<EquipmentItem> {
-        if let Some(item) = self.equipment.remove(slot) {
-            item
-        } else {
-            None
-        }
+        self.equipment.remove(slot)
     }
 
     pub fn item_in_slot(&self, slot: &GeneralEquipmentSlot) -> Option<&EquipmentItem> {
-        self.equipment.get(slot).and_then(|w| w.as_ref())
+        self.equipment.get(slot)
     }
 
     pub fn equip_weapon(
@@ -139,27 +138,18 @@ impl Loadout {
         self.weapons
             .entry(weapon_type)
             .or_insert_with(HashMap::new)
-            .insert(hand, Some(weapon));
+            .insert(hand, weapon);
         Ok(unequipped)
     }
 
     pub fn unequip_weapon(&mut self, weapon_type: &WeaponType, hand: HandSlot) -> Option<Weapon> {
-        if let Some(weapon) = self
-            .weapons
+        self.weapons
             .get_mut(weapon_type)
             .and_then(|w| w.remove(&hand))
-        {
-            weapon
-        } else {
-            None
-        }
     }
 
     pub fn weapon_in_hand(&self, weapon_type: &WeaponType, hand: &HandSlot) -> Option<&Weapon> {
-        self.weapons
-            .get(weapon_type)
-            .and_then(|w| w.get(hand))
-            .and_then(|w| w.as_ref())
+        self.weapons.get(weapon_type).and_then(|w| w.get(hand))
     }
 
     pub fn has_weapon_in_hand(&self, weapon_type: &WeaponType, hand: &HandSlot) -> bool {
@@ -223,25 +213,22 @@ impl ActionProvider for Loadout {
 
         // TODO: There has to be a nicer way to do this
         for (weapon_type, weapon_map) in self.weapons.iter() {
-            for (hand, weapon_opt) in weapon_map.iter() {
-                if let Some(weapon) = weapon_opt {
-                    let weapon_actions = weapon.weapon_actions();
-                    for action_id in weapon_actions {
-                        if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id)
-                        {
-                            let context = ActionContext::Weapon {
-                                weapon_type: weapon_type.clone(),
-                                hand: *hand,
-                            };
-                            let resource_cost = &action.resource_cost().clone();
-                            actions
-                                .entry(action_id.clone())
-                                .and_modify(|a: &mut (Vec<ActionContext>, ResourceCostMap)| {
-                                    a.0.push(context.clone());
-                                    a.1.extend(resource_cost.clone());
-                                })
-                                .or_insert((vec![context], resource_cost.clone()));
-                        }
+            for (hand, weapon) in weapon_map.iter() {
+                let weapon_actions = weapon.weapon_actions();
+                for action_id in weapon_actions {
+                    if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id) {
+                        let context = ActionContext::Weapon {
+                            weapon_type: weapon_type.clone(),
+                            hand: *hand,
+                        };
+                        let resource_cost = &action.resource_cost().clone();
+                        actions
+                            .entry(action_id.clone())
+                            .and_modify(|a: &mut (Vec<ActionContext>, ResourceCostMap)| {
+                                a.0.push(context.clone());
+                                a.1.extend(resource_cost.clone());
+                            })
+                            .or_insert((vec![context], resource_cost.clone()));
                     }
                 }
             }
@@ -265,9 +252,12 @@ impl fmt::Display for Loadout {
             for (weapon_type, weapon_map) in &self.weapons {
                 write!(f, "\t{:?} Weapon(s):\n", weapon_type)?;
                 for (hand, weapon) in weapon_map {
-                    if let Some(w) = weapon {
-                        write!(f, "\t\t{} in {:?} hand\n", w.equipment().item.name, hand)?;
-                    }
+                    write!(
+                        f,
+                        "\t\t{} in {:?} hand\n",
+                        weapon.equipment().item.name,
+                        hand
+                    )?;
                 }
             }
         }
@@ -282,11 +272,7 @@ impl fmt::Display for Loadout {
             write!(f, "\tNo equipment items equipped\n")?;
         } else {
             for (slot, item) in &self.equipment {
-                if let Some(equip_item) = item {
-                    write!(f, "\t{:?}: {}\n", slot, equip_item.item.name)?;
-                } else {
-                    write!(f, "\t{:?}: None\n", slot)?;
-                }
+                write!(f, "\t{:?}: {}\n", slot, item.item.name)?;
             }
         }
 
@@ -473,7 +459,13 @@ mod tests {
         let item = fixtures::equipment::boots();
         let result = loadout.equip_item(&GeneralEquipmentSlot::Headwear, item);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), TryEquipError::InvalidSlot);
+        assert_eq!(
+            result.unwrap_err(),
+            TryEquipError::InvalidSlot {
+                slot: EquipmentSlot::General(GeneralEquipmentSlot::Headwear),
+                item: "Boots".to_string(),
+            }
+        );
     }
 
     #[test]

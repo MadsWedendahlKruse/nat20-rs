@@ -97,6 +97,7 @@ impl GameGui {
                         (*entity, tag.clone())
                             .render_mut_with_context(ui, &mut self.game_state.world);
 
+                        ui.separator();
                         if ui.button(format!("Remove Character##{:?}", entity)) {
                             let _ = self.game_state.world.despawn(*entity);
                         }

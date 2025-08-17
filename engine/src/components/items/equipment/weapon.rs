@@ -107,7 +107,7 @@ impl WeaponProficiencyMap {
 const MELEE_RANGE_DEFAULT: u32 = 5;
 const MELEE_RANGE_REACH: u32 = 10;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Weapon {
     equipment: EquipmentItem,
     category: WeaponCategory,
@@ -219,7 +219,7 @@ impl Weapon {
                 None
             }
         });
-        if versatile_dice.is_some() && !wielding_both_hands {
+        if versatile_dice.is_some() && wielding_both_hands {
             damage_roll.primary.dice_roll.dice = versatile_dice.unwrap().clone();
         }
 

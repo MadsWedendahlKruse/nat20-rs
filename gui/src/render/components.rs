@@ -24,6 +24,7 @@ use nat20_rs::{
                 loadout::Loadout,
                 weapon::{Weapon, WeaponType},
             },
+            inventory::Inventory,
             item::Item,
         },
         level::CharacterLevels,
@@ -43,6 +44,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     render::{
+        inventory::render_loadout_inventory,
         text::{TextKind, TextSegment, TextSegments, indent_text},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
@@ -1130,25 +1132,7 @@ impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
             }
 
             if let Some(tab) = ui.tab_item("Inventory") {
-                let mut wielding_both_hands = HashMap::new();
-                for weapon_type in WeaponType::iter() {
-                    wielding_both_hands.insert(
-                        weapon_type.clone(),
-                        systems::helpers::get_component::<Loadout>(world, entity)
-                            .is_wielding_weapon_with_both_hands(&weapon_type),
-                    );
-                }
-
-                let context = LoadoutRenderContext {
-                    ability_scores: systems::helpers::get_component_clone::<AbilityScoreMap>(
-                        world, entity,
-                    ),
-                    wielding_both_hands,
-                };
-
-                systems::helpers::get_component_mut::<Loadout>(world, entity)
-                    .render_mut_with_context(ui, &context);
-
+                render_loadout_inventory(ui, world, entity);
                 tab.end();
             }
 
