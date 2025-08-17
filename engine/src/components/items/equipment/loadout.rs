@@ -1,19 +1,25 @@
-use std::{collections::HashMap, fmt};
+use std::collections::HashMap;
 
 use hecs::{Entity, World};
+use strum::IntoEnumIterator;
 
 use crate::{
     components::{
         ability::AbilityScoreMap,
         actions::action::{ActionContext, ActionProvider},
         damage::{AttackRoll, AttackRollResult, DamageRoll},
-        id::ActionId,
-        items::equipment::{
-            armor::Armor,
-            equipment::{EquipmentItem, EquipmentSlot, GeneralEquipmentSlot, HandSlot},
-            weapon::{Weapon, WeaponProficiencyMap, WeaponProperties, WeaponType},
+        id::{ActionId, EffectId},
+        items::{
+            equipment::{
+                armor::{Armor, ArmorClass},
+                equipment::EquipmentItem,
+                slots::{EquipmentSlot, SlotProvider},
+                weapon::{Weapon, WeaponKind, WeaponProficiencyMap, WeaponProperties},
+            },
+            inventory::ItemContainer,
+            item::Item,
         },
-        modifier::{ModifierSet, ModifierSource},
+        modifier::ModifierSet,
         resource::ResourceCostMap,
     },
     registry,
@@ -22,48 +28,154 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TryEquipError {
-    InvalidSlot { slot: EquipmentSlot, item: String },
+    InvalidSlot {
+        slot: EquipmentSlot,
+        equipment: EquipmentInstance,
+    },
     SlotOccupied,
     NotProficient,
     WrongWeaponType,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum EquipmentInstance {
+    Armor(Armor),
+    Weapon(Weapon),
+    Equipment(EquipmentItem),
+}
+
+impl EquipmentInstance {
+    pub fn effects(&self) -> &Vec<EffectId> {
+        match self {
+            EquipmentInstance::Armor(armor) => armor.effects(),
+            EquipmentInstance::Weapon(weapon) => weapon.effects(),
+            EquipmentInstance::Equipment(equipment) => &equipment.effects,
+        }
+    }
+}
+
+impl SlotProvider for EquipmentInstance {
+    fn valid_slots(&self) -> &'static [EquipmentSlot] {
+        match self {
+            EquipmentInstance::Armor(armor) => armor.valid_slots(),
+            EquipmentInstance::Weapon(weapon) => weapon.valid_slots(),
+            EquipmentInstance::Equipment(equipment) => equipment.valid_slots(),
+        }
+    }
+
+    fn required_slots(&self) -> &'static [EquipmentSlot] {
+        match self {
+            EquipmentInstance::Weapon(weapon) => weapon.required_slots(),
+            _ => &[],
+        }
+    }
+}
+
+impl ItemContainer for EquipmentInstance {
+    fn item(&self) -> &Item {
+        match self {
+            EquipmentInstance::Armor(armor) => &armor.item,
+            EquipmentInstance::Weapon(weapon) => weapon.item(),
+            EquipmentInstance::Equipment(equipment) => &equipment.item,
+        }
+    }
+}
+
+macro_rules! impl_into_equipment_instance {
+    ($($ty:ty => $variant:ident),* $(,)?) => {
+        $(
+            impl Into<EquipmentInstance> for $ty {
+                fn into(self) -> EquipmentInstance {
+                    EquipmentInstance::$variant(self)
+                }
+            }
+        )*
+    };
+}
+
+impl_into_equipment_instance! {
+    Armor => Armor,
+    Weapon => Weapon,
+    EquipmentItem => Equipment,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Loadout {
-    armor: Option<Armor>,
-    weapons: HashMap<WeaponType, HashMap<HandSlot, Weapon>>,
-    equipment: HashMap<GeneralEquipmentSlot, EquipmentItem>,
+    equipment: HashMap<EquipmentSlot, EquipmentInstance>,
 }
 
 impl Loadout {
     pub fn new() -> Self {
         Self {
-            armor: None,
-            weapons: HashMap::new(),
             equipment: HashMap::new(),
         }
     }
 
+    pub fn item_in_slot(&self, slot: &EquipmentSlot) -> Option<&EquipmentInstance> {
+        self.equipment.get(slot)
+    }
+
+    pub fn unequip(&mut self, slot: &EquipmentSlot) -> Option<EquipmentInstance> {
+        self.equipment.remove(slot)
+    }
+
+    pub fn unequip_slots(&mut self, slots: &[EquipmentSlot]) -> Vec<EquipmentInstance> {
+        slots.iter().filter_map(|slot| self.unequip(slot)).collect()
+    }
+
+    pub fn equip_in_slot(
+        &mut self,
+        slot: &EquipmentSlot,
+        equipment: EquipmentInstance,
+    ) -> Result<Vec<EquipmentInstance>, TryEquipError> {
+        if !equipment.valid_slots().contains(slot) {
+            return Err(TryEquipError::InvalidSlot {
+                slot: *slot,
+                equipment,
+            });
+        }
+        let mut unequipped_items = self.unequip_slots(&equipment.required_slots());
+        if let Some(existing) = self.equipment.insert(*slot, equipment) {
+            unequipped_items.push(existing);
+        }
+        Ok(unequipped_items)
+    }
+
+    pub fn find_slot_for_item(&self, equipment: &EquipmentInstance) -> EquipmentSlot {
+        let valid_slots = equipment.valid_slots();
+        if valid_slots.len() == 1 {
+            return valid_slots[0].clone();
+        }
+        // If there are multiple valid slots, find an available one
+        let mut avaible_slot = valid_slots
+            .iter()
+            .find(|slot| self.item_in_slot(slot).is_none());
+        if avaible_slot.is_none() {
+            // If no available slot, just use the first valid slot
+            // This is a fallback and may not be ideal, but it ensures we have a slot
+            avaible_slot = Some(&valid_slots[0]);
+        }
+        avaible_slot.unwrap().clone()
+    }
+
+    pub fn equip<T>(&mut self, equipment: T) -> Result<Vec<EquipmentInstance>, TryEquipError>
+    where
+        T: Into<EquipmentInstance>,
+    {
+        let equipment = equipment.into();
+        self.equip_in_slot(&self.find_slot_for_item(&equipment), equipment)
+    }
+
     pub fn armor(&self) -> Option<&Armor> {
-        self.armor.as_ref()
-    }
-
-    pub fn equip_armor(&mut self, armor: Armor) -> Option<Armor> {
-        let unequipped = self.armor.take();
-        self.armor = Some(armor);
-        unequipped
-    }
-
-    pub fn unequip_armor(&mut self) -> Option<Armor> {
-        if let Some(armor) = self.armor.take() {
+        if let Some(EquipmentInstance::Armor(armor)) = self.equipment.get(&EquipmentSlot::Armor) {
             Some(armor)
         } else {
             None
         }
     }
 
-    pub fn armor_class(&self, world: &World, entity: Entity) -> ModifierSet {
-        if let Some(armor) = &self.armor {
+    pub fn armor_class(&self, world: &World, entity: Entity) -> ArmorClass {
+        if let Some(armor) = &self.armor() {
             let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, entity);
             let mut armor_class = armor.armor_class(&ability_scores);
             for effect in systems::effects::effects(world, entity).iter() {
@@ -72,9 +184,11 @@ impl Loadout {
             armor_class
         } else {
             // TODO: Not sure if this is the right way to handle unarmored characters
-            let mut armor_class = ModifierSet::new();
-            armor_class.add_modifier(ModifierSource::Custom("Unarmored".to_string()), 10);
-            armor_class
+            ArmorClass {
+                base: 10,
+                max_dexterity_bonus: 0,
+                modifiers: ModifierSet::new(),
+            }
         }
     }
 
@@ -92,72 +206,27 @@ impl Loadout {
             || attack_roll_result.roll_result.total >= armor_class.total() as u32
     }
 
-    pub fn equip_item(
-        &mut self,
-        slot: &GeneralEquipmentSlot,
-        item: EquipmentItem,
-    ) -> Result<Option<EquipmentItem>, TryEquipError> {
-        let equip_slot = EquipmentSlot::General(*slot);
-        if !item.kind.valid_slots().contains(&equip_slot) {
-            return Err(TryEquipError::InvalidSlot {
-                slot: equip_slot,
-                item: item.item.name.clone(),
-            });
+    pub fn weapon_in_hand(&self, slot: &EquipmentSlot) -> Option<&Weapon> {
+        if !slot.is_weapon_slot() {
+            return None;
         }
-        let unequipped = self.unequip_item(slot);
-        self.equipment.insert(*slot, item);
-        Ok(unequipped)
-    }
-
-    pub fn unequip_item(&mut self, slot: &GeneralEquipmentSlot) -> Option<EquipmentItem> {
-        self.equipment.remove(slot)
-    }
-
-    pub fn item_in_slot(&self, slot: &GeneralEquipmentSlot) -> Option<&EquipmentItem> {
-        self.equipment.get(slot)
-    }
-
-    pub fn equip_weapon(
-        &mut self,
-        weapon: Weapon,
-        hand: HandSlot,
-    ) -> Result<Vec<Weapon>, TryEquipError> {
-        let mut unequipped = Vec::new();
-        let weapon_type = weapon.weapon_type().clone();
-
-        if let Some(existing) = self.unequip_weapon(&weapon_type, hand) {
-            unequipped.push(existing);
+        if let Some(EquipmentInstance::Weapon(weapon)) = self.item_in_slot(slot) {
+            Some(weapon)
+        } else {
+            None
         }
-
-        if weapon.has_property(&WeaponProperties::TwoHanded) {
-            if let Some(existing) = self.unequip_weapon(&weapon_type, hand.other()) {
-                unequipped.push(existing);
-            }
-        }
-
-        self.weapons
-            .entry(weapon_type)
-            .or_insert_with(HashMap::new)
-            .insert(hand, weapon);
-        Ok(unequipped)
     }
 
-    pub fn unequip_weapon(&mut self, weapon_type: &WeaponType, hand: HandSlot) -> Option<Weapon> {
-        self.weapons
-            .get_mut(weapon_type)
-            .and_then(|w| w.remove(&hand))
+    pub fn has_weapon_in_hand(&self, slot: &EquipmentSlot) -> bool {
+        self.weapon_in_hand(slot).is_some()
     }
 
-    pub fn weapon_in_hand(&self, weapon_type: &WeaponType, hand: &HandSlot) -> Option<&Weapon> {
-        self.weapons.get(weapon_type).and_then(|w| w.get(hand))
-    }
-
-    pub fn has_weapon_in_hand(&self, weapon_type: &WeaponType, hand: &HandSlot) -> bool {
-        self.weapon_in_hand(weapon_type, hand).is_some()
-    }
-
-    pub fn is_wielding_weapon_with_both_hands(&self, weapon_type: &WeaponType) -> bool {
-        if let Some(main_hand_weapon) = self.weapon_in_hand(weapon_type, &HandSlot::Main) {
+    pub fn is_wielding_weapon_with_both_hands(&self, weapon_kind: &WeaponKind) -> bool {
+        let (main_hand_slot, off_hand_slot) = match weapon_kind {
+            WeaponKind::Melee => (EquipmentSlot::MeleeMainHand, EquipmentSlot::MeleeOffHand),
+            WeaponKind::Ranged => (EquipmentSlot::RangedMainHand, EquipmentSlot::RangedOffHand),
+        };
+        if let Some(main_hand_weapon) = self.weapon_in_hand(&main_hand_slot) {
             // Check that:
             // 1. The main hand weapon is two-handed or versatile.
             // 2. The off hand is empty
@@ -167,22 +236,16 @@ impl Loadout {
                     .properties()
                     .iter()
                     .any(|p| matches!(p, WeaponProperties::Versatile(_))))
-                && !self.has_weapon_in_hand(weapon_type, &HandSlot::Off);
+                && !self.has_weapon_in_hand(&off_hand_slot);
         }
         false
     }
 
-    pub fn attack_roll(
-        &self,
-        world: &World,
-        entity: Entity,
-        weapon_type: &WeaponType,
-        hand: &HandSlot,
-    ) -> AttackRoll {
+    pub fn attack_roll(&self, world: &World, entity: Entity, slot: &EquipmentSlot) -> AttackRoll {
         // TODO: Unarmed attacks
         let weapon = self
-            .weapon_in_hand(weapon_type, hand)
-            .expect("No weapon equipped in the specified hand");
+            .weapon_in_hand(slot)
+            .expect("No weapon equipped in the specified slot");
         weapon.attack_roll(
             &systems::helpers::get_component::<AbilityScoreMap>(world, entity),
             &systems::helpers::get_component::<WeaponProficiencyMap>(world, entity)
@@ -190,19 +253,13 @@ impl Loadout {
         )
     }
 
-    pub fn damage_roll(
-        &self,
-        world: &World,
-        entity: Entity,
-        weapon_type: &WeaponType,
-        hand: &HandSlot,
-    ) -> DamageRoll {
+    pub fn damage_roll(&self, world: &World, entity: Entity, slot: &EquipmentSlot) -> DamageRoll {
         let weapon = self
-            .weapon_in_hand(weapon_type, hand)
-            .expect("No weapon equipped in the specified hand");
+            .weapon_in_hand(slot)
+            .expect("No weapon equipped in the specified slot");
         weapon.damage_roll(
             &systems::helpers::get_component::<AbilityScoreMap>(world, entity),
-            self.is_wielding_weapon_with_both_hands(weapon_type),
+            self.is_wielding_weapon_with_both_hands(weapon.kind()),
         )
     }
 }
@@ -212,15 +269,12 @@ impl ActionProvider for Loadout {
         let mut actions = HashMap::new();
 
         // TODO: There has to be a nicer way to do this
-        for (weapon_type, weapon_map) in self.weapons.iter() {
-            for (hand, weapon) in weapon_map.iter() {
+        for slot in EquipmentSlot::weapon_slots() {
+            if let Some(weapon) = self.weapon_in_hand(slot) {
                 let weapon_actions = weapon.weapon_actions();
                 for action_id in weapon_actions {
                     if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id) {
-                        let context = ActionContext::Weapon {
-                            weapon_type: weapon_type.clone(),
-                            hand: *hand,
-                        };
+                        let context = ActionContext::Weapon { slot: slot.clone() };
                         let resource_cost = &action.resource_cost().clone();
                         actions
                             .entry(action_id.clone())
@@ -242,43 +296,43 @@ impl ActionProvider for Loadout {
     }
 }
 
-impl fmt::Display for Loadout {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Loadout:\n")?;
+// impl fmt::Display for Loadout {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(f, "Loadout:\n")?;
 
-        if self.weapons.is_empty() {
-            write!(f, "\tNo weapons equipped\n")?;
-        } else {
-            for (weapon_type, weapon_map) in &self.weapons {
-                write!(f, "\t{:?} Weapon(s):\n", weapon_type)?;
-                for (hand, weapon) in weapon_map {
-                    write!(
-                        f,
-                        "\t\t{} in {:?} hand\n",
-                        weapon.equipment().item.name,
-                        hand
-                    )?;
-                }
-            }
-        }
+//         if self.weapons.is_empty() {
+//             write!(f, "\tNo weapons equipped\n")?;
+//         } else {
+//             for (weapon_type, weapon_map) in &self.weapons {
+//                 write!(f, "\t{:?} Weapon(s):\n", weapon_type)?;
+//                 for (hand, weapon) in weapon_map {
+//                     write!(
+//                         f,
+//                         "\t\t{} in {:?} hand\n",
+//                         weapon.equipment().item.name,
+//                         hand
+//                     )?;
+//                 }
+//             }
+//         }
 
-        if let Some(armor) = &self.armor {
-            write!(f, "\tArmor: {}\n", armor.equipment.item.name)?;
-        } else {
-            write!(f, "\tNo armor equipped\n")?;
-        }
+//         if let Some(armor) = &self.armor {
+//             write!(f, "\tArmor: {}\n", armor.equipment.item.name)?;
+//         } else {
+//             write!(f, "\tNo armor equipped\n")?;
+//         }
 
-        if self.equipment.is_empty() {
-            write!(f, "\tNo equipment items equipped\n")?;
-        } else {
-            for (slot, item) in &self.equipment {
-                write!(f, "\t{:?}: {}\n", slot, item.item.name)?;
-            }
-        }
+//         if self.equipment.is_empty() {
+//             write!(f, "\tNo equipment items equipped\n")?;
+//         } else {
+//             for (slot, item) in &self.equipment {
+//                 write!(f, "\t{:?}: {}\n", slot, item.item.name)?;
+//             }
+//         }
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
@@ -290,8 +344,7 @@ mod tests {
     #[test]
     fn empty_loadout() {
         let loadout = Loadout::new();
-        assert!(loadout.armor.is_none());
-        assert!(loadout.weapons.is_empty());
+        assert!(loadout.armor().is_none());
         assert!(loadout.equipment.is_empty());
     }
 
@@ -300,17 +353,18 @@ mod tests {
         let mut loadout = Loadout::new();
 
         let armor = fixtures::armor::heavy_armor();
-        let unequipped = loadout.equip_armor(armor);
-        assert!(unequipped.is_none());
-        assert!(loadout.armor.is_some());
+        let slot = EquipmentSlot::Armor;
+        let unequipped = loadout.equip_in_slot(&slot, EquipmentInstance::Armor(armor.clone()));
+        assert!(unequipped.unwrap().is_empty());
+        assert_eq!(loadout.armor(), Some(&armor));
 
-        let unequipped = loadout.unequip_armor();
-        assert!(unequipped.is_some());
-        assert!(loadout.armor.is_none());
+        let unequipped = loadout.unequip(&slot);
+        assert_eq!(unequipped, Some(EquipmentInstance::Armor(armor.clone())));
+        assert!(loadout.armor().is_none());
 
-        let unequipped = loadout.unequip_armor();
+        let unequipped = loadout.unequip(&slot);
         assert!(unequipped.is_none());
-        assert!(loadout.armor.is_none());
+        assert!(loadout.armor().is_none());
     }
 
     #[test]
@@ -318,14 +372,19 @@ mod tests {
         let mut loadout = Loadout::new();
 
         let armor1 = fixtures::armor::heavy_armor();
-        let unequipped1 = loadout.equip_armor(armor1);
-        assert!(unequipped1.is_none());
-        assert!(loadout.armor.is_some());
+        let slot = EquipmentSlot::Armor;
+        let unequipped1 = loadout.equip_in_slot(&slot, EquipmentInstance::Armor(armor1.clone()));
+        assert!(unequipped1.unwrap().is_empty());
+        assert_eq!(loadout.armor(), Some(&armor1));
 
         let armor2 = fixtures::armor::medium_armor();
-        let unequipped2 = loadout.equip_armor(armor2);
-        assert!(unequipped2.is_some());
-        assert!(loadout.armor.is_some());
+        let unequipped2 = loadout.equip_in_slot(&slot, EquipmentInstance::Armor(armor2.clone()));
+        assert!(
+            unequipped2
+                .unwrap()
+                .contains(&EquipmentInstance::Armor(armor1))
+        );
+        assert_eq!(loadout.armor(), Some(&armor2));
     }
 
     #[test]
@@ -333,17 +392,18 @@ mod tests {
         let mut loadout = Loadout::new();
 
         let item = fixtures::equipment::boots();
-        let unequipped = loadout.equip_item(&GeneralEquipmentSlot::Boots, item);
-        assert!(unequipped.is_ok());
-        assert!(loadout.item_in_slot(&GeneralEquipmentSlot::Boots).is_some());
+        let slot = item.valid_slots()[0].clone();
+        let unequipped = loadout.equip_in_slot(&slot, EquipmentInstance::Equipment(item.clone()));
+        assert!(unequipped.unwrap().is_empty());
+        assert!(loadout.item_in_slot(&slot).is_some());
 
-        let unequipped = loadout.unequip_item(&GeneralEquipmentSlot::Boots);
-        assert!(unequipped.is_some());
-        assert!(loadout.item_in_slot(&GeneralEquipmentSlot::Boots).is_none());
+        let unequipped = loadout.unequip(&slot);
+        assert_eq!(unequipped, Some(EquipmentInstance::Equipment(item.clone())));
+        assert!(loadout.item_in_slot(&slot).is_none());
 
-        let unequipped = loadout.unequip_item(&GeneralEquipmentSlot::Boots);
+        let unequipped = loadout.unequip(&slot);
         assert!(unequipped.is_none());
-        assert!(loadout.item_in_slot(&GeneralEquipmentSlot::Boots).is_none());
+        assert!(loadout.item_in_slot(&slot).is_none());
     }
 
     #[test]
@@ -351,14 +411,19 @@ mod tests {
         let mut loadout = Loadout::new();
 
         let item1 = fixtures::equipment::boots();
-        let unequipped1 = loadout.equip_item(&GeneralEquipmentSlot::Boots, item1);
-        assert!(unequipped1.unwrap().is_none());
-        assert!(loadout.item_in_slot(&GeneralEquipmentSlot::Boots).is_some());
+        let slot = EquipmentSlot::Boots;
+        let unequipped1 = loadout.equip_in_slot(&slot, EquipmentInstance::Equipment(item1.clone()));
+        assert!(unequipped1.unwrap().is_empty());
+        assert!(loadout.item_in_slot(&slot).is_some());
 
         let item2 = fixtures::equipment::boots();
-        let unequipped2 = loadout.equip_item(&GeneralEquipmentSlot::Boots, item2);
-        assert!(unequipped2.unwrap().is_some());
-        assert!(loadout.item_in_slot(&GeneralEquipmentSlot::Boots).is_some());
+        let unequipped2 = loadout.equip_in_slot(&slot, EquipmentInstance::Equipment(item2.clone()));
+        assert!(
+            unequipped2
+                .unwrap()
+                .contains(&EquipmentInstance::Equipment(item1))
+        );
+        assert!(loadout.item_in_slot(&slot).is_some());
     }
 
     #[test]
@@ -366,29 +431,14 @@ mod tests {
         let mut loadout = Loadout::new();
 
         let weapon = fixtures::weapons::dagger_light();
-        let unequipped = loadout.equip_weapon(weapon, HandSlot::Main);
+        let slot = weapon.valid_slots()[0];
+        let unequipped = loadout.equip_in_slot(&slot, EquipmentInstance::Weapon(weapon.clone()));
         assert!(unequipped.is_ok());
-        assert!(
-            loadout
-                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-                .is_some()
-        );
+        assert!(loadout.weapon_in_hand(&slot).is_some());
 
-        let unequipped = loadout.unequip_weapon(&WeaponType::Melee, HandSlot::Main);
+        let unequipped = loadout.unequip(&slot);
         assert!(unequipped.is_some());
-        assert!(
-            loadout
-                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-                .is_none()
-        );
-
-        let unequipped = loadout.unequip_weapon(&WeaponType::Melee, HandSlot::Main);
-        assert!(unequipped.is_none());
-        assert!(
-            loadout
-                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-                .is_none()
-        );
+        assert!(loadout.weapon_in_hand(&slot).is_none());
     }
 
     #[test]
@@ -396,22 +446,15 @@ mod tests {
         let mut loadout = Loadout::new();
 
         let weapon1 = fixtures::weapons::dagger_light();
-        let unequipped1 = loadout.equip_weapon(weapon1, HandSlot::Main);
+        let slot = weapon1.valid_slots()[0];
+        let unequipped1 = loadout.equip_in_slot(&slot, EquipmentInstance::Weapon(weapon1.clone()));
         assert_eq!(unequipped1.unwrap().len(), 0);
-        assert!(
-            loadout
-                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-                .is_some()
-        );
+        assert!(loadout.weapon_in_hand(&slot).is_some());
 
         let weapon2 = fixtures::weapons::dagger_light();
-        let unequipped2 = loadout.equip_weapon(weapon2, HandSlot::Main);
+        let unequipped2 = loadout.equip_in_slot(&slot, EquipmentInstance::Weapon(weapon2.clone()));
         assert_eq!(unequipped2.unwrap().len(), 1);
-        assert!(
-            loadout
-                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-                .is_some()
-        );
+        assert!(loadout.weapon_in_hand(&slot).is_some());
     }
 
     #[test]
@@ -420,36 +463,33 @@ mod tests {
 
         let weapon_main_hand = fixtures::weapons::dagger_light();
         let weapon_off_hand = fixtures::weapons::dagger_light();
-        for (hand, weapon) in HashMap::from([
-            (HandSlot::Main, weapon_main_hand),
-            (HandSlot::Off, weapon_off_hand),
-        ]) {
-            let unequipped = loadout.equip_weapon(weapon, hand);
-            assert!(unequipped.is_ok());
-            assert!(loadout.weapon_in_hand(&WeaponType::Melee, &hand).is_some());
-        }
+        let main_slot = EquipmentSlot::MeleeMainHand;
+        let off_slot = EquipmentSlot::MeleeOffHand;
+
+        let unequipped_main = loadout.equip_in_slot(
+            &main_slot,
+            EquipmentInstance::Weapon(weapon_main_hand.clone()),
+        );
+        assert!(unequipped_main.is_ok());
+        assert!(loadout.weapon_in_hand(&main_slot).is_some());
+
+        let unequipped_off = loadout.equip_in_slot(
+            &off_slot,
+            EquipmentInstance::Weapon(weapon_off_hand.clone()),
+        );
+        assert!(unequipped_off.is_ok());
+        assert!(loadout.weapon_in_hand(&off_slot).is_some());
 
         let weapon_two_handed = fixtures::weapons::greatsword_two_handed();
-        let unequipped = loadout.equip_weapon(weapon_two_handed, HandSlot::Main);
+        let unequipped = loadout.equip_in_slot(
+            &main_slot,
+            EquipmentInstance::Weapon(weapon_two_handed.clone()),
+        );
         println!("{:?}", unequipped);
         assert!(unequipped.is_ok());
-        assert_eq!(unequipped.unwrap().len(), 2);
-        assert!(
-            loadout
-                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-                .is_some()
-        );
-        assert!(
-            loadout
-                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Off)
-                .is_none()
-        );
-        assert!(
-            loadout
-                .weapon_in_hand(&WeaponType::Melee, &HandSlot::Main)
-                .unwrap()
-                .has_property(&WeaponProperties::TwoHanded)
-        );
+        // Should unequip both hands if required_slots includes both
+        assert!(loadout.weapon_in_hand(&main_slot).is_some());
+        assert!(loadout.weapon_in_hand(&off_slot).is_none());
     }
 
     #[test]
@@ -457,13 +497,15 @@ mod tests {
         let mut loadout = Loadout::new();
 
         let item = fixtures::equipment::boots();
-        let result = loadout.equip_item(&GeneralEquipmentSlot::Headwear, item);
+        // Try to equip boots in the Headwear slot, which should be invalid
+        let slot = EquipmentSlot::Headwear;
+        let result = loadout.equip_in_slot(&slot, EquipmentInstance::Equipment(item.clone()));
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err(),
             TryEquipError::InvalidSlot {
-                slot: EquipmentSlot::General(GeneralEquipmentSlot::Headwear),
-                item: "Boots".to_string(),
+                slot,
+                equipment: EquipmentInstance::Equipment(item),
             }
         );
     }
@@ -481,10 +523,10 @@ mod tests {
         let mut loadout = Loadout::new();
 
         let weapon1 = fixtures::weapons::dagger_light();
-        loadout.equip_weapon(weapon1, HandSlot::Main).unwrap();
+        loadout.equip(weapon1);
 
         let weapon2 = fixtures::weapons::longbow();
-        loadout.equip_weapon(weapon2, HandSlot::Main).unwrap();
+        loadout.equip(weapon2);
 
         let actions = loadout.all_actions();
         for action in &actions {
@@ -498,15 +540,7 @@ mod tests {
         for (_, (contexts, _)) in actions {
             for context in contexts {
                 match context {
-                    ActionContext::Weapon { weapon_type, hand } => {
-                        if weapon_type == WeaponType::Melee {
-                            assert_eq!(hand, HandSlot::Main);
-                        } else if weapon_type == WeaponType::Ranged {
-                            assert_eq!(hand, HandSlot::Main);
-                        } else {
-                            panic!("Unexpected weapon type: {:?}", weapon_type);
-                        }
-                    }
+                    ActionContext::Weapon { slot } => {}
                     _ => panic!("Unexpected action context: {:?}", context),
                 }
             }

@@ -9,19 +9,22 @@ mod tests {
             ability::{Ability, AbilityScore, AbilityScoreMap},
             damage::DamageType,
             dice::{DiceSet, DieSize},
+            id::ItemId,
             items::{
                 equipment::{
-                    equipment::{EquipmentItem, EquipmentType, HandSlot},
+                    equipment::{EquipmentItem, EquipmentKind},
                     loadout::Loadout,
-                    weapon::{Weapon, WeaponCategory, WeaponProperties, WeaponType},
+                    slots::EquipmentSlot,
+                    weapon::{Weapon, WeaponCategory, WeaponKind, WeaponProperties},
                 },
-                item::ItemRarity,
+                item::{Item, ItemRarity},
             },
             modifier::ModifierSource,
             proficiency::ProficiencyLevel,
         },
         entities::character::Character,
         systems::{self, helpers},
+        test_utils::fixtures,
     };
 
     #[test]
@@ -39,21 +42,7 @@ mod tests {
             );
         }
 
-        let equipment = EquipmentItem::new(
-            "Rapier".to_string(),
-            "A rapier".to_string(),
-            2.0,
-            1,
-            ItemRarity::Common,
-            EquipmentType::MeleeWeapon,
-        );
-        let weapon = Weapon::new(
-            equipment,
-            WeaponCategory::Martial,
-            HashSet::from([WeaponProperties::Finesse]),
-            vec![(1, DieSize::D8, DamageType::Piercing)],
-            vec![],
-        );
+        let weapon = fixtures::weapons::rapier_finesse();
 
         let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(&world, entity);
         assert_eq!(
@@ -89,66 +78,33 @@ mod tests {
         let entity = world.spawn(Character::default());
 
         // Equip trident
-        let trident = Weapon::new(
-            EquipmentItem::new(
-                "Trident".to_string(),
-                "A trident".to_string(),
-                5.0,
-                1,
-                ItemRarity::Common,
-                EquipmentType::MeleeWeapon,
-            ),
-            WeaponCategory::Martial,
-            HashSet::from([
-                WeaponProperties::Versatile(DiceSet {
-                    num_dice: 1,
-                    die_size: DieSize::D8,
-                }),
-                WeaponProperties::Enchantment(1),
-            ]),
-            vec![(1, DieSize::D6, DamageType::Piercing)],
-            vec![],
-        );
-        systems::loadout::equip_weapon(&mut world, entity, trident, HandSlot::Main).unwrap();
+        let trident = fixtures::weapons::trident_versatile();
+        let _ = systems::loadout::equip(&mut world, entity, trident);
 
         // Trident used with two hands
-        let roll =
-            systems::combat::damage_roll(&world, entity, &WeaponType::Melee, &HandSlot::Main);
+        let roll = systems::combat::damage_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
         assert_eq!(roll.primary.dice_roll.dice.num_dice, 1);
         assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D8);
 
-        // Equip dagger in off-hand
-        let dagger = Weapon::new(
-            EquipmentItem::new(
-                "Dagger".to_string(),
-                "A dagger".to_string(),
-                1.0,
-                1,
-                ItemRarity::Common,
-                EquipmentType::MeleeWeapon,
-            ),
-            WeaponCategory::Simple,
-            HashSet::from([WeaponProperties::Light]),
-            vec![(1, DieSize::D4, DamageType::Piercing)],
-            vec![],
-        );
-        systems::loadout::equip_weapon(&mut world, entity, dagger, HandSlot::Off).unwrap();
+        systems::loadout::equip_in_slot(
+            &mut world,
+            entity,
+            &EquipmentSlot::MeleeOffHand,
+            fixtures::weapons::dagger_light(),
+        )
+        .unwrap();
 
         // Trident now used one-handed
-        let roll =
-            systems::combat::damage_roll(&world, entity, &WeaponType::Melee, &HandSlot::Main);
+        let roll = systems::combat::damage_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
         assert_eq!(roll.primary.dice_roll.dice.num_dice, 1);
         assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D6);
 
         // Unequip dagger
         let unequipped =
-            systems::loadout::unequip_weapon(&mut world, entity, &WeaponType::Melee, HandSlot::Off)
-                .unwrap();
-        assert_eq!(unequipped.equipment().item.name, "Dagger");
+            systems::loadout::unequip(&mut world, entity, &EquipmentSlot::MeleeOffHand).unwrap();
 
         // Trident used with two hands again
-        let roll =
-            systems::combat::damage_roll(&world, entity, &WeaponType::Melee, &HandSlot::Main);
+        let roll = systems::combat::damage_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
         assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D8);
     }
 
@@ -157,69 +113,32 @@ mod tests {
         let mut world = World::new();
         let entity = world.spawn(Character::default());
 
-        let dagger = Weapon::new(
-            EquipmentItem::new(
-                "Dagger".to_string(),
-                "A dagger".to_string(),
-                1.0,
-                1,
-                ItemRarity::Common,
-                EquipmentType::MeleeWeapon,
-            ),
-            WeaponCategory::Simple,
-            HashSet::from([WeaponProperties::Light]),
-            vec![(1, DieSize::D4, DamageType::Piercing)],
-            vec![],
+        systems::loadout::equip_in_slot(
+            &mut world,
+            entity,
+            &EquipmentSlot::MeleeOffHand,
+            fixtures::weapons::dagger_light(),
+        )
+        .unwrap();
+        systems::loadout::equip_in_slot(
+            &mut world,
+            entity,
+            &EquipmentSlot::MeleeMainHand,
+            fixtures::weapons::trident_versatile(),
         );
 
-        let trident = Weapon::new(
-            EquipmentItem::new(
-                "Trident".to_string(),
-                "A trident".to_string(),
-                5.0,
-                1,
-                ItemRarity::Common,
-                EquipmentType::MeleeWeapon,
-            ),
-            WeaponCategory::Martial,
-            HashSet::from([
-                WeaponProperties::Versatile(DiceSet {
-                    num_dice: 1,
-                    die_size: DieSize::D8,
-                }),
-                WeaponProperties::Enchantment(1),
-            ]),
-            vec![(1, DieSize::D6, DamageType::Piercing)],
-            vec![],
-        );
-
-        systems::loadout::equip_weapon(&mut world, entity, dagger, HandSlot::Off).unwrap();
-        systems::loadout::equip_weapon(&mut world, entity, trident, HandSlot::Main).unwrap();
-
-        // Equip greatsword
-        let greatsword = Weapon::new(
-            EquipmentItem::new(
-                "Greatsword".to_string(),
-                "A greatsword".to_string(),
-                5.0,
-                1,
-                ItemRarity::Common,
-                EquipmentType::MeleeWeapon,
-            ),
-            WeaponCategory::Martial,
-            HashSet::from([WeaponProperties::TwoHanded]),
-            vec![(2, DieSize::D6, DamageType::Slashing)],
-            vec![],
-        );
-
-        let unequipped =
-            systems::loadout::equip_weapon(&mut world, entity, greatsword, HandSlot::Main).unwrap();
+        let unequipped = systems::loadout::equip(
+            &mut world,
+            entity,
+            fixtures::weapons::greatsword_two_handed(),
+        )
+        .unwrap();
         assert_eq!(unequipped.len(), 2);
 
         // Main hand has greatsword, off-hand should be empty
         let loadout = systems::helpers::get_component::<Loadout>(&world, entity);
-        assert!(loadout.has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Main));
-        assert!(!loadout.has_weapon_in_hand(&WeaponType::Melee, &HandSlot::Off));
+        assert!(loadout.has_weapon_in_hand(&EquipmentSlot::MeleeMainHand));
+        assert!(!loadout.has_weapon_in_hand(&EquipmentSlot::MeleeOffHand));
     }
 
     #[test]
@@ -237,24 +156,25 @@ mod tests {
         }
 
         let longsword = Weapon::new(
-            EquipmentItem::new(
-                "Longsword".to_string(),
-                "A longsword".to_string(),
-                5.0,
-                1,
-                ItemRarity::Common,
-                EquipmentType::MeleeWeapon,
-            ),
+            Item {
+                id: ItemId::from_str("item.longsword"),
+                name: "Longsword".to_string(),
+                description: "A longsword.".to_string(),
+                weight: 3.0,
+                value: 15,
+                rarity: ItemRarity::Common,
+            },
+            WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
             vec![(1, DieSize::D8, DamageType::Slashing)],
             vec![],
+            vec![],
         );
 
-        systems::loadout::equip_weapon(&mut world, entity, longsword, HandSlot::Main).unwrap();
+        systems::loadout::equip(&mut world, entity, longsword).unwrap();
 
-        let roll =
-            systems::combat::attack_roll(&world, entity, &WeaponType::Melee, &HandSlot::Main);
+        let roll = systems::combat::attack_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
 
         println!("{:?}", roll);
         assert!(

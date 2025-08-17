@@ -15,7 +15,7 @@ use crate::{
         },
         dice::{DiceSetRoll, DiceSetRollResult},
         id::{ActionId, EffectId, EntityIdentifier, ResourceId},
-        items::equipment::{equipment::HandSlot, weapon::WeaponType},
+        items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
         modifier::ModifierSet,
         resource::{RechargeRule, ResourceCostMap, ResourceError, ResourceMap},
         saving_throw::{SavingThrowDC, SavingThrowSet},
@@ -30,8 +30,7 @@ use crate::{
 pub enum ActionContext {
     // TODO: Not sure if Weapon needs more info?
     Weapon {
-        weapon_type: WeaponType,
-        hand: HandSlot,
+        slot: EquipmentSlot,
     },
     /// When casting a spell it is important to know the spell level, since
     /// most spells have different effects based on the level at which they are cast.
@@ -157,7 +156,7 @@ pub enum ActionKindResult {
     AttackRollDamage {
         attack_roll: AttackRollResult,
         /// Armor class of the target being attacked
-        armor_class: ModifierSet,
+        armor_class: ArmorClass,
         damage_roll: DamageRollResult,
         damage_taken: Option<DamageMitigationResult>,
     },
@@ -566,7 +565,7 @@ impl Display for ActionResult {
                 damage_taken,
             } => {
                 write!(f, "\tAttack Roll: {}\n", attack_roll)?;
-                write!(f, "\tArmor Class: {}\n", armor_class)?;
+                write!(f, "\tArmor Class: {:?}\n", armor_class)?;
                 write!(f, "\tDamage Roll: {}\n", damage_roll)?;
                 if let Some(damage) = damage_taken {
                     write!(f, "\tDamage Taken: {}\n", damage)?;

@@ -2,13 +2,14 @@ use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
         id::EffectId,
-        items::item::Item,
+        items::{
+            equipment::slots::{EquipmentSlot, SlotProvider},
+            item::Item,
+        },
         modifier::{ModifierSet, ModifierSource},
     },
     registry,
 };
-
-use super::equipment::EquipmentItem;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ArmorType {
@@ -19,90 +20,130 @@ pub enum ArmorType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Armor {
-    pub equipment: EquipmentItem,
-    pub armor_type: ArmorType,
-    armor_class: ModifierSet,
+pub struct ArmorClass {
+    pub base: i32,
     pub max_dexterity_bonus: i32,
+    pub modifiers: ModifierSet,
+}
+
+impl ArmorClass {
+    pub fn new(base: i32, max_dexterity_bonus: i32) -> Self {
+        Self {
+            base,
+            max_dexterity_bonus,
+            modifiers: ModifierSet::new(),
+        }
+    }
+
+    pub fn total(&self) -> i32 {
+        self.base + self.modifiers.total()
+    }
+
+    pub fn add_modifier(&mut self, source: ModifierSource, mut value: i32) {
+        if source == ModifierSource::Ability(Ability::Dexterity) {
+            // Ensure that Dexterity bonus does not exceed max dexterity bonus
+            if value > self.max_dexterity_bonus {
+                value = self.max_dexterity_bonus;
+            }
+        }
+        self.modifiers.add_modifier(source, value);
+    }
+
+    pub fn remove_modifier(&mut self, source: &ModifierSource) {
+        self.modifiers.remove_modifier(source);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Armor {
+    pub item: Item,
+    pub armor_type: ArmorType,
+    pub armor_class: ArmorClass,
     pub stealth_disadvantage: bool,
+    pub effects: Vec<EffectId>,
 }
 
 impl Armor {
     fn new(
-        mut equipment: EquipmentItem,
+        item: Item,
         armor_type: ArmorType,
         armor_class: i32,
         max_dexterity_bonus: i32,
         stealth_disadvantage: bool,
+        mut effects: Vec<EffectId>,
     ) -> Armor {
-        let modifier_source: ModifierSource =
-            ModifierSource::Item(equipment.item.name.clone().to_string());
-
-        let mut armor_class_modifiers = ModifierSet::new();
-        armor_class_modifiers.add_modifier(modifier_source.clone(), armor_class);
-
         if stealth_disadvantage {
-            equipment.add_effect(registry::effects::ARMOR_STEALTH_DISADVANTAGE_ID.clone());
+            effects.push(registry::effects::ARMOR_STEALTH_DISADVANTAGE_ID.clone());
         }
 
         Armor {
-            equipment,
+            item,
             armor_type,
-            armor_class: armor_class_modifiers,
-            max_dexterity_bonus,
+            armor_class: ArmorClass::new(armor_class, max_dexterity_bonus),
             stealth_disadvantage,
+            effects,
         }
     }
 
-    pub fn item(&self) -> &Item {
-        &self.equipment.item
+    pub fn clothing(item: Item, effects: Vec<EffectId>) -> Armor {
+        Armor::new(item, ArmorType::Clothing, 10, i32::MAX, false, effects)
     }
 
-    pub fn clothing(equipment: EquipmentItem) -> Armor {
-        Armor::new(equipment, ArmorType::Clothing, 10, i32::MAX, false)
-    }
-
-    pub fn light(equipment: EquipmentItem, armor_class: i32) -> Armor {
-        Armor::new(equipment, ArmorType::Light, armor_class, i32::MAX, false)
-    }
-
-    pub fn medium(equipment: EquipmentItem, armor_class: i32, stealth_disadvantage: bool) -> Armor {
+    pub fn light(item: Item, armor_class: i32, effects: Vec<EffectId>) -> Armor {
         Armor::new(
-            equipment,
+            item,
+            ArmorType::Light,
+            armor_class,
+            i32::MAX,
+            false,
+            effects,
+        )
+    }
+
+    pub fn medium(
+        item: Item,
+        armor_class: i32,
+        stealth_disadvantage: bool,
+        effects: Vec<EffectId>,
+    ) -> Armor {
+        Armor::new(
+            item,
             ArmorType::Medium,
             armor_class,
             2,
             stealth_disadvantage,
+            effects,
         )
     }
 
-    pub fn heavy(equipment: EquipmentItem, armor_class: i32) -> Armor {
-        Armor::new(equipment, ArmorType::Heavy, armor_class, 0, true)
+    pub fn heavy(item: Item, armor_class: i32, effects: Vec<EffectId>) -> Armor {
+        Armor::new(item, ArmorType::Heavy, armor_class, 0, true, effects)
     }
 
-    pub fn armor_class(&self, ability_scores: &AbilityScoreMap) -> ModifierSet {
-        if self.max_dexterity_bonus == 0 {
-            return self.armor_class.clone();
-        }
-
-        let dex_mod = ability_scores
-            .ability_modifier(Ability::Dexterity)
-            .total()
-            .min(self.max_dexterity_bonus);
-
-        let mut armor_class_modifiers = self.armor_class.clone();
-        armor_class_modifiers.add_modifier(ModifierSource::Ability(Ability::Dexterity), dex_mod);
-        armor_class_modifiers
+    pub fn armor_class(&self, ability_scores: &AbilityScoreMap) -> ArmorClass {
+        let mut armor_class = self.armor_class.clone();
+        let dex_bonus = ability_scores
+            .get(Ability::Dexterity)
+            .ability_modifier()
+            .total();
+        armor_class.add_modifier(ModifierSource::Ability(Ability::Dexterity), dex_bonus);
+        armor_class
     }
 
     pub fn effects(&self) -> &Vec<EffectId> {
-        self.equipment.effects()
+        &self.effects
+    }
+}
+
+impl SlotProvider for Armor {
+    fn valid_slots(&self) -> &'static [EquipmentSlot] {
+        &[EquipmentSlot::Armor]
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::fixtures;
+    use crate::{components::ability::AbilityScore, test_utils::fixtures};
 
     use super::*;
 
@@ -111,7 +152,7 @@ mod tests {
         let armor = fixtures::armor::clothing();
         assert_eq!(armor.armor_type, ArmorType::Clothing);
         assert_eq!(armor.armor_class.total(), 10);
-        assert_eq!(armor.max_dexterity_bonus, i32::MAX);
+        assert_eq!(armor.armor_class.max_dexterity_bonus, i32::MAX);
         assert_eq!(armor.stealth_disadvantage, false);
     }
 
@@ -120,7 +161,7 @@ mod tests {
         let armor = fixtures::armor::light_armor();
         assert_eq!(armor.armor_type, ArmorType::Light);
         assert_eq!(armor.armor_class.total(), 12);
-        assert_eq!(armor.max_dexterity_bonus, i32::MAX);
+        assert_eq!(armor.armor_class.max_dexterity_bonus, i32::MAX);
         assert_eq!(armor.stealth_disadvantage, false);
     }
 
@@ -129,7 +170,7 @@ mod tests {
         let armor = fixtures::armor::medium_armor();
         assert_eq!(armor.armor_type, ArmorType::Medium);
         assert_eq!(armor.armor_class.total(), 14);
-        assert_eq!(armor.max_dexterity_bonus, 2);
+        assert_eq!(armor.armor_class.max_dexterity_bonus, 2);
         assert_eq!(armor.stealth_disadvantage, false);
     }
 
@@ -138,7 +179,72 @@ mod tests {
         let armor = fixtures::armor::heavy_armor();
         assert_eq!(armor.armor_type, ArmorType::Heavy);
         assert_eq!(armor.armor_class.total(), 18);
-        assert_eq!(armor.max_dexterity_bonus, 0);
+        assert_eq!(armor.armor_class.max_dexterity_bonus, 0);
         assert_eq!(armor.stealth_disadvantage, true);
+    }
+
+    #[test]
+    fn armor_class_add_and_remove_modifier() {
+        let mut armor_class = ArmorClass::new(10, 2);
+        assert_eq!(armor_class.total(), 10);
+
+        armor_class.add_modifier(ModifierSource::Custom("Test".to_string()), 3);
+        assert_eq!(armor_class.total(), 13);
+
+        armor_class.remove_modifier(&ModifierSource::Custom("Test".to_string()));
+        assert_eq!(armor_class.total(), 10);
+    }
+
+    #[test]
+    fn armor_effects_are_set_correctly() {
+        let effects = vec![EffectId::from_str("test_effect")];
+        let armor = Armor::clothing(Item::default(), effects.clone());
+        assert_eq!(armor.effects(), &effects);
+    }
+
+    #[test]
+    fn armor_class_with_dexterity_bonus() {
+        let mut ability_scores = AbilityScoreMap::new();
+        ability_scores.set(
+            Ability::Dexterity,
+            AbilityScore::new(Ability::Dexterity, 16),
+        ); // Modifier should be +3
+
+        let armor = Armor::light(Item::default(), 11, vec![]);
+        let armor_class = armor.armor_class(&ability_scores);
+
+        // Should be base (11) + dex mod (3)
+        assert_eq!(armor_class.total(), 14);
+    }
+
+    #[test]
+    fn medium_armor_limits_dexterity_bonus() {
+        let mut ability_scores = AbilityScoreMap::new();
+        ability_scores.set(
+            Ability::Dexterity,
+            AbilityScore::new(Ability::Dexterity, 20),
+        ); // Modifier should be +5
+
+        let armor = Armor::medium(Item::default(), 14, false, vec![]);
+        let armor_class = armor.armor_class(&ability_scores);
+
+        // Should only allow max dex bonus of 2
+        let dex_mod = armor_class.modifiers.total();
+        assert!(dex_mod <= armor_class.max_dexterity_bonus);
+    }
+
+    #[test]
+    fn heavy_armor_no_dexterity_bonus() {
+        let mut ability_scores = AbilityScoreMap::new();
+        ability_scores.set(
+            Ability::Dexterity,
+            AbilityScore::new(Ability::Dexterity, 18),
+        ); // Modifier should be +4
+
+        let armor = Armor::heavy(Item::default(), 16, vec![]);
+        let armor_class = armor.armor_class(&ability_scores);
+
+        // Should not add any dex bonus
+        assert_eq!(armor_class.total(), 16);
     }
 }

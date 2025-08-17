@@ -1,5 +1,7 @@
 use crate::components::items::{
-    equipment::{armor::Armor, equipment::EquipmentItem, weapon::Weapon},
+    equipment::{
+        armor::Armor, equipment::EquipmentItem, loadout::EquipmentInstance, weapon::Weapon,
+    },
     item::Item,
 };
 
@@ -19,8 +21,8 @@ impl ItemContainer for ItemInstance {
     fn item(&self) -> &Item {
         match self {
             ItemInstance::Item(item) => item,
-            ItemInstance::Armor(armor) => armor.item(),
-            ItemInstance::Weapon(weapon) => &weapon.equipment().item,
+            ItemInstance::Armor(armor) => &armor.item,
+            ItemInstance::Weapon(weapon) => weapon.item(),
             ItemInstance::Equipment(equipment) => &equipment.item,
         }
     }
@@ -43,6 +45,27 @@ impl_into_item_instance! {
     Armor => Armor,
     Weapon => Weapon,
     EquipmentItem => Equipment,
+}
+
+impl From<ItemInstance> for EquipmentInstance {
+    fn from(item: ItemInstance) -> EquipmentInstance {
+        match item {
+            ItemInstance::Armor(armor) => EquipmentInstance::Armor(armor),
+            ItemInstance::Weapon(weapon) => EquipmentInstance::Weapon(weapon),
+            ItemInstance::Equipment(equipment) => EquipmentInstance::Equipment(equipment),
+            _ => panic!("Cannot convert ItemInstance::Item to EquipmentInstance"),
+        }
+    }
+}
+
+impl Into<ItemInstance> for EquipmentInstance {
+    fn into(self) -> ItemInstance {
+        match self {
+            EquipmentInstance::Armor(armor) => ItemInstance::Armor(armor),
+            EquipmentInstance::Weapon(weapon) => ItemInstance::Weapon(weapon),
+            EquipmentInstance::Equipment(equipment) => ItemInstance::Equipment(equipment),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]

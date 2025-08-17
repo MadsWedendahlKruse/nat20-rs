@@ -15,6 +15,7 @@ use crate::components::{
         DamageRollHook, DamageRollResultHook, ResourceCostHook,
     },
     id::{EffectId, ResourceId},
+    items::equipment::armor::ArmorClass,
     modifier::{ModifierSet, ModifierSource},
     skill::Skill,
 };
@@ -103,7 +104,7 @@ impl Effect {
                 as AttackRollHook,
             post_attack_roll: Arc::new(|_: &World, _: Entity, _: &mut AttackRollResult| {})
                 as AttackRollResultHook,
-            on_armor_class: Arc::new(|_: &World, _: Entity, _: &mut ModifierSet| {})
+            on_armor_class: Arc::new(|_: &World, _: Entity, _: &mut ArmorClass| {})
                 as ArmorClassHook,
             pre_damage_roll: Arc::new(|_: &World, _: Entity, _: &mut DamageRoll| {})
                 as DamageRollHook,

@@ -109,8 +109,8 @@ static WEAPON_ATTACK_ROLL: LazyLock<
 > = LazyLock::new(|| {
     Arc::new(
         |world: &World, entity: Entity, action_context: &ActionContext| {
-            if let ActionContext::Weapon { weapon_type, hand } = action_context {
-                return systems::combat::attack_roll(world, entity, weapon_type, hand);
+            if let ActionContext::Weapon { slot } = action_context {
+                return systems::combat::attack_roll(world, entity, slot);
             }
             panic!("Action context must be Weapon");
         },
@@ -122,8 +122,8 @@ static WEAPON_DAMAGE_ROLL: LazyLock<
 > = LazyLock::new(|| {
     Arc::new(
         |world: &World, entity: Entity, action_context: &ActionContext| {
-            if let ActionContext::Weapon { weapon_type, hand } = action_context {
-                return systems::combat::damage_roll(world, entity, weapon_type, hand);
+            if let ActionContext::Weapon { slot } = action_context {
+                return systems::combat::damage_roll(world, entity, slot);
             }
             panic!("Action context must be Weapon");
         },
@@ -135,10 +135,10 @@ static WEAPON_TARGETING: LazyLock<
 > = LazyLock::new(|| {
     Arc::new(
         |world: &World, entity: Entity, action_context: &ActionContext| {
-            if let ActionContext::Weapon { weapon_type, hand } = action_context {
+            if let ActionContext::Weapon { slot } = action_context {
                 let (normal_range, max_range) =
                     systems::helpers::get_component::<Loadout>(world, entity)
-                        .weapon_in_hand(weapon_type, hand)
+                        .weapon_in_hand(slot)
                         .unwrap()
                         .range();
                 TargetingContext {

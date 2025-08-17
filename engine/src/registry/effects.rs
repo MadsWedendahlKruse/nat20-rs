@@ -14,7 +14,7 @@ use crate::{
             hooks::D20CheckHooks,
         },
         id::EffectId,
-        items::equipment::{armor::ArmorType, loadout, weapon::WeaponType},
+        items::equipment::{armor::ArmorType, loadout, weapon::WeaponKind},
         modifier::ModifierSource,
         resource::{RechargeRule, Resource, ResourceMap},
         skill::{Skill, SkillSet},
@@ -257,7 +257,7 @@ static FIGHTING_STYLE_ARCHERY: LazyLock<Effect> = LazyLock::new(|| {
     );
     effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
         if match &attack_roll.source {
-            DamageSource::Weapon(weapon_type) => *weapon_type == WeaponType::Ranged,
+            DamageSource::Weapon(weapon_type) => *weapon_type == WeaponKind::Ranged,
             _ => false,
         } {
             attack_roll.d20_check.add_modifier(
@@ -308,14 +308,14 @@ static FIGHTING_STYLE_GREAT_WEAPON_FIGHTING: LazyLock<Effect> = LazyLock::new(||
     effect.post_damage_roll = Arc::new(|world, entity, damage_roll_result| {
         // Great weapon fighting only applies to melee attacks (with both hands)
         if match &damage_roll_result.source {
-            DamageSource::Weapon(weapon_type) => *weapon_type != WeaponType::Melee,
+            DamageSource::Weapon(weapon_type) => *weapon_type != WeaponKind::Melee,
             _ => false,
         } {
             return;
         }
 
         let loadout = systems::helpers::get_component::<loadout::Loadout>(world, entity);
-        if !loadout.is_wielding_weapon_with_both_hands(&WeaponType::Melee) {
+        if !loadout.is_wielding_weapon_with_both_hands(&WeaponKind::Melee) {
             return;
         }
 
@@ -497,13 +497,7 @@ mod helpers {
 
         effect.on_resource_cost = Arc::new(|world, performer, context, resource_cost| {
             // Check that this is only applied for weapon attacks
-            if !matches!(
-                context,
-                ActionContext::Weapon {
-                    weapon_type: _,
-                    hand: _
-                }
-            ) {
+            if !matches!(context, ActionContext::Weapon { .. }) {
                 return;
             }
 

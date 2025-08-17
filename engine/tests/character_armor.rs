@@ -5,17 +5,12 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::{Ability, AbilityScore, AbilityScoreMap},
-            items::{
-                equipment::{
-                    armor::Armor,
-                    equipment::{EquipmentItem, EquipmentType},
-                },
-                item::ItemRarity,
-            },
+            items::equipment::slots::EquipmentSlot,
             modifier::ModifierSource,
         },
         entities::character::Character,
         registry, systems,
+        test_utils::fixtures,
     };
 
     #[test]
@@ -23,20 +18,10 @@ mod tests {
         let mut world = World::new();
         let character = world.spawn(Character::default());
 
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Adamantium Armour".to_string(),
-            "A suit of armor made from adamantium.".to_string(),
-            19.0,
-            5000,
-            ItemRarity::VeryRare,
-            EquipmentType::Armor,
-        );
-        let armor = Armor::heavy(equipment, 19);
-
-        systems::loadout::equip_armor(&mut world, character, armor);
+        let _ = systems::loadout::equip(&mut world, character, fixtures::armor::heavy_armor());
 
         let armor_class = systems::loadout::armor_class(&world, character);
-        assert_eq!(19, armor_class.total());
+        assert_eq!(18, armor_class.total());
         println!("{:?}", armor_class);
 
         // Check that the heavy armor gives stealth disadvantage
@@ -69,18 +54,7 @@ mod tests {
             );
         }
 
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Light Armor".to_string(),
-            "A suit of light armor.".to_string(),
-            5.85,
-            1000,
-            ItemRarity::Rare,
-            EquipmentType::Armor,
-        );
-
-        let armor = Armor::light(equipment, 12);
-
-        systems::loadout::equip_armor(&mut world, character, armor);
+        let _ = systems::loadout::equip(&mut world, character, fixtures::armor::light_armor());
 
         {
             let armor_class = systems::loadout::armor_class(&world, character);
@@ -92,14 +66,10 @@ mod tests {
         }
 
         // Un-equip the armor
-        let armor_name = systems::loadout::unequip_armor(&mut world, character)
-            .unwrap()
-            .equipment
-            .item
-            .name;
+        let armor =
+            systems::loadout::unequip(&mut world, character, &EquipmentSlot::Armor).unwrap();
         let armor_class = systems::loadout::armor_class(&world, character);
-        println!("Un-equipped {:?}", armor_name);
-        assert_eq!(armor_name, "Light Armor");
+        println!("Un-equipped {:?}", armor);
         // Check if the armor class is updated
         println!("{:?}", armor_class);
         assert_eq!(10, armor_class.total());

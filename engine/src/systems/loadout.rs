@@ -1,14 +1,10 @@
 use hecs::{Entity, Ref, World};
 
 use crate::{
-    components::{
-        items::equipment::{
-            armor::Armor,
-            equipment::{EquipmentItem, GeneralEquipmentSlot, HandSlot},
-            loadout::{Loadout, TryEquipError},
-            weapon::{Weapon, WeaponType},
-        },
-        modifier::ModifierSet,
+    components::items::equipment::{
+        armor::ArmorClass,
+        loadout::{EquipmentInstance, Loadout, TryEquipError},
+        slots::EquipmentSlot,
     },
     systems,
 };
@@ -21,35 +17,18 @@ pub fn loadout_mut(world: &mut World, entity: Entity) -> hecs::RefMut<'_, Loadou
     systems::helpers::get_component_mut::<Loadout>(world, entity)
 }
 
-pub fn equip_armor(world: &mut World, entity: Entity, armor: Armor) -> Option<Armor> {
-    let unequipped_armor = loadout_mut(world, entity).equip_armor(armor.clone());
-    if let Some(armor) = &unequipped_armor {
-        systems::effects::remove_effects(world, entity, armor.effects());
-    }
-    systems::effects::add_effects(world, entity, armor.effects());
-    unequipped_armor
-}
-
-pub fn unequip_armor(world: &mut World, entity: Entity) -> Option<Armor> {
-    let unequiped_armor = loadout_mut(world, entity).unequip_armor();
-    if let Some(armor) = &unequiped_armor {
-        systems::effects::remove_effects(world, entity, armor.effects());
-    }
-    unequiped_armor
-}
-
-pub fn armor_class(world: &World, entity: Entity) -> ModifierSet {
-    loadout(world, entity).armor_class(world, entity)
-}
-
-pub fn equip_item(
+pub fn equip_in_slot<T>(
     world: &mut World,
     entity: Entity,
-    slot: &GeneralEquipmentSlot,
-    item: EquipmentItem,
-) -> Result<Option<EquipmentItem>, TryEquipError> {
-    let unequipped_item = loadout_mut(world, entity).equip_item(slot, item)?;
-    if let Some(item) = &unequipped_item {
+    slot: &EquipmentSlot,
+    equipment: T,
+) -> Result<Vec<EquipmentInstance>, TryEquipError>
+where
+    T: Into<EquipmentInstance>,
+{
+    let equipment = equipment.into();
+    let unequipped_items = loadout_mut(world, entity).equip_in_slot(slot, equipment)?;
+    for item in &unequipped_items {
         systems::effects::remove_effects(world, entity, item.effects());
     }
     let effects = loadout(world, entity)
@@ -58,50 +37,40 @@ pub fn equip_item(
         .effects()
         .clone();
     systems::effects::add_effects(world, entity, &effects);
-    Ok(unequipped_item)
+    Ok(unequipped_items)
 }
 
-pub fn unequip_item(
+pub fn equip<T>(
     world: &mut World,
     entity: Entity,
-    slot: &GeneralEquipmentSlot,
-) -> Option<EquipmentItem> {
-    let unequipped_item = loadout_mut(world, entity).unequip_item(slot);
+    equipment: T,
+) -> Result<Vec<EquipmentInstance>, TryEquipError>
+where
+    T: Into<EquipmentInstance>,
+{
+    let equipment = equipment.into();
+    // TODO: Slightly less performant than calling `equip_in_slot` directly
+    let effects = equipment.effects().clone();
+    let unequipped_items = loadout_mut(world, entity).equip(equipment)?;
+    for item in &unequipped_items {
+        systems::effects::remove_effects(world, entity, item.effects());
+    }
+    systems::effects::add_effects(world, entity, &effects);
+    Ok(unequipped_items)
+}
+
+pub fn unequip(
+    world: &mut World,
+    entity: Entity,
+    slot: &EquipmentSlot,
+) -> Option<EquipmentInstance> {
+    let unequipped_item = loadout_mut(world, entity).unequip(slot);
     if let Some(item) = &unequipped_item {
         systems::effects::remove_effects(world, entity, item.effects());
     }
     unequipped_item
 }
 
-pub fn equip_weapon(
-    world: &mut World,
-    entity: Entity,
-    weapon: Weapon,
-    hand: HandSlot,
-) -> Result<Vec<Weapon>, TryEquipError> {
-    let weapon_type = weapon.weapon_type().clone();
-    let unequipped_weapons = loadout_mut(world, entity).equip_weapon(weapon, hand)?;
-    for weapon in &unequipped_weapons {
-        systems::effects::remove_effects(world, entity, weapon.effects());
-    }
-    let effects = loadout(world, entity)
-        .weapon_in_hand(&weapon_type, &hand)
-        .unwrap()
-        .effects()
-        .clone();
-    systems::effects::add_effects(world, entity, &effects);
-    Ok(unequipped_weapons)
-}
-
-pub fn unequip_weapon(
-    world: &mut World,
-    entity: Entity,
-    weapon_type: &WeaponType,
-    hand: HandSlot,
-) -> Option<Weapon> {
-    let unequipped_weapon = loadout_mut(world, entity).unequip_weapon(weapon_type, hand);
-    if let Some(weapon) = &unequipped_weapon {
-        systems::effects::remove_effects(world, entity, weapon.effects());
-    }
-    unequipped_weapon
+pub fn armor_class(world: &World, entity: Entity) -> ArmorClass {
+    loadout(world, entity).armor_class(world, entity)
 }

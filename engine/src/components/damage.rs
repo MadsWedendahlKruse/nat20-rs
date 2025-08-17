@@ -6,7 +6,7 @@ use crate::{
     components::{
         d20_check::{D20Check, D20CheckResult},
         dice::{DiceSet, DiceSetRoll, DiceSetRollResult, DieSize},
-        items::equipment::weapon::{Weapon, WeaponType},
+        items::equipment::weapon::{Weapon, WeaponKind},
         modifier::{ModifierSet, ModifierSource},
     },
     systems::{self},
@@ -87,13 +87,13 @@ impl fmt::Display for DamageComponentResult {
 pub enum DamageSource {
     // TODO: Could also just use the entire weapon instead? Would be a lot of cloning unless
     // we introduce a lifetime for a reference
-    Weapon(WeaponType),
+    Weapon(WeaponKind),
     Spell,
 }
 
 impl DamageSource {
     pub fn from_weapon(weapon: &Weapon) -> Self {
-        Self::Weapon(weapon.weapon_type().clone())
+        Self::Weapon(weapon.kind().clone())
     }
 }
 
@@ -490,7 +490,6 @@ mod tests {
             ability::Ability,
             actions::action::{ActionContext, ActionKind, ActionProvider},
             id::SpellId,
-            items::equipment::equipment::HandSlot,
             modifier::{ModifierSet, ModifierSource},
         },
         test_utils::fixtures,
@@ -783,7 +782,7 @@ mod tests {
                 ),
                 damage_type: DamageType::Fire,
             }],
-            source: DamageSource::Weapon(WeaponType::Melee),
+            source: DamageSource::Weapon(WeaponKind::Melee),
         }
     }
 
@@ -814,7 +813,7 @@ mod tests {
                 },
             ],
             total: 9,
-            source: DamageSource::Weapon(WeaponType::Melee),
+            source: DamageSource::Weapon(WeaponKind::Melee),
         }
     }
 }

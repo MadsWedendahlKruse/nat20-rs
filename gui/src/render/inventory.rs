@@ -1,17 +1,14 @@
 use hecs::{Entity, World};
 use nat20_rs::{
     components::items::{
-        equipment::{
-            equipment::{EquipmentSlot, GeneralEquipmentSlot, HandSlot},
-            weapon::WeaponType,
-        },
-        inventory::{Inventory, ItemContainer},
+        equipment::{slots::EquipmentSlot, weapon::WeaponKind},
+        inventory::{Inventory, ItemContainer, ItemInstance},
     },
     systems,
 };
 use strum::IntoEnumIterator;
 
-use crate::table_with_columns;
+use crate::{render::utils::ImguiRenderableWithContext, table_with_columns};
 
 #[derive(Debug, Clone)]
 pub enum ContainerSlot {
@@ -64,6 +61,18 @@ impl InteractEvent {
     }
 }
 
+fn render_item_button(ui: &imgui::Ui, item_name: &str) -> bool {
+    let words = item_name.split_whitespace();
+    // Render first three lettes of each word
+    let short_name = words
+        .map(|word| word.chars().take(3).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    ui.button_with_size(short_name, [30.0, 30.0])
+}
+
+static INVENTORY_ITEMS_PER_ROW: usize = 8;
+
 pub fn render_inventory(
     ui: &imgui::Ui,
     world: &mut World,
@@ -73,18 +82,35 @@ pub fn render_inventory(
 
     let inventory = systems::helpers::get_component::<Inventory>(world, entity);
     let mut event = None;
+    let items = inventory.items();
+    let rows = (items.len() + INVENTORY_ITEMS_PER_ROW) / INVENTORY_ITEMS_PER_ROW;
+    let total_items = rows * INVENTORY_ITEMS_PER_ROW;
+    for i in 0..total_items {
+        if i < items.len() {
+            let slot = ContainerSlot::Inventory(i);
 
-    for (i, item) in inventory.items().iter().enumerate() {
-        let slot = ContainerSlot::Inventory(i);
+            let item_name = items[i].item().name.clone();
+            if render_item_button(ui, item_name.as_str()) {
+                // Handle item click (don't think we need to do anything here)
+                println!("Clicked on item: {}", item_name);
+            }
 
-        let item_name = item.item().name.clone();
-        if ui.button(item_name.clone()) {
-            // Handle item click (don't think we need to do anything here)
-            println!("Clicked on item: {}", item_name);
+            if ui.is_item_hovered() {
+                ui.tooltip(|| {
+                    items[i].render_with_context(ui, (world, entity));
+                });
+            }
+
+            if event.is_none() {
+                event = InteractEvent::from_ui(ui, entity, slot);
+            }
+        } else {
+            // Render empty button for unused slots
+            ui.button_with_size(format!("##{}", i), [30.0, 30.0]);
         }
 
-        if event.is_none() {
-            event = InteractEvent::from_ui(ui, entity, slot);
+        if (i + 1) % INVENTORY_ITEMS_PER_ROW != 0 && i + 1 < total_items {
+            ui.same_line();
         }
     }
 
@@ -95,95 +121,38 @@ fn render_loadout(ui: &imgui::Ui, world: &mut World, entity: Entity) -> Option<I
     let loadout = systems::loadout::loadout(world, entity);
     let mut event = None;
 
-    ui.separator_with_text("Weapons");
-    if let Some(table) = table_with_columns!(ui, "Weapons", "Hand", "Weapon") {
-        for weapon_type in WeaponType::iter() {
-            // Render separator for each weapon type
-            ui.table_next_row_with_flags(imgui::TableRowFlags::empty());
-            ui.table_next_column();
-            ui.text_colored([0.7, 0.7, 0.7, 1.0], weapon_type.to_string());
-            ui.table_next_column();
-
-            for hand in HandSlot::iter() {
-                ui.table_next_column();
-                ui.text(hand.to_string());
-                ui.table_next_column();
-                if let Some(weapon) = loadout.weapon_in_hand(&weapon_type, &hand) {
-                    ui.text(weapon.equipment().item.name.to_string());
-                    // if ui.is_item_hovered() {
-                    //     ui.tooltip(|| {
-                    //         weapon.render_with_context(ui, context);
-                    //     });
-                    // }
-
-                    let equipment_slot = match weapon_type {
-                        WeaponType::Melee => EquipmentSlot::Melee(hand),
-                        WeaponType::Ranged => EquipmentSlot::Ranged(hand),
-                    };
-                    let slot = ContainerSlot::Loadout(equipment_slot);
-
-                    if event.is_none() {
-                        event = InteractEvent::from_ui(ui, entity, slot);
-                    }
-                }
-            }
-        }
-
-        table.end();
-    }
-
-    ui.separator_with_text("Equipment");
-    if let Some(table) = table_with_columns!(ui, "Equipment", "Slot", "Item") {
-        // Armor is technically not considered equipment, but we can sneak
-        // it in here for now
-        ui.table_next_column();
-        ui.text(format!("{}", EquipmentSlot::Armor));
-        ui.table_next_column();
-        if let Some(armor) = loadout.armor() {
-            ui.text(armor.item().name.to_string());
-            if event.is_none() {
-                let slot = ContainerSlot::Loadout(EquipmentSlot::Armor);
-                event = InteractEvent::from_ui(ui, entity, slot);
-            }
-        }
-        for slot in GeneralEquipmentSlot::iter() {
-            // TODO: Maybe we should handle rings differently in the engine?
-            // Special handling for the ring slots
-            if matches!(slot, GeneralEquipmentSlot::Ring(_)) {
-                continue;
-            }
-
+    if let Some(table) = table_with_columns!(ui, "Loadout", "Slot", "Item") {
+        for slot in EquipmentSlot::iter() {
+            // Slot column
             ui.table_next_column();
             ui.text(slot.to_string());
+            // Item column
             ui.table_next_column();
+            let item = loadout.item_in_slot(&slot);
+            if let Some(item) = item {
+                if render_item_button(ui, item.item().name.as_str()) {
+                    // Handle item click (don't think we need to do anything here)
+                    println!("Clicked on loadout item: {}", item.item().name);
+                }
 
-            if let Some(item) = loadout.item_in_slot(&slot) {
-                ui.text(item.item.name.to_string());
+                if ui.is_item_hovered() {
+                    ui.tooltip(|| {
+                        // TODO: Consider implementing a dedicated render method for EquipmentInstance
+                        let item_instance: ItemInstance = item.clone().into();
+                        item_instance.render_with_context(ui, (world, entity));
+                    });
+                }
 
                 if event.is_none() {
-                    let equipment_slot = EquipmentSlot::General(slot);
-                    event =
-                        InteractEvent::from_ui(ui, entity, ContainerSlot::Loadout(equipment_slot));
+                    event = InteractEvent::from_ui(ui, entity, ContainerSlot::Loadout(slot));
                 }
+            } else {
+                // Render empty button for unused slots
+                ui.button_with_size(format!("##{}", slot), [30.0, 30.0]);
             }
         }
-        // Render ring slots separately
-        for ring_number in 0..2 {
-            let slot = GeneralEquipmentSlot::Ring(ring_number);
-            ui.table_next_column();
-            ui.text(slot.to_string());
-            ui.table_next_column();
-            if let Some(item) = loadout.item_in_slot(&slot) {
-                ui.text(item.item.name.to_string());
-                if event.is_none() {
-                    let equipment_slot = EquipmentSlot::General(slot);
-                    event =
-                        InteractEvent::from_ui(ui, entity, ContainerSlot::Loadout(equipment_slot));
-                }
-            }
-        }
-
-        table.end();
+    } else {
+        ui.text("No loadout available.");
     }
 
     event
@@ -206,11 +175,9 @@ pub fn render_loadout_inventory(ui: &imgui::Ui, world: &mut World, entity: Entit
 
             InteractMode::DoubleClick => {
                 let result = systems::inventory::unequip(world, entity, &slot);
-                if let Ok(Some(item)) = result {
+                if let Some(item) = result {
                     println!("Unequipped item: {:?}", item);
                     systems::inventory::add(world, entity, item);
-                } else {
-                    println!("Failed to unequip item from slot: {:?}", slot);
                 }
             }
 
@@ -260,6 +227,19 @@ pub fn render_loadout_inventory(ui: &imgui::Ui, world: &mut World, entity: Entit
             InteractMode::Drag => {
                 // Handle drag on inventory item
                 println!("Dragging inventory item: {:?}", item.item().name);
+            }
+        }
+    }
+}
+
+impl ImguiRenderableWithContext<(&World, Entity)> for ItemInstance {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
+        match self {
+            ItemInstance::Weapon(weapon) => {
+                weapon.render_with_context(ui, context);
+            }
+            _ => {
+                ui.text("Placeholder tooltip :^)");
             }
         }
     }

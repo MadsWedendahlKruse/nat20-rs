@@ -3,8 +3,6 @@ use std::fmt;
 use hecs::Entity;
 use uuid::Uuid;
 
-pub type ItemId = Uuid;
-
 pub type EncounterId = Uuid;
 
 macro_rules! id_newtypes {
@@ -29,6 +27,7 @@ macro_rules! id_newtypes {
 }
 
 id_newtypes!(
+    ItemId,
     EffectId,
     ResourceId,
     ActionId,

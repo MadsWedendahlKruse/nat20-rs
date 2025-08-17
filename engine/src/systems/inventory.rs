@@ -3,12 +3,10 @@ use hecs::{Entity, World};
 use crate::{
     components::items::{
         equipment::{
-            equipment::{EquipmentSlot, HandSlot},
-            loadout::{Loadout, TryEquipError},
-            weapon::{self, WeaponProperties, WeaponType},
+            loadout::{EquipmentInstance, TryEquipError},
+            slots::EquipmentSlot,
         },
-        inventory::{Inventory, ItemContainer, ItemInstance},
-        item::Item,
+        inventory::{Inventory, ItemInstance},
     },
     systems,
 };
@@ -22,107 +20,26 @@ where
     T: Into<ItemInstance>,
 {
     let item = item.into();
-    let item_name = item.item().name.clone();
+    let equipment: EquipmentInstance = item.into();
 
-    match item {
-        ItemInstance::Armor(armor) => {
-            if let Some(unequippped_armor) = systems::loadout::equip_armor(world, entity, armor) {
-                Ok(vec![ItemInstance::Armor(unequippped_armor)])
-            } else {
-                Ok(vec![])
-            }
-        }
+    let unequippped_items = systems::loadout::equip(world, entity, equipment)?;
 
-        ItemInstance::Equipment(equipment) => {
-            let valid_slots = equipment.kind.valid_slots();
-
-            let slot = if valid_slots.len() == 1 {
-                valid_slots[0].clone()
-            } else {
-                // TODO: Do something else
-                valid_slots[0].clone()
-            };
-            let slot = match slot {
-                EquipmentSlot::General(slot) => slot,
-                _ => {
-                    return Err(TryEquipError::InvalidSlot {
-                        item: item_name,
-                        slot,
-                    });
-                }
-            };
-
-            if let Some(unequipped_item) =
-                systems::loadout::equip_item(world, entity, &slot, equipment.clone())?
-            {
-                Ok(vec![ItemInstance::Equipment(unequipped_item)])
-            } else {
-                Ok(vec![])
-            }
-        }
-
-        ItemInstance::Weapon(weapon) => {
-            let weapon_type = weapon.weapon_type();
-
-            let hand = if weapon.has_property(&WeaponProperties::TwoHanded) {
-                HandSlot::Main
-            } else {
-                if systems::helpers::get_component::<Loadout>(world, entity)
-                    .has_weapon_in_hand(weapon_type, &HandSlot::Main)
-                {
-                    HandSlot::Off
-                } else {
-                    HandSlot::Main
-                }
-            };
-
-            let unequipped_weapons = systems::loadout::equip_weapon(world, entity, weapon, hand)?;
-            Ok(unequipped_weapons
-                .into_iter()
-                .map(ItemInstance::Weapon)
-                .collect())
-        }
-
-        ItemInstance::Item(item) => panic!("Cannot equip a regular item: {}", item_name),
-    }
+    Ok(unequippped_items
+        .iter()
+        .map(|item| <EquipmentInstance as Into<ItemInstance>>::into(item.clone()))
+        .collect::<Vec<ItemInstance>>())
 }
 
-pub fn unequip(
-    world: &mut World,
-    entity: Entity,
-    slot: &EquipmentSlot,
-) -> Result<Option<ItemInstance>, TryEquipError> {
-    match slot {
-        EquipmentSlot::Armor => Ok(option_to_item_instance(systems::loadout::unequip_armor(
-            world, entity,
-        ))),
-
-        EquipmentSlot::Melee(hand) => Ok(option_to_item_instance(
-            systems::loadout::unequip_weapon(world, entity, &WeaponType::Melee, *hand),
-        )),
-
-        EquipmentSlot::Ranged(hand) => Ok(option_to_item_instance(
-            systems::loadout::unequip_weapon(world, entity, &WeaponType::Ranged, *hand),
-        )),
-
-        EquipmentSlot::General(slot) => Ok(option_to_item_instance(
-            systems::loadout::unequip_item(world, entity, slot),
-        )),
-    }
+pub fn unequip(world: &mut World, entity: Entity, slot: &EquipmentSlot) -> Option<ItemInstance> {
+    let unequipped_item = systems::loadout::unequip(world, entity, slot);
+    unequipped_item.map(|item| item.into())
 }
 
-fn option_to_item_instance<T>(item: Option<T>) -> Option<ItemInstance>
+pub fn add<T>(world: &mut World, entity: Entity, item: T)
 where
     T: Into<ItemInstance>,
 {
-    match item {
-        Some(item) => Some(item.into()),
-        None => None,
-    }
-}
-
-pub fn add(world: &mut World, entity: Entity, item: ItemInstance) {
-    systems::helpers::get_component_mut::<Inventory>(world, entity).add(item);
+    systems::helpers::get_component_mut::<Inventory>(world, entity).add(item.into());
 }
 
 pub fn remove(world: &mut World, entity: Entity, index: usize) -> Option<ItemInstance> {

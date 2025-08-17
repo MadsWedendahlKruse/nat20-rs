@@ -1,6 +1,5 @@
-use std::{collections::HashMap, vec};
+use std::{collections::HashMap, ops::Deref, vec};
 
-use glutin::context;
 use hecs::{Entity, World};
 use nat20_rs::{
     components::{
@@ -19,18 +18,12 @@ use nat20_rs::{
         hit_points::HitPoints,
         id::{FeatId, RaceId, SpellId, SubraceId},
         items::{
-            equipment::{
-                equipment::{EquipmentSlot, GeneralEquipmentSlot, HandSlot},
-                loadout::Loadout,
-                weapon::{Weapon, WeaponType},
-            },
-            inventory::Inventory,
+            equipment::{armor::ArmorClass, loadout::Loadout, weapon::Weapon},
             item::Item,
         },
         level::CharacterLevels,
         modifier::ModifierSet,
         proficiency::{Proficiency, ProficiencyLevel},
-        race::Race,
         resource::ResourceMap,
         saving_throw::SavingThrowSet,
         skill::{Skill, SkillSet, skill_ability},
@@ -532,81 +525,6 @@ impl ImguiRenderable for Vec<FeatId> {
     }
 }
 
-struct LoadoutRenderContext {
-    ability_scores: AbilityScoreMap,
-    wielding_both_hands: HashMap<WeaponType, bool>,
-}
-
-impl ImguiRenderableMutWithContext<&LoadoutRenderContext> for Loadout {
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: &LoadoutRenderContext) {
-        ui.separator_with_text("Weapons");
-        if let Some(table) = table_with_columns!(ui, "Weapons", "Hand", "Weapon") {
-            for weapon_type in WeaponType::iter() {
-                // Render separator for each weapon type
-                ui.table_next_row_with_flags(imgui::TableRowFlags::empty());
-                ui.table_next_column();
-                ui.text_colored([0.7, 0.7, 0.7, 1.0], weapon_type.to_string());
-                ui.table_next_column();
-
-                for hand in HandSlot::iter() {
-                    ui.table_next_column();
-                    ui.text(hand.to_string());
-                    ui.table_next_column();
-                    if let Some(weapon) = self.weapon_in_hand(&weapon_type, &hand) {
-                        ui.text(weapon.equipment().item.name.to_string());
-                        if ui.is_item_hovered() {
-                            ui.tooltip(|| {
-                                weapon.render_with_context(ui, context);
-                            });
-                        }
-                    }
-                }
-            }
-
-            table.end();
-        }
-
-        ui.separator_with_text("Equipment");
-        if let Some(table) = table_with_columns!(ui, "Equipment", "Slot", "Item") {
-            // Armor is technically not considered equipment, but we can sneak
-            // it in here for now
-            ui.table_next_column();
-            ui.text(format!("{}", EquipmentSlot::Armor));
-            ui.table_next_column();
-            if let Some(armor) = self.armor() {
-                ui.text(armor.item().name.to_string());
-            }
-            for slot in GeneralEquipmentSlot::iter() {
-                // TODO: Maybe we should handle rings differently in the engine?
-                // Special handling for the ring slots
-                if matches!(slot, GeneralEquipmentSlot::Ring(_)) {
-                    continue;
-                }
-
-                ui.table_next_column();
-                ui.text(slot.to_string());
-                ui.table_next_column();
-
-                if let Some(item) = self.item_in_slot(&slot) {
-                    ui.text(item.item.name.to_string());
-                }
-            }
-            // Render ring slots separately
-            for ring_number in 0..2 {
-                let slot = GeneralEquipmentSlot::Ring(ring_number);
-                ui.table_next_column();
-                ui.text(slot.to_string());
-                ui.table_next_column();
-                if let Some(item) = self.item_in_slot(&slot) {
-                    ui.text(item.item.name.to_string());
-                }
-            }
-
-            table.end();
-        }
-    }
-}
-
 fn render_item_misc(ui: &imgui::Ui, item: &Item) {
     ui.text_colored([0.7, 0.7, 0.7, 1.0], &item.description);
     // Fake right-aligned text for weight and value
@@ -617,12 +535,14 @@ fn render_item_misc(ui: &imgui::Ui, item: &Item) {
     ui.text(text);
 }
 
-impl ImguiRenderableWithContext<&LoadoutRenderContext> for Weapon {
-    fn render_with_context(&self, ui: &imgui::Ui, context: &LoadoutRenderContext) {
-        ui.separator_with_text(&self.equipment().item.name);
+impl ImguiRenderableWithContext<(&World, Entity)> for Weapon {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
+        let (world, entity) = context;
+        ui.separator_with_text(&self.item().name);
         let damage_roll = self.damage_roll(
-            &context.ability_scores,
-            *context.wielding_both_hands.get(self.weapon_type()).unwrap(),
+            systems::helpers::get_component::<AbilityScoreMap>(world, entity).deref(),
+            systems::helpers::get_component::<Loadout>(world, entity)
+                .is_wielding_weapon_with_both_hands(self.kind()),
         );
         damage_roll.render(ui);
         ui.separator();
@@ -631,7 +551,22 @@ impl ImguiRenderableWithContext<&LoadoutRenderContext> for Weapon {
             ui.text(format!("{}", property));
         }
         ui.separator();
-        render_item_misc(ui, &self.equipment().item);
+        render_item_misc(ui, &self.item());
+    }
+}
+
+impl ImguiRenderable for ArmorClass {
+    fn render(&self, ui: &imgui::Ui) {
+        ui.text(format!("{}", self.total()));
+        if ui.is_item_hovered() {
+            ui.tooltip(|| {
+                ui.text(format!("Base: {}", self.base));
+                if !self.modifiers.is_empty() {
+                    self.modifiers
+                        .render_with_context(ui, ModifierSetRenderMode::List(1));
+                }
+            });
+        }
     }
 }
 
@@ -826,7 +761,7 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                         ui.text("Armor Class:");
                         ui.same_line();
                         // TODO: New type for armor class
-                        armor_class.render_with_context(ui, ModifierSetRenderMode::Line);
+                        armor_class.render(ui);
 
                         ui.text("");
                         ui.text("Attack Roll:");

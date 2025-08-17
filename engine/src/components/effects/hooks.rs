@@ -7,13 +7,13 @@ use crate::components::{
     d20_check::{D20Check, D20CheckResult},
     damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
     id::ResourceId,
-    modifier::ModifierSet,
+    items::equipment::armor::ArmorClass,
 };
 
 pub type EffectHook = Arc<dyn Fn(&mut World, Entity) + Send + Sync>;
 pub type AttackRollHook = Arc<dyn Fn(&World, Entity, &mut AttackRoll) + Send + Sync>;
 pub type AttackRollResultHook = Arc<dyn Fn(&World, Entity, &mut AttackRollResult) + Send + Sync>;
-pub type ArmorClassHook = Arc<dyn Fn(&World, Entity, &mut ModifierSet) + Send + Sync>;
+pub type ArmorClassHook = Arc<dyn Fn(&World, Entity, &mut ArmorClass) + Send + Sync>;
 pub type D20CheckHook = Arc<dyn Fn(&World, Entity, &mut D20Check) + Send + Sync>;
 pub type D20CheckResultHook = Arc<dyn Fn(&World, Entity, &mut D20CheckResult) + Send + Sync>;
 pub type DamageRollHook = Arc<dyn Fn(&World, Entity, &mut DamageRoll) + Send + Sync>;

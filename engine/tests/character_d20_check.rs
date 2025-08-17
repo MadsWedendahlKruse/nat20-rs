@@ -10,7 +10,7 @@ mod tests {
             items::{
                 equipment::{
                     armor::Armor,
-                    equipment::{EquipmentItem, EquipmentType},
+                    equipment::{EquipmentItem, EquipmentKind},
                 },
                 item::ItemRarity,
             },
@@ -103,17 +103,7 @@ mod tests {
         let mut world = World::new();
         let character = world.spawn(Character::default());
 
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Adamantium Armour".to_string(),
-            "A suit of armor made from adamantium.".to_string(),
-            19.0,
-            5000,
-            ItemRarity::VeryRare,
-            EquipmentType::Armor,
-        );
-        let armor = Armor::heavy(equipment, 19);
-
-        systems::loadout::equip_armor(&mut world, character, armor);
+        let _ = systems::loadout::equip(&mut world, character, fixtures::armor::heavy_armor());
 
         let result = systems::helpers::get_component::<SkillSet>(&world, character).check(
             Skill::Stealth,

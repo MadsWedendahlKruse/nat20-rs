@@ -1,58 +1,73 @@
 pub mod armor {
-    use crate::components::items::{
-        equipment::{
-            armor::Armor,
-            equipment::{EquipmentItem, EquipmentType},
+    use crate::components::{
+        id::ItemId,
+        items::{
+            equipment::{
+                armor::Armor,
+                equipment::{EquipmentItem, EquipmentKind},
+            },
+            item::{Item, ItemRarity},
         },
-        item::ItemRarity,
     };
 
     pub fn clothing() -> Armor {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Clothes".to_string(),
-            "A test clothing item.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::Armor,
-        );
-        Armor::clothing(equipment)
+        Armor::clothing(
+            Item {
+                id: ItemId::from_str("item.clothing"),
+                name: "Clothing".to_string(),
+                description: "A simple set of clothing.".to_string(),
+                weight: 1.0,
+                value: 15,
+                rarity: ItemRarity::Common,
+            },
+            Vec::new(),
+        )
     }
 
     pub fn light_armor() -> Armor {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Leather Armor".to_string(),
-            "A test light armor item.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::Armor,
-        );
-        Armor::light(equipment, 12)
+        Armor::light(
+            Item {
+                id: ItemId::from_str("item.light_armor"),
+                name: "Leather Armor".to_string(),
+                description: "A test light armor item.".to_string(),
+                weight: 5.0,
+                value: 30,
+                rarity: ItemRarity::Common,
+            },
+            12,
+            Vec::new(),
+        )
     }
 
     pub fn medium_armor() -> Armor {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Chain Shirt".to_string(),
-            "A test medium armor item.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::Armor,
-        );
-        Armor::medium(equipment, 14, false)
+        Armor::medium(
+            Item {
+                id: ItemId::from_str("item.medium_armor"),
+                name: "Chain Shirt".to_string(),
+                description: "A test medium armor item.".to_string(),
+                weight: 20.0,
+                value: 50,
+                rarity: ItemRarity::Common,
+            },
+            14,
+            false,
+            Vec::new(),
+        )
     }
 
     pub fn heavy_armor() -> Armor {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Plate Armor".to_string(),
-            "A test heavy armor item.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::Armor,
-        );
-        Armor::heavy(equipment, 18)
+        Armor::heavy(
+            Item {
+                id: ItemId::from_str("item.heavy_armor"),
+                name: "Plate Armor".to_string(),
+                description: "A test heavy armor item.".to_string(),
+                weight: 65.0,
+                value: 1500,
+                rarity: ItemRarity::Common,
+            },
+            18,
+            Vec::new(),
+        )
     }
 }
 
@@ -62,120 +77,126 @@ pub mod weapons {
     use crate::components::{
         damage::DamageType,
         dice::{DiceSet, DieSize},
+        id::ItemId,
         items::{
             equipment::{
-                equipment::{EquipmentItem, EquipmentType},
-                weapon::{Weapon, WeaponCategory, WeaponProperties},
+                equipment::{EquipmentItem, EquipmentKind},
+                weapon::{Weapon, WeaponCategory, WeaponKind, WeaponProperties},
             },
-            item::ItemRarity,
+            item::{Item, ItemRarity},
         },
     };
 
     pub fn dagger_light() -> Weapon {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Dagger".to_string(),
-            "A test dagger.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::MeleeWeapon,
-        );
         Weapon::new(
-            equipment,
+            Item {
+                id: ItemId::from_str("item.dagger_light"),
+                name: "Dagger".to_string(),
+                description: "A test light dagger.".to_string(),
+                weight: 1.0,
+                value: 2,
+                rarity: ItemRarity::Common,
+            },
+            WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Light]),
             vec![(1, DieSize::D4, DamageType::Piercing)],
-            vec![],
+            Vec::new(),
+            Vec::new(),
         )
     }
 
     pub fn rapier_finesse() -> Weapon {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Rapier".to_string(),
-            "A test rapier.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::MeleeWeapon,
-        );
         Weapon::new(
-            equipment,
+            Item {
+                id: ItemId::from_str("item.rapier_finesse"),
+                name: "Rapier".to_string(),
+                description: "A test rapier with finesse.".to_string(),
+                weight: 1.0,
+                value: 25,
+                rarity: ItemRarity::Common,
+            },
+            WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
             vec![(1, DieSize::D8, DamageType::Piercing)],
-            vec![],
+            Vec::new(),
+            Vec::new(),
         )
     }
 
     pub fn trident_versatile() -> Weapon {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Trident".to_string(),
-            "A test trident.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::MeleeWeapon,
-        );
         let dice_set_two_handed = DiceSet {
             num_dice: 1,
             die_size: DieSize::D8,
         };
         Weapon::new(
-            equipment,
+            Item {
+                id: ItemId::from_str("item.trident_versatile"),
+                name: "Trident".to_string(),
+                description: "A versatile trident.".to_string(),
+                weight: 4.0,
+                value: 5,
+                rarity: ItemRarity::Common,
+            },
+            WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Versatile(dice_set_two_handed)]),
             vec![(1, DieSize::D6, DamageType::Piercing)],
-            vec![],
+            Vec::new(),
+            Vec::new(),
         )
     }
 
     pub fn greatsword_two_handed() -> Weapon {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Greatsword".to_string(),
-            "A test greatsword.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::MeleeWeapon,
-        );
         Weapon::new(
-            equipment,
+            Item {
+                id: ItemId::from_str("item.greatsword_two_handed"),
+                name: "Greatsword".to_string(),
+                description: "A two-handed greatsword.".to_string(),
+                weight: 6.0,
+                value: 50,
+                rarity: ItemRarity::Common,
+            },
+            WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::TwoHanded]),
             vec![(2, DieSize::D6, DamageType::Slashing)],
-            vec![],
+            Vec::new(),
+            Vec::new(),
         )
     }
 
     pub fn longbow() -> Weapon {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Longbow".to_string(),
-            "A test longbow.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::RangedWeapon,
-        );
         Weapon::new(
-            equipment,
+            Item {
+                id: ItemId::from_str("item.longbow"),
+                name: "Longbow".to_string(),
+                description: "A longbow with a range of 10/40 feet.".to_string(),
+                weight: 2.0,
+                value: 50,
+                rarity: ItemRarity::Common,
+            },
+            WeaponKind::Ranged,
             WeaponCategory::Martial,
-            HashSet::from([WeaponProperties::Range(10, 40)]),
+            HashSet::from([WeaponProperties::Range(10, 40), WeaponProperties::TwoHanded]),
             vec![(1, DieSize::D8, DamageType::Piercing)],
-            vec![],
+            Vec::new(),
+            Vec::new(),
         )
     }
 
     pub fn greatsword_flaming() -> Weapon {
-        let equipment: EquipmentItem = EquipmentItem::new(
-            "Flaming Greatsword".to_string(),
-            "A test flaming greatsword.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Rare,
-            EquipmentType::MeleeWeapon,
-        );
         Weapon::new(
-            equipment,
+            Item {
+                id: ItemId::from_str("item.greatsword_flaming"),
+                name: "Flaming Greatsword".to_string(),
+                description: "A magical greatsword that deals fire damage.".to_string(),
+                weight: 6.0,
+                value: 1000,
+                rarity: ItemRarity::Rare,
+            },
+            WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::from([
                 WeaponProperties::TwoHanded,
@@ -185,37 +206,49 @@ pub mod weapons {
                 (2, DieSize::D6, DamageType::Slashing),
                 (1, DieSize::D4, DamageType::Fire),
             ],
-            vec![],
+            Vec::new(),
+            Vec::new(),
         )
     }
 }
 
 pub mod equipment {
-    use crate::components::items::{
-        equipment::equipment::{EquipmentItem, EquipmentType},
-        item::ItemRarity,
+    use crate::components::{
+        id::ItemId,
+        items::{
+            equipment::equipment::{EquipmentItem, EquipmentKind},
+            item::{Item, ItemRarity},
+        },
     };
 
     pub fn boots() -> EquipmentItem {
-        EquipmentItem::new(
-            "Boots".to_string(),
-            "A test pair of boots.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::Boots,
-        )
+        EquipmentItem {
+            item: Item {
+                id: ItemId::from_str("item.boots"),
+                name: "Boots".to_string(),
+                description: "A test pair of boots.".to_string(),
+                weight: 1.8,
+                value: 11,
+                rarity: ItemRarity::Common,
+            },
+            kind: EquipmentKind::Boots,
+            effects: Vec::new(),
+        }
     }
 
     pub fn gloves() -> EquipmentItem {
-        EquipmentItem::new(
-            "Gloves".to_string(),
-            "A test pair of gloves.".to_string(),
-            1.8,
-            11,
-            ItemRarity::Common,
-            EquipmentType::Gloves,
-        )
+        EquipmentItem {
+            item: Item {
+                id: ItemId::from_str("item.gloves"),
+                name: "Gloves".to_string(),
+                description: "A test pair of gloves.".to_string(),
+                weight: 0.5,
+                value: 5,
+                rarity: ItemRarity::Common,
+            },
+            kind: EquipmentKind::Gloves,
+            effects: Vec::new(),
+        }
     }
 }
 
@@ -224,10 +257,7 @@ pub mod creatures {
     use hecs::{Entity, World};
 
     use crate::{
-        components::{
-            ability::Ability, items::equipment::equipment::HandSlot, modifier::ModifierSource,
-            skill::Skill,
-        },
+        components::{ability::Ability, modifier::ModifierSource, skill::Skill},
         systems::{self, level_up::LevelUpDecision},
     };
 
@@ -318,13 +348,8 @@ pub mod creatures {
                 ],
             );
 
-            systems::loadout::equip_armor(world, entity, fixtures::armor::heavy_armor());
-            let _ = systems::loadout::equip_weapon(
-                world,
-                entity,
-                fixtures::weapons::greatsword_flaming(),
-                HandSlot::Main,
-            );
+            let _ = systems::loadout::equip(world, entity, fixtures::armor::heavy_armor());
+            let _ = systems::loadout::equip(world, entity, fixtures::weapons::greatsword_flaming());
 
             EntityIdentifier::new(entity, name)
         }
@@ -383,7 +408,7 @@ pub mod creatures {
                 ],
             );
 
-            systems::loadout::equip_armor(world, entity, fixtures::armor::clothing());
+            let _ = systems::loadout::equip(world, entity, fixtures::armor::clothing());
 
             // TODO: Spellcasting ability should be set automatically based on class
             let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
@@ -450,7 +475,7 @@ pub mod creatures {
                 ],
             );
 
-            systems::loadout::equip_armor(world, entity, fixtures::armor::clothing());
+            let _ = systems::loadout::equip(world, entity, fixtures::armor::clothing());
 
             let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
             spellbook.update_spell_slots(5);
@@ -514,13 +539,8 @@ pub mod creatures {
                 ],
             );
 
-            systems::loadout::equip_armor(world, entity, fixtures::armor::medium_armor());
-            let _ = systems::loadout::equip_weapon(
-                world,
-                entity,
-                fixtures::weapons::dagger_light(),
-                HandSlot::Main,
-            );
+            let _ = systems::loadout::equip(world, entity, fixtures::armor::medium_armor());
+            let _ = systems::loadout::equip(world, entity, fixtures::weapons::dagger_light());
 
             EntityIdentifier::new(entity, name)
         }
