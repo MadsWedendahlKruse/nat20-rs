@@ -3,12 +3,19 @@ use nat20_rs::{
     components::items::{
         equipment::{slots::EquipmentSlot, weapon::WeaponKind},
         inventory::{Inventory, ItemContainer, ItemInstance},
+        item::{Item, ItemRarity},
     },
     systems,
 };
 use strum::IntoEnumIterator;
 
-use crate::{render::utils::ImguiRenderableWithContext, table_with_columns};
+use crate::{
+    render::{
+        text::{TextKind, item_rarity_color},
+        utils::ImguiRenderableWithContext,
+    },
+    table_with_columns,
+};
 
 #[derive(Debug, Clone)]
 pub enum ContainerSlot {
@@ -61,14 +68,31 @@ impl InteractEvent {
     }
 }
 
-fn render_item_button(ui: &imgui::Ui, item_name: &str) -> bool {
-    let words = item_name.split_whitespace();
+fn render_item_button(ui: &imgui::Ui, item: &Item) -> bool {
+    let words = item.name.split_whitespace();
     // Render first three lettes of each word
     let short_name = words
         .map(|word| word.chars().take(3).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
-    ui.button_with_size(short_name, [30.0, 30.0])
+
+    let background_color = item_rarity_color(&item.rarity);
+    let highlight_color = background_color.map(|c| (c * 1.2).min(1.0));
+
+    let mut style_tokens = vec![
+        ui.push_style_color(imgui::StyleColor::Button, background_color),
+        ui.push_style_color(imgui::StyleColor::ButtonHovered, highlight_color),
+    ];
+    // Common is white, so we don't need to change the text color
+    if item.rarity == ItemRarity::Common {
+        style_tokens.push(ui.push_style_color(imgui::StyleColor::Text, [0.0, 0.0, 0.0, 1.0]));
+    }
+
+    let clicked = ui.button_with_size(short_name, [30.0, 30.0]);
+
+    style_tokens.into_iter().for_each(|token| token.pop());
+
+    clicked
 }
 
 static INVENTORY_ITEMS_PER_ROW: usize = 8;
@@ -90,7 +114,7 @@ pub fn render_inventory(
             let slot = ContainerSlot::Inventory(i);
 
             let item_name = items[i].item().name.clone();
-            if render_item_button(ui, item_name.as_str()) {
+            if render_item_button(ui, items[i].item()) {
                 // Handle item click (don't think we need to do anything here)
                 println!("Clicked on item: {}", item_name);
             }
@@ -130,7 +154,7 @@ fn render_loadout(ui: &imgui::Ui, world: &mut World, entity: Entity) -> Option<I
             ui.table_next_column();
             let item = loadout.item_in_slot(&slot);
             if let Some(item) = item {
-                if render_item_button(ui, item.item().name.as_str()) {
+                if render_item_button(ui, item.item()) {
                     // Handle item click (don't think we need to do anything here)
                     println!("Clicked on loadout item: {}", item.item().name);
                 }
@@ -151,6 +175,8 @@ fn render_loadout(ui: &imgui::Ui, world: &mut World, entity: Entity) -> Option<I
                 ui.button_with_size(format!("##{}", slot), [30.0, 30.0]);
             }
         }
+
+        table.end();
     } else {
         ui.text("No loadout available.");
     }
@@ -237,6 +263,9 @@ impl ImguiRenderableWithContext<(&World, Entity)> for ItemInstance {
         match self {
             ItemInstance::Weapon(weapon) => {
                 weapon.render_with_context(ui, context);
+            }
+            ItemInstance::Armor(armor) => {
+                armor.render_with_context(ui, context);
             }
             _ => {
                 ui.text("Placeholder tooltip :^)");

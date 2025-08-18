@@ -1,6 +1,6 @@
 use std::{borrow::Cow, fmt::Display};
 
-use nat20_rs::components::damage::DamageType;
+use nat20_rs::components::{damage::DamageType, items::item::ItemRarity};
 
 use crate::render::utils::ImguiRenderable;
 
@@ -22,6 +22,16 @@ pub fn damage_type_color(damage_type: &DamageType) -> [f32; 4] {
     }
 }
 
+pub fn item_rarity_color(rarity: &ItemRarity) -> [f32; 4] {
+    match rarity {
+        ItemRarity::Common => [1.0, 1.0, 1.0, 1.0],
+        ItemRarity::Uncommon => [0.12, 1.0, 0.0, 1.0],
+        ItemRarity::Rare => [0.2, 0.4, 1.0, 1.0],
+        ItemRarity::VeryRare => [0.64, 0.21, 0.93, 1.0],
+        ItemRarity::Legendary => [1.0, 0.5, 0.0, 1.0],
+    }
+}
+
 pub fn indent_text(ui: &imgui::Ui, indent_level: u8) {
     for _ in 0..indent_level {
         ui.text("\t");
@@ -40,6 +50,7 @@ pub enum TextKind {
     Details,
     Ability,
     Skill,
+    Item(ItemRarity),
 }
 
 impl TextKind {
@@ -55,6 +66,7 @@ impl TextKind {
             TextKind::Details => [0.75, 0.75, 0.75, 1.0],
             TextKind::Ability => [0.75, 0.5, 1.0, 1.0],
             TextKind::Skill => [0.5, 0.75, 1.0, 1.0],
+            TextKind::Item(item_rarity) => item_rarity_color(item_rarity),
         }
     }
 }

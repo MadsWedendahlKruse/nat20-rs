@@ -18,8 +18,12 @@ use nat20_rs::{
         hit_points::HitPoints,
         id::{FeatId, RaceId, SpellId, SubraceId},
         items::{
-            equipment::{armor::ArmorClass, loadout::Loadout, weapon::Weapon},
-            item::Item,
+            equipment::{
+                armor::{Armor, ArmorClass, ArmorType},
+                loadout::Loadout,
+                weapon::Weapon,
+            },
+            item::{Item, ItemRarity},
         },
         level::CharacterLevels,
         modifier::ModifierSet,
@@ -38,7 +42,7 @@ use strum::IntoEnumIterator;
 use crate::{
     render::{
         inventory::render_loadout_inventory,
-        text::{TextKind, TextSegment, TextSegments, indent_text},
+        text::{TextKind, TextSegment, TextSegments, indent_text, item_rarity_color},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
             ImguiRenderableWithContext, SELECTED_BUTTON_COLOR, render_empty_button,
@@ -535,10 +539,17 @@ fn render_item_misc(ui: &imgui::Ui, item: &Item) {
     ui.text(text);
 }
 
+fn render_item_name(ui: &imgui::Ui, item: &Item) {
+    let token = ui.push_style_color(imgui::StyleColor::Text, item_rarity_color(&item.rarity));
+    ui.separator_with_text(&item.name);
+    token.pop();
+}
+
 impl ImguiRenderableWithContext<(&World, Entity)> for Weapon {
     fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
         let (world, entity) = context;
-        ui.separator_with_text(&self.item().name);
+        render_item_name(ui, self.item());
+        self.item().rarity.render(ui);
         let damage_roll = self.damage_roll(
             systems::helpers::get_component::<AbilityScoreMap>(world, entity).deref(),
             systems::helpers::get_component::<Loadout>(world, entity)
@@ -552,6 +563,60 @@ impl ImguiRenderableWithContext<(&World, Entity)> for Weapon {
         }
         ui.separator();
         render_item_misc(ui, &self.item());
+    }
+}
+
+impl ImguiRenderableWithContext<(&World, Entity)> for Armor {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
+        let (world, entity) = context;
+        render_item_name(ui, &self.item);
+        self.item.rarity.render(ui);
+        self.armor_type.render(ui);
+        let armor_class = self
+            .armor_class(systems::helpers::get_component::<AbilityScoreMap>(world, entity).deref());
+        armor_class.render(ui);
+        ui.same_line();
+        ui.text("Armor Class");
+        ui.separator();
+        // TODO: Option instead of int max?
+        if armor_class.max_dexterity_bonus != i32::MAX {
+            if armor_class.max_dexterity_bonus == 0 {
+                TextSegments::new(vec![
+                    ("No Armor Class bonus from", TextKind::Details),
+                    ("Dexterity", TextKind::Ability),
+                ])
+                .render(ui);
+            } else {
+                TextSegments::new(vec![
+                    ("Armor Class bonus from", TextKind::Details),
+                    ("Dexterity", TextKind::Ability),
+                    (
+                        format!("is limited to {}", armor_class.max_dexterity_bonus).as_str(),
+                        TextKind::Details,
+                    ),
+                ])
+                .render(ui);
+            }
+            ui.separator();
+        }
+        render_item_misc(ui, &self.item);
+    }
+}
+
+impl ImguiRenderable for ArmorType {
+    fn render(&self, ui: &imgui::Ui) {
+        let mut segments = vec![(self.to_string(), TextKind::Details)];
+        if self != &ArmorType::Clothing {
+            segments.push(("Armor".to_string(), TextKind::Details));
+        }
+        TextSegments::new(segments).render(ui);
+    }
+}
+
+impl ImguiRenderable for ItemRarity {
+    fn render(&self, ui: &imgui::Ui) {
+        // TextSegment::new(self.to_string(), TextKind::Item(self.clone())).render(ui);
+        TextSegment::new(self.to_string(), TextKind::Details).render(ui);
     }
 }
 

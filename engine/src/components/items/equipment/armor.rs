@@ -1,3 +1,5 @@
+use strum::Display;
+
 use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
@@ -11,7 +13,7 @@ use crate::{
     registry,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
 pub enum ArmorType {
     Clothing,
     Light,

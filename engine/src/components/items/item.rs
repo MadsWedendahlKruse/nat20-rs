@@ -1,6 +1,8 @@
+use strum::Display;
+
 use crate::components::id::ItemId;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Display)]
 pub enum ItemRarity {
     Common,
     Uncommon,
