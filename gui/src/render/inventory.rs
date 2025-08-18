@@ -12,7 +12,7 @@ use strum::IntoEnumIterator;
 use crate::{
     render::{
         text::{TextKind, item_rarity_color},
-        utils::ImguiRenderableWithContext,
+        utils::{ImguiRenderable, ImguiRenderableWithContext},
     },
     table_with_columns,
 };
@@ -68,7 +68,7 @@ impl InteractEvent {
     }
 }
 
-fn render_item_button(ui: &imgui::Ui, item: &Item) -> bool {
+fn render_item_button(ui: &imgui::Ui, item: &Item, index: usize) -> bool {
     let words = item.name.split_whitespace();
     // Render first three lettes of each word
     let short_name = words
@@ -77,20 +77,14 @@ fn render_item_button(ui: &imgui::Ui, item: &Item) -> bool {
         .join("\n");
 
     let background_color = item_rarity_color(&item.rarity);
-    let highlight_color = background_color.map(|c| (c * 1.2).min(1.0));
 
-    let mut style_tokens = vec![
-        ui.push_style_color(imgui::StyleColor::Button, background_color),
-        ui.push_style_color(imgui::StyleColor::ButtonHovered, highlight_color),
-    ];
-    // Common is white, so we don't need to change the text color
-    if item.rarity == ItemRarity::Common {
-        style_tokens.push(ui.push_style_color(imgui::StyleColor::Text, [0.0, 0.0, 0.0, 1.0]));
-    }
+    let style = ui.push_style_var(imgui::StyleVar::FrameBorderSize(1.0));
+    let color = ui.push_style_color(imgui::StyleColor::Border, background_color);
 
-    let clicked = ui.button_with_size(short_name, [30.0, 30.0]);
+    let clicked = ui.button_with_size(format!("{}##{}", short_name, index), [30.0, 30.0]);
 
-    style_tokens.into_iter().for_each(|token| token.pop());
+    style.pop();
+    color.pop();
 
     clicked
 }
@@ -105,6 +99,8 @@ pub fn render_inventory(
     ui.separator_with_text("Inventory");
 
     let inventory = systems::helpers::get_component::<Inventory>(world, entity);
+    inventory.money().render(ui);
+
     let mut event = None;
     let items = inventory.items();
     let rows = (items.len() + INVENTORY_ITEMS_PER_ROW) / INVENTORY_ITEMS_PER_ROW;
@@ -114,7 +110,7 @@ pub fn render_inventory(
             let slot = ContainerSlot::Inventory(i);
 
             let item_name = items[i].item().name.clone();
-            if render_item_button(ui, items[i].item()) {
+            if render_item_button(ui, items[i].item(), i) {
                 // Handle item click (don't think we need to do anything here)
                 println!("Clicked on item: {}", item_name);
             }
@@ -146,7 +142,7 @@ fn render_loadout(ui: &imgui::Ui, world: &mut World, entity: Entity) -> Option<I
     let mut event = None;
 
     if let Some(table) = table_with_columns!(ui, "Loadout", "Slot", "Item") {
-        for slot in EquipmentSlot::iter() {
+        for (i, slot) in EquipmentSlot::iter().enumerate() {
             // Slot column
             ui.table_next_column();
             ui.text(slot.to_string());
@@ -154,7 +150,7 @@ fn render_loadout(ui: &imgui::Ui, world: &mut World, entity: Entity) -> Option<I
             ui.table_next_column();
             let item = loadout.item_in_slot(&slot);
             if let Some(item) = item {
-                if render_item_button(ui, item.item()) {
+                if render_item_button(ui, item.item(), i) {
                     // Handle item click (don't think we need to do anything here)
                     println!("Clicked on loadout item: {}", item.item().name);
                 }
@@ -203,7 +199,7 @@ pub fn render_loadout_inventory(ui: &imgui::Ui, world: &mut World, entity: Entit
                 let result = systems::inventory::unequip(world, entity, &slot);
                 if let Some(item) = result {
                     println!("Unequipped item: {:?}", item);
-                    systems::inventory::add(world, entity, item);
+                    systems::inventory::add_item(world, entity, item);
                 }
             }
 
@@ -238,10 +234,12 @@ pub fn render_loadout_inventory(ui: &imgui::Ui, world: &mut World, entity: Entit
                 let result = systems::inventory::equip(world, entity, item);
                 match result {
                     Ok(unequipped_items) => {
-                        systems::inventory::remove(world, entity, index);
+                        // Remove the item that was equipped from the inventory
+                        systems::inventory::remove_item(world, entity, index);
                         for unequipped_item in unequipped_items {
                             println!("Unequipped item: {:?}", unequipped_item);
-                            systems::inventory::add(world, entity, unequipped_item);
+                            // Add unequipped items back to inventory
+                            systems::inventory::add_item(world, entity, unequipped_item);
                         }
                     }
                     Err(err) => {

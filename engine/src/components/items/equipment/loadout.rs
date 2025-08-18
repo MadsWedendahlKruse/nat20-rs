@@ -123,11 +123,15 @@ impl Loadout {
         slots.iter().filter_map(|slot| self.unequip(slot)).collect()
     }
 
-    pub fn equip_in_slot(
+    pub fn equip_in_slot<T>(
         &mut self,
         slot: &EquipmentSlot,
-        equipment: EquipmentInstance,
-    ) -> Result<Vec<EquipmentInstance>, TryEquipError> {
+        equipment: T,
+    ) -> Result<Vec<EquipmentInstance>, TryEquipError>
+    where
+        T: Into<EquipmentInstance>,
+    {
+        let equipment = equipment.into();
         if !equipment.valid_slots().contains(slot) {
             return Err(TryEquipError::InvalidSlot {
                 slot: *slot,
@@ -141,10 +145,65 @@ impl Loadout {
         Ok(unequipped_items)
     }
 
-    pub fn find_slot_for_item(&self, equipment: &EquipmentInstance) -> EquipmentSlot {
+    pub fn can_equip(&self, equipment: &EquipmentInstance) -> bool {
+        if !equipment
+            .valid_slots()
+            .iter()
+            .any(|s| self.item_in_slot(s).is_none())
+        {
+            return false;
+        }
+        for slot in equipment.required_slots() {
+            if self.item_in_slot(slot).is_some() {
+                return false;
+            }
+        }
+        for (_, equipped) in &self.equipment {
+            if equipped
+                .required_slots()
+                .iter()
+                .any(|s| equipment.valid_slots().contains(s))
+            {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn find_slot_for_item(
+        &mut self,
+        equipment: &EquipmentInstance,
+    ) -> (EquipmentSlot, Vec<EquipmentInstance>) {
         let valid_slots = equipment.valid_slots();
+
+        // Make sure none of the other equipment "require" this slot. This is mainly
+        // for weapons that might require both hands.
+        let should_unequip = self
+            .equipment
+            .iter()
+            .filter_map(|(slot, equipped)| {
+                // Unequip the item in this slot if it conflicts with the new equipment
+                if equipped
+                    .required_slots()
+                    .iter()
+                    .any(|s| valid_slots.contains(s))
+                {
+                    Some(slot.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Unequip any conflicting items
+        let unequipped_items = should_unequip
+            .iter()
+            .filter_map(|slot| self.unequip(slot))
+            .collect::<Vec<_>>();
+
+        // If there's only one valid slot, use that
         if valid_slots.len() == 1 {
-            return valid_slots[0].clone();
+            return (valid_slots[0].clone(), unequipped_items);
         }
         // If there are multiple valid slots, find an available one
         let mut avaible_slot = valid_slots
@@ -155,7 +214,8 @@ impl Loadout {
             // This is a fallback and may not be ideal, but it ensures we have a slot
             avaible_slot = Some(&valid_slots[0]);
         }
-        avaible_slot.unwrap().clone()
+
+        (avaible_slot.unwrap().clone(), unequipped_items)
     }
 
     pub fn equip<T>(&mut self, equipment: T) -> Result<Vec<EquipmentInstance>, TryEquipError>
@@ -163,7 +223,9 @@ impl Loadout {
         T: Into<EquipmentInstance>,
     {
         let equipment = equipment.into();
-        self.equip_in_slot(&self.find_slot_for_item(&equipment), equipment)
+        let (slot, mut unequipped) = self.find_slot_for_item(&equipment);
+        unequipped.extend(self.equip_in_slot(&slot, equipment)?);
+        Ok(unequipped)
     }
 
     pub fn armor(&self) -> Option<&Armor> {
@@ -352,14 +414,23 @@ mod tests {
     fn equip_unequip_armor() {
         let mut loadout = Loadout::new();
 
-        let armor = fixtures::armor::heavy_armor();
+        let armor = registry::items::ITEM_REGISTRY
+            .get(&registry::items::CHAINMAIL_ID)
+            .unwrap()
+            .clone();
         let slot = EquipmentSlot::Armor;
-        let unequipped = loadout.equip_in_slot(&slot, EquipmentInstance::Armor(armor.clone()));
+        let unequipped = loadout.equip_in_slot(&slot, armor);
         assert!(unequipped.unwrap().is_empty());
-        assert_eq!(loadout.armor(), Some(&armor));
+        assert_eq!(
+            loadout.armor().unwrap().item.id,
+            registry::items::CHAINMAIL_ID.clone()
+        );
 
         let unequipped = loadout.unequip(&slot);
-        assert_eq!(unequipped, Some(EquipmentInstance::Armor(armor.clone())));
+        assert_eq!(
+            unequipped.unwrap().item().id,
+            registry::items::CHAINMAIL_ID.clone()
+        );
         assert!(loadout.armor().is_none());
 
         let unequipped = loadout.unequip(&slot);
@@ -371,20 +442,30 @@ mod tests {
     fn equip_armor_twice() {
         let mut loadout = Loadout::new();
 
-        let armor1 = fixtures::armor::heavy_armor();
+        let armor1 = registry::items::ITEM_REGISTRY
+            .get(&registry::items::CHAINMAIL_ID)
+            .unwrap()
+            .clone();
         let slot = EquipmentSlot::Armor;
-        let unequipped1 = loadout.equip_in_slot(&slot, EquipmentInstance::Armor(armor1.clone()));
+        let unequipped1 = loadout.equip_in_slot(&slot, armor1.clone());
         assert!(unequipped1.unwrap().is_empty());
-        assert_eq!(loadout.armor(), Some(&armor1));
+        assert_eq!(
+            loadout.armor().unwrap().item.id,
+            *registry::items::CHAINMAIL_ID
+        );
 
-        let armor2 = fixtures::armor::medium_armor();
-        let unequipped2 = loadout.equip_in_slot(&slot, EquipmentInstance::Armor(armor2.clone()));
+        let armor2 = registry::items::ITEM_REGISTRY
+            .get(&registry::items::STUDDED_LEATHER_ARMOR_ID)
+            .unwrap()
+            .clone();
+        let unequipped2 = loadout.equip_in_slot(&slot, armor2.clone());
         assert!(
             unequipped2
                 .unwrap()
-                .contains(&EquipmentInstance::Armor(armor1))
+                .iter()
+                .any(|item| item.item().id == *registry::items::CHAINMAIL_ID)
         );
-        assert_eq!(loadout.armor(), Some(&armor2));
+        assert_eq!(loadout.armor().unwrap().item.id, armor2.item().id);
     }
 
     #[test]
@@ -430,9 +511,13 @@ mod tests {
     fn equip_unequip_weapon() {
         let mut loadout = Loadout::new();
 
-        let weapon = fixtures::weapons::dagger_light();
+        let weapon: EquipmentInstance = registry::items::ITEM_REGISTRY
+            .get(&registry::items::DAGGER_ID)
+            .unwrap()
+            .clone()
+            .into();
         let slot = weapon.valid_slots()[0];
-        let unequipped = loadout.equip_in_slot(&slot, EquipmentInstance::Weapon(weapon.clone()));
+        let unequipped = loadout.equip_in_slot(&slot, weapon);
         assert!(unequipped.is_ok());
         assert!(loadout.weapon_in_hand(&slot).is_some());
 
@@ -445,14 +530,22 @@ mod tests {
     fn equip_weapon_twice() {
         let mut loadout = Loadout::new();
 
-        let weapon1 = fixtures::weapons::dagger_light();
+        let weapon1: EquipmentInstance = registry::items::ITEM_REGISTRY
+            .get(&registry::items::DAGGER_ID)
+            .unwrap()
+            .clone()
+            .into();
         let slot = weapon1.valid_slots()[0];
-        let unequipped1 = loadout.equip_in_slot(&slot, EquipmentInstance::Weapon(weapon1.clone()));
+        let unequipped1 = loadout.equip_in_slot(&slot, weapon1);
         assert_eq!(unequipped1.unwrap().len(), 0);
         assert!(loadout.weapon_in_hand(&slot).is_some());
 
-        let weapon2 = fixtures::weapons::dagger_light();
-        let unequipped2 = loadout.equip_in_slot(&slot, EquipmentInstance::Weapon(weapon2.clone()));
+        let weapon2: EquipmentInstance = registry::items::ITEM_REGISTRY
+            .get(&registry::items::DAGGER_ID)
+            .unwrap()
+            .clone()
+            .into();
+        let unequipped2 = loadout.equip_in_slot(&slot, weapon2);
         assert_eq!(unequipped2.unwrap().len(), 1);
         assert!(loadout.weapon_in_hand(&slot).is_some());
     }
@@ -461,30 +554,30 @@ mod tests {
     fn equip_two_handed_weapon_should_unequip_other_hand() {
         let mut loadout = Loadout::new();
 
-        let weapon_main_hand = fixtures::weapons::dagger_light();
-        let weapon_off_hand = fixtures::weapons::dagger_light();
+        let weapon_main_hand = registry::items::ITEM_REGISTRY
+            .get(&registry::items::DAGGER_ID)
+            .unwrap()
+            .clone();
+        let weapon_off_hand = registry::items::ITEM_REGISTRY
+            .get(&registry::items::DAGGER_ID)
+            .unwrap()
+            .clone();
         let main_slot = EquipmentSlot::MeleeMainHand;
         let off_slot = EquipmentSlot::MeleeOffHand;
 
-        let unequipped_main = loadout.equip_in_slot(
-            &main_slot,
-            EquipmentInstance::Weapon(weapon_main_hand.clone()),
-        );
+        let unequipped_main = loadout.equip_in_slot(&main_slot, weapon_main_hand);
         assert!(unequipped_main.is_ok());
         assert!(loadout.weapon_in_hand(&main_slot).is_some());
 
-        let unequipped_off = loadout.equip_in_slot(
-            &off_slot,
-            EquipmentInstance::Weapon(weapon_off_hand.clone()),
-        );
+        let unequipped_off = loadout.equip_in_slot(&off_slot, weapon_off_hand);
         assert!(unequipped_off.is_ok());
         assert!(loadout.weapon_in_hand(&off_slot).is_some());
 
-        let weapon_two_handed = fixtures::weapons::greatsword_two_handed();
-        let unequipped = loadout.equip_in_slot(
-            &main_slot,
-            EquipmentInstance::Weapon(weapon_two_handed.clone()),
-        );
+        let weapon_two_handed = registry::items::ITEM_REGISTRY
+            .get(&registry::items::GREATSWORD_ID)
+            .unwrap()
+            .clone();
+        let unequipped = loadout.equip_in_slot(&main_slot, weapon_two_handed);
         println!("{:?}", unequipped);
         assert!(unequipped.is_ok());
         // Should unequip both hands if required_slots includes both
@@ -522,10 +615,16 @@ mod tests {
     fn available_actions_melee_and_ranged_weapon() {
         let mut loadout = Loadout::new();
 
-        let weapon1 = fixtures::weapons::dagger_light();
+        let weapon1 = registry::items::ITEM_REGISTRY
+            .get(&registry::items::DAGGER_ID)
+            .unwrap()
+            .clone();
         loadout.equip(weapon1);
 
-        let weapon2 = fixtures::weapons::longbow();
+        let weapon2 = registry::items::ITEM_REGISTRY
+            .get(&registry::items::SHORTBOW_ID)
+            .unwrap()
+            .clone();
         loadout.equip(weapon2);
 
         let actions = loadout.all_actions();

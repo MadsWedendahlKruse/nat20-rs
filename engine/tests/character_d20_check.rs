@@ -20,6 +20,7 @@ mod tests {
             skill::{Skill, SkillSet},
         },
         entities::character::Character,
+        registry,
         systems::{self},
         test_utils::fixtures,
     };
@@ -103,7 +104,14 @@ mod tests {
         let mut world = World::new();
         let character = world.spawn(Character::default());
 
-        let _ = systems::loadout::equip(&mut world, character, fixtures::armor::heavy_armor());
+        let _ = systems::loadout::equip(
+            &mut world,
+            character,
+            registry::items::ITEM_REGISTRY
+                .get(&registry::items::CHAINMAIL_ID)
+                .unwrap()
+                .clone(),
+        );
 
         let result = systems::helpers::get_component::<SkillSet>(&world, character).check(
             Skill::Stealth,

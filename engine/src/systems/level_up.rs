@@ -7,9 +7,10 @@ use uuid::Uuid;
 use crate::{
     components::{
         ability::{Ability, AbilityScore, AbilityScoreDistribution, AbilityScoreMap},
-        class::{ClassName, SubclassName},
+        class::ClassName,
         hit_points::HitPoints,
         id::{ActionId, EffectId},
+        items::{equipment::loadout::EquipmentInstance, money::MonetaryValue},
         level::CharacterLevels,
         level_up::{ChoiceItem, LevelUpPrompt},
         modifier::ModifierSource,
@@ -248,6 +249,35 @@ fn resolve_level_up_prompt(
 
                     ChoiceItem::Subrace(subrace_id) => {
                         systems::race::set_subrace(world, entity, subrace_id);
+                    }
+
+                    ChoiceItem::Equipment { items, money } => {
+                        for (count, item_id) in items {
+                            // TODO: Not the most elegant solution
+                            for _ in 0..*count {
+                                let item =
+                                    registry::items::ITEM_REGISTRY.get(item_id).unwrap().clone();
+                                if item.equipable() {
+                                    let equipment: EquipmentInstance = item.clone().into();
+                                    if systems::loadout::can_equip(world, entity, &equipment) {
+                                        let result =
+                                            systems::loadout::equip(world, entity, equipment);
+                                        if let Err(e) = result {
+                                            eprintln!("Failed to equip item {}: {:?}", item_id, e);
+                                        } else {
+                                            // If the item is successfully equipped,
+                                            // we don't need to add it to inventory
+                                            continue;
+                                        }
+                                    }
+                                }
+                                systems::inventory::add_item(world, entity, item);
+                            }
+                        }
+                        if !money.is_empty() {
+                            let money = MonetaryValue::from(money.clone());
+                            systems::inventory::add_money(world, entity, money);
+                        }
                     }
                 }
             }

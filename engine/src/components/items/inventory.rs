@@ -3,6 +3,7 @@ use crate::components::items::{
         armor::Armor, equipment::EquipmentItem, loadout::EquipmentInstance, weapon::Weapon,
     },
     item::Item,
+    money::{MonetaryValue, MonetaryValueError},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -11,6 +12,15 @@ pub enum ItemInstance {
     Armor(Armor),
     Weapon(Weapon),
     Equipment(EquipmentItem),
+}
+
+impl ItemInstance {
+    pub fn equipable(&self) -> bool {
+        matches!(
+            self,
+            ItemInstance::Armor(_) | ItemInstance::Weapon(_) | ItemInstance::Equipment(_)
+        )
+    }
 }
 
 pub trait ItemContainer {
@@ -68,21 +78,25 @@ impl Into<ItemInstance> for EquipmentInstance {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Inventory {
     items: Vec<ItemInstance>,
+    money: MonetaryValue,
 }
 
 impl Inventory {
     pub fn new() -> Self {
-        Self { items: Vec::new() }
+        Self {
+            items: Vec::new(),
+            money: MonetaryValue::new(),
+        }
     }
 
-    pub fn add(&mut self, item: ItemInstance) {
+    pub fn add_item(&mut self, item: ItemInstance) {
         self.items.push(item);
     }
 
-    pub fn remove(&mut self, index: usize) -> Option<ItemInstance> {
+    pub fn remove_item(&mut self, index: usize) -> Option<ItemInstance> {
         if index < self.items.len() {
             Some(self.items.remove(index))
         } else {
@@ -97,5 +111,22 @@ impl Inventory {
     /// Optional: find by name
     pub fn find_by_name(&self, name: &str) -> Option<&ItemInstance> {
         self.items.iter().find(|i| i.item().name == name)
+    }
+
+    pub fn money(&self) -> &MonetaryValue {
+        &self.money
+    }
+
+    pub fn add_money(&mut self, amount: MonetaryValue) {
+        for (currency, value) in amount.values.into_iter() {
+            self.money.add(currency, value);
+        }
+    }
+
+    pub fn remove_money(&mut self, amount: MonetaryValue) -> Result<(), MonetaryValueError> {
+        for (currency, value) in amount.values.into_iter() {
+            self.money.remove(currency, value)?;
+        }
+        Ok(())
     }
 }

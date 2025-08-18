@@ -145,45 +145,9 @@ impl SlotProvider for Armor {
 
 #[cfg(test)]
 mod tests {
-    use crate::{components::ability::AbilityScore, test_utils::fixtures};
+    use crate::components::ability::AbilityScore;
 
     use super::*;
-
-    #[test]
-    fn clothing_stats() {
-        let armor = fixtures::armor::clothing();
-        assert_eq!(armor.armor_type, ArmorType::Clothing);
-        assert_eq!(armor.armor_class.total(), 10);
-        assert_eq!(armor.armor_class.max_dexterity_bonus, i32::MAX);
-        assert_eq!(armor.stealth_disadvantage, false);
-    }
-
-    #[test]
-    fn light_armor_stats() {
-        let armor = fixtures::armor::light_armor();
-        assert_eq!(armor.armor_type, ArmorType::Light);
-        assert_eq!(armor.armor_class.total(), 12);
-        assert_eq!(armor.armor_class.max_dexterity_bonus, i32::MAX);
-        assert_eq!(armor.stealth_disadvantage, false);
-    }
-
-    #[test]
-    fn medium_armor_stats() {
-        let armor = fixtures::armor::medium_armor();
-        assert_eq!(armor.armor_type, ArmorType::Medium);
-        assert_eq!(armor.armor_class.total(), 14);
-        assert_eq!(armor.armor_class.max_dexterity_bonus, 2);
-        assert_eq!(armor.stealth_disadvantage, false);
-    }
-
-    #[test]
-    fn heavy_armor_stats() {
-        let armor = fixtures::armor::heavy_armor();
-        assert_eq!(armor.armor_type, ArmorType::Heavy);
-        assert_eq!(armor.armor_class.total(), 18);
-        assert_eq!(armor.armor_class.max_dexterity_bonus, 0);
-        assert_eq!(armor.stealth_disadvantage, true);
-    }
 
     #[test]
     fn armor_class_add_and_remove_modifier() {

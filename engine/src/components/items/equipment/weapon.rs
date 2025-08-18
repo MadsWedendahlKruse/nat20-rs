@@ -338,7 +338,11 @@ impl SlotProvider for Weapon {
 
 #[cfg(test)]
 mod tests {
-    use crate::components::{ability::AbilityScore, id::ItemId, items::item::ItemRarity};
+    use crate::components::{
+        ability::AbilityScore,
+        id::ItemId,
+        items::{item::ItemRarity, money::MonetaryValue},
+    };
 
     use super::*;
 
@@ -349,7 +353,7 @@ mod tests {
             name: "Longsword".to_string(),
             description: "A longsword".to_string(),
             weight: 5.0,
-            value: 1,
+            value: MonetaryValue::from("1 GP"),
             rarity: ItemRarity::Common,
         };
         let weapon = Weapon::new(
@@ -382,7 +386,7 @@ mod tests {
             name: "Shortbow".to_string(),
             description: "A ranged weapon".to_string(),
             weight: 2.0,
-            value: 1,
+            value: MonetaryValue::from("1 GP"),
             rarity: ItemRarity::Common,
         };
         Weapon::new(
@@ -403,7 +407,7 @@ mod tests {
             name: "Dagger".to_string(),
             description: "A small dagger".to_string(),
             weight: 1.0,
-            value: 1,
+            value: MonetaryValue::from("1 GP"),
             rarity: ItemRarity::Common,
         };
         let weapon = Weapon::new(
@@ -427,7 +431,7 @@ mod tests {
             "Magic Sword".to_string(),
             "A sword with enchantment".to_string(),
             3.0,
-            1,
+            MonetaryValue::from("1 GP"),
             ItemRarity::Uncommon,
         );
         let weapon = Weapon::new(
@@ -449,7 +453,7 @@ mod tests {
             "Rapier".to_string(),
             "A finesse weapon".to_string(),
             2.5,
-            1,
+            MonetaryValue::from("1 GP"),
             ItemRarity::Common,
         );
         let weapon = Weapon::new(
@@ -480,7 +484,7 @@ mod tests {
             "Warhammer".to_string(),
             "A heavy warhammer".to_string(),
             8.0,
-            1,
+            MonetaryValue::from("1 GP"),
             ItemRarity::Rare,
         );
         let weapon = Weapon::new(
@@ -503,7 +507,7 @@ mod tests {
             "Shortbow".to_string(),
             "A ranged weapon".to_string(),
             2.0,
-            1,
+            MonetaryValue::from("1 GP"),
             ItemRarity::Common,
         );
         let weapon = Weapon::new(
@@ -525,7 +529,7 @@ mod tests {
             "Club".to_string(),
             "A simple club".to_string(),
             2.0,
-            1,
+            MonetaryValue::from("1 GP"),
             ItemRarity::Common,
         );
         let weapon = Weapon::new(
@@ -547,7 +551,7 @@ mod tests {
             "Whip".to_string(),
             "A whip with reach".to_string(),
             3.0,
-            1,
+            MonetaryValue::from("1 GP"),
             ItemRarity::Uncommon,
         );
         let weapon = Weapon::new(
@@ -569,7 +573,7 @@ mod tests {
             "Longbow".to_string(),
             "A long ranged bow".to_string(),
             2.0,
-            1,
+            MonetaryValue::from("1 GP"),
             ItemRarity::Rare,
         );
         let weapon = Weapon::new(
@@ -591,7 +595,7 @@ mod tests {
             "Axe".to_string(),
             "A hand axe".to_string(),
             2.0,
-            1,
+            MonetaryValue::from("1 GP"),
             ItemRarity::Common,
         );
         let weapon = Weapon::new(
@@ -615,7 +619,7 @@ mod tests {
             "Crossbow".to_string(),
             "A light crossbow".to_string(),
             3.0,
-            1,
+            MonetaryValue::from("1 GP"),
             ItemRarity::Uncommon,
         );
         let weapon = Weapon::new(

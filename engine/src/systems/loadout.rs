@@ -74,3 +74,7 @@ pub fn unequip(
 pub fn armor_class(world: &World, entity: Entity) -> ArmorClass {
     loadout(world, entity).armor_class(world, entity)
 }
+
+pub fn can_equip(world: &World, entity: Entity, equipment: &EquipmentInstance) -> bool {
+    loadout(world, entity).can_equip(equipment)
+}

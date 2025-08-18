@@ -24,6 +24,7 @@ use nat20_rs::{
                 weapon::Weapon,
             },
             item::{Item, ItemRarity},
+            money::MonetaryValue,
         },
         level::CharacterLevels,
         modifier::ModifierSet,
@@ -529,10 +530,16 @@ impl ImguiRenderable for Vec<FeatId> {
     }
 }
 
+impl ImguiRenderable for MonetaryValue {
+    fn render(&self, ui: &imgui::Ui) {
+        ui.text(self.to_string());
+    }
+}
+
 fn render_item_misc(ui: &imgui::Ui, item: &Item) {
     ui.text_colored([0.7, 0.7, 0.7, 1.0], &item.description);
     // Fake right-aligned text for weight and value
-    let text = format!("{} kg, {} gold", item.weight, item.value);
+    let text = format!("{} kg, {}", item.weight, item.value);
     let text_width = ui.calc_text_size(&text)[0];
     let available_width = ui.content_region_avail()[0];
     ui.set_cursor_pos([available_width - text_width, ui.cursor_pos()[1] + 10.0]);

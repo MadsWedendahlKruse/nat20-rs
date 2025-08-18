@@ -18,10 +18,17 @@ mod tests {
         let mut world = World::new();
         let character = world.spawn(Character::default());
 
-        let _ = systems::loadout::equip(&mut world, character, fixtures::armor::heavy_armor());
+        let _ = systems::loadout::equip(
+            &mut world,
+            character,
+            registry::items::ITEM_REGISTRY
+                .get(&registry::items::CHAINMAIL_ID)
+                .unwrap()
+                .clone(),
+        );
 
         let armor_class = systems::loadout::armor_class(&world, character);
-        assert_eq!(18, armor_class.total());
+        assert_eq!(16, armor_class.total());
         println!("{:?}", armor_class);
 
         // Check that the heavy armor gives stealth disadvantage
@@ -54,7 +61,14 @@ mod tests {
             );
         }
 
-        let _ = systems::loadout::equip(&mut world, character, fixtures::armor::light_armor());
+        let _ = systems::loadout::equip(
+            &mut world,
+            character,
+            registry::items::ITEM_REGISTRY
+                .get(&registry::items::STUDDED_LEATHER_ARMOR_ID)
+                .unwrap()
+                .clone(),
+        );
 
         {
             let armor_class = systems::loadout::armor_class(&world, character);

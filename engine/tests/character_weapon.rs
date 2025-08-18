@@ -15,14 +15,17 @@ mod tests {
                     equipment::{EquipmentItem, EquipmentKind},
                     loadout::Loadout,
                     slots::EquipmentSlot,
-                    weapon::{Weapon, WeaponCategory, WeaponKind, WeaponProperties},
+                    weapon::{self, Weapon, WeaponCategory, WeaponKind, WeaponProperties},
                 },
+                inventory::ItemInstance,
                 item::{Item, ItemRarity},
+                money::MonetaryValue,
             },
             modifier::ModifierSource,
             proficiency::ProficiencyLevel,
         },
         entities::character::Character,
+        registry,
         systems::{self, helpers},
         test_utils::fixtures,
     };
@@ -42,7 +45,14 @@ mod tests {
             );
         }
 
-        let weapon = fixtures::weapons::rapier_finesse();
+        let weapon = registry::items::ITEM_REGISTRY
+            .get(&registry::items::SCIMITAR_ID)
+            .unwrap()
+            .clone();
+        let weapon = match weapon {
+            ItemInstance::Weapon(weapon) => weapon,
+            _ => panic!("Expected a weapon item"),
+        };
 
         let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(&world, entity);
         assert_eq!(
@@ -77,9 +87,12 @@ mod tests {
         let mut world = World::new();
         let entity = world.spawn(Character::default());
 
-        // Equip trident
-        let trident = fixtures::weapons::trident_versatile();
-        let _ = systems::loadout::equip(&mut world, entity, trident);
+        // Equip longsword
+        let longsword = registry::items::ITEM_REGISTRY
+            .get(&registry::items::LONGSWORD_ID)
+            .unwrap()
+            .clone();
+        let _ = systems::loadout::equip(&mut world, entity, longsword);
 
         // Trident used with two hands
         let roll = systems::combat::damage_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
@@ -90,7 +103,10 @@ mod tests {
             &mut world,
             entity,
             &EquipmentSlot::MeleeOffHand,
-            fixtures::weapons::dagger_light(),
+            registry::items::ITEM_REGISTRY
+                .get(&registry::items::DAGGER_ID)
+                .unwrap()
+                .clone(),
         )
         .unwrap();
 
@@ -117,20 +133,29 @@ mod tests {
             &mut world,
             entity,
             &EquipmentSlot::MeleeOffHand,
-            fixtures::weapons::dagger_light(),
+            registry::items::ITEM_REGISTRY
+                .get(&registry::items::DAGGER_ID)
+                .unwrap()
+                .clone(),
         )
         .unwrap();
         systems::loadout::equip_in_slot(
             &mut world,
             entity,
             &EquipmentSlot::MeleeMainHand,
-            fixtures::weapons::trident_versatile(),
+            registry::items::ITEM_REGISTRY
+                .get(&registry::items::LONGSWORD_ID)
+                .unwrap()
+                .clone(),
         );
 
         let unequipped = systems::loadout::equip(
             &mut world,
             entity,
-            fixtures::weapons::greatsword_two_handed(),
+            registry::items::ITEM_REGISTRY
+                .get(&registry::items::GREATSWORD_ID)
+                .unwrap()
+                .clone(),
         )
         .unwrap();
         assert_eq!(unequipped.len(), 2);
@@ -161,7 +186,7 @@ mod tests {
                 name: "Longsword".to_string(),
                 description: "A longsword.".to_string(),
                 weight: 3.0,
-                value: 15,
+                value: MonetaryValue::from("15 GP"),
                 rarity: ItemRarity::Common,
             },
             WeaponKind::Melee,

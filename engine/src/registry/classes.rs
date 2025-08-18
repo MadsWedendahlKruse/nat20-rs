@@ -8,7 +8,10 @@ use crate::{
         ability::{Ability, AbilityScoreDistribution},
         class::{Class, ClassBase, ClassName, SpellcastingProgression, Subclass, SubclassName},
         dice::DieSize,
-        items::equipment::{armor::ArmorType, weapon::WeaponCategory},
+        items::{
+            equipment::{armor::ArmorType, weapon::WeaponCategory},
+            money::MonetaryValue,
+        },
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         resource::{RechargeRule, Resource},
         skill::Skill,
@@ -118,21 +121,54 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         ]),
         HashMap::from([(
             1,
-            vec![LevelUpPrompt::Choice(
-                ChoiceSpec::single(
-                    "Fighting Style",
-                    [
-                        registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
-                        registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone(),
-                        registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
-                    ]
-                    .into_iter()
-                    .map(ChoiceItem::Feat)
-                    .collect(),
-                )
-                .with_id("choice.fighting_style")
-                .clone(),
-            )],
+            vec![
+                LevelUpPrompt::Choice(
+                    ChoiceSpec::single(
+                        "Fighting Style",
+                        [
+                            registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
+                            registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone(),
+                            registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
+                        ]
+                        .into_iter()
+                        .map(ChoiceItem::Feat)
+                        .collect(),
+                    )
+                    .with_id("choice.fighting_style")
+                    .clone(),
+                ),
+                LevelUpPrompt::Choice(
+                    ChoiceSpec::single(
+                        "Figter Starting Equipment",
+                        vec![
+                            ChoiceItem::Equipment {
+                                items: vec![
+                                    (1, registry::items::CHAINMAIL_ID.clone()),
+                                    (1, registry::items::GREATSWORD_ID.clone()),
+                                    (1, registry::items::FLAIL_ID.clone()),
+                                    (8, registry::items::JAVELIN_ID.clone()),
+                                ],
+                                money: "4 GP".to_string(),
+                            },
+                            ChoiceItem::Equipment {
+                                items: vec![
+                                    (1, registry::items::STUDDED_LEATHER_ARMOR_ID.clone()),
+                                    (1, registry::items::SCIMITAR_ID.clone()),
+                                    (1, registry::items::SHORTSWORD_ID.clone()),
+                                    (8, registry::items::LONGBOW_ID.clone()),
+                                ],
+                                money: "11 GP".to_string(),
+                            },
+                            ChoiceItem::Equipment {
+                                items: Vec::new(),
+                                money: "155 GP".to_string(),
+                            },
+                        ],
+                    )
+                    .with_id("choice.starting_equipment.fighter")
+                    .clone(),
+                ),
+            ],
         )]),
         HashMap::from([
             (1, vec![registry::actions::SECOND_WIND_ID.clone()]),

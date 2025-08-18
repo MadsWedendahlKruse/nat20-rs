@@ -10,7 +10,7 @@ use crate::{
     components::{
         ability::Ability,
         class::{ClassName, SubclassName},
-        id::{ActionId, BackgroundId, EffectId, FeatId, RaceId, SubraceId},
+        id::{ActionId, BackgroundId, EffectId, FeatId, ItemId, RaceId, SubraceId},
         modifier::ModifierSource,
         skill::Skill,
     },
@@ -42,9 +42,12 @@ pub enum ChoiceItem {
     Feat(FeatId),
     Race(RaceId),
     Subrace(SubraceId),
-    // SubPrompt(Box<LevelUpPrompt>), // cascade
-    // Escape hatch if you need something truly custom
-    // Custom(String),
+    Equipment {
+        items: Vec<(u8, ItemId)>,
+        money: String, // e.g., "10 GP"
+    }, // SubPrompt(Box<LevelUpPrompt>), // cascade
+       // Escape hatch if you need something truly custom
+       // Custom(String),
 }
 
 impl ChoiceItem {
@@ -58,6 +61,7 @@ impl ChoiceItem {
             ChoiceItem::Feat(_) => "choice.feat",
             ChoiceItem::Race(_) => "choice.race",
             ChoiceItem::Subrace(_) => "choice.subrace",
+            ChoiceItem::Equipment { .. } => "choice.equipment",
         }
     }
 
@@ -69,9 +73,10 @@ impl ChoiceItem {
             ChoiceItem::Background(_) => 2,
             ChoiceItem::Class(_) => 3,
             ChoiceItem::Subclass(_) => 4,
-            ChoiceItem::Action(_) => 5,
-            ChoiceItem::Effect(_) => 6,
-            ChoiceItem::Feat(_) => 7,
+            ChoiceItem::Equipment { .. } => 5,
+            ChoiceItem::Action(_) => 6,
+            ChoiceItem::Effect(_) => 7,
+            ChoiceItem::Feat(_) => 8,
         }
     }
 }
@@ -87,11 +92,22 @@ impl std::fmt::Display for ChoiceItem {
             ChoiceItem::Subclass(id) => write!(f, "{}", id.name),
             ChoiceItem::Race(id) => write!(f, "{}", id),
             ChoiceItem::Subrace(id) => write!(f, "{}", id),
+            ChoiceItem::Equipment { items, money } => {
+                let names: Vec<String> = items
+                    .iter()
+                    .map(|(count, id)| format!("{} {}", count, id.to_string()))
+                    .collect();
+                write!(f, "{}", names.join("\n"))?;
+                if !money.is_empty() {
+                    write!(f, "\n{}", money)?;
+                }
+                Ok(())
+            }
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChoiceSpec {
     pub id: String,
     pub label: String,
@@ -131,7 +147,7 @@ impl ChoiceSpec {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LevelUpPrompt {
     Choice(ChoiceSpec),
     AbilityScores(HashMap<u8, u8>, u8),

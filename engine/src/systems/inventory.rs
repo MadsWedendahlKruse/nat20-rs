@@ -7,6 +7,7 @@ use crate::{
             slots::EquipmentSlot,
         },
         inventory::{Inventory, ItemInstance},
+        money::{MonetaryValue, MonetaryValueError},
     },
     systems,
 };
@@ -19,7 +20,7 @@ pub fn equip<T>(
 where
     T: Into<ItemInstance>,
 {
-    let item = item.into();
+    let item: ItemInstance = item.into();
     let equipment: EquipmentInstance = item.into();
 
     let unequippped_items = systems::loadout::equip(world, entity, equipment)?;
@@ -35,13 +36,25 @@ pub fn unequip(world: &mut World, entity: Entity, slot: &EquipmentSlot) -> Optio
     unequipped_item.map(|item| item.into())
 }
 
-pub fn add<T>(world: &mut World, entity: Entity, item: T)
+pub fn add_item<T>(world: &mut World, entity: Entity, item: T)
 where
     T: Into<ItemInstance>,
 {
-    systems::helpers::get_component_mut::<Inventory>(world, entity).add(item.into());
+    systems::helpers::get_component_mut::<Inventory>(world, entity).add_item(item.into());
 }
 
-pub fn remove(world: &mut World, entity: Entity, index: usize) -> Option<ItemInstance> {
-    systems::helpers::get_component_mut::<Inventory>(world, entity).remove(index)
+pub fn remove_item(world: &mut World, entity: Entity, index: usize) -> Option<ItemInstance> {
+    systems::helpers::get_component_mut::<Inventory>(world, entity).remove_item(index)
+}
+
+pub fn add_money(world: &mut World, entity: Entity, amount: MonetaryValue) {
+    systems::helpers::get_component_mut::<Inventory>(world, entity).add_money(amount);
+}
+
+pub fn remove_money(
+    world: &mut World,
+    entity: Entity,
+    amount: MonetaryValue,
+) -> Result<(), MonetaryValueError> {
+    systems::helpers::get_component_mut::<Inventory>(world, entity).remove_money(amount)
 }

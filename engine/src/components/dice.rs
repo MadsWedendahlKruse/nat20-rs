@@ -21,6 +21,36 @@ pub struct DiceSet {
     pub die_size: DieSize,
 }
 
+impl DiceSet {
+    pub fn new(num_dice: u32, die_size: DieSize) -> Self {
+        Self { num_dice, die_size }
+    }
+}
+
+impl<T> From<T> for DiceSet
+where
+    T: AsRef<str>,
+{
+    fn from(s: T) -> Self {
+        let parts: Vec<&str> = s.as_ref().split('d').collect();
+        if parts.len() != 2 {
+            panic!("Invalid dice format: {}", s.as_ref());
+        }
+        let num_dice = parts[0].parse::<u32>().unwrap_or(1);
+        let die_size = match parts[1] {
+            "4" => DieSize::D4,
+            "6" => DieSize::D6,
+            "8" => DieSize::D8,
+            "10" => DieSize::D10,
+            "12" => DieSize::D12,
+            "20" => DieSize::D20,
+            "100" => DieSize::D100,
+            _ => DieSize::D6, // Default to D6 if unknown
+        };
+        Self::new(num_dice, die_size)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct DiceSetRoll {
     pub dice: DiceSet,
@@ -226,5 +256,47 @@ mod tests {
 
         assert!(result.total >= 10 && result.total <= 31);
         println!("{}", result);
+    }
+
+    #[test]
+    fn parse_simple_dice_string() {
+        let dice: DiceSet = "2d6".into();
+        assert_eq!(dice.num_dice, 2);
+        assert_eq!(dice.die_size, DieSize::D6);
+
+        let dice: DiceSet = "1d20".into();
+        assert_eq!(dice.num_dice, 1);
+        assert_eq!(dice.die_size, DieSize::D20);
+
+        let dice: DiceSet = "3d4".into();
+        assert_eq!(dice.num_dice, 3);
+        assert_eq!(dice.die_size, DieSize::D4);
+    }
+
+    #[test]
+    fn parse_dice_string_with_missing_number_defaults_to_one() {
+        let dice: DiceSet = "d8".into();
+        assert_eq!(dice.num_dice, 1);
+        assert_eq!(dice.die_size, DieSize::D8);
+    }
+
+    #[test]
+    fn parse_dice_string_with_invalid_die_size_defaults_to_d6() {
+        let dice: DiceSet = "2d13".into();
+        assert_eq!(dice.num_dice, 2);
+        assert_eq!(dice.die_size, DieSize::D6);
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid dice format")]
+    fn parse_invalid_format_panics() {
+        let _: DiceSet = "2x6".into();
+    }
+
+    #[test]
+    fn parse_d100() {
+        let dice: DiceSet = "1d100".into();
+        assert_eq!(dice.num_dice, 1);
+        assert_eq!(dice.die_size, DieSize::D100);
     }
 }
