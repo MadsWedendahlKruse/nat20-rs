@@ -1,7 +1,13 @@
 use std::{collections::HashMap, sync::LazyLock};
 
 use crate::{
-    components::{ability::Ability, background::Background, id::BackgroundId, skill::Skill},
+    components::{
+        ability::Ability,
+        background::Background,
+        id::BackgroundId,
+        level_up::{ChoiceItem, ChoiceSpec},
+        skill::Skill,
+    },
     registry,
 };
 
@@ -24,6 +30,21 @@ static ACOLYTE: LazyLock<Background> = LazyLock::new(|| {
         // TODO: Placeholder
         registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
         [Skill::Insight, Skill::Religion],
+        ChoiceSpec::single(
+            "Acolyte Starting Equipment",
+            vec![
+                ChoiceItem::Equipment {
+                    items: vec![(1, registry::items::ROBE_ID.clone())],
+                    money: "8 GP".to_string(),
+                },
+                ChoiceItem::Equipment {
+                    items: Vec::new(),
+                    money: "50 GP".to_string(),
+                },
+            ],
+        )
+        .with_id("choice.starting_equipment.acolyte")
+        .clone(),
     )
 });
 
@@ -37,6 +58,24 @@ static CRIMINAL: LazyLock<Background> = LazyLock::new(|| {
         // TODO: Placeholder
         registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
         [Skill::SleightOfHand, Skill::Stealth],
+        ChoiceSpec::single(
+            "Criminal Starting Equipment",
+            vec![
+                ChoiceItem::Equipment {
+                    items: vec![
+                        (2, registry::items::DAGGER_ID.clone()),
+                        (1, registry::items::TRAVELERS_CLOTHES_ID.clone()),
+                    ],
+                    money: "16 GP".to_string(),
+                },
+                ChoiceItem::Equipment {
+                    items: Vec::new(),
+                    money: "50 GP".to_string(),
+                },
+            ],
+        )
+        .with_id("choice.starting_equipment.criminal")
+        .clone(),
     )
 });
 
@@ -50,6 +89,24 @@ static SAGE: LazyLock<Background> = LazyLock::new(|| {
         // TODO: Placeholder
         registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
         [Skill::Arcana, Skill::History],
+        ChoiceSpec::single(
+            "Sage Starting Equipment",
+            vec![
+                ChoiceItem::Equipment {
+                    items: vec![
+                        (1, registry::items::QUARTERSTAFF_ID.clone()),
+                        (1, registry::items::ROBE_ID.clone()),
+                    ],
+                    money: "8 GP".to_string(),
+                },
+                ChoiceItem::Equipment {
+                    items: Vec::new(),
+                    money: "50 GP".to_string(),
+                },
+            ],
+        )
+        .with_id("choice.starting_equipment.sage")
+        .clone(),
     )
 });
 
@@ -70,5 +127,24 @@ static SOLDIER: LazyLock<Background> = LazyLock::new(|| {
         // it's a bit too powerful to be a background feat.
         registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone(),
         [Skill::Athletics, Skill::Intimidation],
+        ChoiceSpec::single(
+            "Soldier Starting Equipment",
+            vec![
+                ChoiceItem::Equipment {
+                    items: vec![
+                        (1, registry::items::SPEAR_ID.clone()),
+                        (1, registry::items::SHORTBOW_ID.clone()),
+                        (1, registry::items::TRAVELERS_CLOTHES_ID.clone()),
+                    ],
+                    money: "14 GP".to_string(),
+                },
+                ChoiceItem::Equipment {
+                    items: Vec::new(),
+                    money: "50 GP".to_string(),
+                },
+            ],
+        )
+        .with_id("choice.starting_equipment.soldier")
+        .clone(),
     )
 });

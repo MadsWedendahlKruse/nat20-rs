@@ -1,6 +1,7 @@
 use crate::components::{
     ability::Ability,
     id::{BackgroundId, FeatId},
+    level_up::ChoiceSpec,
     skill::Skill,
 };
 
@@ -13,8 +14,7 @@ pub struct Background {
     skill_proficiencies: [Skill; 2],
     // TODO: Not sure what to do with these yet
     // tool_proficiencies
-    // TODO: Include equipment here or should it be based on the class?
-    // equipment:
+    equipment: ChoiceSpec,
 }
 
 impl Background {
@@ -23,12 +23,14 @@ impl Background {
         ability_scores: [Ability; 3],
         feat: FeatId,
         skill_proficiencies: [Skill; 2],
+        equipment: ChoiceSpec,
     ) -> Self {
         Self {
             id,
             ability_scores,
             feat,
             skill_proficiencies,
+            equipment,
         }
     }
 
@@ -46,5 +48,9 @@ impl Background {
 
     pub fn skill_proficiencies(&self) -> &[Skill; 2] {
         &self.skill_proficiencies
+    }
+
+    pub fn equipment(&self) -> &ChoiceSpec {
+        &self.equipment
     }
 }

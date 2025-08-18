@@ -223,7 +223,11 @@ fn resolve_level_up_prompt(
                     }
 
                     ChoiceItem::Background(background_id) => {
-                        systems::backgrounds::set_background(world, entity, background_id);
+                        prompts.extend(systems::backgrounds::set_background(
+                            world,
+                            entity,
+                            background_id,
+                        ));
                     }
 
                     ChoiceItem::Class(class_name) => {

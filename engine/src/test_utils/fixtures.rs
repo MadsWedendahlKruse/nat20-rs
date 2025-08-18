@@ -124,6 +124,13 @@ pub mod creatures {
                             money: "4 GP".to_string(),
                         },
                     ),
+                    LevelUpDecision::single_choice_with_id(
+                        "choice.starting_equipment.soldier",
+                        ChoiceItem::Equipment {
+                            items: Vec::new(),
+                            money: "50 GP".to_string(),
+                        },
+                    ),
                     // Level 2
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
                     // Level 3
@@ -181,6 +188,16 @@ pub mod creatures {
                         Skill::Investigation,
                         Skill::Insight,
                     ])),
+                    LevelUpDecision::single_choice_with_id(
+                        "choice.starting_equipment.sage",
+                        ChoiceItem::Equipment {
+                            items: vec![
+                                (1, registry::items::QUARTERSTAFF_ID.clone()),
+                                (1, registry::items::ROBE_ID.clone()),
+                            ],
+                            money: "8 GP".to_string(),
+                        },
+                    ),
                     // Level 2
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Wizard)),
                     // Level 3
@@ -246,6 +263,13 @@ pub mod creatures {
                         Skill::Arcana,
                         Skill::Deception,
                     ])),
+                    LevelUpDecision::single_choice_with_id(
+                        "choice.starting_equipment.acolyte",
+                        ChoiceItem::Equipment {
+                            items: vec![(1, registry::items::ROBE_ID.clone())],
+                            money: "8 GP".to_string(),
+                        },
+                    ),
                     // Level 2
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Warlock)),
                     // Level 3
@@ -283,7 +307,6 @@ pub mod creatures {
             components::{class::ClassName, id::EntityIdentifier, level_up::ChoiceItem},
             entities::character::Character,
             registry,
-            test_utils::fixtures,
         };
 
         use super::*;
@@ -331,12 +354,19 @@ pub mod creatures {
                         "choice.starting_equipment.fighter",
                         ChoiceItem::Equipment {
                             items: vec![
-                                (1, registry::items::CHAINMAIL_ID.clone()),
-                                (1, registry::items::GREATSWORD_ID.clone()),
-                                (1, registry::items::FLAIL_ID.clone()),
-                                (8, registry::items::JAVELIN_ID.clone()),
+                                (1, registry::items::STUDDED_LEATHER_ARMOR_ID.clone()),
+                                (1, registry::items::SCIMITAR_ID.clone()),
+                                (1, registry::items::SHORTSWORD_ID.clone()),
+                                (1, registry::items::LONGBOW_ID.clone()),
                             ],
-                            money: "4 GP".to_string(),
+                            money: "11 GP".to_string(),
+                        },
+                    ),
+                    LevelUpDecision::single_choice_with_id(
+                        "choice.starting_equipment.soldier",
+                        ChoiceItem::Equipment {
+                            items: Vec::new(),
+                            money: "50 GP".to_string(),
                         },
                     ),
                 ],

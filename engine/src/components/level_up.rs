@@ -93,15 +93,14 @@ impl std::fmt::Display for ChoiceItem {
             ChoiceItem::Race(id) => write!(f, "{}", id),
             ChoiceItem::Subrace(id) => write!(f, "{}", id),
             ChoiceItem::Equipment { items, money } => {
-                let names: Vec<String> = items
+                let mut lines: Vec<String> = items
                     .iter()
-                    .map(|(count, id)| format!("{} {}", count, id.to_string()))
+                    .map(|(count, id)| format!("{} x {}", count, id.to_string()))
                     .collect();
-                write!(f, "{}", names.join("\n"))?;
                 if !money.is_empty() {
-                    write!(f, "\n{}", money)?;
+                    lines.push(money.to_string());
                 }
-                Ok(())
+                write!(f, "{}", lines.join("\n"))
             }
         }
     }

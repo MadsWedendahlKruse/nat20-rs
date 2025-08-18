@@ -39,7 +39,7 @@ pub fn set_background(
         // TODO: Not sure what to do here
         panic!("Error adding background feat: {:?}", e);
     }
-    let prompts = feat_result.unwrap();
+    let mut prompts = feat_result.unwrap();
 
     let mut skill_set = systems::helpers::get_component_mut::<SkillSet>(world, entity);
     for skill in background.skill_proficiencies() {
@@ -55,6 +55,8 @@ pub fn set_background(
     // Set tool proficiencies
 
     // Set languages
+
+    prompts.push(LevelUpPrompt::Choice(background.equipment().clone()));
 
     prompts
 }

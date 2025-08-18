@@ -31,7 +31,7 @@ use crate::{
         text::{TextKind, TextSegments},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-            render_button_disabled_conditionally, render_button_selectable,
+            render_button_disabled_conditionally, render_button_selectable, render_uniform_buttons,
             render_uniform_buttons_do, render_window_at_cursor,
         },
     },
@@ -662,6 +662,7 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                 } = &mut self.progress
                 {
                     let (button_size, columns) = spec_style(spec);
+                    // TODO: If button size is [0.0, 0.0], calculate uniform size
                     for (i, option) in spec.options.iter().enumerate() {
                         let selected = decisions.contains(option);
                         if render_button_selectable(ui, option.to_string(), button_size, selected) {
