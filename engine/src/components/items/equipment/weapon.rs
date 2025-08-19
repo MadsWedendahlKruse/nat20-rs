@@ -64,6 +64,7 @@ impl Display for WeaponProperties {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             WeaponProperties::Enchantment(level) => write!(f, "Enchantment +{}", level),
+            WeaponProperties::Versatile(dice) => write!(f, "Versatile ({})", dice),
             _ => write!(f, "{:?}", self),
         }
     }

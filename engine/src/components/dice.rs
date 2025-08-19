@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{self, Display};
 
 use rand::Rng;
 
@@ -24,6 +24,12 @@ pub struct DiceSet {
 impl DiceSet {
     pub fn new(num_dice: u32, die_size: DieSize) -> Self {
         Self { num_dice, die_size }
+    }
+}
+
+impl Display for DiceSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}d{}", self.num_dice, self.die_size as u32)
     }
 }
 
