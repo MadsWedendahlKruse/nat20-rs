@@ -146,7 +146,7 @@ impl D20Check {
 
         let total_modifier = modifiers.total();
         // TODO: For some reason this is clamped to zero, so negative modifiers are not applied
-        let total = selected_roll as u32 + total_modifier.max(0) as u32;
+        let total = (selected_roll as i32 + total_modifier) as u32;
 
         let is_crit = selected_roll == 20;
 
