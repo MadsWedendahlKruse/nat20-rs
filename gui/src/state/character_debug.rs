@@ -11,12 +11,7 @@ use nat20_rs::{
 };
 use strum::IntoEnumIterator;
 
-use crate::{
-    buttons,
-    render::utils::{
-        ImguiRenderableMutWithContext, render_uniform_buttons, render_window_at_cursor,
-    },
-};
+use crate::render::utils::{ImguiRenderableMutWithContext, render_uniform_buttons};
 
 pub enum CheckKind {
     SavingThrow,
@@ -30,29 +25,25 @@ pub enum CharacterDebugState {
 
 pub struct CharacterDebugGui {
     pub character: Entity,
-    pub state: Option<CharacterDebugState>,
+    pub state: CharacterDebugState,
 }
 
 impl CharacterDebugGui {
     pub fn new(character: Entity) -> Self {
         Self {
             character,
-            state: Some(CharacterDebugState::MainMenu),
+            state: CharacterDebugState::MainMenu,
         }
     }
 }
 
 impl ImguiRenderableMutWithContext<&mut GameState> for CharacterDebugGui {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, game_state: &mut GameState) {
-        if self.state.is_none() {
-            return;
-        }
-
-        render_window_at_cursor(ui, "Debug", true, || match self.state.as_mut().unwrap() {
+        ui.popup("Debug", || match &mut self.state {
             CharacterDebugState::MainMenu => {
                 if let Some(index) = render_uniform_buttons(
                     ui,
-                    ["Heal Full", "Saving Throw", "Skill Check", "Cancel"],
+                    ["Heal Full", "Saving Throw", "Skill Check"],
                     [20.0, 5.0],
                 ) {
                     match index {
@@ -60,19 +51,16 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CharacterDebugGui {
                             systems::health::heal_full(&mut game_state.world, self.character);
                         }
                         1 => {
-                            self.state = Some(CharacterDebugState::Check {
+                            self.state = CharacterDebugState::Check {
                                 kind: CheckKind::SavingThrow,
                                 dc_value: 10,
-                            });
+                            };
                         }
                         2 => {
-                            self.state = Some(CharacterDebugState::Check {
+                            self.state = CharacterDebugState::Check {
                                 kind: CheckKind::SkillCheck,
                                 dc_value: 10,
-                            });
-                        }
-                        3 => {
-                            self.state.take();
+                            };
                         }
                         _ => unreachable!(),
                     }
@@ -114,7 +102,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CharacterDebugGui {
                             ),
                             dc,
                         ));
-                        self.state.take();
+                        ui.close_current_popup();
                     }
                 }
 
@@ -152,7 +140,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CharacterDebugGui {
                             ),
                             dc,
                         ));
-                        self.state.take();
+                        ui.close_current_popup();
                     }
                 }
             },

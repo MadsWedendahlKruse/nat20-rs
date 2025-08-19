@@ -102,24 +102,14 @@ impl GameGui {
                             let _ = self.game_state.world.despawn(*entity);
                         }
 
-                        if let Some(debug_gui) = &mut self.character_debug {
-                            if debug_gui.state.is_none() {
-                                self.character_debug = None;
-                            } else {
-                                debug_gui.render_mut_with_context(ui, &mut self.game_state);
-                            }
-                        }
-
-                        let disabled_token = ui.begin_disabled(
-                            self.game_state.in_combat.contains_key(entity)
-                                || self.character_debug.is_some(),
-                        );
-
                         if ui.button(format!("Debug##{:?}", entity)) {
                             self.character_debug = Some(CharacterDebugGui::new(*entity));
+                            ui.open_popup("Debug");
                         }
 
-                        disabled_token.end();
+                        if let Some(debug_gui) = &mut self.character_debug {
+                            debug_gui.render_mut_with_context(ui, &mut self.game_state);
+                        }
                     }
                 }
 

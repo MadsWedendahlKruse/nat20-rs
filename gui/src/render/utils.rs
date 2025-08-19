@@ -67,6 +67,17 @@ pub fn render_button_selectable(
     clicked
 }
 
+pub fn labels_max_width<I, S>(ui: &imgui::Ui, labels: I) -> f32
+where
+    I: Clone + IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    labels
+        .into_iter()
+        .map(|label| ui.calc_text_size(label.as_ref())[0])
+        .fold(0.0, f32::max)
+}
+
 /// Renders a vertical list of same-width buttons with centered text.
 /// Returns the index of the clicked button, if any.
 pub fn render_uniform_buttons<I, S>(ui: &imgui::Ui, labels: I, padding: [f32; 2]) -> Option<usize>
