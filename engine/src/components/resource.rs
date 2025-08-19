@@ -18,7 +18,7 @@
 
 use std::{collections::HashMap, fmt::Display, hash::Hash};
 
-use crate::components::id::ResourceId;
+use crate::{components::id::ResourceId, registry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum RechargeRule {
@@ -228,6 +228,25 @@ impl ResourceMap {
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&ResourceId, &mut Resource)> {
         self.resources.iter_mut()
+    }
+}
+
+impl Default for ResourceMap {
+    fn default() -> Self {
+        let mut resources = ResourceMap::new();
+        [
+            registry::resources::ACTION.clone(),
+            registry::resources::BONUS_ACTION.clone(),
+            registry::resources::REACTION.clone(),
+        ]
+        .iter()
+        .for_each(|resource| {
+            resources.add(
+                Resource::new(resource.clone(), 1, RechargeRule::OnTurn).unwrap(),
+                true,
+            );
+        });
+        resources
     }
 }
 

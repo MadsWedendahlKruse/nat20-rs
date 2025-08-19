@@ -24,7 +24,7 @@ pub enum CreatureType {
 }
 
 #[derive(Debug, Clone)]
-pub enum Size {
+pub enum CreatureSize {
     Tiny,
     Small,
     Medium,
@@ -45,7 +45,7 @@ pub struct Race {
     pub base: RaceBase,
     pub subraces: HashMap<SubraceId, Subrace>,
     pub creature_type: CreatureType,
-    pub size: Size,
+    pub size: CreatureSize,
     // TODO: Subraces can modify the speed using an effect?
     pub speed: u8,
 }

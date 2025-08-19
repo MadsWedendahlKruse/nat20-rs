@@ -19,20 +19,64 @@ pub trait Level {
     }
 }
 
-pub struct CreatureLevel(u8);
+// TODO: Not sure if hardcoding this is the best approach, but it works for now
+static EXPERIENCE_BY_CHALLENGE_RATING: LazyLock<HashMap<u8, u32>> = LazyLock::new(|| {
+    HashMap::from([
+        (0, 0),
+        (1, 200),
+        (2, 450),
+        (3, 700),
+        (4, 1100),
+        (5, 1800),
+        (6, 2300),
+        (7, 2900),
+        (8, 3900),
+        (9, 5000),
+        (10, 5900),
+        (11, 7200),
+        (12, 8400),
+        (13, 10000),
+        (14, 11500),
+        (15, 13000),
+        (16, 15000),
+        (17, 18000),
+        (18, 20000),
+        (19, 22000),
+        (20, 25000),
+        (21, 33000),
+        (22, 41000),
+        (23, 50000),
+        (24, 62000),
+        (25, 75000),
+        (26, 90000),
+        (27, 105000),
+        (28, 120000),
+        (29, 135000),
+        (30, 155000),
+    ])
+});
 
-impl CreatureLevel {
+// The SRD supports fractional challenge ratings, but that's a bit more complex
+// to handle, so we'll stick with whole numbers for now
+#[derive(Debug, Clone)]
+pub struct ChallengeRating(u8);
+
+impl ChallengeRating {
     pub fn new(level: u8) -> Self {
         if level == 0 {
             panic!("Creature level cannot be zero");
         }
         Self(level)
     }
+
+    pub fn experience(&self) -> u32 {
+        *EXPERIENCE_BY_CHALLENGE_RATING.get(&self.0).unwrap_or(&0)
+    }
 }
 
-impl Level for CreatureLevel {
+impl Level for ChallengeRating {
     fn total_level(&self) -> u8 {
-        self.0
+        self.0 as u8
     }
 }
 
@@ -202,12 +246,12 @@ mod tests {
     #[test]
     #[should_panic(expected = "Creature level cannot be zero")]
     fn creature_level_zero_panics() {
-        CreatureLevel::new(0);
+        ChallengeRating::new(0);
     }
 
     #[test]
     fn creature_level_new_and_total_level() {
-        let lvl = CreatureLevel::new(5);
+        let lvl = ChallengeRating::new(5);
         assert_eq!(lvl.total_level(), 5);
     }
 

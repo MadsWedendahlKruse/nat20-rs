@@ -2,7 +2,7 @@ use std::{any::type_name, collections::HashMap, ops::Deref};
 
 use hecs::{Entity, Ref, World};
 
-use crate::components::level::{CharacterLevels, CreatureLevel, Level};
+use crate::components::level::{ChallengeRating, CharacterLevels, Level};
 
 pub fn get_component<'a, T: hecs::Component + 'static>(
     world: &'a World,
@@ -55,7 +55,7 @@ pub fn level(world: &World, entity: Entity) -> Option<Ref<'_, dyn Level>> {
         return Some(Ref::map(level, |l| l as &dyn Level));
     }
 
-    if let Ok(level) = world.get::<&CreatureLevel>(entity) {
+    if let Ok(level) = world.get::<&ChallengeRating>(entity) {
         return Some(Ref::map(level, |l| l as &dyn Level));
     }
 

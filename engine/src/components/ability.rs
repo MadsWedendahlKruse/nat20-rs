@@ -119,20 +119,6 @@ impl AbilityScoreMap {
         Self { scores }
     }
 
-    pub fn from_distribution(distribution: AbilityScoreDistribution) -> Self {
-        let mut scores = HashMap::new();
-        for (ability, score) in distribution.scores {
-            let mut base = score;
-            if ability == distribution.plus_2_bonus {
-                base += 2;
-            } else if ability == distribution.plus_1_bonus {
-                base += 1;
-            }
-            scores.insert(ability, AbilityScore::new(ability, base as i32));
-        }
-        Self { scores }
-    }
-
     pub fn get(&self, ability: Ability) -> &AbilityScore {
         self.scores.get(&ability).unwrap()
     }
@@ -159,6 +145,32 @@ impl AbilityScoreMap {
 
     pub fn remove_modifier(&mut self, ability: Ability, source: &ModifierSource) {
         self.get_mut(ability).modifiers.remove_modifier(source);
+    }
+}
+
+impl From<AbilityScoreDistribution> for AbilityScoreMap {
+    fn from(distribution: AbilityScoreDistribution) -> Self {
+        let mut scores = HashMap::new();
+        for (ability, score) in distribution.scores {
+            let mut base = score;
+            if ability == distribution.plus_2_bonus {
+                base += 2;
+            } else if ability == distribution.plus_1_bonus {
+                base += 1;
+            }
+            scores.insert(ability, AbilityScore::new(ability, base as i32));
+        }
+        Self { scores }
+    }
+}
+
+impl From<[(Ability, i32); 6]> for AbilityScoreMap {
+    fn from(scores: [(Ability, i32); 6]) -> Self {
+        let mut map = AbilityScoreMap::new();
+        for (ability, score) in scores {
+            map.set(ability, AbilityScore::new(ability, score));
+        }
+        map
     }
 }
 

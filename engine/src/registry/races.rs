@@ -4,7 +4,7 @@ use crate::{
     components::{
         id::{EffectId, RaceId, SubraceId},
         level_up::LevelUpPrompt,
-        race::{CreatureType, Race, RaceBase, Size, Subrace},
+        race::{CreatureSize, CreatureType, Race, RaceBase, Subrace},
     },
     registry,
 };
@@ -35,7 +35,7 @@ static DRAGONBORN: LazyLock<Race> = LazyLock::new(|| Race {
         (DRAGONBORN_WHITE.id.clone(), DRAGONBORN_WHITE.to_owned()),
     ]),
     creature_type: CreatureType::Humanoid,
-    size: Size::Medium,
+    size: CreatureSize::Medium,
     speed: 30,
 });
 

@@ -630,6 +630,7 @@ impl Display for ActionResult {
     }
 }
 
+// TODO: Combine these two?
 pub type ActionMap = HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)>;
 
 pub type ActionCooldownMap = HashMap<ActionId, RechargeRule>;

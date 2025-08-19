@@ -20,41 +20,9 @@ use crate::{
         skill::SkillSet,
         spells::spellbook::Spellbook,
     },
+    from_world,
     registry::{self},
 };
-
-macro_rules! from_world {
-    (
-        $(#[$meta:meta])*
-        $vis:vis struct $name:ident {
-            $(
-                $(#[$field_meta:meta])*
-                $field_vis:vis $field:ident : $ty:ty,
-            )*
-        }
-    ) => {
-        use hecs::{World, Entity};
-        use crate::systems;
-
-        $(#[$meta])*
-        $vis struct $name {
-            $(
-                $(#[$field_meta])*
-                $field_vis $field : $ty,
-            )*
-        }
-
-        impl $name {
-            pub fn from_world(world: &World, entity: Entity) -> Self {
-                Self {
-                    $(
-                        $field: systems::helpers::get_component_clone(world, entity),
-                    )*
-                }
-            }
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct CharacterTag;
@@ -70,7 +38,7 @@ from_world!(
         pub subrace: Option<SubraceId>,
         pub background: Option<BackgroundId>,
         pub levels: CharacterLevels,
-        pub hp: HitPoints,
+        pub hit_points: HitPoints,
         pub ability_scores: AbilityScoreMap,
         pub skills: SkillSet,
         pub saving_throws: SavingThrowSet,
@@ -89,19 +57,6 @@ from_world!(
 
 impl Character {
     pub fn new(name: &str) -> Self {
-        // TODO: Not sure this is the best place to put this?
-        // By default everyone has one action, bonus action and reaction
-        let mut resources = ResourceMap::new();
-        for resource in [
-            registry::resources::ACTION.clone(),
-            registry::resources::BONUS_ACTION.clone(),
-            registry::resources::REACTION.clone(),
-        ] {
-            resources.add(
-                Resource::new(resource, 1, RechargeRule::OnTurn).unwrap(),
-                true,
-            );
-        }
         Self {
             tag: CharacterTag,
             name: name.to_string(),
@@ -109,7 +64,7 @@ impl Character {
             subrace: None,
             background: None,
             levels: CharacterLevels::new(),
-            hp: HitPoints::new(0),
+            hit_points: HitPoints::new(0),
             ability_scores: AbilityScoreMap::new(),
             skills: SkillSet::default(),
             saving_throws: SavingThrowSet::default(),
@@ -118,7 +73,7 @@ impl Character {
             loadout: Loadout::new(),
             inventory: Inventory::new(),
             spellbook: Spellbook::new(),
-            resources,
+            resources: ResourceMap::default(),
             effects: Vec::new(),
             feats: Vec::new(),
             // TODO: Default actions like jump, dash, help, etc.

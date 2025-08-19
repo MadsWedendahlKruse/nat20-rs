@@ -342,6 +342,12 @@ impl DamageResistances {
     }
 }
 
+impl Default for DamageResistances {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl fmt::Display for DamageResistances {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.effects.is_empty() {

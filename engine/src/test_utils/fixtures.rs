@@ -301,11 +301,16 @@ pub mod creatures {
     }
 
     pub mod monsters {
-        use std::collections::HashSet;
 
         use crate::{
-            components::{class::ClassName, id::EntityIdentifier, level_up::ChoiceItem},
-            entities::character::Character,
+            components::{
+                ability::AbilityScoreMap,
+                hit_points::HitPoints,
+                id::EntityIdentifier,
+                level::ChallengeRating,
+                race::{CreatureSize, CreatureType},
+            },
+            entities::monster::Monster,
             registry,
         };
 
@@ -313,64 +318,40 @@ pub mod creatures {
 
         pub fn goblin_warrior(world: &mut World) -> EntityIdentifier {
             let name = "Goblin Warrior";
-            let character = Character::new(name);
-            let entity = world.spawn(character);
-            // TODO: Not sure how to handle monster level-ups yet
-            systems::level_up::apply_level_up_decision(
-                world,
-                entity,
-                1,
-                vec![
-                    // Level 1
-                    // TODO: Everyone is dragonborn for now (even the goblins)
-                    LevelUpDecision::single_choice(ChoiceItem::Race(
-                        registry::races::DRAGONBORN_ID.clone(),
-                    )),
-                    LevelUpDecision::single_choice(ChoiceItem::Subrace(
-                        registry::races::DRAGONBORN_GREEN_ID.clone(),
-                    )),
-                    LevelUpDecision::single_choice(ChoiceItem::Background(
-                        registry::backgrounds::SOLDIER_ID.clone(),
-                    )),
-                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
-                    LevelUpDecision::AbilityScores(
-                        registry::classes::CLASS_REGISTRY
-                            .get(&ClassName::Fighter)
-                            .unwrap()
-                            .default_abilities
-                            .clone(),
-                    ),
-                    LevelUpDecision::single_choice_with_id(
-                        "choice.fighting_style",
-                        ChoiceItem::Feat(
-                            registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
-                        ),
-                    ),
-                    LevelUpDecision::SkillProficiency(HashSet::from([
-                        Skill::Acrobatics,
-                        Skill::Survival,
-                    ])),
-                    LevelUpDecision::single_choice_with_id(
-                        "choice.starting_equipment.fighter",
-                        ChoiceItem::Equipment {
-                            items: vec![
-                                (1, registry::items::STUDDED_LEATHER_ARMOR_ID.clone()),
-                                (1, registry::items::SCIMITAR_ID.clone()),
-                                (1, registry::items::SHORTSWORD_ID.clone()),
-                                (1, registry::items::LONGBOW_ID.clone()),
-                            ],
-                            money: "11 GP".to_string(),
-                        },
-                    ),
-                    LevelUpDecision::single_choice_with_id(
-                        "choice.starting_equipment.soldier",
-                        ChoiceItem::Equipment {
-                            items: Vec::new(),
-                            money: "50 GP".to_string(),
-                        },
-                    ),
-                ],
+            let monster = Monster::new(
+                name,
+                ChallengeRating::new(1),
+                HitPoints::new(10),
+                CreatureSize::Small,
+                CreatureType::Fey,
+                AbilityScoreMap::from([
+                    (Ability::Strength, 10),
+                    (Ability::Dexterity, 14),
+                    (Ability::Constitution, 12),
+                    (Ability::Intelligence, 8),
+                    (Ability::Wisdom, 10),
+                    (Ability::Charisma, 8),
+                ]),
             );
+            let entity = world.spawn(monster);
+            {
+                [
+                    // TODO: Should be LEATHER_ARMOR_ID
+                    registry::items::STUDDED_LEATHER_ARMOR_ID.clone(),
+                    registry::items::SCIMITAR_ID.clone(),
+                    // TODO: Add SHIELD_ID
+                    registry::items::SHORTBOW_ID.clone(),
+                ]
+                .iter()
+                .for_each(|item_id| {
+                    let _ = systems::loadout::equip(
+                        world,
+                        entity,
+                        registry::items::ITEM_REGISTRY.get(item_id).unwrap().clone(),
+                    );
+                });
+            }
+
             EntityIdentifier::new(entity, name)
         }
     }
