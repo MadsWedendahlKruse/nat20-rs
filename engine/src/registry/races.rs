@@ -4,7 +4,7 @@ use crate::{
     components::{
         id::{EffectId, RaceId, SubraceId},
         level_up::LevelUpPrompt,
-        race::{CreatureSize, CreatureType, Race, RaceBase, Subrace},
+        race::{CreatureSize, CreatureType, Race, RaceBase, Speed, Subrace},
     },
     registry,
 };
@@ -36,7 +36,7 @@ static DRAGONBORN: LazyLock<Race> = LazyLock::new(|| Race {
     ]),
     creature_type: CreatureType::Humanoid,
     size: CreatureSize::Medium,
-    speed: 30,
+    speed: Speed(30),
 });
 
 macro_rules! dragonborn_subraces {

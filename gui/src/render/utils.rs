@@ -1,3 +1,6 @@
+use hecs::{Entity, World};
+use nat20_rs::components::id::Name;
+
 pub trait ImguiRenderable {
     fn render(&self, ui: &imgui::Ui);
 }
@@ -108,42 +111,6 @@ where
     clicked_index
 }
 
-type ButtonAction<S> = Box<dyn FnMut(&mut S) + 'static>;
-
-// TODO: Not sure if this is actually useful
-/// Renders equal-width buttons, and if one is clicked, runs its action on `state`.
-/// Returns the clicked index (if any).
-pub fn render_uniform_buttons_do<S>(
-    ui: &imgui::Ui,
-    items: &mut [(&str, ButtonAction<S>)],
-    state: &mut S,
-    padding: [f32; 2],
-) -> Option<usize> {
-    // Pass 1: max width
-    let max_width = items
-        .iter()
-        .map(|(label, _)| ui.calc_text_size(label)[0])
-        .fold(0.0, f32::max)
-        + padding[0] * 2.0;
-
-    // Pass 2: render
-    let mut clicked = None;
-    for (i, (label, _)) in items.iter_mut().enumerate() {
-        let _style = ui.push_style_var(imgui::StyleVar::ButtonTextAlign([0.5, 0.5]));
-        let height = ui.calc_text_size(&*label)[1] + padding[1] * 2.0;
-        if ui.button_with_size(label, [max_width, height]) {
-            clicked = Some(i);
-        }
-    }
-
-    // Dispatch after the render loop to avoid borrow tangles
-    if let Some(i) = clicked {
-        (items[i].1)(state);
-    }
-
-    clicked
-}
-
 #[macro_export]
 macro_rules! buttons {
     ($($label:expr => $action:expr),+ $(,)?) => {
@@ -193,4 +160,15 @@ pub fn render_window_at_cursor<R, F: FnOnce() -> R>(
         .position(cursor_pos, imgui::Condition::Once)
         .always_auto_resize(always_auto_resize)
         .build(build_fn);
+}
+
+pub fn entities_by_tag<T>(world: &World) -> Vec<(Entity, Name, T)>
+where
+    T: 'static + Clone + Send + Sync,
+{
+    world
+        .query::<(&Name, &T)>()
+        .into_iter()
+        .map(|(entity, (name, tag))| (entity, name.clone(), tag.clone()))
+        .collect()
 }

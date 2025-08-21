@@ -16,7 +16,7 @@ use nat20_rs::{
         },
         effects::effects::{Effect, EffectDuration},
         hit_points::HitPoints,
-        id::{FeatId, RaceId, SpellId, SubraceId},
+        id::{FeatId, Name, RaceId, SpellId, SubraceId},
         items::{
             equipment::{
                 armor::{Armor, ArmorClass, ArmorType},
@@ -26,7 +26,7 @@ use nat20_rs::{
             item::{Item, ItemRarity},
             money::MonetaryValue,
         },
-        level::CharacterLevels,
+        level::{ChallengeRating, CharacterLevels, Level},
         modifier::ModifierSet,
         proficiency::{Proficiency, ProficiencyLevel},
         resource::ResourceMap,
@@ -114,6 +114,13 @@ impl ImguiRenderableWithContext<ModifierSetRenderMode> for ModifierSet {
     }
 }
 
+// TODO: Replace with Name (or similar struct)?
+impl ImguiRenderable for Name {
+    fn render(&self, ui: &imgui::Ui) {
+        ui.text(self.as_str());
+    }
+}
+
 impl ImguiRenderable for CharacterLevels {
     fn render(&self, ui: &imgui::Ui) {
         let mut class_strings = Vec::new();
@@ -128,6 +135,13 @@ impl ImguiRenderable for CharacterLevels {
         }
         let all_classes = class_strings.join(", ");
         ui.text(all_classes);
+    }
+}
+
+impl ImguiRenderable for ChallengeRating {
+    fn render(&self, ui: &imgui::Ui) {
+        // TODO: Not sure if we should write level or challenge rating
+        ui.text(format!("Level {}", self.total_level()));
     }
 }
 
@@ -791,7 +805,7 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
         let indent_level = context;
 
         let target_name = match &self.target {
-            TargetTypeInstance::Entity(entity) => entity.name(),
+            TargetTypeInstance::Entity(entity) => entity.name().as_str(),
             TargetTypeInstance::Point(point) => todo!(),
             TargetTypeInstance::Area(area_shape) => {
                 todo!()
@@ -1063,107 +1077,6 @@ impl ImguiRenderable for EffectDuration {
             }
             // TODO: Does it make sense to render the other durations?
             _ => {}
-        }
-    }
-}
-
-pub enum CharacterRenderMode {
-    Full,
-    Compact,
-}
-
-impl ImguiRenderableWithContext<(&mut World, CharacterRenderMode)> for (Entity, CharacterTag) {
-    fn render_with_context(&self, ui: &imgui::Ui, context: (&mut World, CharacterRenderMode)) {
-        let (entity, _) = *self;
-        let (world, mode) = context;
-
-        match mode {
-            CharacterRenderMode::Full => todo!(),
-
-            CharacterRenderMode::Compact => {
-                ui.text(systems::helpers::get_component::<String>(world, entity).to_string());
-                systems::helpers::get_component::<CharacterLevels>(world, entity).render(ui);
-                systems::helpers::get_component::<HitPoints>(world, entity).render(ui);
-                {
-                    let effects = systems::effects::effects(world, entity);
-                    if !effects.is_empty() {
-                        let conditions = effects
-                            .iter()
-                            .filter(|e| {
-                                matches!(
-                                    e.duration(),
-                                    EffectDuration::Temporary { .. } | EffectDuration::Conditional
-                                )
-                            })
-                            .collect::<Vec<_>>();
-                        ui.separator_with_text("Condtions");
-                        if !conditions.is_empty() {
-                            if let Some(table) =
-                                table_with_columns!(ui, "Conditions", "Condition", "Duration")
-                            {
-                                for effect in conditions {
-                                    ui.table_next_column();
-                                    ui.text(effect.id().to_string());
-                                    ui.table_next_column();
-                                    effect.duration().render(ui);
-                                }
-                                table.end();
-                            }
-                        } else {
-                            ui.text("None");
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-impl ImguiRenderableMutWithContext<&mut World> for (Entity, CharacterTag) {
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, world: &mut World) {
-        let (entity, _) = *self;
-        ui.text(format!("ID: {:?}", entity));
-
-        render_race(ui, world, entity);
-        systems::helpers::get_component::<CharacterLevels>(world, entity).render(ui);
-        systems::helpers::get_component::<HitPoints>(world, entity).render(ui);
-        systems::helpers::get_component::<AbilityScoreMap>(world, entity)
-            .render_with_context(ui, (world, entity));
-        systems::helpers::get_component::<DamageResistances>(world, entity).render(ui);
-
-        if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
-            if let Some(tab) = ui.tab_item("Skills") {
-                systems::helpers::get_component::<SkillSet>(world, entity)
-                    .render_with_context(ui, (world, entity));
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Inventory") {
-                render_loadout_inventory(ui, world, entity);
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Spellbook") {
-                systems::helpers::get_component_mut::<Spellbook>(world, entity).render_mut(ui);
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Resources") {
-                systems::helpers::get_component::<ResourceMap>(world, entity).render(ui);
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Effects") {
-                systems::effects::effects(world, entity).render(ui);
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Feats") {
-                systems::helpers::get_component::<Vec<FeatId>>(world, entity).render(ui);
-                tab.end();
-            }
-
-            tab_bar.end();
         }
     }
 }

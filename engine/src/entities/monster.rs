@@ -6,7 +6,8 @@ use crate::{
         actions::action::{ActionCooldownMap, ActionMap},
         damage::DamageResistances,
         effects::effects::Effect,
-        hit_points::{self, HitPoints},
+        hit_points::HitPoints,
+        id::Name,
         items::equipment::loadout::Loadout,
         level::ChallengeRating,
         race::{CreatureSize, CreatureType},
@@ -25,7 +26,7 @@ from_world!(
     #[derive(Bundle, Clone)]
     pub struct Monster {
         pub tag: MonsterTag,
-        pub name: String,
+        pub name: Name,
         pub challenge_rating: ChallengeRating,
         pub hit_points: HitPoints,
         pub size: CreatureSize,
@@ -48,7 +49,7 @@ from_world!(
 
 impl Monster {
     pub fn new(
-        name: &str,
+        name: Name,
         challenge_rating: ChallengeRating,
         hit_points: HitPoints,
         size: CreatureSize,
@@ -57,7 +58,7 @@ impl Monster {
     ) -> Self {
         Self {
             tag: MonsterTag,
-            name: name.to_string(),
+            name,
             challenge_rating,
             hit_points,
             size,

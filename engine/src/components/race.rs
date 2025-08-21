@@ -33,6 +33,18 @@ pub enum CreatureSize {
     Gargantuan,
 }
 
+// TODO: Do we need all these modes?
+// pub struct Speed {
+//     pub walk: u8,
+//     pub burrow: Option<u8>,
+//     pub climb: Option<u8>,
+//     pub fly: Option<u8>,
+//     pub swim: Option<u8>,
+// }
+
+#[derive(Debug, Clone)]
+pub struct Speed(pub u8);
+
 #[derive(Debug, Clone)]
 pub struct RaceBase {
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
@@ -47,7 +59,7 @@ pub struct Race {
     pub creature_type: CreatureType,
     pub size: CreatureSize,
     // TODO: Subraces can modify the speed using an effect?
-    pub speed: u8,
+    pub speed: Speed,
 }
 
 #[derive(Debug, Clone)]

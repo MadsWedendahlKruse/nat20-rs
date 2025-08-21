@@ -54,7 +54,7 @@ pub mod creatures {
         use crate::{
             components::{
                 class::{ClassName, SubclassName},
-                id::EntityIdentifier,
+                id::{EntityIdentifier, Name},
                 level_up::ChoiceItem,
                 skill::SkillSet,
                 spells::spellbook::Spellbook,
@@ -75,8 +75,8 @@ pub mod creatures {
 
         // TODO: Should spawn an Entity in a World instead of returning a Character
         pub fn fighter(world: &mut World) -> EntityIdentifier {
-            let name = "Johnny Fighter";
-            let character = Character::new(name);
+            let name = Name::new("Johnny Fighter");
+            let character = Character::new(name.clone());
             let entity = world.spawn(character);
             systems::level_up::apply_level_up_decision(
                 world,
@@ -157,8 +157,8 @@ pub mod creatures {
         }
 
         pub fn wizard(world: &mut World) -> EntityIdentifier {
-            let name = "Jimmy Wizard";
-            let character = Character::new(name);
+            let name = Name::new("Jimmy Wizard");
+            let character = Character::new(name.clone());
             let entity = world.spawn(character);
             systems::level_up::apply_level_up_decision(
                 world,
@@ -232,8 +232,8 @@ pub mod creatures {
         }
 
         pub fn warlock(world: &mut World) -> EntityIdentifier {
-            let name = "Bobby Warlock";
-            let character = Character::new(name);
+            let name = Name::new("Bobby Warlock");
+            let character = Character::new(name.clone());
             let entity = world.spawn(character);
             systems::level_up::apply_level_up_decision(
                 world,
@@ -306,7 +306,7 @@ pub mod creatures {
             components::{
                 ability::AbilityScoreMap,
                 hit_points::HitPoints,
-                id::EntityIdentifier,
+                id::{EntityIdentifier, Name},
                 level::ChallengeRating,
                 race::{CreatureSize, CreatureType},
             },
@@ -317,9 +317,9 @@ pub mod creatures {
         use super::*;
 
         pub fn goblin_warrior(world: &mut World) -> EntityIdentifier {
-            let name = "Goblin Warrior";
+            let name = Name::new("Goblin Warrior");
             let monster = Monster::new(
-                name,
+                name.clone(),
                 ChallengeRating::new(1),
                 HitPoints::new(10),
                 CreatureSize::Small,

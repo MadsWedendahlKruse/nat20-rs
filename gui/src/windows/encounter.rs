@@ -1,14 +1,14 @@
 use std::collections::HashSet;
 
 use hecs::{Entity, World};
-use imgui::{ChildFlags, TreeNodeFlags};
+use imgui::ChildFlags;
 use nat20_rs::{
     components::{
         actions::{
             action::{ActionContext, ActionMap},
             targeting::TargetingKind,
         },
-        id::{ActionId, EncounterId},
+        id::{ActionId, EncounterId, Name},
         resource::ResourceMap,
         spells::spellbook::Spellbook,
     },
@@ -25,7 +25,7 @@ use nat20_rs::{
 
 use crate::{
     render::{
-        components::CharacterRenderMode,
+        entities::CreatureRenderMode,
         text::{TextKind, TextSegments},
         utils::{
             ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
@@ -109,7 +109,7 @@ impl ActionDecisionProgress {
     }
 }
 
-enum EncounterGuiState {
+enum EncounterWindowState {
     EncounterCreation {
         participants: HashSet<Entity>,
     },
@@ -120,15 +120,15 @@ enum EncounterGuiState {
     EncounterFinished,
 }
 
-pub struct EncounterGui {
-    state: EncounterGuiState,
+pub struct EncounterWindow {
+    state: EncounterWindowState,
     id: EncounterId,
 }
 
-impl EncounterGui {
+impl EncounterWindow {
     pub fn new() -> Self {
         Self {
-            state: EncounterGuiState::EncounterCreation {
+            state: EncounterWindowState::EncounterCreation {
                 participants: HashSet::new(),
             },
             id: EncounterId::new_v4(),
@@ -140,32 +140,36 @@ impl EncounterGui {
     }
 
     pub fn finished(&self) -> bool {
-        matches!(self.state, EncounterGuiState::EncounterFinished)
+        matches!(self.state, EncounterWindowState::EncounterFinished)
     }
 }
 
-impl ImguiRenderableMutWithContext<&mut GameState> for EncounterGui {
+impl ImguiRenderableMutWithContext<&mut GameState> for EncounterWindow {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, game_state: &mut GameState) {
         match &mut self.state {
-            EncounterGuiState::EncounterCreation { participants } => {
+            EncounterWindowState::EncounterCreation { participants } => {
                 ui.separator_with_text("Encounter creation");
                 ui.text("Select participants:");
-                let characters = game_state
+
+                game_state
                     .world
-                    .query_mut::<(&String, &CharacterTag)>()
+                    .query::<&Name>()
                     .into_iter()
-                    .map(|(entity, (name, tag))| (entity, name.clone(), tag.clone()))
-                    .collect::<Vec<_>>();
-                for (entity, name, tag) in characters {
-                    let is_selected = participants.contains(&entity);
-                    if render_button_selectable(ui, name, [100.0, 20.0], is_selected) {
-                        if is_selected {
-                            participants.remove(&entity);
-                        } else {
-                            participants.insert(entity);
+                    .for_each(|(entity, name)| {
+                        let is_selected = participants.contains(&entity);
+                        if render_button_selectable(
+                            ui,
+                            name.to_string(),
+                            [100.0, 20.0],
+                            is_selected,
+                        ) {
+                            if is_selected {
+                                participants.remove(&entity);
+                            } else {
+                                participants.insert(entity);
+                            }
                         }
-                    }
-                }
+                    });
 
                 ui.separator();
                 if render_button_disabled_conditionally(
@@ -176,14 +180,14 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterGui {
                     "You must have at least two participants to start an encounter.",
                 ) {
                     game_state.start_encounter_with_id(participants.clone(), self.id);
-                    self.state = EncounterGuiState::EncounterRunning {
+                    self.state = EncounterWindowState::EncounterRunning {
                         decision_progress: None,
                         auto_scroll_combat_log: true,
                     };
                 }
             }
 
-            EncounterGuiState::EncounterRunning {
+            EncounterWindowState::EncounterRunning {
                 decision_progress,
                 auto_scroll_combat_log,
             } => {
@@ -246,12 +250,12 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterGui {
 
                 ui.separator();
                 if ui.button("End Encounter") {
-                    self.state = EncounterGuiState::EncounterFinished;
+                    self.state = EncounterWindowState::EncounterFinished;
                     game_state.end_encounter(&self.id);
                 }
             }
 
-            EncounterGuiState::EncounterFinished => {
+            EncounterWindowState::EncounterFinished => {
                 ui.text("Encounter finished!");
             }
         }
@@ -271,11 +275,12 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
 
         let initiative_order = self.initiative_order();
         let current_entity = self.current_entity();
-        let current_name = systems::helpers::get_component_clone::<String>(world, current_entity);
+        let current_name =
+            systems::helpers::get_component_clone::<Name>(world, current_entity).to_string();
 
         if let Some(table) = table_with_columns!(ui, "Initiative Order", "", "Participant",) {
             for (entity, initiative) in initiative_order {
-                if let Ok((name, tag)) = world.query_one_mut::<(&String, &CharacterTag)>(*entity) {
+                if let Ok(_) = world.query_one_mut::<&Name>(*entity) {
                     // Initiative column
                     ui.table_next_column();
                     ui.text(initiative.total.to_string());
@@ -292,8 +297,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
 
                     // Participant column
                     ui.table_next_column();
-                    (*entity, tag.clone())
-                        .render_with_context(ui, (world, CharacterRenderMode::Compact));
+                    entity.render_with_context(ui, (world, CreatureRenderMode::Compact));
                 }
             }
 
@@ -430,7 +434,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                     render_window_at_cursor(ui, "Target Selection", true, || {
                         TextSegments::new(vec![
                             (
-                                systems::helpers::get_component::<String>(world, current_entity)
+                                systems::helpers::get_component::<Name>(world, current_entity)
                                     .to_string(),
                                 TextKind::Actor,
                             ),
@@ -497,7 +501,8 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                 render_window_at_cursor(ui, "Reaction", true, || {
                     let mut segments = vec![
                         (
-                            systems::helpers::get_component_clone::<String>(world, action.actor),
+                            systems::helpers::get_component_clone::<Name>(world, action.actor)
+                                .to_string(),
                             TextKind::Actor,
                         ),
                         ("used".to_string(), TextKind::Normal),
@@ -509,17 +514,19 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                         } else {
                             segments.push((", ".to_string(), TextKind::Normal));
                         }
-                        let target_name =
-                            systems::helpers::get_component_clone::<String>(world, *action_target);
-                        segments.push((target_name, TextKind::Target));
+                        segments.push((
+                            systems::helpers::get_component_clone::<Name>(world, *action_target)
+                                .to_string(),
+                            TextKind::Target,
+                        ));
                     }
                     TextSegments::new(segments).render(ui);
 
                     ui.text("Choose how to react");
 
-                    ui.separator_with_text(systems::helpers::get_component_clone::<String>(
-                        world, *reactor,
-                    ));
+                    ui.separator_with_text(
+                        systems::helpers::get_component_clone::<Name>(world, *reactor).as_str(),
+                    );
                     for option in options {
                         if render_button_selectable(
                             ui,
@@ -572,10 +579,10 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
             TargetingKind::Single => {
                 ui.text("Select a single target:");
                 for entity in encounter.participants() {
-                    if let Ok(name) = world.query_one_mut::<&String>(*entity) {
+                    if let Ok(name) = world.query_one_mut::<&Name>(*entity) {
                         if render_button_selectable(
                             ui,
-                            name.clone(),
+                            name.to_string(),
                             [100.0, 20.0],
                             targets.contains(entity),
                         ) {
@@ -597,8 +604,8 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
                 ));
                 ui.separator_with_text("Possible targets");
                 for entity in encounter.participants() {
-                    if let Ok(name) = world.query_one_mut::<&String>(*entity) {
-                        if ui.button(name.clone()) && targets.len() < max_targets {
+                    if let Ok(name) = world.query_one_mut::<&Name>(*entity) {
+                        if ui.button(name.as_str()) && targets.len() < max_targets {
                             targets.push(*entity);
                         }
                     }
@@ -606,8 +613,8 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
                 ui.separator_with_text("Selected targets");
                 let mut remove_target = None;
                 for (i, target) in (&mut *targets).iter().enumerate() {
-                    if let Ok(name) = world.query_one_mut::<&String>(*target) {
-                        if ui.button(format!("{}##{}", name, i)) {
+                    if let Ok(name) = world.query_one_mut::<&Name>(*target) {
+                        if ui.button(format!("{}##{}", name.as_str(), i)) {
                             remove_target = Some(i);
                         }
                     }
@@ -639,7 +646,7 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                 CombatEvents::ActionPerformed { action, results } => {
                     TextSegments::new(vec![
                         (
-                            &systems::helpers::get_component::<String>(world, action.actor)
+                            &systems::helpers::get_component::<Name>(world, action.actor)
                                 .to_string(),
                             TextKind::Actor,
                         ),
@@ -653,10 +660,8 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                         TextSegments::new(vec![
                             ("on", TextKind::Normal),
                             (
-                                &systems::helpers::get_component::<String>(
-                                    world,
-                                    action.targets[0],
-                                ),
+                                systems::helpers::get_component::<Name>(world, action.targets[0])
+                                    .as_str(),
                                 TextKind::Target,
                             ),
                         ])
@@ -671,7 +676,8 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                 CombatEvents::ReactionTriggered { reactor, action } => {
                     let mut segments = vec![
                         (
-                            systems::helpers::get_component_clone::<String>(world, action.actor),
+                            systems::helpers::get_component_clone::<Name>(world, action.actor)
+                                .to_string(),
                             TextKind::Actor,
                         ),
                         ("used".to_string(), TextKind::Normal),
@@ -683,22 +689,25 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                         } else {
                             segments.push((", ".to_string(), TextKind::Normal));
                         }
-                        let target_name =
-                            systems::helpers::get_component_clone::<String>(world, *action_target);
-                        segments.push((target_name, TextKind::Target));
+                        segments.push((
+                            systems::helpers::get_component_clone::<Name>(world, *action_target)
+                                .to_string(),
+                            TextKind::Target,
+                        ));
                     }
                     TextSegments::new(segments).render(ui);
 
                     TextSegments::new(vec![
                         (
-                            systems::helpers::get_component::<String>(world, *reactor).to_string(),
+                            systems::helpers::get_component::<Name>(world, *reactor).to_string(),
                             TextKind::Actor,
                         ),
                         ("is reacting to".to_string(), TextKind::Normal),
                         (
                             format!(
                                 "{}'s",
-                                systems::helpers::get_component::<String>(world, action.actor),
+                                systems::helpers::get_component::<Name>(world, action.actor)
+                                    .as_str(),
                             ),
                             TextKind::Actor,
                         ),
@@ -714,14 +723,15 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                 } => {
                     TextSegments::new(vec![
                         (
-                            systems::helpers::get_component::<String>(world, *reactor).to_string(),
+                            systems::helpers::get_component::<Name>(world, *reactor).to_string(),
                             TextKind::Actor,
                         ),
                         ("cancelled".to_string(), TextKind::Normal),
                         (
                             format!(
                                 "{}'s",
-                                systems::helpers::get_component::<String>(world, action.actor),
+                                systems::helpers::get_component::<Name>(world, action.actor)
+                                    .as_str(),
                             ),
                             TextKind::Actor,
                         ),
@@ -735,14 +745,15 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                 CombatEvents::NoReactionTaken { reactor, action } => {
                     TextSegments::new(vec![
                         (
-                            systems::helpers::get_component::<String>(world, *reactor).to_string(),
+                            systems::helpers::get_component::<Name>(world, *reactor).to_string(),
                             TextKind::Actor,
                         ),
                         ("did not react to".to_string(), TextKind::Normal),
                         (
                             format!(
                                 "{}'s",
-                                systems::helpers::get_component::<String>(world, action.actor),
+                                systems::helpers::get_component::<Name>(world, action.actor)
+                                    .as_str(),
                             ),
                             TextKind::Actor,
                         ),

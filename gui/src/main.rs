@@ -1,13 +1,13 @@
 use std::{num::NonZeroU32, time::Instant};
 
 mod render;
-mod state;
 mod utils;
+mod windows;
 
 use glow::HasContext;
 use glutin::surface::GlSurface;
 
-use crate::state::gui::GameGui;
+use crate::windows::main_menu::MainMenuWindow;
 
 fn main() {
     let (event_loop, window, surface, context) = utils::create_window("Hello, triangle!", None);
@@ -23,7 +23,7 @@ fn main() {
 
     let mut last_frame = Instant::now();
 
-    let mut gui_state = GameGui::new();
+    let mut gui_state = MainMenuWindow::new();
 
     #[allow(deprecated)]
     event_loop

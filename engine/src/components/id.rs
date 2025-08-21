@@ -1,4 +1,7 @@
-use std::fmt;
+use std::{
+    fmt::{self, Display},
+    ops::Deref,
+};
 
 use hecs::Entity;
 use uuid::Uuid;
@@ -14,6 +17,10 @@ macro_rules! id_newtypes {
             impl $name {
                 pub fn from_str(s: impl Into<String>) -> Self {
                     $name(s.into())
+                }
+
+                pub fn as_str(&self) -> &str {
+                    &self.0
                 }
             }
 
@@ -50,37 +57,60 @@ impl ActionId {
     }
 }
 
+// TODO: Not sure if this is the best place for this
+/// Name is a simple wrapper around a String to provide a type-safe way to
+/// handle names when querying entities in the game world. The alternative is to
+/// use a String directly, but a String can be ambiguous in terms of what it
+/// represents
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Name(String);
+
+impl Name {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn to_string(&self) -> String {
+        self.0.clone()
+    }
+
+    pub fn to_string_mut(&mut self) -> &mut String {
+        &mut self.0
+    }
+}
+
 /// Identifier for an entity in the game world.
 /// This is used to uniquely identify entities, such as characters or creatures.
-/// In most cases the id (`Entity` ) is meaningless outside the context of the
+/// In most cases the id (`Entity`) is meaningless outside the context of the
 /// world, so for convenience we also store the name of the entity.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EntityIdentifier {
     id: Entity,
-    name: String,
+    name: Name,
 }
 
 impl EntityIdentifier {
-    pub fn new(id: Entity, name: impl Into<String>) -> Self {
-        Self {
-            id,
-            name: name.into(),
-        }
+    pub fn new(id: Entity, name: Name) -> Self {
+        Self { id, name }
     }
 
     pub fn id(&self) -> Entity {
         self.id
     }
 
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &Name {
         &self.name
     }
 
     pub fn from_world(world: &hecs::World, entity: Entity) -> Self {
         let name = world
-            .get::<&String>(entity)
-            .map(|name| name.to_string())
-            .unwrap_or_else(|_| "Unnamed Entity".to_string());
+            .get::<&Name>(entity)
+            .map(|name| name.deref().clone())
+            .unwrap_or_else(|_| Name::new("Unnamed Entity"));
         Self::new(entity, name)
     }
 }

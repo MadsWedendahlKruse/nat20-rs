@@ -9,19 +9,19 @@ use crate::{
         damage::DamageResistances,
         effects::effects::Effect,
         hit_points::HitPoints,
-        id::{BackgroundId, FeatId, RaceId, SubraceId},
+        id::{BackgroundId, FeatId, Name, RaceId, SubraceId},
         items::{
             equipment::{loadout::Loadout, weapon::WeaponProficiencyMap},
             inventory::Inventory,
         },
         level::CharacterLevels,
-        resource::{RechargeRule, Resource, ResourceMap},
+        race::{CreatureSize, CreatureType, Speed},
+        resource::ResourceMap,
         saving_throw::SavingThrowSet,
         skill::SkillSet,
         spells::spellbook::Spellbook,
     },
     from_world,
-    registry::{self},
 };
 
 #[derive(Debug, Clone)]
@@ -31,11 +31,14 @@ from_world!(
     #[derive(Bundle, Clone)]
     pub struct Character {
         pub tag: CharacterTag,
-        pub name: String,
+        pub name: Name,
         // TODO: Not sure if Option makes sense here, it would only be at the
         // very beginning of character creation where they are not set
         pub race: Option<RaceId>,
         pub subrace: Option<SubraceId>,
+        pub size: Option<CreatureSize>,
+        pub creature_type: Option<CreatureType>,
+        pub speed: Option<Speed>,
         pub background: Option<BackgroundId>,
         pub levels: CharacterLevels,
         pub hit_points: HitPoints,
@@ -56,13 +59,16 @@ from_world!(
 );
 
 impl Character {
-    pub fn new(name: &str) -> Self {
+    pub fn new(name: Name) -> Self {
         Self {
             tag: CharacterTag,
-            name: name.to_string(),
+            name,
             race: None,
             subrace: None,
             background: None,
+            size: None,
+            creature_type: None,
+            speed: None,
             levels: CharacterLevels::new(),
             hit_points: HitPoints::new(0),
             ability_scores: AbilityScoreMap::new(),
@@ -85,6 +91,6 @@ impl Character {
 
 impl Default for Character {
     fn default() -> Self {
-        Character::new("John Doe")
+        Character::new(Name::new("John Doe"))
     }
 }

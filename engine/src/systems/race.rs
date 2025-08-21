@@ -5,7 +5,7 @@ use crate::{
         actions::action::ActionMap,
         id::{RaceId, SubraceId},
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
-        race::RaceBase,
+        race::{CreatureSize, CreatureType, RaceBase, Speed},
     },
     registry, systems,
 };
@@ -33,6 +33,14 @@ pub fn set_race(world: &mut World, entity: Entity, race: &RaceId) -> Vec<LevelUp
                 .collect(),
         )));
     }
+
+    systems::helpers::set_component::<Option<CreatureSize>>(world, entity, Some(race.size.clone()));
+    systems::helpers::set_component::<Option<CreatureType>>(
+        world,
+        entity,
+        Some(race.creature_type.clone()),
+    );
+    systems::helpers::set_component::<Option<Speed>>(world, entity, Some(race.speed.clone()));
 
     prompts
 }

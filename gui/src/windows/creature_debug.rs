@@ -18,29 +18,29 @@ pub enum CheckKind {
     SkillCheck,
 }
 
-pub enum CharacterDebugState {
+pub enum CreatureDebugState {
     MainMenu,
     Check { kind: CheckKind, dc_value: i32 },
 }
 
-pub struct CharacterDebugGui {
-    pub character: Entity,
-    pub state: CharacterDebugState,
+pub struct CreatureDebugWindow {
+    pub state: CreatureDebugState,
+    pub creature: Entity,
 }
 
-impl CharacterDebugGui {
-    pub fn new(character: Entity) -> Self {
+impl CreatureDebugWindow {
+    pub fn new(creature: Entity) -> Self {
         Self {
-            character,
-            state: CharacterDebugState::MainMenu,
+            state: CreatureDebugState::MainMenu,
+            creature,
         }
     }
 }
 
-impl ImguiRenderableMutWithContext<&mut GameState> for CharacterDebugGui {
+impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, game_state: &mut GameState) {
         ui.popup("Debug", || match &mut self.state {
-            CharacterDebugState::MainMenu => {
+            CreatureDebugState::MainMenu => {
                 if let Some(index) = render_uniform_buttons(
                     ui,
                     ["Heal Full", "Saving Throw", "Skill Check"],
@@ -48,16 +48,17 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CharacterDebugGui {
                 ) {
                     match index {
                         0 => {
-                            systems::health::heal_full(&mut game_state.world, self.character);
+                            systems::health::heal_full(&mut game_state.world, self.creature);
+                            ui.close_current_popup();
                         }
                         1 => {
-                            self.state = CharacterDebugState::Check {
+                            self.state = CreatureDebugState::Check {
                                 kind: CheckKind::SavingThrow,
                                 dc_value: 10,
                             };
                         }
                         2 => {
-                            self.state = CharacterDebugState::Check {
+                            self.state = CreatureDebugState::Check {
                                 kind: CheckKind::SkillCheck,
                                 dc_value: 10,
                             };
@@ -67,7 +68,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CharacterDebugGui {
                 }
             }
 
-            CharacterDebugState::Check { kind, dc_value } => match kind {
+            CreatureDebugState::Check { kind, dc_value } => match kind {
                 CheckKind::SavingThrow => {
                     ui.separator_with_text("Saving Throw");
 
@@ -94,10 +95,10 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CharacterDebugGui {
                             key: ability,
                         };
                         game_state.log_event(GameEvent::SavingThrow(
-                            self.character,
+                            self.creature,
                             systems::d20_check::saving_throw_dc(
                                 &game_state.world,
-                                self.character,
+                                self.creature,
                                 &dc,
                             ),
                             dc,
@@ -132,10 +133,10 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CharacterDebugGui {
                             key: skill,
                         };
                         game_state.log_event(GameEvent::SkillCheck(
-                            self.character,
+                            self.creature,
                             systems::d20_check::skill_check_dc(
                                 &game_state.world,
-                                self.character,
+                                self.creature,
                                 &dc,
                             ),
                             dc,

@@ -9,7 +9,7 @@ use crate::{
         id::EncounterId,
         skill::Skill,
     },
-    engine::encounter::{ActionDecision, CombatEvents, ActionError, CombatLog, Encounter},
+    engine::encounter::{ActionDecision, ActionError, CombatEvents, CombatLog, Encounter},
 };
 
 // TODO: Not 100% sure this is the best solution
@@ -22,6 +22,7 @@ pub enum GameEvent {
 
 pub type EventLog = Vec<GameEvent>;
 
+// TODO: WorldState instead?
 pub struct GameState {
     pub world: World,
     pub encounters: HashMap<EncounterId, Encounter>,
@@ -80,10 +81,7 @@ impl GameState {
         }
     }
 
-    pub fn process(
-        &mut self,
-        decision: ActionDecision,
-    ) -> Result<CombatEvents, ActionError> {
+    pub fn process(&mut self, decision: ActionDecision) -> Result<CombatEvents, ActionError> {
         let entity = decision.actor();
         if let Some(encounter_id) = self.in_combat.get(&entity) {
             if let Some(encounter) = self.encounters.get_mut(encounter_id) {

@@ -4,35 +4,32 @@ use std::{
 };
 
 use hecs::{Entity, World};
-use imgui::TreeNodeFlags;
 use nat20_rs::{
     components::{
         ability::{Ability, AbilityScoreDistribution, AbilityScoreMap},
-        id::{RaceId, SubraceId},
+        id::Name,
         level::CharacterLevels,
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         proficiency::{Proficiency, ProficiencyLevel},
         skill::{Skill, SkillSet},
     },
-    entities::character::{Character, CharacterTag},
+    entities::character::Character,
     registry,
     systems::{
         self,
         level_up::{LevelUpDecision, LevelUpGains, LevelUpSession},
     },
-    test_utils::fixtures,
 };
 use strum::IntoEnumIterator;
 
 use crate::{
-    buttons,
     render::{
         components::render_race,
         text::{TextKind, TextSegments},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext, labels_max_width,
-            render_button_disabled_conditionally, render_button_selectable, render_uniform_buttons,
-            render_uniform_buttons_do, render_window_at_cursor,
+            render_button_disabled_conditionally, render_button_selectable,
+            render_window_at_cursor,
         },
     },
     table_with_columns,
@@ -283,105 +280,50 @@ impl LevelUpPromptWithProgress {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum CharacterCreationState {
-    ChoosingMethod,
-    FromPredefined,
-    FromScratch,
-    CreationComplete,
-}
-
-pub struct CharacterCreation {
-    /// World where the character creation takes place. Note that this is not the
-    /// main game world, but rather a dummy world. Once the character is created,
-    /// it will be added to the main game world.
-    world: World,
-    state: Option<CharacterCreationState>,
-    current_character: Option<Entity>,
+pub struct LevelUpWindow {
+    character: Option<Entity>,
     /// The initial state of the character when the level-up session was first created.
     /// Whenever the user changes a decision, this is used to reset the character
     /// to the initial state, and then apply the new decisions.
     initial_character: Option<Character>,
     level_up_session: Option<LevelUpSession>,
     pending_decisions: Vec<LevelUpPromptWithProgress>,
+    level_up_complete: bool,
 }
 
-impl CharacterCreation {
-    pub fn new() -> Self {
-        let mut world = World::new();
-
-        let spawners = vec![
-            fixtures::creatures::heroes::fighter,
-            fixtures::creatures::heroes::wizard,
-            fixtures::creatures::heroes::warlock,
-            fixtures::creatures::monsters::goblin_warrior,
-        ];
-
-        for spawner in spawners {
-            let entity = spawner(&mut world).id();
-            // They spawn with zero health, so we heal them to full
-            systems::health::heal_full(&mut world, entity);
-        }
-
-        Self {
-            world,
-            state: None,
-            current_character: None,
-            initial_character: None,
-            level_up_session: None,
-            pending_decisions: Vec::new(),
-        }
-    }
-
-    pub fn set_state(&mut self, state: CharacterCreationState) {
-        self.state = Some(state);
-    }
-
-    pub fn creation_complete(&self) -> bool {
-        matches!(self.state, Some(CharacterCreationState::CreationComplete))
-    }
-
-    pub fn get_character(&mut self) -> Option<Character> {
-        if let Some(entity) = self.current_character {
-            let character = Some(Character::from_world(&self.world, entity));
-            self.reset();
-            character
+impl LevelUpWindow {
+    pub fn new(world: &World, character: Option<Entity>) -> Self {
+        let initial_character = if let Some(entity) = character {
+            Some(Character::from_world(world, entity))
         } else {
             None
+        };
+
+        Self {
+            character,
+            initial_character,
+            level_up_session: None,
+            pending_decisions: Vec::new(),
+            level_up_complete: false,
         }
     }
 
-    fn reset(&mut self) {
-        if let Some(entity) = self.current_character {
-            self.world.despawn(entity).unwrap();
-        }
-
-        self.state = None;
-        self.current_character = None;
-        self.level_up_session = None;
-        self.pending_decisions.clear();
+    pub fn is_level_up_complete(&self) -> bool {
+        self.level_up_complete
     }
 
-    fn sync_pending_decisions(&mut self) {
-        // Preserve the name
-        let name = systems::helpers::get_component_clone::<String>(
-            &self.world,
-            self.current_character.unwrap(),
-        );
+    fn sync_pending_decisions(&mut self, world: &mut World) {
+        // Preserve the name and id of the character
+        let entity_id = self.character.unwrap();
+        let name = systems::helpers::get_component_clone::<Name>(&world, entity_id);
 
         // Drop the current character and spawn a new one with the same name
         // This is to re-apply any changes made during the level-up session
-        self.world.despawn(self.current_character.unwrap()).unwrap();
-        self.current_character = Some(
-            self.world
-                .spawn(self.initial_character.as_ref().unwrap().clone()),
-        );
-        systems::helpers::set_component(&mut self.world, self.current_character.unwrap(), name);
+        world.despawn(entity_id).unwrap();
+        Some(world.spawn_at(entity_id, self.initial_character.as_ref().unwrap().clone()));
+        systems::helpers::set_component(world, entity_id, name);
 
-        self.level_up_session = Some(LevelUpSession::new(
-            &self.world,
-            self.current_character.unwrap(),
-        ));
+        self.level_up_session = Some(LevelUpSession::new(&world, entity_id));
 
         // TODO: Naming seems all over the place here (both variables and structs)
         // Check if any of the current decisions are still valid
@@ -400,7 +342,7 @@ impl CharacterCreation {
                 .level_up_session
                 .as_mut()
                 .unwrap()
-                .advance(&mut self.world, &decision);
+                .advance(world, &decision);
             if result.is_ok() {
                 valid_decisions.push(prompt_progress.clone());
             }
@@ -428,8 +370,8 @@ impl CharacterCreation {
                 self.pending_decisions.push(
                     LevelUpPromptWithProgress::new_from_prompt_and_character(
                         prompt.clone(),
-                        &self.world,
-                        self.current_character.unwrap(),
+                        &world,
+                        self.character.unwrap(),
                     ),
                 );
             }
@@ -437,208 +379,152 @@ impl CharacterCreation {
     }
 }
 
-impl ImguiRenderableMut for CharacterCreation {
-    fn render_mut(&mut self, ui: &imgui::Ui) {
-        if self.state.is_none() {
+impl ImguiRenderableMutWithContext<&mut World> for LevelUpWindow {
+    fn render_mut_with_context(&mut self, ui: &imgui::Ui, world: &mut World) {
+        // TODO: Kind of hacky
+        if self.level_up_complete {
             return;
         }
-        render_window_at_cursor(ui, "Character Creation", true, || {
-            match self.state {
-                Some(CharacterCreationState::ChoosingMethod) => {
-                    let mut buttons = buttons![
-                        "From Predefined" => |s: &mut Self| {
-                            s.state = Some(CharacterCreationState::FromPredefined);
-                        },
-                        "From Scratch" => |s: &mut Self| {
-                            s.reset();
-                            s.state = Some(CharacterCreationState::FromScratch);
-                        },
-                        "Cancel" => |s: &mut Self| {
-                            s.state = None;
-                        },
-                    ];
-                    let _ = render_uniform_buttons_do(ui, &mut buttons, self, [20.0, 5.0]);
+
+        render_window_at_cursor(ui, "Level Up", true, || {
+            if self.character.is_none() {
+                self.initial_character = Some(Character::new(Name::new("Johnny Hero")));
+                self.character =
+                    Some(world.spawn(self.initial_character.as_ref().unwrap().clone()));
+            }
+
+            {
+                let mut name =
+                    systems::helpers::get_component_mut::<Name>(world, self.character.unwrap());
+                ui.text("Name:");
+                if ui
+                    .input_text("##", name.to_string_mut())
+                    .enter_returns_true(true)
+                    .build()
+                {
+                    // systems::helpers::set_component(
+                    //     &mut world,
+                    //     self.current_character.unwrap(),
+                    //     name,
+                    // );
                 }
+            }
 
-                Some(CharacterCreationState::FromPredefined) => {
-                    // Avoid double borrow
-                    let characters = self
-                        .world
-                        .query_mut::<(&String, &CharacterTag)>()
-                        .into_iter()
-                        .map(|(entity, (name, tag))| (entity, name.clone(), tag.clone()))
-                        .collect::<Vec<_>>();
-                    for (entity, name, tag) in characters {
-                        if ui.collapsing_header(&name, TreeNodeFlags::FRAMED) {
-                            if ui.button(format!("Add to World##{}", entity.id())) {
-                                self.current_character = Some(entity);
-                                self.state = Some(CharacterCreationState::CreationComplete);
-                            }
-                            ui.separator();
-                            // TODO: Maybe they shouldn't be rendered as mutable?
-                            (entity, tag).render_mut_with_context(ui, &mut self.world);
-                        }
-                    }
-                    ui.separator();
-                    if ui.button("Back") {
-                        self.state = Some(CharacterCreationState::ChoosingMethod);
+            render_race(ui, world, self.character.unwrap());
+
+            {
+                let levels = systems::helpers::get_component::<CharacterLevels>(
+                    world,
+                    self.character.unwrap(),
+                );
+                levels.render(ui);
+
+                // If a class has been chosen, show what will be gained at this level
+                // TODO: Include race and subrace gains
+                if let Some(level_up_session) = &self.level_up_session {
+                    if let Some(class) = level_up_session.chosen_class() {
+                        systems::level_up::level_up_gains(
+                            &world,
+                            self.character.unwrap(),
+                            &class,
+                            levels.class_level(&class).unwrap().level(),
+                        )
+                        .render(ui);
                     }
                 }
+                ui.separator();
+            }
 
-                Some(CharacterCreationState::FromScratch) => {
-                    // Logic for scratch character creation
-                    if ui.button("Back") {
-                        self.state = Some(CharacterCreationState::ChoosingMethod);
+            let mut decision_updated = None;
+            for (i, pending_decision) in self.pending_decisions.iter_mut().enumerate() {
+                if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs")) {
+                    let style_tokens = if pending_decision.progress.is_complete() {
+                        Some(
+                            [
+                                (imgui::StyleColor::Tab, [0.0, 0.6, 0.0, 1.0]),
+                                (imgui::StyleColor::TabHovered, [0.0, 0.75, 0.0, 1.0]),
+                                (imgui::StyleColor::TabSelected, [0.0, 0.75, 0.0, 1.0]),
+                            ]
+                            .iter()
+                            .map(|(style, color)| ui.push_style_color(*style, *color))
+                            .collect::<Vec<_>>(),
+                        )
+                    } else {
+                        None
+                    };
+
+                    if let Some(tab) = ui.tab_item(format!("{}", pending_decision.prompt)) {
+                        pending_decision.render_mut(ui);
+                        tab.end();
                     }
-                    ui.separator();
 
-                    if self.current_character.is_none() {
-                        self.initial_character = Some(Character::new("Johnny Hero"));
-                        self.current_character = Some(
-                            self.world
-                                .spawn(self.initial_character.as_ref().unwrap().clone()),
-                        );
-                    }
+                    tab_bar.end();
 
-                    {
-                        let mut name = systems::helpers::get_component_mut::<String>(
-                            &mut self.world,
-                            self.current_character.unwrap(),
-                        );
-                        ui.text("Name:");
-                        if ui
-                            .input_text("##", &mut name)
-                            .enter_returns_true(true)
-                            .build()
+                    if let Some(level_up_session) = &mut self.level_up_session {
+                        // Check if a decision has been revoked
+                        if level_up_session.is_complete()
+                            && !pending_decision.progress.is_complete()
                         {
-                            // systems::helpers::set_component(
-                            //     &mut self.world,
-                            //     self.current_character.unwrap(),
-                            //     name,
-                            // );
+                            decision_updated = Some((i, pending_decision.clone()));
                         }
-                    }
 
-                    render_race(ui, &self.world, self.current_character.unwrap());
-
-                    {
-                        let levels = systems::helpers::get_component::<CharacterLevels>(
-                            &self.world,
-                            self.current_character.unwrap(),
-                        );
-                        levels.render(ui);
-
-                        // If a class has been chosen, show what will be gained at this level
-                        // TODO: Include race and subrace gains
-                        if let Some(level_up_session) = &self.level_up_session {
-                            if let Some(class) = level_up_session.chosen_class() {
-                                systems::level_up::level_up_gains(
-                                    &self.world,
-                                    self.current_character.unwrap(),
-                                    &class,
-                                    levels.class_level(&class).unwrap().level(),
-                                )
-                                .render(ui);
+                        // Check if the decision is complete
+                        if pending_decision.progress.is_complete() {
+                            let decision = pending_decision.progress.clone().finalize();
+                            if !level_up_session.decisions().contains(&decision) {
+                                println!("New decision: {:?}", decision);
+                                decision_updated = Some((i, pending_decision.clone()));
                             }
                         }
-                        ui.separator();
-                    }
-
-                    let mut decision_updated = None;
-                    for (i, pending_decision) in self.pending_decisions.iter_mut().enumerate() {
-                        if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs")) {
-                            let style_tokens = if pending_decision.progress.is_complete() {
-                                Some(
-                                    [
-                                        (imgui::StyleColor::Tab, [0.0, 0.6, 0.0, 1.0]),
-                                        (imgui::StyleColor::TabHovered, [0.0, 0.75, 0.0, 1.0]),
-                                        (imgui::StyleColor::TabSelected, [0.0, 0.75, 0.0, 1.0]),
-                                    ]
-                                    .iter()
-                                    .map(|(style, color)| ui.push_style_color(*style, *color))
-                                    .collect::<Vec<_>>(),
-                                )
-                            } else {
-                                None
-                            };
-
-                            if let Some(tab) = ui.tab_item(format!("{}", pending_decision.prompt)) {
-                                pending_decision.render_mut(ui);
-                                tab.end();
-                            }
-
-                            tab_bar.end();
-
-                            if let Some(level_up_session) = &mut self.level_up_session {
-                                // Check if a decision has been revoked
-                                if level_up_session.is_complete()
-                                    && !pending_decision.progress.is_complete()
-                                {
-                                    decision_updated = Some((i, pending_decision.clone()));
-                                }
-
-                                // Check if the decision is complete
-                                if pending_decision.progress.is_complete() {
-                                    let decision = pending_decision.progress.clone().finalize();
-                                    if !level_up_session.decisions().contains(&decision) {
-                                        println!("New decision: {:?}", decision);
-                                        decision_updated = Some((i, pending_decision.clone()));
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // All the decisions that come *after* choosing a class arise
-                    // from what class is chosen, so if the class decision is
-                    // updated, we can reset the subsequent decisions
-                    // (little bit of a hack)
-                    if let Some((index, decision)) = decision_updated.as_ref() {
-                        if let LevelUpPrompt::Choice(item) = &decision.prompt {
-                            // TODO: first().unwrap() is a bit hacky
-                            if matches!(&item.options.first().unwrap(), ChoiceItem::Class(_)) {
-                                self.pending_decisions.truncate(*index + 1);
-                            }
-                        }
-                    }
-
-                    // Check if any new pending prompts were triggered
-                    // Or if there are no pending decisions to choose from
-                    if decision_updated.is_some() || self.pending_decisions.is_empty() {
-                        self.sync_pending_decisions();
-                    }
-
-                    let buttons_disabled = !self.level_up_session.as_ref().unwrap().is_complete();
-                    let tooltip = "Please complete all required choices before proceeding.";
-
-                    ui.separator();
-                    if render_button_disabled_conditionally(
-                        ui,
-                        "Level Up",
-                        [200.0, 30.0],
-                        buttons_disabled,
-                        tooltip,
-                    ) {
-                        self.initial_character = Some(Character::from_world(
-                            &self.world,
-                            self.current_character.unwrap(),
-                        ));
-                        self.pending_decisions.clear();
-                    }
-
-                    ui.separator();
-                    if render_button_disabled_conditionally(
-                        ui,
-                        "Finish Character Creation",
-                        [200.0, 30.0],
-                        buttons_disabled,
-                        tooltip,
-                    ) {
-                        self.state = Some(CharacterCreationState::CreationComplete);
                     }
                 }
+            }
 
-                _ => {}
+            // All the decisions that come *after* choosing a class arise
+            // from what class is chosen, so if the class decision is
+            // updated, we can reset the subsequent decisions
+            // (little bit of a hack)
+            if let Some((index, decision)) = decision_updated.as_ref() {
+                if let LevelUpPrompt::Choice(item) = &decision.prompt {
+                    // TODO: first().unwrap() is a bit hacky
+                    if matches!(&item.options.first().unwrap(), ChoiceItem::Class(_)) {
+                        self.pending_decisions.truncate(*index + 1);
+                    }
+                }
+            }
+
+            // Check if any new pending prompts were triggered
+            // Or if there are no pending decisions to choose from
+            if decision_updated.is_some() || self.pending_decisions.is_empty() {
+                self.sync_pending_decisions(world);
+            }
+
+            let buttons_disabled = !self.level_up_session.as_ref().unwrap().is_complete();
+            let tooltip = "Please complete all required choices before proceeding.";
+
+            ui.separator();
+            if render_button_disabled_conditionally(
+                ui,
+                "Level Up",
+                [200.0, 30.0],
+                buttons_disabled,
+                tooltip,
+            ) {
+                self.initial_character =
+                    Some(Character::from_world(world, self.character.unwrap()));
+                self.pending_decisions.clear();
+            }
+
+            ui.separator();
+            if render_button_disabled_conditionally(
+                ui,
+                "Finish Character Creation",
+                [200.0, 30.0],
+                buttons_disabled,
+                tooltip,
+            ) {
+                // TODO: Close the window?
+                self.level_up_complete = true;
             }
         });
     }

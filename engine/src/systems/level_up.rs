@@ -9,7 +9,7 @@ use crate::{
         ability::{Ability, AbilityScore, AbilityScoreDistribution, AbilityScoreMap},
         class::ClassName,
         hit_points::HitPoints,
-        id::{ActionId, EffectId},
+        id::{ActionId, EffectId, Name},
         items::{equipment::loadout::EquipmentInstance, money::MonetaryValue},
         level::CharacterLevels,
         level_up::{ChoiceItem, LevelUpPrompt},
@@ -413,7 +413,7 @@ pub fn apply_level_up_decision(
     let mut decisions = decisions;
 
     for level in 1..=levels {
-        let name = systems::helpers::get_component_clone::<String>(world, entity);
+        let name = systems::helpers::get_component_clone::<Name>(world, entity);
         let mut level_up_session = LevelUpSession::new(world, entity);
 
         // Some of the responses are identical, e.g. selecting the same class
@@ -434,7 +434,9 @@ pub fn apply_level_up_decision(
                 _ => {
                     panic!(
                         "Failed to apply level up response for {} at level {}: {:?}",
-                        name, level, result
+                        name.as_str(),
+                        level,
+                        result
                     );
                 }
             }
@@ -448,7 +450,7 @@ pub fn apply_level_up_decision(
         if !level_up_session.is_complete() {
             panic!(
                 "Level up session for {} at level {} did not complete. Pending prompts: {:?}",
-                name,
+                name.as_str(),
                 level,
                 level_up_session.pending_prompts()
             );
