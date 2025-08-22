@@ -306,9 +306,17 @@ pub mod creatures {
             components::{
                 ability::AbilityScoreMap,
                 hit_points::HitPoints,
-                id::{EntityIdentifier, Name},
+                id::{EntityIdentifier, ItemId, Name},
+                items::{
+                    equipment::{
+                        armor::ArmorTrainingSet, loadout::TryEquipError,
+                        weapon::WeaponProficiencyMap,
+                    },
+                    inventory::ItemInstance,
+                },
                 level::ChallengeRating,
-                race::{CreatureSize, CreatureType},
+                proficiency::{Proficiency, ProficiencyLevel},
+                race::{CreatureSize, CreatureType, Speed},
             },
             entities::monster::Monster,
             registry,
@@ -324,6 +332,7 @@ pub mod creatures {
                 HitPoints::new(10),
                 CreatureSize::Small,
                 CreatureType::Fey,
+                Speed(30),
                 AbilityScoreMap::from([
                     (Ability::Strength, 10),
                     (Ability::Dexterity, 14),
@@ -334,25 +343,51 @@ pub mod creatures {
                 ]),
             );
             let entity = world.spawn(monster);
-            {
-                [
+            let _ = monster_equipment(
+                world,
+                entity,
+                &[
                     // TODO: Should be LEATHER_ARMOR_ID
                     registry::items::STUDDED_LEATHER_ARMOR_ID.clone(),
                     registry::items::SCIMITAR_ID.clone(),
                     // TODO: Add SHIELD_ID
                     registry::items::SHORTBOW_ID.clone(),
-                ]
-                .iter()
-                .for_each(|item_id| {
-                    let _ = systems::loadout::equip(
-                        world,
-                        entity,
-                        registry::items::ITEM_REGISTRY.get(item_id).unwrap().clone(),
-                    );
-                });
-            }
+                ],
+            );
 
             EntityIdentifier::new(entity, name)
+        }
+
+        fn monster_equipment(
+            world: &mut World,
+            entity: Entity,
+            item_ids: &[ItemId],
+        ) -> Result<(), TryEquipError> {
+            for item_id in item_ids {
+                let item = registry::items::ITEM_REGISTRY.get(item_id).unwrap().clone();
+                // Monsters are considered proficient with all their equipment
+                // so we can add proficiency for what they equip
+                match &item {
+                    ItemInstance::Armor(armor) => {
+                        systems::helpers::get_component_mut::<ArmorTrainingSet>(world, entity)
+                            .insert(armor.armor_type.clone());
+                    }
+                    ItemInstance::Weapon(weapon) => {
+                        systems::helpers::get_component_mut::<WeaponProficiencyMap>(world, entity)
+                            .set_proficiency(
+                                weapon.category().clone(),
+                                Proficiency::new(
+                                    ProficiencyLevel::Proficient,
+                                    ModifierSource::None,
+                                ),
+                            );
+                    }
+                    _ => {}
+                }
+
+                systems::loadout::equip(world, entity, item)?;
+            }
+            Ok(())
         }
     }
 }

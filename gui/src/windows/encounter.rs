@@ -581,7 +581,7 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
                     if let Ok(name) = world.query_one_mut::<&Name>(*entity) {
                         if render_button_selectable(
                             ui,
-                            name.to_string(),
+                            format!("{}##{:?}", name.as_str(), entity),
                             [100.0, 20.0],
                             targets.contains(entity),
                         ) {
@@ -604,7 +604,9 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
                 ui.separator_with_text("Possible targets");
                 for entity in encounter.participants() {
                     if let Ok(name) = world.query_one_mut::<&Name>(*entity) {
-                        if ui.button(name.as_str()) && targets.len() < max_targets {
+                        if ui.button(format!("{}##{:?}", name.as_str(), entity))
+                            && targets.len() < max_targets
+                        {
                             targets.push(*entity);
                         }
                     }

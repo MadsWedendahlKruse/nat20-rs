@@ -2,7 +2,8 @@ use crate::{
     components::{
         class::{ClassBase, ClassName, SubclassName},
         id::FeatId,
-        level_up::{ChoiceItem, ChoiceSpec},
+        items::equipment::{armor::ArmorTrainingSet, weapon::WeaponProficiencyMap},
+        level_up::ChoiceItem,
         proficiency::ProficiencyLevel,
         resource::ResourceMap,
     },
@@ -12,7 +13,7 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        class::Class, level::CharacterLevels, level_up::LevelUpPrompt, modifier::ModifierSource,
+        level::CharacterLevels, level_up::LevelUpPrompt, modifier::ModifierSource,
         proficiency::Proficiency, saving_throw::SavingThrowSet,
     },
     systems,
@@ -59,9 +60,21 @@ pub fn increment_class_level(
 
     systems::spells::update_spell_slots(world, entity);
 
-    let mut prompts = apply_class_base(world, entity, &class.base, new_level);
+    let mut prompts = apply_class_base(
+        world,
+        entity,
+        &class.base,
+        class_name.to_string(),
+        new_level,
+    );
     if let Some(subclass) = subclass {
-        prompts.extend(apply_class_base(world, entity, subclass.base(), new_level));
+        prompts.extend(apply_class_base(
+            world,
+            entity,
+            subclass.base(),
+            subclass.name.name.clone(),
+            new_level,
+        ));
     }
     prompts
 }
@@ -91,13 +104,20 @@ pub fn set_subclass(
         (subclass, level)
     };
 
-    apply_class_base(world, entity, subclass.base(), level)
+    apply_class_base(
+        world,
+        entity,
+        subclass.base(),
+        subclass_name.name.clone(),
+        level,
+    )
 }
 
 fn apply_class_base(
     world: &mut World,
     entity: Entity,
     class_base: &ClassBase,
+    name: String,
     level: u8,
 ) -> Vec<LevelUpPrompt> {
     // Effect
@@ -121,6 +141,30 @@ fn apply_class_base(
     {
         if let Some(actions_for_level) = class_base.actions_by_level.get(&level) {
             systems::actions::add_actions(world, entity, actions_for_level);
+        }
+    }
+
+    // Weapons proficiencies
+    {
+        let mut weapon_proficiencies =
+            systems::helpers::get_component_mut::<WeaponProficiencyMap>(world, entity);
+        for proficiency in class_base.weapon_proficiencies.iter() {
+            weapon_proficiencies.set_proficiency(
+                proficiency.clone(),
+                Proficiency::new(
+                    ProficiencyLevel::Proficient,
+                    ModifierSource::ClassFeature(name.clone()),
+                ),
+            );
+        }
+    }
+
+    // Armor training
+    {
+        let mut armor_training =
+            systems::helpers::get_component_mut::<ArmorTrainingSet>(world, entity);
+        for armor_type in class_base.armor_proficiencies.iter() {
+            armor_training.insert(armor_type.clone());
         }
     }
 

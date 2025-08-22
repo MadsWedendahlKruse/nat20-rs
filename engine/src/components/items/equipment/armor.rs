@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use strum::Display;
 
 use crate::{
@@ -142,6 +144,8 @@ impl SlotProvider for Armor {
         &[EquipmentSlot::Armor]
     }
 }
+
+pub type ArmorTrainingSet = HashSet<ArmorType>;
 
 #[cfg(test)]
 mod tests {

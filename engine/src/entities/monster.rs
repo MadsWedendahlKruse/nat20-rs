@@ -8,9 +8,11 @@ use crate::{
         effects::effects::Effect,
         hit_points::HitPoints,
         id::Name,
-        items::equipment::loadout::Loadout,
+        items::equipment::{
+            armor::ArmorTrainingSet, loadout::Loadout, weapon::WeaponProficiencyMap,
+        },
         level::ChallengeRating,
-        race::{CreatureSize, CreatureType},
+        race::{CreatureSize, CreatureType, Speed},
         resource::ResourceMap,
         saving_throw::SavingThrowSet,
         skill::SkillSet,
@@ -31,6 +33,7 @@ from_world!(
         pub hit_points: HitPoints,
         pub size: CreatureSize,
         pub creature_type: CreatureType,
+        pub speed: Speed,
         pub abilities: AbilityScoreMap,
         pub skills: SkillSet,
         pub saving_throws: SavingThrowSet,
@@ -38,12 +41,13 @@ from_world!(
         // TODO: alignment?
         // TODO: ArmorClass or just Loadout?
         pub loadout: Loadout,
-        // TODO: Speed
         pub spellbook: Spellbook,
         pub resources: ResourceMap,
         pub effects: Vec<Effect>,
         pub actions: ActionMap,
         pub cooldowns: ActionCooldownMap,
+        pub weapon_proficiencies: WeaponProficiencyMap,
+        pub armor_training: ArmorTrainingSet,
     }
 );
 
@@ -54,6 +58,7 @@ impl Monster {
         hit_points: HitPoints,
         size: CreatureSize,
         creature_type: CreatureType,
+        speed: Speed,
         abilities: AbilityScoreMap,
     ) -> Self {
         Self {
@@ -63,6 +68,7 @@ impl Monster {
             hit_points,
             size,
             creature_type,
+            speed,
             abilities,
             skills: SkillSet::default(),
             saving_throws: SavingThrowSet::default(),
@@ -73,6 +79,8 @@ impl Monster {
             effects: Vec::new(),
             actions: ActionMap::default(),
             cooldowns: ActionCooldownMap::default(),
+            weapon_proficiencies: WeaponProficiencyMap::new(),
+            armor_training: ArmorTrainingSet::default(),
         }
     }
 }
