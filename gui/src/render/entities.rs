@@ -117,12 +117,10 @@ where
 
 pub fn render_race_if_present(ui: &imgui::Ui, world: &World, entity: Entity) {
     let mut query = world
-        .query_one::<(&Option<RaceId>, &Option<SubraceId>)>(entity)
+        .query_one::<(&RaceId, &Option<SubraceId>)>(entity)
         .unwrap();
     if let Some((race, subrace)) = query.get() {
-        if let Some(race) = race.deref() {
-            (race.clone(), subrace.clone()).render(ui);
-        }
+        (race.clone(), subrace.clone()).render(ui);
     }
 }
 

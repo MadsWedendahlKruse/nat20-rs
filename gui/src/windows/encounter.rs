@@ -19,7 +19,6 @@ use nat20_rs::{
         },
         game_state::GameState,
     },
-    entities::character::CharacterTag,
     registry, systems,
 };
 
@@ -159,7 +158,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterWindow {
                         let is_selected = participants.contains(&entity);
                         if render_button_selectable(
                             ui,
-                            name.to_string(),
+                            format!("{}##{:?}", name.as_str(), entity),
                             [100.0, 20.0],
                             is_selected,
                         ) {
