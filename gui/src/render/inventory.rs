@@ -137,7 +137,7 @@ pub fn render_inventory(
     event
 }
 
-fn render_loadout(ui: &imgui::Ui, world: &mut World, entity: Entity) -> Option<InteractEvent> {
+pub fn render_loadout(ui: &imgui::Ui, world: &World, entity: Entity) -> Option<InteractEvent> {
     let loadout = systems::loadout::loadout(world, entity);
     let mut event = None;
 

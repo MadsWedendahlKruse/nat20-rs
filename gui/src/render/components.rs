@@ -29,6 +29,7 @@ use nat20_rs::{
         level::{ChallengeRating, CharacterLevels, Level},
         modifier::ModifierSet,
         proficiency::{Proficiency, ProficiencyLevel},
+        race::{CreatureSize, CreatureType},
         resource::ResourceMap,
         saving_throw::SavingThrowSet,
         skill::{Skill, SkillSet, skill_ability},
@@ -384,93 +385,138 @@ fn spell_level_roman_numeral(level: u8) -> &'static str {
     }
 }
 
+#[derive(Debug)]
+enum SpellbookUiAction {
+    Prepare(SpellId),
+    Unprepare(SpellId),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum RenderMode {
+    ReadOnly,
+    Editable,
+}
+
+fn render_spellbook_ui(ui: &imgui::Ui, sb: &Spellbook, mode: RenderMode) -> Vec<SpellbookUiAction> {
+    let mut actions = Vec::new();
+
+    // --- Cantrips ---
+    ui.separator_with_text("Cantrips");
+    for spell_id in sb.all_spells() {
+        let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
+        if spell.is_cantrip() {
+            let _disabled = match mode {
+                RenderMode::ReadOnly => Some(ui.begin_disabled(true)),
+                RenderMode::Editable => None,
+            };
+            if ui.button(spell_id.to_string()) {
+                // (e.g. open inspector) -> if you later add an inspect action, push it here.
+            }
+        }
+    }
+
+    // --- Prepared Spells ---
+    ui.separator_with_text("Prepared Spells");
+    let prepared_spells: HashSet<SpellId> = sb.prepared_spells().clone();
+    let mut rendered = 0;
+    for spell_id in &prepared_spells {
+        let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
+        let label = format!(
+            "{} ({})",
+            spell_id,
+            spell_level_roman_numeral(spell.base_level())
+        );
+
+        let _disabled = match mode {
+            RenderMode::ReadOnly => Some(ui.begin_disabled(true)),
+            RenderMode::Editable => None,
+        };
+        if ui.button(label) {
+            if matches!(mode, RenderMode::Editable) {
+                actions.push(SpellbookUiAction::Unprepare(spell_id.clone()));
+            }
+        }
+        rendered += 1;
+    }
+    for i in rendered..sb.max_prepared_spells() {
+        render_empty_button(ui, &format!("Empty##{}", i));
+    }
+
+    // --- All Spells ---
+    ui.separator_with_text("All Spells");
+    if let Some(table) = table_with_columns!(ui, "Spells", "Level", "Spells", "Slots") {
+        // group by level
+        let mut spells_by_level: HashMap<u8, Vec<&SpellId>> = HashMap::new();
+        let all_spells = sb.all_spells().clone();
+        for spell_id in &all_spells {
+            let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
+            spells_by_level
+                .entry(spell.base_level())
+                .or_default()
+                .push(spell_id);
+        }
+        let max_level = spells_by_level.keys().max().cloned().unwrap_or(0);
+
+        for level in 1..=max_level {
+            // Level
+            ui.table_next_column();
+            ui.text(spell_level_roman_numeral(level));
+
+            // Spells
+            ui.table_next_column();
+            if let Some(spells) = spells_by_level.get(&level) {
+                for spell_id in spells {
+                    let label = spell_id.to_string();
+                    let is_prepared = sb.is_spell_prepared(spell_id);
+
+                    let prepared_style = is_prepared.then(|| {
+                        ui.push_style_color(imgui::StyleColor::Button, SELECTED_BUTTON_COLOR)
+                    });
+                    let _disabled = match mode {
+                        RenderMode::ReadOnly => Some(ui.begin_disabled(true)),
+                        RenderMode::Editable => None,
+                    };
+
+                    if ui.button(label) {
+                        if matches!(mode, RenderMode::Editable) {
+                            actions.push(SpellbookUiAction::Prepare((*spell_id).clone()));
+                        }
+                    }
+
+                    if let Some(s) = prepared_style {
+                        s.pop();
+                    }
+                    ui.same_line();
+                }
+            }
+
+            // Slots
+            ui.table_next_column();
+            let slots = sb.spell_slots_for_level(level);
+            ui.text(format!("{}/{}", slots.current(), slots.maximum()));
+        }
+        table.end();
+    }
+
+    actions
+}
+
+impl ImguiRenderable for Spellbook {
+    fn render(&self, ui: &imgui::Ui) {
+        // Read-only: render and ignore any clicks (they’re disabled anyway)
+        let _ = render_spellbook_ui(ui, self, RenderMode::ReadOnly);
+    }
+}
+
 impl ImguiRenderableMut for Spellbook {
     fn render_mut(&mut self, ui: &imgui::Ui) {
-        ui.separator_with_text("Cantrips");
-        for spell_id in self.all_spells() {
-            let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
-            if spell.is_cantrip() {
-                if ui.button(spell_id.to_string()) {
-                    // Maybe click to inspect?
-                }
-                // ui.same_line();
-            }
-        }
-        ui.separator_with_text("Prepared Spells");
-        let prepared_spells: HashSet<SpellId> = self.prepared_spells().clone();
-        let mut rendered = 0;
-        for spell_id in &prepared_spells {
-            let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
-            if ui.button(format!(
-                "{} ({})",
-                spell_id,
-                spell_level_roman_numeral(spell.base_level())
-            )) {
-                self.unprepare_spell(spell_id);
-            }
-            rendered += 1;
-        }
-        for i in rendered..self.max_prepared_spells() {
-            render_empty_button(ui, &format!("Empty##{}", i));
-        }
-
-        ui.separator_with_text("All Spells");
-        if let Some(table) = table_with_columns!(ui, "Spells", "Level", "Spells", "Slots") {
-            // Group spells by level
-            let mut spells_by_level: HashMap<u8, Vec<&SpellId>> = HashMap::new();
-            let all_spells = self.all_spells().clone();
-            for spell_id in &all_spells {
-                let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
-                spells_by_level
-                    .entry(spell.base_level())
-                    .or_default()
-                    .push(spell_id);
-            }
-
-            let max_level = spells_by_level.keys().max().cloned().unwrap_or(0);
-
-            for level in 1..=max_level {
-                // Level column
-                ui.table_next_column();
-                ui.text(spell_level_roman_numeral(level));
-
-                // Spells column
-                ui.table_next_column();
-                if let Some(spells) = spells_by_level.get(&level) {
-                    for spell_id in spells {
-                        // let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
-                        let label = spell_id.to_string();
-                        let is_prepared = self.is_spell_prepared(spell_id);
-
-                        // You can set different colors here based on "prepared" status
-                        let style_color =
-                            if is_prepared {
-                                Some(ui.push_style_color(
-                                    imgui::StyleColor::Button,
-                                    SELECTED_BUTTON_COLOR,
-                                ))
-                            } else {
-                                None
-                            };
-
-                        if ui.button(label) {
-                            self.prepare_spell(spell_id);
-                        }
-
-                        if let Some(color) = style_color {
-                            color.pop();
-                        }
-
-                        ui.same_line();
-                    }
-                }
-
-                // Slots column
-                ui.table_next_column();
-                let slots = self.spell_slots_for_level(level);
-                ui.text(format!("{}/{}", slots.current(), slots.maximum()));
-            }
-            table.end();
+        // Editable: render, then apply the collected intents
+        let actions = render_spellbook_ui(ui, self, RenderMode::Editable);
+        for a in actions {
+            match a {
+                SpellbookUiAction::Prepare(id) => self.prepare_spell(&id),
+                SpellbookUiAction::Unprepare(id) => self.unprepare_spell(&id),
+            };
         }
     }
 }
@@ -1008,17 +1054,16 @@ impl ImguiRenderable for D20CheckDC<Skill> {
     }
 }
 
-pub fn render_race(ui: &imgui::Ui, world: &World, entity: Entity) {
-    let race = systems::helpers::get_component::<Option<RaceId>>(world, entity);
-    let subrace = systems::helpers::get_component::<Option<SubraceId>>(world, entity);
-    let text = if subrace.is_some() {
-        subrace.as_ref().unwrap().to_string()
-    } else if race.is_some() {
-        race.as_ref().unwrap().to_string()
-    } else {
-        "".to_string()
-    };
-    TextSegment::new(text, TextKind::Details).render(ui);
+impl ImguiRenderable for (RaceId, Option<SubraceId>) {
+    fn render(&self, ui: &imgui::Ui) {
+        let (race, subrace) = self;
+        let text = if subrace.is_some() {
+            subrace.as_ref().unwrap().to_string()
+        } else {
+            race.to_string()
+        };
+        TextSegment::new(text, TextKind::Details).render(ui);
+    }
 }
 
 impl ImguiRenderable for DamageResistances {
@@ -1078,5 +1123,17 @@ impl ImguiRenderable for EffectDuration {
             // TODO: Does it make sense to render the other durations?
             _ => {}
         }
+    }
+}
+
+impl ImguiRenderable for CreatureSize {
+    fn render(&self, ui: &imgui::Ui) {
+        TextSegment::new(self.to_string(), TextKind::Details).render(ui);
+    }
+}
+
+impl ImguiRenderable for CreatureType {
+    fn render(&self, ui: &imgui::Ui) {
+        TextSegment::new(self.to_string(), TextKind::Details).render(ui);
     }
 }

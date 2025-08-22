@@ -24,7 +24,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     render::{
-        components::render_race,
+        entities::render_race_if_present,
         text::{TextKind, TextSegments},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext, labels_max_width,
@@ -397,20 +397,12 @@ impl ImguiRenderableMutWithContext<&mut World> for LevelUpWindow {
                 let mut name =
                     systems::helpers::get_component_mut::<Name>(world, self.character.unwrap());
                 ui.text("Name:");
-                if ui
-                    .input_text("##", name.to_string_mut())
+                ui.input_text("##", name.to_string_mut())
                     .enter_returns_true(true)
-                    .build()
-                {
-                    // systems::helpers::set_component(
-                    //     &mut world,
-                    //     self.current_character.unwrap(),
-                    //     name,
-                    // );
-                }
+                    .build();
             }
 
-            render_race(ui, world, self.character.unwrap());
+            render_race_if_present(ui, world, self.character.unwrap());
 
             {
                 let levels = systems::helpers::get_component::<CharacterLevels>(

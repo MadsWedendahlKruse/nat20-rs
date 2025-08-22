@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use hecs::{Entity, World};
 use nat20_rs::{
     components::{
@@ -5,20 +7,20 @@ use nat20_rs::{
         damage::DamageResistances,
         effects::effects::{Effect, EffectDuration},
         hit_points::HitPoints,
-        id::{FeatId, Name},
+        id::{FeatId, Name, RaceId, SubraceId},
         level::{ChallengeRating, CharacterLevels},
+        race::{CreatureSize, CreatureType},
         resource::ResourceMap,
         skill::SkillSet,
         spells::spellbook::Spellbook,
     },
-    entities::{character::CharacterTag, monster::MonsterTag},
+    entities::character::CharacterTag,
     systems,
 };
 
 use crate::{
     render::{
-        components::render_race,
-        inventory::render_loadout_inventory,
+        inventory::{render_loadout, render_loadout_inventory},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
             ImguiRenderableWithContext,
@@ -38,7 +40,57 @@ impl ImguiRenderableWithContext<(&World, CreatureRenderMode)> for Entity {
 
         match mode {
             CreatureRenderMode::Full => {
-                todo!()
+                let entity = *self;
+                ui.text(format!("ID: {:?}", entity));
+
+                if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
+                    if let Some(tab) = ui.tab_item("Overview") {
+                        render_race_if_present(ui, world, entity);
+
+                        render_if_present::<CreatureSize>(ui, world, entity);
+                        ui.same_line();
+                        render_if_present::<CreatureType>(ui, world, entity);
+
+                        // render_if_present::<Name>(ui, world, *self);
+                        render_if_present::<CharacterLevels>(ui, world, *self);
+                        render_if_present::<ChallengeRating>(ui, world, *self);
+                        render_if_present::<HitPoints>(ui, world, *self);
+                        systems::helpers::get_component::<AbilityScoreMap>(world, entity)
+                            .render_with_context(ui, (world, entity));
+                        render_if_present::<DamageResistances>(ui, world, entity);
+
+                        tab.end();
+                    }
+
+                    if let Some(tab) = ui.tab_item("Effects") {
+                        render_if_present::<Vec<Effect>>(ui, world, entity);
+                        render_if_present::<Vec<FeatId>>(ui, world, entity);
+                        tab.end();
+                    }
+
+                    if let Some(tab) = ui.tab_item("Skills") {
+                        systems::helpers::get_component::<SkillSet>(world, entity)
+                            .render_with_context(ui, (world, entity));
+                        tab.end();
+                    }
+
+                    if let Some(tab) = ui.tab_item("Inventory") {
+                        render_loadout(ui, world, entity);
+                        tab.end();
+                    }
+
+                    if let Some(tab) = ui.tab_item("Spellbook") {
+                        systems::helpers::get_component::<Spellbook>(world, entity).render(ui);
+                        tab.end();
+                    }
+
+                    if let Some(tab) = ui.tab_item("Resources") {
+                        render_if_present::<ResourceMap>(ui, world, entity);
+                        tab.end();
+                    }
+
+                    tab_bar.end();
+                }
             }
 
             CreatureRenderMode::Compact => {
@@ -60,6 +112,17 @@ where
 {
     if let Ok(component) = world.get::<&T>(entity) {
         component.render(ui);
+    }
+}
+
+pub fn render_race_if_present(ui: &imgui::Ui, world: &World, entity: Entity) {
+    let mut query = world
+        .query_one::<(&Option<RaceId>, &Option<SubraceId>)>(entity)
+        .unwrap();
+    if let Some((race, subrace)) = query.get() {
+        if let Some(race) = race.deref() {
+            (race.clone(), subrace.clone()).render(ui);
+        }
     }
 }
 
@@ -89,19 +152,36 @@ fn render_effects_compact(ui: &imgui::Ui, effects: &[Effect]) {
     }
 }
 
-impl ImguiRenderableMutWithContext<(&mut World, Entity)> for CharacterTag {
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: (&mut World, Entity)) {
-        let (world, entity) = context;
+impl ImguiRenderableMutWithContext<(&mut World)> for Entity {
+    fn render_mut_with_context(&mut self, ui: &imgui::Ui, world: &mut World) {
+        let entity = *self;
         ui.text(format!("ID: {:?}", entity));
 
-        render_race(ui, world, entity);
-        systems::helpers::get_component::<CharacterLevels>(world, entity).render(ui);
-        systems::helpers::get_component::<HitPoints>(world, entity).render(ui);
-        systems::helpers::get_component::<AbilityScoreMap>(world, entity)
-            .render_with_context(ui, (world, entity));
-        systems::helpers::get_component::<DamageResistances>(world, entity).render(ui);
-
         if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
+            if let Some(tab) = ui.tab_item("Overview") {
+                render_race_if_present(ui, world, entity);
+
+                render_if_present::<CreatureSize>(ui, world, entity);
+                ui.same_line();
+                render_if_present::<CreatureType>(ui, world, entity);
+
+                // render_if_present::<Name>(ui, world, *self);
+                render_if_present::<CharacterLevels>(ui, world, *self);
+                render_if_present::<ChallengeRating>(ui, world, *self);
+                render_if_present::<HitPoints>(ui, world, *self);
+                systems::helpers::get_component::<AbilityScoreMap>(world, entity)
+                    .render_with_context(ui, (world, entity));
+                render_if_present::<DamageResistances>(ui, world, entity);
+
+                tab.end();
+            }
+
+            if let Some(tab) = ui.tab_item("Effects") {
+                render_if_present::<Vec<Effect>>(ui, world, entity);
+                render_if_present::<Vec<FeatId>>(ui, world, entity);
+                tab.end();
+            }
+
             if let Some(tab) = ui.tab_item("Skills") {
                 systems::helpers::get_component::<SkillSet>(world, entity)
                     .render_with_context(ui, (world, entity));
@@ -119,17 +199,7 @@ impl ImguiRenderableMutWithContext<(&mut World, Entity)> for CharacterTag {
             }
 
             if let Some(tab) = ui.tab_item("Resources") {
-                systems::helpers::get_component::<ResourceMap>(world, entity).render(ui);
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Effects") {
-                systems::effects::effects(world, entity).render(ui);
-                tab.end();
-            }
-
-            if let Some(tab) = ui.tab_item("Feats") {
-                systems::helpers::get_component::<Vec<FeatId>>(world, entity).render(ui);
+                render_if_present::<ResourceMap>(ui, world, entity);
                 tab.end();
             }
 

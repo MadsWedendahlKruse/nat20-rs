@@ -12,12 +12,12 @@ use crate::{
     registry, systems,
 };
 
-pub fn background(world: &World, entity: Entity) -> hecs::Ref<'_, Option<BackgroundId>> {
-    systems::helpers::get_component::<Option<BackgroundId>>(world, entity)
+pub fn background(world: &World, entity: Entity) -> hecs::Ref<'_, BackgroundId> {
+    systems::helpers::get_component::<BackgroundId>(world, entity)
 }
 
-pub fn background_mut(world: &mut World, entity: Entity) -> hecs::RefMut<'_, Option<BackgroundId>> {
-    systems::helpers::get_component_mut::<Option<BackgroundId>>(world, entity)
+pub fn background_mut(world: &mut World, entity: Entity) -> hecs::RefMut<'_, BackgroundId> {
+    systems::helpers::get_component_mut::<BackgroundId>(world, entity)
 }
 
 pub fn set_background(
@@ -32,7 +32,7 @@ pub fn set_background(
             background_id
         ));
 
-    *background_mut(world, entity) = Some(background_id.clone());
+    *background_mut(world, entity) = background_id.clone();
 
     let feat_result = systems::feats::add_feat(world, entity, background.feat());
     if let Err(e) = feat_result {

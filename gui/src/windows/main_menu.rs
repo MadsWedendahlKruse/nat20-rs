@@ -118,7 +118,7 @@ impl MainMenuWindow {
             .build(|| {
                 ui.separator_with_text("Creatures");
 
-                let entities = game_state
+                let mut entities = game_state
                     .world
                     .query::<&Name>()
                     .into_iter()
@@ -127,23 +127,20 @@ impl MainMenuWindow {
 
                 let entitiy_count = entities.len();
 
-                entities.into_iter().for_each(|(entity, name)| {
+                entities.iter_mut().for_each(|(entity, name)| {
                     if ui.collapsing_header(
                         format!("{}##{:?}", name.as_str(), entity),
                         imgui::TreeNodeFlags::FRAMED,
                     ) {
-                        entity.render_with_context(
-                            ui,
-                            (&game_state.world, CreatureRenderMode::Compact),
-                        );
+                        entity.render_mut_with_context(ui, &mut game_state.world);
                         ui.separator();
 
                         if ui.button(format!("Remove Character##{:?}", entity)) {
-                            let _ = game_state.world.despawn(entity);
+                            let _ = game_state.world.despawn(*entity);
                         }
 
                         if ui.button(format!("Debug##{:?}", entity)) {
-                            *debug_window = Some(CreatureDebugWindow::new(entity));
+                            *debug_window = Some(CreatureDebugWindow::new(*entity));
                             ui.open_popup("Debug");
                         }
 
@@ -152,22 +149,6 @@ impl MainMenuWindow {
                         }
                     }
                 });
-
-                // // Avoid double borrow
-                // let mut characters = game_state
-                //     .world
-                //     .query_mut::<(&Name, &CharacterTag)>()
-                //     .into_iter()
-                //     .map(|(entity, (name, tag))| (entity, name.clone(), tag.clone()))
-                //     .collect::<Vec<_>>();
-
-                // for (entity, name, tag) in characters.iter_mut() {
-                //     if ui.collapsing_header(name.as_str(), TreeNodeFlags::FRAMED) {
-                //         tag.render_mut_with_context(ui, (&mut game_state.world, *entity));
-
-                //         ui.separator();
-                //     }
-                // }
 
                 ui.separator();
                 if ui.button("Spawn Creature") {

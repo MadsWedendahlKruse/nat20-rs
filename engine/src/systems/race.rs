@@ -18,7 +18,7 @@ pub fn set_race(world: &mut World, entity: Entity, race: &RaceId) -> Vec<LevelUp
         race
     ));
 
-    systems::helpers::set_component::<Option<RaceId>>(world, entity, Some(race.id.clone()));
+    systems::helpers::set_component::<RaceId>(world, entity, race.id.clone());
 
     // TODO: The race is presumably always set at level 1?
     apply_race_base(world, entity, &race.base, 1);
@@ -34,20 +34,15 @@ pub fn set_race(world: &mut World, entity: Entity, race: &RaceId) -> Vec<LevelUp
         )));
     }
 
-    systems::helpers::set_component::<Option<CreatureSize>>(world, entity, Some(race.size.clone()));
-    systems::helpers::set_component::<Option<CreatureType>>(
-        world,
-        entity,
-        Some(race.creature_type.clone()),
-    );
-    systems::helpers::set_component::<Option<Speed>>(world, entity, Some(race.speed.clone()));
+    systems::helpers::set_component::<CreatureSize>(world, entity, race.size.clone());
+    systems::helpers::set_component::<CreatureType>(world, entity, race.creature_type.clone());
+    systems::helpers::set_component::<Speed>(world, entity, race.speed.clone());
 
     prompts
 }
 
 pub fn set_subrace(world: &mut World, entity: Entity, subrace: &SubraceId) {
-    let race_id = systems::helpers::get_component_clone::<Option<RaceId>>(world, entity)
-        .expect("Unable to set subrace if race has not been set");
+    let race_id = systems::helpers::get_component_clone::<RaceId>(world, entity);
 
     let race = registry::races::RACE_REGISTRY
         .get(&race_id)

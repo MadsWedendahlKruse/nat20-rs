@@ -161,14 +161,3 @@ pub fn render_window_at_cursor<R, F: FnOnce() -> R>(
         .always_auto_resize(always_auto_resize)
         .build(build_fn);
 }
-
-pub fn entities_by_tag<T>(world: &World) -> Vec<(Entity, Name, T)>
-where
-    T: 'static + Clone + Send + Sync,
-{
-    world
-        .query::<(&Name, &T)>()
-        .into_iter()
-        .map(|(entity, (name, tag))| (entity, name.clone(), tag.clone()))
-        .collect()
-}

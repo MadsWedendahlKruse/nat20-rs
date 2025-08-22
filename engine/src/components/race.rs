@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
-use crate::{
-    components::id::{ActionId, EffectId, RaceId, SubraceId},
-    systems,
-};
+use strum::Display;
 
-#[derive(Debug, Clone)]
+use crate::components::id::{ActionId, EffectId, RaceId, SubraceId};
+
+#[derive(Debug, Clone, Display)]
 pub enum CreatureType {
     Aberration,
     Beast,
@@ -23,7 +22,7 @@ pub enum CreatureType {
     Undead,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Display)]
 pub enum CreatureSize {
     Tiny,
     Small,

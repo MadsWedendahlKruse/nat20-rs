@@ -11,10 +11,7 @@ use nat20_rs::{
 
 use crate::render::{
     entities::CreatureRenderMode,
-    utils::{
-        ImguiRenderableMutWithContext, ImguiRenderableWithContext, entities_by_tag,
-        render_window_at_cursor,
-    },
+    utils::{ImguiRenderableMutWithContext, ImguiRenderableWithContext, render_window_at_cursor},
 };
 
 pub struct SpawnPredefinedWindow {
@@ -70,12 +67,12 @@ impl ImguiRenderableMutWithContext<&mut World> for SpawnPredefinedWindow {
                         format!("{}##{:?}", name.as_str(), entity),
                         imgui::TreeNodeFlags::FRAMED,
                     ) {
-                        entity.render_with_context(ui, (&self.world, CreatureRenderMode::Compact));
-                        ui.separator();
                         if ui.button(format!("Spawn##{:?}", entity)) {
                             println!("Spawning entity: {:?}", entity);
                             entity_to_spawn = Some(entity);
                         }
+                        ui.separator();
+                        entity.render_with_context(ui, (&self.world, CreatureRenderMode::Full));
                     }
                 });
 
