@@ -217,7 +217,7 @@ mod tests {
             !roll
                 .d20_check
                 .modifiers()
-                .contains_key(&ModifierSource::Item("Enchantment".to_string()))
+                .contains_key(&ModifierSource::Custom("Enchantment".to_string()))
         );
     }
 }

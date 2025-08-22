@@ -177,6 +177,8 @@ impl From<[(Ability, i32); 6]> for AbilityScoreMap {
 #[cfg(test)]
 mod tests {
 
+    use crate::components::id::ItemId;
+
     use super::*;
 
     #[test]
@@ -190,9 +192,10 @@ mod tests {
     #[test]
     fn ability_total() {
         let mut ability_score = AbilityScore::new(Ability::Dexterity, 14);
-        ability_score
-            .modifiers
-            .add_modifier(ModifierSource::Item("Ring of Dexterity".to_string()), 2);
+        ability_score.modifiers.add_modifier(
+            ModifierSource::Item(ItemId::from_str("item.ring_of_dexterity")),
+            2,
+        );
         assert_eq!(ability_score.total(), 16); // 14 + 2 = 16
         assert_eq!(ability_score.ability_modifier().total(), 3); // (16 - 10) / 2 = 3
     }
@@ -206,7 +209,7 @@ mod tests {
         );
         ability_scores.add_modifier(
             Ability::Dexterity,
-            ModifierSource::Item("Ring of Dexterity".to_string()),
+            ModifierSource::Item(ItemId::from_str("item.ring_of_dexterity")),
             2,
         );
 
@@ -223,7 +226,7 @@ mod tests {
         ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
         ability_scores.add_modifier(
             Ability::Strength,
-            ModifierSource::Item("Ring of Strength".to_string()),
+            ModifierSource::Item(ItemId::from_str("item.ring_of_strength")),
             2,
         );
 
@@ -258,14 +261,14 @@ mod tests {
         );
         ability_scores.add_modifier(
             Ability::Dexterity,
-            ModifierSource::Item("Ring of Dexterity".to_string()),
+            ModifierSource::Item(ItemId::from_str("item.ring_of_dexterity")),
             2,
         );
 
         assert_eq!(ability_scores.total(Ability::Dexterity), 17);
         ability_scores.remove_modifier(
             Ability::Dexterity,
-            &ModifierSource::Item("Ring of Dexterity".to_string()),
+            &ModifierSource::Item(ItemId::from_str("item.ring_of_dexterity")),
         );
         assert_eq!(ability_scores.total(Ability::Dexterity), 15);
     }

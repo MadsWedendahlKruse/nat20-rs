@@ -5,6 +5,7 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::{Ability, AbilityScore, AbilityScoreMap},
+            id::ItemId,
             items::equipment::slots::EquipmentSlot,
             modifier::ModifierSource,
         },
@@ -56,7 +57,7 @@ mod tests {
             );
             ability_scores.add_modifier(
                 Ability::Dexterity,
-                ModifierSource::Item("Ring of Dexterity".to_string()),
+                ModifierSource::Item(ItemId::from_str("item.ring_of_dexterity")),
                 2,
             );
         }

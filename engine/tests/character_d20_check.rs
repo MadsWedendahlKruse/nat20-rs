@@ -7,6 +7,7 @@ mod tests {
         components::{
             ability::{Ability, AbilityScore, AbilityScoreMap},
             d20_check::RollMode,
+            id::ItemId,
             items::{
                 equipment::{
                     armor::Armor,
@@ -37,7 +38,7 @@ mod tests {
             ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
             ability_scores.add_modifier(
                 Ability::Strength,
-                ModifierSource::Item("Ring of Strength".to_string()),
+                ModifierSource::Item(ItemId::from_str("item.ring_of_strength")),
                 2,
             );
             assert_eq!(ability_scores.get(Ability::Strength).total(), 19);

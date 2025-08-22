@@ -495,7 +495,8 @@ mod tests {
         components::{
             ability::Ability,
             actions::action::{ActionContext, ActionKind, ActionProvider},
-            id::SpellId,
+            id::{ItemId, SpellId},
+            items::item::Item,
             modifier::{ModifierSet, ModifierSource},
         },
         test_utils::fixtures,
@@ -535,7 +536,7 @@ mod tests {
         resistances.effects.insert(
             DamageType::Slashing,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Shield of Resistance".to_string()),
+                source: ModifierSource::Item(ItemId::from_str("item.shield_of_resistance")),
                 operation: MitigationOperation::Resistance,
             }],
         );
@@ -555,7 +556,7 @@ mod tests {
         resistances.effects.insert(
             DamageType::Fire,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Ring of Fire Immunity".to_string()),
+                source: ModifierSource::Item(ItemId::from_str("item.ring_of_fire_immunity")),
                 operation: MitigationOperation::Immunity,
             }],
         );
@@ -574,7 +575,7 @@ mod tests {
         resistances.effects.insert(
             DamageType::Slashing,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Shield of Vulnerability".to_string()),
+                source: ModifierSource::Item(ItemId::from_str("item.shield_of_vulnerability")),
                 operation: MitigationOperation::Vulnerability,
             }],
         );
@@ -593,7 +594,7 @@ mod tests {
         resistances.effects.insert(
             DamageType::Slashing,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Shield of Flat Reduction".to_string()),
+                source: ModifierSource::Item(ItemId::from_str("item.shield_of_flat_reduction")),
                 operation: MitigationOperation::FlatReduction(3),
             }],
         );
@@ -613,11 +614,11 @@ mod tests {
             DamageType::Slashing,
             vec![
                 DamageMitigationEffect {
-                    source: ModifierSource::Item("Shield of Resistance".to_string()),
+                    source: ModifierSource::Item(ItemId::from_str("item.shield_of_resistance")),
                     operation: MitigationOperation::Resistance,
                 },
                 DamageMitigationEffect {
-                    source: ModifierSource::Item("Shield of Flat Reduction".to_string()),
+                    source: ModifierSource::Item(ItemId::from_str("item.shield_of_flat_reduction")),
                     operation: MitigationOperation::FlatReduction(3),
                 },
             ],
@@ -638,14 +639,14 @@ mod tests {
         resistances.effects.insert(
             DamageType::Slashing,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Shield of Resistance".to_string()),
+                source: ModifierSource::Item(ItemId::from_str("item.shield_of_resistance")),
                 operation: MitigationOperation::Resistance,
             }],
         );
         resistances.effects.insert(
             DamageType::Fire,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item("Ring of Fire Immunity".to_string()),
+                source: ModifierSource::Item(ItemId::from_str("item.ring_of_fire_immunity")),
                 operation: MitigationOperation::Immunity,
             }],
         );
@@ -666,7 +667,7 @@ mod tests {
             DamageType::Slashing,
             vec![
                 DamageMitigationEffect {
-                    source: ModifierSource::Item("Shield of Resistance".to_string()),
+                    source: ModifierSource::Item(ItemId::from_str("item.shield_of_resistance")),
                     operation: MitigationOperation::Resistance,
                 },
                 DamageMitigationEffect {
@@ -674,7 +675,9 @@ mod tests {
                     operation: MitigationOperation::Vulnerability,
                 },
                 DamageMitigationEffect {
-                    source: ModifierSource::Item("Shield of Slashing Immunity".to_string()),
+                    source: ModifierSource::Item(ItemId::from_str(
+                        "item.ring_of_slashing_immunity",
+                    )),
                     operation: MitigationOperation::Immunity,
                 },
             ],
@@ -698,11 +701,11 @@ mod tests {
             DamageType::Slashing,
             vec![
                 DamageMitigationEffect {
-                    source: ModifierSource::Item("Shield of Resistance".to_string()),
+                    source: ModifierSource::Item(ItemId::from_str("item.shield_of_resistance")),
                     operation: MitigationOperation::Resistance,
                 },
                 DamageMitigationEffect {
-                    source: ModifierSource::Item("Shield of Flat Reduction".to_string()),
+                    source: ModifierSource::Item(ItemId::from_str("item.shield_of_flat_reduction")),
                     operation: MitigationOperation::FlatReduction(3),
                 },
             ],

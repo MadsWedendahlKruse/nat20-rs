@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::components::id::{BackgroundId, EffectId, SpellId};
+use crate::components::id::{BackgroundId, EffectId, ItemId, SpellId};
 
 use super::{ability::Ability, proficiency::ProficiencyLevel};
 
@@ -9,7 +9,7 @@ use super::{ability::Ability, proficiency::ProficiencyLevel};
 pub enum ModifierSource {
     Background(BackgroundId),
     Spell(SpellId),       // e.g. "Bless"
-    Item(String),         // e.g. "Belt of Strength"
+    Item(ItemId),         // e.g. "Belt of Strength"
     Condition(String),    // e.g. "Poisoned"
     ClassFeature(String), // e.g. "Rage"
     Effect(EffectId),     // optional: unique ID for internal tracking
@@ -134,7 +134,10 @@ mod tests {
     #[test]
     fn modifiers() {
         let mut modifiers = ModifierSet::new();
-        modifiers.add_modifier(ModifierSource::Item("Belt of Strength".to_string()), 4);
+        modifiers.add_modifier(
+            ModifierSource::Item(ItemId::from_str("item.belt_of_strength")),
+            4,
+        );
         modifiers.add_modifier(ModifierSource::Spell(SpellId::from_str("BLESS")), 1);
 
         assert_eq!(modifiers.modifiers.len(), 2);

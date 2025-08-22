@@ -19,7 +19,7 @@ use nat20_rs::{
         id::{FeatId, Name, RaceId, SpellId, SubraceId},
         items::{
             equipment::{
-                armor::{Armor, ArmorClass, ArmorType},
+                armor::{Armor, ArmorClass, ArmorDexterityBonus, ArmorType},
                 loadout::Loadout,
                 weapon::Weapon,
             },
@@ -645,9 +645,21 @@ impl ImguiRenderableWithContext<(&World, Entity)> for Armor {
         ui.same_line();
         ui.text("Armor Class");
         ui.separator();
-        // TODO: Option instead of int max?
-        if armor_class.max_dexterity_bonus != i32::MAX {
-            if armor_class.max_dexterity_bonus == 0 {
+        armor_class.dexterity_bonus.render(ui);
+        if armor_class.dexterity_bonus != ArmorDexterityBonus::Unlimited {
+            ui.same_line();
+            TextSegment::new(format!("({} Armor)", self.armor_type), TextKind::Details).render(ui);
+            ui.separator();
+        }
+        render_item_misc(ui, &self.item);
+    }
+}
+
+impl ImguiRenderable for ArmorDexterityBonus {
+    fn render(&self, ui: &imgui::Ui) {
+        if self != &ArmorDexterityBonus::Unlimited {
+            let max_dexterity_bonus = self.max_bonus();
+            if max_dexterity_bonus == 0 {
                 TextSegments::new(vec![
                     ("No Armor Class bonus from", TextKind::Details),
                     ("Dexterity", TextKind::Ability),
@@ -658,15 +670,13 @@ impl ImguiRenderableWithContext<(&World, Entity)> for Armor {
                     ("Armor Class bonus from", TextKind::Details),
                     ("Dexterity", TextKind::Ability),
                     (
-                        format!("is limited to {}", armor_class.max_dexterity_bonus).as_str(),
+                        format!("is limited to {}", max_dexterity_bonus).as_str(),
                         TextKind::Details,
                     ),
                 ])
                 .render(ui);
             }
-            ui.separator();
         }
-        render_item_misc(ui, &self.item);
     }
 }
 
@@ -692,7 +702,14 @@ impl ImguiRenderable for ArmorClass {
         ui.text(format!("{}", self.total()));
         if ui.is_item_hovered() {
             ui.tooltip(|| {
-                ui.text(format!("Base: {}", self.base));
+                ui.text(format!("Total AC: {}", self.total()));
+                TextSegments::new(vec![
+                    (format!("{} (Base)", self.base.0), TextKind::Normal),
+                    (format!("({})", self.base.1), TextKind::Details),
+                ])
+                .render(ui);
+                indent_text(ui, 1);
+                self.dexterity_bonus.render(ui);
                 if !self.modifiers.is_empty() {
                     self.modifiers
                         .render_with_context(ui, ModifierSetRenderMode::List(1));

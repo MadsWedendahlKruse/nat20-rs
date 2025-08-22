@@ -13,8 +13,11 @@ use crate::{
             effects::{Effect, EffectDuration},
             hooks::D20CheckHooks,
         },
-        id::EffectId,
-        items::equipment::{armor::ArmorType, loadout, weapon::WeaponKind},
+        id::{EffectId, ItemId},
+        items::{
+            equipment::{armor::ArmorType, loadout, weapon::WeaponKind},
+            item::Item,
+        },
         modifier::ModifierSource,
         resource::{RechargeRule, Resource, ResourceMap},
         skill::{Skill, SkillSet},
@@ -129,7 +132,7 @@ pub static ARMOR_OF_CONSTITUTION_SAVING_THROWS_ID: LazyLock<EffectId> =
 static ARMOR_OF_CONSTITUTION_SAVING_THROWS: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         ARMOR_OF_CONSTITUTION_SAVING_THROWS_ID.clone(),
-        ModifierSource::Item("Armor of Constitution Saving Throws".to_string()),
+        ModifierSource::Item(ItemId::from_str("item.armor_of_constitution_saving_throws")),
         EffectDuration::Permanent,
     );
 
@@ -138,7 +141,7 @@ static ARMOR_OF_CONSTITUTION_SAVING_THROWS: LazyLock<Effect> = LazyLock::new(|| 
         D20CheckHooks::with_check_hook(|_, _, d20_check| {
             d20_check.advantage_tracker_mut().add(
                 AdvantageType::Advantage,
-                ModifierSource::Item("Armor of Constitution Saving Throws".to_string()),
+                ModifierSource::Item(ItemId::from_str("item.armor_of_constitution_saving_throws")),
             );
         }),
     )]);
@@ -152,7 +155,7 @@ pub static ARMOR_OF_SNEAKING_ID: LazyLock<EffectId> =
 static ARMOR_OF_SNEAKING: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         ARMOR_OF_SNEAKING_ID.clone(),
-        ModifierSource::Item("Armor of Sneaking".to_string()),
+        ModifierSource::Item(ItemId::from_str("item.armor_of_sneaking")),
         EffectDuration::Permanent,
     );
 
@@ -161,7 +164,7 @@ static ARMOR_OF_SNEAKING: LazyLock<Effect> = LazyLock::new(|| {
             let mut skills = systems::helpers::get_component_mut::<SkillSet>(world, entity);
             skills.add_modifier(
                 Skill::Stealth,
-                ModifierSource::Item("Armor of Sneaking".to_string()),
+                ModifierSource::Item(ItemId::from_str("item.armor_of_sneaking")),
                 2,
             );
         }
@@ -172,7 +175,7 @@ static ARMOR_OF_SNEAKING: LazyLock<Effect> = LazyLock::new(|| {
             let mut skills = systems::helpers::get_component_mut::<SkillSet>(world, entity);
             skills.remove_modifier(
                 Skill::Stealth,
-                &ModifierSource::Item("Armor of Sneaking".to_string()),
+                &ModifierSource::Item(ItemId::from_str("item.armor_of_sneaking")),
             );
         }
     });
@@ -184,7 +187,8 @@ pub static ARMOR_STEALTH_DISADVANTAGE_ID: LazyLock<EffectId> =
     LazyLock::new(|| EffectId::from_str("effect.armor.stealth_disadvantage"));
 
 pub static ARMOR_STEALTH_DISADVANTAGE: LazyLock<Effect> = LazyLock::new(|| {
-    let modifier_source: ModifierSource = ModifierSource::Item("Armor".to_string());
+    let modifier_source: ModifierSource =
+        ModifierSource::Item(ItemId::from_str("item.plate_armor"));
 
     let mut stealth_disadvantage_effect = Effect::new(
         EffectId::from_str("effect.armor.stealth_disadvantage"),
@@ -383,13 +387,13 @@ pub static RING_OF_ATTACKING_ID: LazyLock<EffectId> =
 static RING_OF_ATTACKING: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         RING_OF_ATTACKING_ID.clone(),
-        ModifierSource::Item("Ring of Attacking".to_string()),
+        ModifierSource::Item(ItemId::from_str("item.ring_of_attacking")),
         EffectDuration::Permanent,
     );
     effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
         attack_roll.d20_check.advantage_tracker_mut().add(
             AdvantageType::Advantage,
-            ModifierSource::Item("Ring of Attacking".to_string()),
+            ModifierSource::Item(ItemId::from_str("item.ring_of_attacking")),
         );
     });
     effect

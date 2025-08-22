@@ -11,7 +11,7 @@ use crate::{
         id::{ActionId, EffectId},
         items::{
             equipment::{
-                armor::{Armor, ArmorClass},
+                armor::{Armor, ArmorClass, ArmorDexterityBonus},
                 equipment::EquipmentItem,
                 slots::{EquipmentSlot, SlotProvider},
                 weapon::{Weapon, WeaponKind, WeaponProficiencyMap, WeaponProperties},
@@ -19,7 +19,7 @@ use crate::{
             inventory::ItemContainer,
             item::Item,
         },
-        modifier::ModifierSet,
+        modifier::{ModifierSet, ModifierSource},
         resource::ResourceCostMap,
     },
     registry,
@@ -247,8 +247,8 @@ impl Loadout {
         } else {
             // TODO: Not sure if this is the right way to handle unarmored characters
             ArmorClass {
-                base: 10,
-                max_dexterity_bonus: 0,
+                base: (10, ModifierSource::None),
+                dexterity_bonus: ArmorDexterityBonus::Unlimited,
                 modifiers: ModifierSet::new(),
             }
         }

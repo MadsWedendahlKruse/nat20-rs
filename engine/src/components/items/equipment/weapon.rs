@@ -210,7 +210,7 @@ impl Weapon {
         let enchantment = self.enchantment();
         if enchantment > 0 {
             attack_roll.add_modifier(
-                ModifierSource::Item("Enchantment".to_string()),
+                ModifierSource::Custom("Enchantment".to_string()),
                 enchantment as i32,
             );
         }
@@ -242,7 +242,7 @@ impl Weapon {
         let enchantment = self.enchantment();
         if enchantment > 0 {
             damage_roll.primary.dice_roll.modifiers.add_modifier(
-                ModifierSource::Item("Enchantment".to_string()),
+                ModifierSource::Custom("Enchantment".to_string()),
                 enchantment as i32,
             );
         }

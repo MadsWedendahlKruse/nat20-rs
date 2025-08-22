@@ -356,6 +356,8 @@ impl fmt::Display for D20CheckDC<Ability> {
 
 #[cfg(test)]
 mod tests {
+    use crate::components::{id::ItemId, items::item::Item};
+
     use super::*;
 
     #[test]
@@ -364,9 +366,10 @@ mod tests {
             ProficiencyLevel::Proficient,
             ModifierSource::None,
         ));
-        check
-            .modifiers
-            .add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
+        check.modifiers.add_modifier(
+            ModifierSource::Item(ItemId::from_str("item.ring_of_rolling")),
+            2,
+        );
         println!("Check: {}", check);
         let result = check.roll(2);
 
@@ -385,12 +388,13 @@ mod tests {
             ProficiencyLevel::Proficient,
             ModifierSource::None,
         ));
-        check
-            .modifiers
-            .add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
+        check.modifiers.add_modifier(
+            ModifierSource::Item(ItemId::from_str("item.ring_of_rolling")),
+            2,
+        );
         check.advantage_tracker.add(
             AdvantageType::Advantage,
-            ModifierSource::Item("Lucky Charm".to_string()),
+            ModifierSource::Item(ItemId::from_str("item.lucky_charm")),
         );
         let result = check.roll(0);
 
@@ -416,7 +420,7 @@ mod tests {
         ));
         check.advantage_tracker.add(
             AdvantageType::Disadvantage,
-            ModifierSource::Item("Cursed Ring".to_string()),
+            ModifierSource::Item(ItemId::from_str("item.cursed_ring")),
         );
         let result = check.roll(4);
 
@@ -442,11 +446,11 @@ mod tests {
         ));
         check.advantage_tracker.add(
             AdvantageType::Advantage,
-            ModifierSource::Item("Lucky Charm".to_string()),
+            ModifierSource::Item(ItemId::from_str("item.lucky_charm")),
         );
         check.advantage_tracker.add(
             AdvantageType::Disadvantage,
-            ModifierSource::Item("Cursed Ring".to_string()),
+            ModifierSource::Item(ItemId::from_str("item.cursed_ring")),
         );
         let result = check.roll(4);
 
@@ -465,9 +469,10 @@ mod tests {
             ProficiencyLevel::Proficient,
             ModifierSource::None,
         ));
-        check
-            .modifiers
-            .add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
+        check.modifiers.add_modifier(
+            ModifierSource::Item(ItemId::from_str("item.ring_of_rolling")),
+            2,
+        );
         let mut result = check.roll(0);
         while result.selected_roll != 20 {
             // Simulate rolling again until we get a critical success

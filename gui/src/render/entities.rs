@@ -55,6 +55,8 @@ impl ImguiRenderableWithContext<(&World, CreatureRenderMode)> for Entity {
                         render_if_present::<CharacterLevels>(ui, world, *self);
                         render_if_present::<ChallengeRating>(ui, world, *self);
                         render_if_present::<HitPoints>(ui, world, *self);
+                        ui.separator_with_text("Armor Class");
+                        systems::loadout::armor_class(world, entity).render(ui);
                         systems::helpers::get_component::<AbilityScoreMap>(world, entity)
                             .render_with_context(ui, (world, entity));
                         render_if_present::<DamageResistances>(ui, world, entity);

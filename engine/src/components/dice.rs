@@ -190,7 +190,7 @@ impl fmt::Display for CompositeRollResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::components::{ability::Ability, modifier::ModifierSource};
+    use crate::components::{ability::Ability, id::ItemId, modifier::ModifierSource};
 
     use super::*;
 
@@ -225,7 +225,10 @@ mod tests {
     #[test]
     fn composite_roll() {
         let mut modifiers = ModifierSet::new();
-        modifiers.add_modifier(ModifierSource::Item("Ring of Rolling".to_string()), 2);
+        modifiers.add_modifier(
+            ModifierSource::Item(ItemId::from_str("item.ring_of_rolling")),
+            2,
+        );
         let group1 = DiceSetRoll {
             dice: DiceSet {
                 num_dice: 2,
