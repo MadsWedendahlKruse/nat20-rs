@@ -580,75 +580,99 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
             match target_type {
                 TargetType::Entity { .. } => {
                     let filter = ParticipantsFilter::from(target_type.clone());
+                    self.kind.render_with_context(
+                        ui,
+                        (world, encounter, targets, confirm_targets, filter),
+                    );
+                }
+            }
+        }
+    }
+}
 
-                    match &self.kind {
-                        TargetingKind::Single => {
-                            ui.text("Select a single target:");
-                            for entity in encounter.participants(
-                                &world,
-                                // TODO: This should be determined by the action's targeting filters
-                                filter,
-                            ) {
-                                if let Ok(name) = world.query_one_mut::<&Name>(entity) {
-                                    if render_button_selectable(
-                                        ui,
-                                        format!("{}##{:?}", name.as_str(), entity),
-                                        [100.0, 20.0],
-                                        targets.contains(&entity),
-                                    ) {
-                                        if targets.len() > 0 {
-                                            targets.clear();
-                                        }
-                                        targets.push(entity);
-                                    }
-                                }
-                            }
-                        }
+impl
+    ImguiRenderableWithContext<(
+        &mut World,
+        &Encounter,
+        &mut Vec<Entity>,
+        &mut bool,
+        ParticipantsFilter,
+    )> for TargetingKind
+{
+    fn render_with_context(
+        &self,
+        ui: &imgui::Ui,
+        context: (
+            &mut World,
+            &Encounter,
+            &mut Vec<Entity>,
+            &mut bool,
+            ParticipantsFilter,
+        ),
+    ) {
+        let (world, encounter, targets, confirm_targets, filter) = context;
 
-                        TargetingKind::Multiple { max_targets } => {
-                            let max_targets = *max_targets as usize;
-                            ui.text(format!(
-                                "Selected {}/{} targets:",
-                                targets.len(),
-                                max_targets
-                            ));
-                            ui.separator_with_text("Possible targets");
-                            for entity in encounter.participants(&world, filter) {
-                                if let Ok(name) = world.query_one_mut::<&Name>(entity) {
-                                    if ui.button(format!("{}##{:?}", name.as_str(), entity))
-                                        && targets.len() < max_targets
-                                    {
-                                        targets.push(entity);
-                                    }
-                                }
+        match &self {
+            TargetingKind::Single => {
+                ui.text("Select a single target:");
+                for entity in encounter.participants(&world, filter) {
+                    if let Ok(name) = world.query_one_mut::<&Name>(entity) {
+                        if render_button_selectable(
+                            ui,
+                            format!("{}##{:?}", name.as_str(), entity),
+                            [100.0, 20.0],
+                            targets.contains(&entity),
+                        ) {
+                            if targets.len() > 0 {
+                                targets.clear();
                             }
-                            ui.separator_with_text("Selected targets");
-                            let mut remove_target = None;
-                            for (i, target) in (&mut *targets).iter().enumerate() {
-                                if let Ok(name) = world.query_one_mut::<&Name>(*target) {
-                                    if ui.button(format!("{}##{}", name.as_str(), i)) {
-                                        remove_target = Some(i);
-                                    }
-                                }
-                            }
-                            for i in targets.len()..max_targets {
-                                render_empty_button(ui, &format!("Empty##{}", i));
-                            }
-                            if let Some(target_index) = remove_target {
-                                targets.remove(target_index);
-                            }
-                        }
-
-                        TargetingKind::SelfTarget => {
-                            targets.push(encounter.current_entity());
-                            *confirm_targets = true;
-                        }
-
-                        _ => {
-                            ui.text(format!("Targeting kind {:?} is not implemented yet.", self));
+                            targets.push(entity);
                         }
                     }
                 }
+            }
+
+            TargetingKind::Multiple { max_targets } => {
+                let max_targets = *max_targets as usize;
+                ui.text(format!(
+                    "Selected {}/{} targets:",
+                    targets.len(),
+                    max_targets
+                ));
+                ui.separator_with_text("Possible targets");
+                for entity in encounter.participants(&world, filter) {
+                    if let Ok(name) = world.query_one_mut::<&Name>(entity) {
+                        if ui.button(format!("{}##{:?}", name.as_str(), entity))
+                            && targets.len() < max_targets
+                        {
+                            targets.push(entity);
+                        }
+                    }
+                }
+                ui.separator_with_text("Selected targets");
+                let mut remove_target = None;
+                for (i, target) in (&mut *targets).iter().enumerate() {
+                    if let Ok(name) = world.query_one_mut::<&Name>(*target) {
+                        if ui.button(format!("{}##{}", name.as_str(), i)) {
+                            remove_target = Some(i);
+                        }
+                    }
+                }
+                for i in targets.len()..max_targets {
+                    render_empty_button(ui, &format!("Empty##{}", i));
+                }
+                if let Some(target_index) = remove_target {
+                    targets.remove(target_index);
+                }
+            }
+
+            TargetingKind::SelfTarget => {
+                targets.push(encounter.current_entity());
+                *confirm_targets = true;
+            }
+
+            _ => {
+                ui.text(format!("Targeting kind {:?} is not implemented yet.", self));
             }
         }
     }
