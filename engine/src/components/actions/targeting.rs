@@ -1,6 +1,4 @@
-use std::{collections::HashSet, hash::Hash};
-
-use hecs::Entity;
+use std::collections::HashSet;
 
 use crate::{
     components::{health::life_state::LifeState, id::EntityIdentifier},

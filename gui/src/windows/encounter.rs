@@ -8,14 +8,13 @@ use nat20_rs::{
             action::{ActionContext, ActionMap},
             targeting::{TargetType, TargetingContext, TargetingKind},
         },
-        health::life_state::LifeState,
         id::{ActionId, EncounterId, Name},
         resource::ResourceMap,
         spells::spellbook::Spellbook,
     },
     engine::{
         encounter::{
-            ActionData, ActionDecision, ActionPrompt, CombatEvents, CombatLog, Encounter,
+            ActionData, ActionDecision, ActionPrompt, CombatEvent, CombatLog, Encounter,
             ParticipantsFilter, ReactionData,
         },
         game_state::GameState,
@@ -472,7 +471,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                         let decision = self.take().unwrap().finalize();
                         let result = encounter.process(world, decision).unwrap();
                         match result {
-                            CombatEvents::ActionPerformed { action, results } => {
+                            CombatEvent::ActionPerformed { action, results } => {
                                 // Handle action performed, e.g., apply effects, update state
                                 println!("Action performed: {:?}", action);
                                 for result in results {
@@ -682,7 +681,7 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
     fn render_with_context(&self, ui: &imgui::Ui, world: &World) {
         for entry in self {
             match entry {
-                CombatEvents::ActionPerformed { action, results } => {
+                CombatEvent::ActionPerformed { action, results } => {
                     TextSegments::new(vec![
                         (
                             &systems::helpers::get_component::<Name>(world, action.actor)
@@ -712,7 +711,7 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                     }
                 }
 
-                CombatEvents::ReactionTriggered { reactor, action } => {
+                CombatEvent::ReactionTriggered { reactor, action } => {
                     let mut segments = vec![
                         (
                             systems::helpers::get_component_clone::<Name>(world, action.actor)
@@ -755,7 +754,7 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                     .render(ui);
                 }
 
-                CombatEvents::ActionCancelled {
+                CombatEvent::ActionCancelled {
                     reactor,
                     reaction,
                     action,
@@ -781,7 +780,7 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                     .render(ui);
                 }
 
-                CombatEvents::NoReactionTaken { reactor, action } => {
+                CombatEvent::NoReactionTaken { reactor, action } => {
                     TextSegments::new(vec![
                         (
                             systems::helpers::get_component::<Name>(world, *reactor).to_string(),
@@ -801,7 +800,7 @@ impl ImguiRenderableWithContext<&World> for CombatLog {
                     .render(ui);
                 }
 
-                CombatEvents::NewRound { round } => {
+                CombatEvent::NewRound { round } => {
                     ui.separator_with_text(format!("Round {}", round));
                 }
             }
