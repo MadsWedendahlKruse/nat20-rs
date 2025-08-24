@@ -4,7 +4,10 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        actions::action::{ActionContext, ActionResult, ReactionKind},
+        actions::{
+            action::{ActionContext, ActionResult, ReactionKind},
+            targeting::TargetType,
+        },
         d20_check::D20CheckResult,
         health::life_state::{self, LifeState},
         id::{ActionId, EncounterId},
@@ -241,8 +244,25 @@ pub enum ParticipantsFilter {
     Characters,
     Monsters,
     Specific(HashSet<Entity>),
-    LifeState(LifeState),
+    LifeStates(HashSet<LifeState>),
     NotLifeStates(HashSet<LifeState>),
+}
+
+impl From<TargetType> for ParticipantsFilter {
+    fn from(value: TargetType) -> Self {
+        match value {
+            TargetType::Entity {
+                allowed_states,
+                invert,
+            } => {
+                if invert {
+                    ParticipantsFilter::NotLifeStates(allowed_states)
+                } else {
+                    ParticipantsFilter::LifeStates(allowed_states)
+                }
+            }
+        }
+    }
 }
 
 pub struct Encounter {
@@ -325,10 +345,16 @@ impl Encounter {
             ParticipantsFilter::Specific(entities) => {
                 self.participants.intersection(&entities).cloned().collect()
             }
-            ParticipantsFilter::LifeState(life_state) => world
+            ParticipantsFilter::LifeStates(life_states) => world
                 .query::<&LifeState>()
                 .iter()
-                .filter_map(|(e, ls)| if *ls == life_state { Some(e) } else { None })
+                .filter_map(|(e, ls)| {
+                    if life_states.contains(ls) {
+                        Some(e)
+                    } else {
+                        None
+                    }
+                })
                 .collect(),
             ParticipantsFilter::NotLifeStates(life_states) => world
                 .query::<&LifeState>()

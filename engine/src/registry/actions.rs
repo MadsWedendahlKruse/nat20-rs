@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, LazyLock},
 };
 
@@ -14,6 +14,7 @@ use crate::{
         class::ClassName,
         damage::{AttackRoll, DamageRoll},
         dice::{DiceSet, DiceSetRoll, DieSize},
+        health::life_state::LifeState,
         id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
         level::CharacterLevels,
@@ -145,7 +146,7 @@ static WEAPON_TARGETING: LazyLock<
                     kind: TargetingKind::Single,
                     normal_range,
                     max_range,
-                    valid_target_types: vec![TargetType::Entity],
+                    valid_target_types: vec![TargetType::entity_not_dead()],
                 }
             } else {
                 panic!("Action context must be Weapon");

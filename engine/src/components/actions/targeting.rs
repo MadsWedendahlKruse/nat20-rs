@@ -1,6 +1,11 @@
+use std::{collections::HashSet, hash::Hash};
+
 use hecs::Entity;
 
-use crate::{components::id::EntityIdentifier, math::point::Point};
+use crate::{
+    components::{health::life_state::LifeState, id::EntityIdentifier},
+    math::point::Point,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TargetingKind {
@@ -32,15 +37,33 @@ pub enum AreaShape {
     Line { length: u32, width: u32 },      // e.g. Lightning Bolt
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TargetType {
-    // An entity in the game world, e.g. a character or creature
-    Entity,
-    // Self,       // Explicit "this actor" (optional; could be special-cased)
-    // None, // For actions that don't actually select a target
-    // Future-proofing:
-    // Point, // A position/tile (for teleport, movement, some spells)
-    // Area,  // An area, e.g. Cloudkill, Grease (could also be modeled by targeting context)
+    /// An entity in the game world, e.g. a character or a monster.
+    Entity {
+        /// If specified, the target must be in one of these states to be valid.
+        /// If `invert` is true, the target must NOT be in one of these states.
+        /// In most cases this is used to prevent targeting dead creatures, but
+        /// in some cases it could be used to specifically target dead creatures
+        /// (e.g. Revivify).
+        allowed_states: HashSet<LifeState>,
+        /// If true, the allowed_states set is inverted. I.e. the target must NOT
+        /// be in one of the allowed states.
+        invert: bool,
+    }, // Self,       // Explicit "this actor" (optional; could be special-cased)
+       // None, // For actions that don't actually select a target
+       // Future-proofing:
+       // Point, // A position/tile (for teleport, movement, some spells)
+       // Area,  // An area, e.g. Cloudkill, Grease (could also be modeled by targeting context)
+}
+
+impl TargetType {
+    pub fn entity_not_dead() -> Self {
+        TargetType::Entity {
+            allowed_states: HashSet::from([LifeState::Dead, LifeState::Defeated]),
+            invert: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -83,7 +106,10 @@ impl TargetingContext {
             kind: TargetingKind::SelfTarget,
             normal_range: 0,
             max_range: 0,
-            valid_target_types: vec![TargetType::Entity],
+            valid_target_types: vec![TargetType::Entity {
+                allowed_states: HashSet::new(),
+                invert: false,
+            }],
         }
     }
 }

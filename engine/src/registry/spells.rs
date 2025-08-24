@@ -51,7 +51,7 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
             kind: TargetingKind::Single,
             normal_range: 60,
             max_range: 60,
-            valid_target_types: vec![TargetType::Entity],
+            valid_target_types: vec![TargetType::entity_not_dead()],
         }),
         Some(Arc::new(
             |world, reactor, actor, action_id, action_context, targets| {
@@ -113,7 +113,7 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
                 },
                 normal_range: 120,
                 max_range: 120,
-                valid_target_types: vec![TargetType::Entity],
+                valid_target_types: vec![TargetType::entity_not_dead()],
             }
         }),
         None,
@@ -158,7 +158,7 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
             normal_range: 150,
             max_range: 150,
             // TODO: Can also hit objects
-            valid_target_types: vec![TargetType::Entity],
+            valid_target_types: vec![TargetType::entity_not_dead()],
         }),
         None,
     )
@@ -204,7 +204,7 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
                 },
                 normal_range: 120,
                 max_range: 120,
-                valid_target_types: vec![TargetType::Entity],
+                valid_target_types: vec![TargetType::entity_not_dead()],
             }
         }),
         None,

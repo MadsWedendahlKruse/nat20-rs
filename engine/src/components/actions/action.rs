@@ -16,7 +16,6 @@ use crate::{
         dice::{DiceSetRoll, DiceSetRollResult},
         id::{ActionId, EffectId, EntityIdentifier, ResourceId},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
-        modifier::ModifierSet,
         resource::{RechargeRule, ResourceCostMap, ResourceError, ResourceMap},
         saving_throw::{SavingThrowDC, SavingThrowSet},
         spells::spellbook::Spellbook,
