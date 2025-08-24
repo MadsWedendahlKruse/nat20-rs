@@ -15,7 +15,7 @@ use nat20_rs::{
             DamageRollResult, MitigationOperation,
         },
         effects::effects::{Effect, EffectDuration},
-        hit_points::HitPoints,
+        health::{hit_points::HitPoints, life_state::LifeState},
         id::{FeatId, Name, RaceId, SpellId, SubraceId},
         items::{
             equipment::{
@@ -47,7 +47,8 @@ use crate::{
         text::{TextKind, TextSegment, TextSegments, indent_text, item_rarity_color},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-            ImguiRenderableWithContext, SELECTED_BUTTON_COLOR, render_empty_button,
+            ImguiRenderableWithContext, SELECTED_BUTTON_COLOR, interpolate_color,
+            render_empty_button,
         },
     },
     table_with_columns,
@@ -146,6 +147,11 @@ impl ImguiRenderable for ChallengeRating {
     }
 }
 
+static FULL_HEALTH_COLOR: [f32; 4] = [0.0, 0.7, 0.0, 1.0];
+static FULL_HEALTH_BG_COLOR: [f32; 4] = [0.0, 0.2, 0.0, 1.0];
+static LOW_HEALTH_COLOR: [f32; 4] = [0.7, 0.0, 0.0, 1.0];
+static LOW_HEALTH_BG_COLOR: [f32; 4] = [0.2, 0.0, 0.0, 1.0];
+
 impl ImguiRenderable for HitPoints {
     fn render(&self, ui: &imgui::Ui) {
         let current = self.current();
@@ -163,10 +169,15 @@ impl ImguiRenderable for HitPoints {
         ui.text("HP:");
         ui.same_line();
 
-        // Style colors
-        let foreground =
-            ui.push_style_color(imgui::StyleColor::PlotHistogram, [0.7, 0.0, 0.0, 1.0]);
-        let background = ui.push_style_color(imgui::StyleColor::FrameBg, [0.2, 0.0, 0.0, 1.0]);
+        // Style colors (interpolated based on health fraction)
+        let (health_color, health_bg_color) = {
+            (
+                interpolate_color(FULL_HEALTH_COLOR, LOW_HEALTH_COLOR, hp_fraction),
+                interpolate_color(FULL_HEALTH_BG_COLOR, LOW_HEALTH_BG_COLOR, hp_fraction),
+            )
+        };
+        let foreground = ui.push_style_color(imgui::StyleColor::PlotHistogram, health_color);
+        let background = ui.push_style_color(imgui::StyleColor::FrameBg, health_bg_color);
 
         imgui::ProgressBar::new(hp_fraction)
             .size([150.0, bar_height])
@@ -176,6 +187,49 @@ impl ImguiRenderable for HitPoints {
         // Pop the style colors
         foreground.pop();
         background.pop();
+    }
+}
+
+impl ImguiRenderable for LifeState {
+    fn render(&self, ui: &imgui::Ui) {
+        match self {
+            LifeState::Normal => {
+                // Render *something* to fit with UI line logic
+                ui.text("");
+            }
+            LifeState::Unconscious(death_saving_throws) => {
+                // Render something like [_++|-__] where + is a success and - is a failure
+                let mut segments = Vec::new();
+                segments.push(("Unconscious: ".to_string(), TextKind::Details));
+                segments.push((
+                    format!(
+                        "[{}",
+                        "_".repeat((3 - death_saving_throws.successes()) as usize)
+                    ),
+                    TextKind::Details,
+                ));
+                segments.push((
+                    format!("{}", "+".repeat(death_saving_throws.successes() as usize)),
+                    TextKind::Green,
+                ));
+                segments.push(("|".to_string(), TextKind::Details));
+                segments.push((
+                    format!("{}", "-".repeat(death_saving_throws.failures() as usize)),
+                    TextKind::Red,
+                ));
+                segments.push((
+                    format!(
+                        "{}]",
+                        "_".repeat((3 - death_saving_throws.failures()) as usize)
+                    ),
+                    TextKind::Details,
+                ));
+                TextSegments::new(segments).render(ui);
+            }
+            _ => {
+                TextSegment::new(format!("{:?}", self), TextKind::Details).render(ui);
+            }
+        }
     }
 }
 
@@ -980,20 +1034,28 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
     }
 }
 
-impl ImguiRenderableWithContext<(&str, u8)> for DamageComponentMitigation {
-    fn render_with_context(&self, ui: &imgui::Ui, context: (&str, u8)) {
-        let (target_name, indent_level) = context;
+impl ImguiRenderableWithContext<(&str, u8, &Option<AttackRollResult>)>
+    for DamageComponentMitigation
+{
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&str, u8, &Option<AttackRollResult>)) {
+        let (target_name, indent_level, attack_roll) = context;
 
-        TextSegments::new(vec![
-            (target_name, TextKind::Target),
-            ("was hit for", TextKind::Normal),
+        let mut segments = vec![
+            (target_name.to_string(), TextKind::Target),
+            ("was hit for".to_string(), TextKind::Normal),
             (
-                &format!("{} {} damage", self.after_mods, self.damage_type),
+                format!("{} {} damage", self.after_mods, self.damage_type),
                 TextKind::Damage(self.damage_type),
             ),
-        ])
-        .with_indent(indent_level)
-        .render(ui);
+        ];
+        if let Some(attack_roll) = attack_roll {
+            if attack_roll.roll_result.is_crit {
+                segments.push(("(Critical Hit!)".to_string(), TextKind::Details));
+            }
+        }
+        TextSegments::new(segments)
+            .with_indent(indent_level)
+            .render(ui);
     }
 }
 
@@ -1007,20 +1069,20 @@ impl ImguiRenderableWithContext<(&str, u8, &str, Option<AttackRollResult>)>
     ) {
         let (target_name, indent_level, no_damage_text, attack_roll) = context;
         ui.group(|| match self {
+            // Some damage was taken
             Some(result) => {
                 for component in &result.components {
-                    component.render_with_context(ui, (target_name, indent_level));
+                    component.render_with_context(ui, (target_name, indent_level, &attack_roll));
                 }
             }
+            // No damage was taken
             None => {
                 let mut segments = vec![
                     (target_name.to_string(), TextKind::Target),
                     (no_damage_text.to_string(), TextKind::Normal),
                 ];
                 if let Some(attack_roll) = attack_roll {
-                    if attack_roll.roll_result.is_crit {
-                        segments.push(("(Critical Hit!)".to_string(), TextKind::Details));
-                    } else if attack_roll.roll_result.is_crit_fail {
+                    if attack_roll.roll_result.is_crit_fail {
                         segments.push(("(Critical Miss!)".to_string(), TextKind::Details));
                     }
                 }

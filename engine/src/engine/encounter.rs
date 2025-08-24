@@ -6,10 +6,12 @@ use crate::{
     components::{
         actions::action::{ActionContext, ActionResult, ReactionKind},
         d20_check::D20CheckResult,
+        health::life_state::{self, LifeState},
         id::{ActionId, EncounterId},
         resource::ResourceCostMap,
         skill::{Skill, SkillSet},
     },
+    entities::{character::CharacterTag, monster::MonsterTag},
     systems,
 };
 
@@ -234,18 +236,27 @@ impl ActionDecision {
 
 pub type CombatLog = Vec<CombatEvents>;
 
+pub enum ParticipantsFilter {
+    All,
+    Characters,
+    Monsters,
+    Specific(HashSet<Entity>),
+    LifeState(LifeState),
+    NotLifeStates(HashSet<LifeState>),
+}
+
 pub struct Encounter {
-    pub id: EncounterId,
-    pub participants: HashSet<Entity>,
-    pub round: usize,
-    pub turn_index: usize,
-    pub initiative_order: Vec<(Entity, D20CheckResult)>,
-    pub pending_prompts: VecDeque<ActionPrompt>,
+    id: EncounterId,
+    participants: HashSet<Entity>,
+    round: usize,
+    turn_index: usize,
+    initiative_order: Vec<(Entity, D20CheckResult)>,
+    pending_prompts: VecDeque<ActionPrompt>,
     /// In case a reaction is requested, this will hold the pending decisions
     /// until the reaction is resolved. The decision will then be processed once
     /// the reaction is resolved. In most cases this will be a single decision.
-    pub pending_decisions: VecDeque<ActionDecision>,
-    pub combat_log: CombatLog,
+    pending_decisions: VecDeque<ActionDecision>,
+    combat_log: CombatLog,
 }
 
 impl Encounter {
@@ -298,8 +309,39 @@ impl Encounter {
         idx
     }
 
-    pub fn participants(&self) -> &HashSet<Entity> {
-        &self.participants
+    pub fn participants(&self, world: &World, filter: ParticipantsFilter) -> Vec<Entity> {
+        match filter {
+            ParticipantsFilter::All => self.participants.iter().cloned().collect(),
+            ParticipantsFilter::Characters => world
+                .query::<&CharacterTag>()
+                .iter()
+                .map(|(e, _)| e)
+                .collect(),
+            ParticipantsFilter::Monsters => world
+                .query::<&MonsterTag>()
+                .iter()
+                .map(|(e, _)| e)
+                .collect(),
+            ParticipantsFilter::Specific(entities) => {
+                self.participants.intersection(&entities).cloned().collect()
+            }
+            ParticipantsFilter::LifeState(life_state) => world
+                .query::<&LifeState>()
+                .iter()
+                .filter_map(|(e, ls)| if *ls == life_state { Some(e) } else { None })
+                .collect(),
+            ParticipantsFilter::NotLifeStates(life_states) => world
+                .query::<&LifeState>()
+                .iter()
+                .filter_map(|(e, ls)| {
+                    if !life_states.contains(ls) {
+                        Some(e)
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        }
     }
 
     pub fn next_prompt(&self) -> Option<&ActionPrompt> {
@@ -538,6 +580,27 @@ impl Encounter {
     fn start_turn(&mut self, world: &mut World) {
         systems::turns::on_turn_start(world, self.current_entity());
 
+        let skip_turn = {
+            let mut life_state = systems::helpers::get_component_mut::<life_state::LifeState>(
+                world,
+                self.current_entity(),
+            );
+            match *life_state {
+                LifeState::Normal => false,
+                LifeState::Unconscious(ref mut death_saving_throws) => {
+                    death_saving_throws.roll();
+                    true
+                }
+                _ => true,
+            }
+        };
+
+        if skip_turn {
+            // Automatically end the turn if the entity is not able to act
+            self.end_turn(world, self.current_entity());
+            return;
+        }
+
         self.pending_prompts.push_back(ActionPrompt::Action {
             actor: self.current_entity(),
         });
@@ -549,5 +612,9 @@ impl Encounter {
 
     pub fn combat_log(&self) -> &CombatLog {
         &self.combat_log
+    }
+
+    pub fn combat_log_move(&mut self) -> CombatLog {
+        std::mem::take(&mut self.combat_log)
     }
 }

@@ -161,3 +161,12 @@ pub fn render_window_at_cursor<R, F: FnOnce() -> R>(
         .always_auto_resize(always_auto_resize)
         .build(build_fn);
 }
+
+pub fn interpolate_color(color1: [f32; 4], color2: [f32; 4], factor: f32) -> [f32; 4] {
+    [
+        color2[0] + (color1[0] - color2[0]) * factor,
+        color2[1] + (color1[1] - color2[1]) * factor,
+        color2[2] + (color1[2] - color2[2]) * factor,
+        color2[3] + (color1[3] - color2[3]) * factor,
+    ]
+}

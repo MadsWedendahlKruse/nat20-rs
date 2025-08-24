@@ -8,7 +8,7 @@ use crate::{
     components::{
         ability::{Ability, AbilityScore, AbilityScoreDistribution, AbilityScoreMap},
         class::ClassName,
-        hit_points::HitPoints,
+        health::hit_points::HitPoints,
         id::{ActionId, EffectId, Name},
         items::{equipment::loadout::EquipmentInstance, money::MonetaryValue},
         level::CharacterLevels,

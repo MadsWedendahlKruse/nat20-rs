@@ -9,7 +9,9 @@ use crate::{
         id::EncounterId,
         skill::Skill,
     },
-    engine::encounter::{ActionDecision, ActionError, CombatEvents, CombatLog, Encounter},
+    engine::encounter::{
+        ActionDecision, ActionError, CombatEvents, CombatLog, Encounter, ParticipantsFilter,
+    },
 };
 
 // TODO: Not 100% sure this is the best solution
@@ -70,13 +72,13 @@ impl GameState {
     }
 
     pub fn end_encounter(&mut self, encounter_id: &EncounterId) {
-        if let Some(encounter) = self.encounters.remove(encounter_id) {
-            for entity in encounter.participants() {
+        if let Some(mut encounter) = self.encounters.remove(encounter_id) {
+            for entity in encounter.participants(&self.world, ParticipantsFilter::All) {
                 self.in_combat.remove(&entity);
             }
             self.event_log.push(GameEvent::EncounterEnded(
                 encounter_id.clone(),
-                encounter.combat_log,
+                encounter.combat_log_move(),
             ));
         }
     }

@@ -8,6 +8,7 @@ use nat20_rs::{
             action::{ActionContext, ActionMap},
             targeting::TargetingKind,
         },
+        health::life_state::LifeState,
         id::{ActionId, EncounterId, Name},
         resource::ResourceMap,
         spells::spellbook::Spellbook,
@@ -15,7 +16,7 @@ use nat20_rs::{
     engine::{
         encounter::{
             ActionData, ActionDecision, ActionPrompt, CombatEvents, CombatLog, Encounter,
-            ReactionData,
+            ParticipantsFilter, ReactionData,
         },
         game_state::GameState,
     },
@@ -304,7 +305,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
         }
 
         ui.separator();
-        ui.text(format!("Round: {}", self.round));
+        ui.text(format!("Round: {}", self.round()));
 
         let next_prompt = self.next_prompt();
         if next_prompt.is_none() {
@@ -577,18 +578,25 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
         match self {
             TargetingKind::Single => {
                 ui.text("Select a single target:");
-                for entity in encounter.participants() {
-                    if let Ok(name) = world.query_one_mut::<&Name>(*entity) {
+                for entity in encounter.participants(
+                    &world,
+                    // TODO: This should be determined by the action's targeting filters
+                    ParticipantsFilter::NotLifeStates(HashSet::from([
+                        LifeState::Dead,
+                        LifeState::Defeated,
+                    ])),
+                ) {
+                    if let Ok(name) = world.query_one_mut::<&Name>(entity) {
                         if render_button_selectable(
                             ui,
                             format!("{}##{:?}", name.as_str(), entity),
                             [100.0, 20.0],
-                            targets.contains(entity),
+                            targets.contains(&entity),
                         ) {
                             if targets.len() > 0 {
                                 targets.clear();
                             }
-                            targets.push(*entity);
+                            targets.push(entity);
                         }
                     }
                 }
@@ -602,12 +610,19 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
                     max_targets
                 ));
                 ui.separator_with_text("Possible targets");
-                for entity in encounter.participants() {
-                    if let Ok(name) = world.query_one_mut::<&Name>(*entity) {
+                for entity in encounter.participants(
+                    &world,
+                    // TODO: This should be determined by the action's targeting filters
+                    ParticipantsFilter::NotLifeStates(HashSet::from([
+                        LifeState::Dead,
+                        LifeState::Defeated,
+                    ])),
+                ) {
+                    if let Ok(name) = world.query_one_mut::<&Name>(entity) {
                         if ui.button(format!("{}##{:?}", name.as_str(), entity))
                             && targets.len() < max_targets
                         {
-                            targets.push(*entity);
+                            targets.push(entity);
                         }
                     }
                 }

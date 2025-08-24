@@ -8,23 +8,38 @@ use crate::{
             DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
             MitigationOperation,
         },
-        hit_points::HitPoints,
+        health::{
+            hit_points::{self, HitPoints},
+            life_state::LifeState,
+        },
         level::CharacterLevels,
         modifier::ModifierSource,
         saving_throw::SavingThrowSet,
     },
+    entities::{character::CharacterTag, monster::MonsterTag},
     registry, systems,
 };
 
 pub fn heal(world: &mut World, target: Entity, amount: u32) {
     if let Ok(mut hit_points) = world.get::<&mut HitPoints>(target) {
         hit_points.heal(amount);
+        if let Ok(mut life_state) = world.get::<&mut LifeState>(target) {
+            if hit_points.current() > 0 {
+                *life_state = LifeState::Normal;
+            }
+        }
     }
 }
 
 pub fn heal_full(world: &mut World, target: Entity) {
-    if let Ok(mut hit_points) = world.get::<&mut HitPoints>(target) {
-        hit_points.heal_full();
+    // TODO: Bit of a convoluted way to get avoid repeating the life state logic
+    let hit_point_max = if let Ok(hit_points) = world.get::<&HitPoints>(target) {
+        Some(hit_points.max())
+    } else {
+        None
+    };
+    if let Some(max) = hit_point_max {
+        heal(world, target, max);
     }
 }
 
@@ -34,13 +49,28 @@ fn damage_internal(
     damage_roll_result: &DamageRollResult,
     resistances: &DamageResistances,
 ) -> Option<DamageMitigationResult> {
-    if let Ok(mut hit_points) = world.get::<&mut HitPoints>(target) {
-        let mitigation_result = resistances.apply(damage_roll_result);
-        hit_points.damage(mitigation_result.total.max(0) as u32);
-        Some(mitigation_result)
-    } else {
-        None
+    let (mitigation_result, current_hp) =
+        if let Ok(mut hit_points) = world.get::<&mut HitPoints>(target) {
+            let mitigation_result = resistances.apply(damage_roll_result);
+            hit_points.damage(mitigation_result.total.max(0) as u32);
+            (mitigation_result, hit_points.current())
+        } else {
+            return None;
+        };
+
+    if current_hp == 0 {
+        // Monsters and Characters 'die' differently
+        if let Ok((_, life_state)) = world.query_one_mut::<(&MonsterTag, &mut LifeState)>(target) {
+            *life_state = LifeState::Defeated;
+        }
+
+        if let Ok((_, life_state)) = world.query_one_mut::<(&CharacterTag, &mut LifeState)>(target)
+        {
+            *life_state = LifeState::unconscious();
+        }
     }
+
+    Some(mitigation_result)
 }
 
 // TODO: This should return some more information, like for an attack roll

@@ -305,7 +305,7 @@ pub mod creatures {
         use crate::{
             components::{
                 ability::AbilityScoreMap,
-                hit_points::HitPoints,
+                health::hit_points::HitPoints,
                 id::{EntityIdentifier, ItemId, Name},
                 items::{
                     equipment::{

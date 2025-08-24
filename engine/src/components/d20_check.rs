@@ -73,6 +73,9 @@ impl AdvantageTracker {
     }
 }
 
+pub static D20_CRITICAL_SUCCESS: u8 = 20;
+pub static D20_CRITICAL_FAILURE: u8 = 1;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct D20Check {
     modifiers: ModifierSet,
@@ -148,7 +151,7 @@ impl D20Check {
         // TODO: For some reason this is clamped to zero, so negative modifiers are not applied
         let total = (selected_roll as i32 + total_modifier) as u32;
 
-        let is_crit = selected_roll == 20;
+        let is_crit = selected_roll == D20_CRITICAL_SUCCESS;
 
         D20CheckResult {
             advantage_tracker: self.advantage_tracker.clone(),
@@ -158,7 +161,7 @@ impl D20Check {
             total_modifier,
             total,
             is_crit,
-            is_crit_fail: selected_roll == 1,
+            is_crit_fail: selected_roll == D20_CRITICAL_FAILURE,
             // We can already now say the check is a success if it's a crit
             success: is_crit,
         }

@@ -7,7 +7,7 @@ pub mod damage;
 pub mod dice;
 pub mod effects;
 pub mod feat;
-pub mod hit_points;
+pub mod health;
 pub mod id;
 pub mod items;
 pub mod level;

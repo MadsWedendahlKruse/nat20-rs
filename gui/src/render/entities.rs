@@ -1,12 +1,10 @@
-use std::ops::Deref;
-
 use hecs::{Entity, World};
 use nat20_rs::{
     components::{
         ability::AbilityScoreMap,
         damage::DamageResistances,
         effects::effects::{Effect, EffectDuration},
-        hit_points::HitPoints,
+        health::{hit_points::HitPoints, life_state::LifeState},
         id::{FeatId, Name, RaceId, SubraceId},
         level::{ChallengeRating, CharacterLevels},
         race::{CreatureSize, CreatureType},
@@ -14,7 +12,6 @@ use nat20_rs::{
         skill::SkillSet,
         spells::spellbook::Spellbook,
     },
-    entities::character::CharacterTag,
     systems,
 };
 
@@ -52,9 +49,11 @@ impl ImguiRenderableWithContext<(&World, CreatureRenderMode)> for Entity {
                         render_if_present::<CreatureType>(ui, world, entity);
 
                         // render_if_present::<Name>(ui, world, *self);
-                        render_if_present::<CharacterLevels>(ui, world, *self);
-                        render_if_present::<ChallengeRating>(ui, world, *self);
-                        render_if_present::<HitPoints>(ui, world, *self);
+                        render_if_present::<CharacterLevels>(ui, world, entity);
+                        render_if_present::<ChallengeRating>(ui, world, entity);
+                        render_if_present::<HitPoints>(ui, world, entity);
+                        ui.same_line();
+                        render_if_present::<LifeState>(ui, world, entity);
                         ui.separator_with_text("Armor Class");
                         systems::loadout::armor_class(world, entity).render(ui);
                         systems::helpers::get_component::<AbilityScoreMap>(world, entity)
@@ -100,6 +99,8 @@ impl ImguiRenderableWithContext<(&World, CreatureRenderMode)> for Entity {
                 render_if_present::<CharacterLevels>(ui, world, *self);
                 render_if_present::<ChallengeRating>(ui, world, *self);
                 render_if_present::<HitPoints>(ui, world, *self);
+                ui.same_line();
+                render_if_present::<LifeState>(ui, world, *self);
                 if let Ok(effects) = world.get::<&Vec<Effect>>(*self) {
                     render_effects_compact(ui, &effects);
                 }
@@ -169,6 +170,8 @@ impl ImguiRenderableMutWithContext<(&mut World)> for Entity {
                 render_if_present::<CharacterLevels>(ui, world, *self);
                 render_if_present::<ChallengeRating>(ui, world, *self);
                 render_if_present::<HitPoints>(ui, world, *self);
+                ui.same_line();
+                render_if_present::<LifeState>(ui, world, entity);
                 systems::helpers::get_component::<AbilityScoreMap>(world, entity)
                     .render_with_context(ui, (world, entity));
                 render_if_present::<DamageResistances>(ui, world, entity);

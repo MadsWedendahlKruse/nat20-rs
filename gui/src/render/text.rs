@@ -51,6 +51,9 @@ pub enum TextKind {
     Ability,
     Skill,
     Item(ItemRarity),
+    // General purpose text colors
+    Green,
+    Red,
 }
 
 impl TextKind {
@@ -67,6 +70,8 @@ impl TextKind {
             TextKind::Ability => [0.75, 0.5, 1.0, 1.0],
             TextKind::Skill => [0.5, 0.75, 1.0, 1.0],
             TextKind::Item(item_rarity) => item_rarity_color(item_rarity),
+            TextKind::Green => [0.0, 1.0, 0.0, 1.0],
+            TextKind::Red => [1.0, 0.0, 0.0, 1.0],
         }
     }
 }

@@ -7,7 +7,7 @@ mod tests {
             actions::action::ActionKindSnapshot,
             damage::{DamageComponentResult, DamageRollResult, DamageSource, DamageType},
             dice::{DiceSetRollResult, DieSize},
-            hit_points::HitPoints,
+            health::hit_points::HitPoints,
             modifier::ModifierSet,
             resource::ResourceMap,
         },
