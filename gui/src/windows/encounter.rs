@@ -14,7 +14,7 @@ use nat20_rs::{
     },
     engine::{
         encounter::{ActionDecision, ActionPrompt, Encounter, ParticipantsFilter},
-        game_state::{ActionData, EventLog, GameEvent, GameState, ReactionData},
+        game_state::{ActionData, GameState, ReactionData},
     },
     registry, systems,
 };

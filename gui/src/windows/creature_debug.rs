@@ -1,7 +1,6 @@
 use hecs::Entity;
 use nat20_rs::{
     components::{
-        ability::Ability,
         d20::D20CheckDC,
         modifier::{ModifierSet, ModifierSource},
         resource::RechargeRule,
