@@ -18,7 +18,7 @@ use crate::{
         id::{ActionId, EffectId, EntityIdentifier, ResourceId},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
         resource::{RechargeRule, ResourceCostMap, ResourceError, ResourceMap},
-        saving_throw::{SavingThrowDC, SavingThrowSet},
+        saving_throw::{self, SavingThrowDC, SavingThrowSet},
         spells::spellbook::Spellbook,
     },
     systems::{self},
@@ -95,56 +95,12 @@ pub enum ActionKind {
     /// that deals damage and applies a beneficial effect.
     Composite { actions: Vec<ActionKind> },
     /// Custom actions can have any kind of effect, including damage, healing, or utility.
-    /// The closure should return a `SpellKindSnapshot` that describes the effect of the spell.
     /// Please note that this should only be used for actions that don't fit into the
     /// standard categories.
-    Custom(Arc<dyn Fn(&World, Entity, &ActionContext) -> ActionKindSnapshot + Send + Sync>),
+    Custom(Arc<dyn Fn(&World, Entity, &ActionContext) -> ActionKindResult + Send + Sync>),
 }
 
-/// For some actions we run into a borrowing issue, where we need to borrow the
-/// character performing the action immutably (to read their stats, abilities, etc.),
-/// and also borrow the target mutably (to apply damage, effects, etc.).
-/// To avoid this, we create a snapshot of the action that contains all the
-/// precomputed results, and then we can apply those results to the target
-/// without needing to borrow the character immutably again.
-#[derive(Debug, Clone)]
-pub enum ActionKindSnapshot {
-    UnconditionalDamage {
-        damage_roll: DamageRollResult,
-    },
-    AttackRollDamage {
-        attack_roll: AttackRollResult,
-        damage_roll: DamageRollResult,
-        damage_on_failure: Option<DamageRollResult>,
-    },
-    SavingThrowDamage {
-        saving_throw_dc: SavingThrowDC,
-        half_damage_on_save: bool,
-        damage_roll: DamageRollResult,
-    },
-    UnconditionalEffect {
-        effect: EffectId,
-    },
-    SavingThrowEffect {
-        saving_throw: SavingThrowDC,
-        effect: EffectId,
-    },
-    BeneficialEffect {
-        effect: EffectId,
-    },
-    Healing {
-        healing: DiceSetRollResult,
-    },
-    Utility,
-    Composite {
-        actions: Vec<ActionKindSnapshot>,
-    },
-    Custom {
-        // TODO: Add more fields as needed for custom spells
-    },
-}
-
-/// The result of applying an action snapshot to a target.
+/// The result of applying an action to a target.
 /// This is the final result of the action, which includes any damage dealt,
 /// effects applied, or healing done.
 #[derive(Debug, Clone)]
@@ -189,7 +145,7 @@ pub enum ActionKindResult {
     },
     Utility,
     Composite {
-        actions: Vec<ActionResult>,
+        actions: Vec<ActionKindResult>,
     },
     Custom {
         // TODO: Add more fields as needed for custom spells
@@ -277,73 +233,66 @@ pub trait ActionProvider {
 }
 
 impl ActionKind {
-    pub fn snapshot(
+    pub fn perform(
         &self,
-        world: &World,
-        entity: Entity,
+        world: &mut World,
+        performer: Entity,
         context: &ActionContext,
-    ) -> ActionKindSnapshot {
+        target: Entity,
+    ) -> ActionKindResult {
         match self {
-            ActionKind::UnconditionalDamage { damage } => ActionKindSnapshot::UnconditionalDamage {
-                damage_roll: damage(world, entity, context).roll(),
-            },
-
-            ActionKind::AttackRollDamage {
-                attack_roll,
-                damage,
-                damage_on_failure,
-            } => {
-                let attack_roll_result = attack_roll(world, entity, context).roll(world, entity);
-                let is_crit = attack_roll_result.roll_result.is_crit;
-                ActionKindSnapshot::AttackRollDamage {
-                    attack_roll: attack_roll_result,
-                    damage_roll: damage(world, entity, context).roll_crit_damage(is_crit),
-                    damage_on_failure: damage_on_failure
-                        .as_ref()
-                        .map(|f| f(world, entity, context).roll()),
-                }
+            ActionKind::UnconditionalDamage { .. }
+            | ActionKind::AttackRollDamage { .. }
+            | ActionKind::SavingThrowDamage { .. } => {
+                systems::health::damage(world, performer, target, self, context)
             }
 
-            ActionKind::SavingThrowDamage {
-                saving_throw,
-                half_damage_on_save,
-                damage,
-            } => ActionKindSnapshot::SavingThrowDamage {
-                saving_throw_dc: saving_throw(world, entity, context),
-                half_damage_on_save: *half_damage_on_save,
-                damage_roll: damage(world, entity, context).roll(),
-            },
-
-            ActionKind::UnconditionalEffect { effect } => ActionKindSnapshot::UnconditionalEffect {
+            ActionKind::UnconditionalEffect { effect } => ActionKindResult::UnconditionalEffect {
                 effect: effect.clone(),
+                applied: true, // TODO: Unconditional effects are always applied
             },
 
             ActionKind::SavingThrowEffect {
                 saving_throw,
                 effect,
-            } => ActionKindSnapshot::SavingThrowEffect {
-                saving_throw: saving_throw(world, entity, context),
-                effect: effect.clone(),
-            },
+            } => {
+                let saving_throw = saving_throw(world, performer, context);
+                ActionKindResult::SavingThrowEffect {
+                    saving_throw: saving_throw.clone(),
+                    effect: effect.clone(),
+                    applied: systems::helpers::get_component::<SavingThrowSet>(world, target)
+                        .check_dc(&saving_throw, world, target)
+                        .success,
+                }
+            }
 
-            ActionKind::BeneficialEffect { effect } => ActionKindSnapshot::BeneficialEffect {
-                effect: effect.clone(),
-            },
+            ActionKind::BeneficialEffect { effect } => {
+                systems::effects::add_effect(world, target, effect);
+                ActionKindResult::BeneficialEffect {
+                    effect: effect.clone(),
+                    applied: true, // TODO: Beneficial effects are always applied?
+                }
+            }
 
-            ActionKind::Healing { heal } => ActionKindSnapshot::Healing {
-                healing: heal(world, entity, context).roll(),
-            },
+            ActionKind::Healing { heal } => {
+                let healing = heal(world, performer, context).roll();
+                let new_life_state = systems::health::heal(world, target, healing.subtotal as u32);
+                ActionKindResult::Healing {
+                    healing,
+                    new_life_state,
+                }
+            }
 
-            ActionKind::Utility { .. } => ActionKindSnapshot::Utility,
+            ActionKind::Utility { .. } => ActionKindResult::Utility,
 
-            ActionKind::Composite { actions } => ActionKindSnapshot::Composite {
+            ActionKind::Composite { actions } => ActionKindResult::Composite {
                 actions: actions
                     .iter()
-                    .map(|a| a.snapshot(world, entity, context))
+                    .map(|a| a.perform(world, performer, context, target))
                     .collect(),
             },
 
-            ActionKind::Custom(custom) => custom(world, entity, context),
+            ActionKind::Custom(custom) => custom(world, target, context),
         }
     }
 }
@@ -369,97 +318,14 @@ impl Debug for ActionKind {
     }
 }
 
-impl ActionKindSnapshot {
-    pub fn apply_to_entity(&self, world: &mut World, entity: Entity) -> ActionResult {
-        let result = match self {
-            ActionKindSnapshot::UnconditionalDamage { damage_roll } => {
-                systems::health::damage(world, entity, self)
-            }
-
-            ActionKindSnapshot::AttackRollDamage {
-                attack_roll,
-                damage_roll,
-                damage_on_failure,
-            } => systems::health::damage(world, entity, self),
-
-            ActionKindSnapshot::SavingThrowDamage {
-                saving_throw_dc: saving_throw,
-                half_damage_on_save,
-                damage_roll,
-            } => systems::health::damage(world, entity, self),
-
-            ActionKindSnapshot::UnconditionalEffect { effect } => {
-                ActionKindResult::UnconditionalEffect {
-                    effect: effect.clone(),
-                    applied: true, // TODO: Unconditional effects are always applied
-                }
-            }
-
-            ActionKindSnapshot::SavingThrowEffect {
-                saving_throw,
-                effect,
-            } => ActionKindResult::SavingThrowEffect {
-                saving_throw: saving_throw.clone(),
-                effect: effect.clone(),
-                applied: systems::helpers::get_component::<SavingThrowSet>(world, entity)
-                    .check_dc(saving_throw, world, entity)
-                    .success,
-            },
-
-            ActionKindSnapshot::BeneficialEffect { effect } => {
-                systems::effects::add_effect(world, entity, effect);
-                ActionKindResult::BeneficialEffect {
-                    effect: effect.clone(),
-                    applied: true, // TODO: Beneficial effects are always applied?
-                }
-            }
-
-            ActionKindSnapshot::Healing { healing } => {
-                let new_life_state = systems::health::heal(world, entity, healing.subtotal as u32);
-                ActionKindResult::Healing {
-                    healing: healing.clone(),
-                    new_life_state,
-                }
-            }
-
-            ActionKindSnapshot::Utility => ActionKindResult::Utility,
-
-            ActionKindSnapshot::Composite { actions } => ActionKindResult::Composite {
-                actions: actions
-                    .iter()
-                    .map(|a| a.apply_to_entity(world, entity))
-                    .collect(),
-            },
-            ActionKindSnapshot::Custom { .. } => {
-                // Custom actions can have any kind of effect, so we return a placeholder
-                ActionKindResult::Custom {}
-            }
-        };
-
-        ActionResult {
-            target: TargetTypeInstance::Entity(EntityIdentifier::from_world(world, entity)),
-            result,
-        }
-    }
-}
-
 impl Action {
-    pub fn snapshot(
-        &self,
-        world: &World,
-        entity: Entity,
-        context: &ActionContext,
-    ) -> ActionKindSnapshot {
-        self.kind.snapshot(world, entity, context)
-    }
-
     pub fn perform(
         &mut self,
         world: &mut World,
         performer: Entity,
         context: &ActionContext,
-        num_snapshots: usize,
-    ) -> Vec<ActionKindSnapshot> {
+        targets: &[Entity],
+    ) -> Vec<ActionResult> {
         // TODO: Not a fan of having to clone to avoid borrowing issues, but
         // hopefully since most of the effect just have a no-op as their
         // on_action component it'll be cheap to clone
@@ -475,8 +341,12 @@ impl Action {
         // TODO: Resource might error?
         let _ = self.spend_resources(world, performer, context);
 
-        (0..num_snapshots)
-            .map(|_| self.snapshot(world, performer, context))
+        targets
+            .iter()
+            .map(|target| ActionResult {
+                target: TargetTypeInstance::Entity(EntityIdentifier::from_world(world, *target)),
+                result: self.kind.perform(world, performer, context, *target),
+            })
             .collect()
     }
 
@@ -547,109 +417,6 @@ impl PartialEq for Action {
     fn eq(&self, other: &Self) -> bool {
         // TODO: For now we just assume actions are equal if their IDs are the same.
         self.id == other.id
-    }
-}
-
-impl Display for ActionResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Target: {:?}\n", self.target)?;
-        match &self.result {
-            ActionKindResult::UnconditionalDamage {
-                damage_roll,
-                damage_taken,
-                new_life_state,
-            } => {
-                write!(f, "\tDamage Roll: {}\n", damage_roll)?;
-                if let Some(damage) = damage_taken {
-                    write!(f, "\tDamage Taken: {}\n", damage)?;
-                }
-                if let Some(life_state) = new_life_state {
-                    write!(f, "\tNew Life State: {:?}\n", life_state)?;
-                }
-            }
-            ActionKindResult::AttackRollDamage {
-                attack_roll,
-                armor_class,
-                damage_roll,
-                damage_taken,
-                new_life_state,
-            } => {
-                write!(f, "\tAttack Roll: {}\n", attack_roll)?;
-                write!(f, "\tArmor Class: {:?}\n", armor_class)?;
-                write!(f, "\tDamage Roll: {}\n", damage_roll)?;
-                if let Some(damage) = damage_taken {
-                    write!(f, "\tDamage Taken: {}\n", damage)?;
-                }
-                if let Some(life_state) = new_life_state {
-                    write!(f, "\tNew Life State: {:?}\n", life_state)?;
-                }
-            }
-            ActionKindResult::SavingThrowDamage {
-                saving_throw_dc,
-                saving_throw_result,
-                half_damage_on_save,
-                damage_roll,
-                damage_taken,
-                new_life_state,
-            } => {
-                write!(
-                    f,
-                    "Saving Throw: {:?}, Half Damage on Save: {}\n",
-                    saving_throw_dc, half_damage_on_save
-                )?;
-                write!(f, "\tSaving Throw Result: {:?}\n", saving_throw_result)?;
-                write!(f, "\tDamage Roll: {}\n", damage_roll)?;
-                if let Some(damage) = damage_taken {
-                    write!(f, "\tDamage Taken: {}\n", damage)?;
-                }
-                if let Some(life_state) = new_life_state {
-                    write!(f, "\tNew Life State: {:?}\n", life_state)?;
-                }
-            }
-            ActionKindResult::UnconditionalEffect { effect, applied } => {
-                write!(
-                    f,
-                    "Unconditional Effect: {}, Applied: {}\n",
-                    effect, applied
-                )?;
-            }
-            ActionKindResult::SavingThrowEffect {
-                saving_throw,
-                effect,
-                applied,
-            } => {
-                write!(
-                    f,
-                    "\tSaving Throw Effect: {}, Applied: {}\n",
-                    effect, applied
-                )?;
-            }
-            ActionKindResult::BeneficialEffect { effect, applied } => {
-                write!(f, "\tBeneficial Effect: {}, Applied: {}\n", effect, applied)?;
-            }
-            ActionKindResult::Healing {
-                healing,
-                new_life_state,
-            } => {
-                write!(f, "\tHealing: {}\n", healing)?;
-                if let Some(life_state) = new_life_state {
-                    write!(f, "\tNew Life State: {:?}\n", life_state)?;
-                }
-            }
-            ActionKindResult::Utility => {
-                write!(f, "\tUtility Action\n")?;
-            }
-            ActionKindResult::Composite { actions } => {
-                write!(f, "\tComposite Actions:\n")?;
-                for action in actions {
-                    write!(f, "\t{}\n", action)?;
-                }
-            }
-            ActionKindResult::Custom {} => {
-                write!(f, "\tCustom Action\n")?;
-            }
-        }
-        Ok(())
     }
 }
 

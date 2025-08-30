@@ -1,11 +1,15 @@
 extern crate nat20_rs;
 
 mod tests {
+    use std::sync::Arc;
+
     use hecs::World;
     use nat20_rs::{
         components::{
-            actions::action::ActionKindSnapshot,
-            damage::{DamageComponentResult, DamageRollResult, DamageSource, DamageType},
+            actions::action::{ActionContext, ActionKind},
+            damage::{
+                DamageComponentResult, DamageRoll, DamageRollResult, DamageSource, DamageType,
+            },
             dice::{DiceSetRollResult, DieSize},
             health::hit_points::HitPoints,
             modifier::ModifierSet,
@@ -49,9 +53,13 @@ mod tests {
             );
         }
 
-        let snapshots =
-            systems::actions::perform_action(&mut world, fighter, &action_id, &context[0], 1);
-        snapshots[0].apply_to_entity(&mut world, fighter);
+        let _ = systems::actions::perform_action(
+            &mut world,
+            fighter,
+            &action_id,
+            &context[0],
+            &[fighter],
+        );
 
         {
             // Check that the Action Surge effect is applied
@@ -134,24 +142,24 @@ mod tests {
         );
 
         // Let the fighter take some damage
-        let damage_source = ActionKindSnapshot::UnconditionalDamage {
-            damage_roll: DamageRollResult {
-                label: "Test Damage".to_string(),
-                components: vec![DamageComponentResult {
-                    result: DiceSetRollResult {
-                        label: "Test Damage".to_string(),
-                        die_size: DieSize::D10,
-                        rolls: vec![3, 4],
-                        modifiers: ModifierSet::new(),
-                        subtotal: 7,
-                    },
-                    damage_type: DamageType::Force,
-                }],
-                total: 10,
-                source: DamageSource::Spell,
-            },
+        let damage_source = ActionKind::UnconditionalDamage {
+            damage: Arc::new(|_, _, _| {
+                DamageRoll::new(
+                    1,
+                    DieSize::D4,
+                    DamageType::Force,
+                    DamageSource::Spell,
+                    "Magic Missile".to_string(),
+                )
+            }),
         };
-        systems::health::damage(&mut world, fighter, &damage_source);
+        systems::health::damage(
+            &mut world,
+            fighter,
+            fighter,
+            &damage_source,
+            &ActionContext::Other,
+        );
 
         // Check that the fighter's HP is reduced
         let prev_hp = {
@@ -161,9 +169,13 @@ mod tests {
             hit_points.current()
         };
 
-        let snapshots =
-            systems::actions::perform_action(&mut world, fighter, &action_id, &context[0], 1);
-        let result = snapshots[0].apply_to_entity(&mut world, fighter);
+        let result = systems::actions::perform_action(
+            &mut world,
+            fighter,
+            &action_id,
+            &context[0],
+            &[fighter],
+        );
         println!("Second Wind Result: {:?}", result);
 
         // Check that the Fighters HP is increased by the Second Wind healing

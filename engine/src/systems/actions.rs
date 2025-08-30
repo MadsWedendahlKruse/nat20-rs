@@ -1,18 +1,16 @@
 use std::collections::HashMap;
 
 use hecs::{Entity, World};
-use rand::rand_core::le;
 
 use crate::{
     components::{
         actions::{
             action::{
-                Action, ActionContext, ActionCooldownMap, ActionKindSnapshot, ActionMap,
-                ActionProvider, ActionResult, ReactionKind, ReactionSet,
+                Action, ActionContext, ActionCooldownMap, ActionMap, ActionProvider, ActionResult,
+                ReactionKind, ReactionSet,
             },
             targeting::TargetingContext,
         },
-        health::life_state::LifeState,
         id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
         resource::{RechargeRule, ResourceCostMap, ResourceMap},
@@ -162,19 +160,19 @@ pub fn available_actions(
 
 pub fn perform_action(
     world: &mut World,
-    entity: Entity,
+    performer: Entity,
     action_id: &ActionId,
     context: &ActionContext,
-    num_snapshots: usize,
-) -> Vec<ActionKindSnapshot> {
+    targets: &[Entity],
+) -> Vec<ActionResult> {
     // TODO: Handle missing action
     let mut action =
         get_action(action_id).expect("Action not found in character's actions or registry");
     if let Some(cooldown) = action.cooldown {
-        systems::helpers::get_component_mut::<ActionCooldownMap>(world, entity)
+        systems::helpers::get_component_mut::<ActionCooldownMap>(world, performer)
             .insert(action_id.clone(), cooldown);
     }
-    action.perform(world, entity, &context, num_snapshots)
+    action.perform(world, performer, &context, &targets)
 }
 
 pub fn targeting_context(
@@ -246,16 +244,4 @@ pub fn available_reactions_to_action(
         }
     }
     reactions
-}
-
-pub fn apply_to_targets(
-    world: &mut World,
-    snapshots: Vec<ActionKindSnapshot>,
-    targets: &Vec<Entity>,
-) -> Vec<ActionResult> {
-    targets
-        .iter()
-        .zip(snapshots.iter())
-        .map(|(target, snapshot)| snapshot.apply_to_entity(world, *target))
-        .collect()
 }

@@ -3,7 +3,7 @@ use hecs::{Entity, World};
 use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
-        actions::action::{ActionKindResult, ActionKindSnapshot},
+        actions::action::{ActionContext, ActionKind, ActionKindResult},
         damage::{
             AttackRollResult, DamageMitigationEffect, DamageMitigationResult, DamageResistances,
             DamageRollResult, MitigationOperation,
@@ -122,14 +122,12 @@ fn damage_internal(
     (Some(mitigation_result), new_life_state)
 }
 
-// TODO: This should return some more information, like for an attack roll
-// what was the armor class it rolled against, or for a saving throw,
-// what did the target roll, etc.
 pub fn damage(
     world: &mut World,
+    performer: Entity,
     target: Entity,
-    // TODO: Attacker?
-    damage_source: &ActionKindSnapshot,
+    action: &ActionKind,
+    context: &ActionContext,
 ) -> ActionKindResult {
     let mut resistances = if let Ok(resistances) = world.get::<&mut DamageResistances>(target) {
         resistances.clone()
@@ -137,10 +135,11 @@ pub fn damage(
         DamageResistances::new()
     };
 
-    match damage_source {
-        ActionKindSnapshot::UnconditionalDamage { damage_roll } => {
+    match action {
+        ActionKind::UnconditionalDamage { damage } => {
+            let damage_roll = damage(world, performer, context).roll();
             let (damage_taken, new_life_state) =
-                damage_internal(world, target, damage_roll, None, &resistances);
+                damage_internal(world, target, &damage_roll, None, &resistances);
             ActionKindResult::UnconditionalDamage {
                 damage_roll: damage_roll.clone(),
                 damage_taken: damage_taken,
@@ -148,26 +147,39 @@ pub fn damage(
             }
         }
 
-        ActionKindSnapshot::AttackRollDamage {
+        ActionKind::AttackRollDamage {
             attack_roll,
-            damage_roll,
+            damage,
             damage_on_failure,
         } => {
+            let attack_roll = attack_roll(world, performer, context).roll(world, performer);
+            let is_crit = attack_roll.roll_result.is_crit;
+            let damage_roll = damage(world, performer, context).roll();
+            let damage_on_failure = damage_on_failure
+                .as_ref()
+                .map(|f| f(world, performer, context).roll());
+
             let (damage_taken, new_life_state) =
-                if !systems::combat::attack_hits(world, target, attack_roll) {
+                if !systems::combat::attack_hits(world, target, &attack_roll) {
                     if let Some(damage_on_failure) = damage_on_failure {
                         damage_internal(
                             world,
                             target,
-                            damage_on_failure,
-                            Some(attack_roll),
+                            &damage_on_failure,
+                            Some(&attack_roll),
                             &resistances,
                         )
                     } else {
                         (None, None)
                     }
                 } else {
-                    damage_internal(world, target, damage_roll, Some(attack_roll), &resistances)
+                    damage_internal(
+                        world,
+                        target,
+                        &damage_roll,
+                        Some(&attack_roll),
+                        &resistances,
+                    )
                 };
 
             ActionKindResult::AttackRollDamage {
@@ -179,11 +191,14 @@ pub fn damage(
             }
         }
 
-        ActionKindSnapshot::SavingThrowDamage {
-            saving_throw_dc,
+        ActionKind::SavingThrowDamage {
+            saving_throw,
             half_damage_on_save,
-            damage_roll,
+            damage,
         } => {
+            let saving_throw_dc = saving_throw(world, performer, context);
+            let damage_roll = damage(world, performer, context).roll();
+
             let check_result = {
                 let saving_throws =
                     systems::helpers::get_component::<&SavingThrowSet>(world, target);
@@ -214,7 +229,7 @@ pub fn damage(
                 }
             } else {
                 (damage_taken, new_life_state) =
-                    damage_internal(world, target, damage_roll, None, &resistances);
+                    damage_internal(world, target, &damage_roll, None, &resistances);
             }
 
             ActionKindResult::SavingThrowDamage {
@@ -235,8 +250,8 @@ pub fn damage(
         // }
         _ => {
             panic!(
-                "Character::take_damage called with unsupported damage source (action snapshot): {:?}",
-                damage_source
+                "systems::health::damage called with unsupported damage source (action snapshot): {:?}",
+                action
             );
         }
     }

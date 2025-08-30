@@ -413,21 +413,19 @@ impl Encounter {
                 }
 
                 // Process the action decision
-                let snapshots = systems::actions::perform_action(
+                let results = systems::actions::perform_action(
                     world,
                     action.actor,
                     &action.action_id,
                     &action.context,
-                    action.targets.len(),
+                    &action.targets,
                 );
 
-                // TODO: When the action is performed it's still the same entity's turn,
-                // so we can either pop the prompt and then push a new one, or just
-                // keep the current prompt in the queue. Functionally it's the same
-                // if we just leave the prompt as is.
-                // self.pending_prompts.pop_front();
+                // Notice that we are not modifying the prompt queue here since
+                // after performing the action it's still the same entity's turn.
+                // The new prompt is then identically the same as the old one
+                // (both are prompts for the current entity to take an action).
 
-                let results = systems::actions::apply_to_targets(world, snapshots, &action.targets);
                 return Ok(GameEvent::ActionPerformed {
                     action: action.clone(),
                     results,
@@ -460,14 +458,15 @@ impl Encounter {
 
                 let reaction = choice.as_ref().unwrap();
 
-                // TODO: Do we even need the snapshots here?
-                let snapshots = systems::actions::perform_action(
+                // Perform the reaction to consume resources / apply cooldowns
+                // TODO: Do we need to do anything with the results?
+                let _ = systems::actions::perform_action(
                     world,
                     *reactor,
                     &reaction.reaction_id,
                     &reaction.context,
                     // TODO: How many snapshots to take?
-                    1,
+                    &[],
                 );
 
                 match &reaction.kind {
@@ -504,7 +503,7 @@ impl Encounter {
                                 action.actor,
                                 action_id,
                                 context,
-                                0,
+                                &[],
                             );
                         }
 

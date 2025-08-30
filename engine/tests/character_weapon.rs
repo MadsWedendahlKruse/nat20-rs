@@ -94,10 +94,10 @@ mod tests {
             .clone();
         let _ = systems::loadout::equip(&mut world, entity, longsword);
 
-        // Trident used with two hands
+        // Longsword used with two hands
         let roll = systems::combat::damage_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
         assert_eq!(roll.primary.dice_roll.dice.num_dice, 1);
-        assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D8);
+        assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D10);
 
         systems::loadout::equip_in_slot(
             &mut world,
@@ -110,18 +110,18 @@ mod tests {
         )
         .unwrap();
 
-        // Trident now used one-handed
+        // Longsword now used one-handed
         let roll = systems::combat::damage_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
         assert_eq!(roll.primary.dice_roll.dice.num_dice, 1);
-        assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D6);
+        assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D8);
 
         // Unequip dagger
         let unequipped =
             systems::loadout::unequip(&mut world, entity, &EquipmentSlot::MeleeOffHand).unwrap();
 
-        // Trident used with two hands again
+        // Longsword used with two hands again
         let roll = systems::combat::damage_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
-        assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D8);
+        assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D10);
     }
 
     #[test]
@@ -139,7 +139,7 @@ mod tests {
                 .clone(),
         )
         .unwrap();
-        systems::loadout::equip_in_slot(
+        let _ = systems::loadout::equip_in_slot(
             &mut world,
             entity,
             &EquipmentSlot::MeleeMainHand,

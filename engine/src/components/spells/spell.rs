@@ -4,7 +4,7 @@ use hecs::{Entity, World};
 
 use crate::components::{
     actions::{
-        action::{Action, ActionContext, ActionKind, ActionKindSnapshot, ReactionKind},
+        action::{Action, ActionContext, ActionKind, ReactionKind},
         targeting::TargetingContext,
     },
     id::{ActionId, ResourceId, SpellId},
@@ -89,34 +89,35 @@ impl Spell {
         &self.action
     }
 
-    pub fn snapshot(
-        &self,
-        world: &World,
-        caster: Entity,
-        spell_level: &u8,
-    ) -> Result<ActionKindSnapshot, SnapshotError> {
-        if spell_level < &self.base_level {
-            return Err(SnapshotError::DowncastingNotAllowed(
-                self.base_level,
-                *spell_level,
-            ));
-        }
-        if self.is_cantrip() && spell_level > &self.base_level {
-            return Err(SnapshotError::UpcastingCantripNotAllowed);
-        }
-        // TODO: Something like BG3 Lightning Charges with Magic Missile would not work
-        // with this snapshotting, since each damage instance would add an effect to the
-        // caster, which would not be reflected in the snapshot.
-        // ---
-        // Might not be an issue anymore???
-        Ok(self.action.kind().snapshot(
-            world,
-            caster,
-            &ActionContext::Spell {
-                level: *spell_level,
-            },
-        ))
-    }
+    // TODO: Apparently not used anywhere?
+    // pub fn snapshot(
+    //     &self,
+    //     world: &World,
+    //     caster: Entity,
+    //     spell_level: &u8,
+    // ) -> Result<ActionKindSnapshot, SnapshotError> {
+    //     if spell_level < &self.base_level {
+    //         return Err(SnapshotError::DowncastingNotAllowed(
+    //             self.base_level,
+    //             *spell_level,
+    //         ));
+    //     }
+    //     if self.is_cantrip() && spell_level > &self.base_level {
+    //         return Err(SnapshotError::UpcastingCantripNotAllowed);
+    //     }
+    //     // TODO: Something like BG3 Lightning Charges with Magic Missile would not work
+    //     // with this snapshotting, since each damage instance would add an effect to the
+    //     // caster, which would not be reflected in the snapshot.
+    //     // ---
+    //     // Might not be an issue anymore???
+    //     Ok(self.action.kind().snapshot(
+    //         world,
+    //         caster,
+    //         &ActionContext::Spell {
+    //             level: *spell_level,
+    //         },
+    //     ))
+    // }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

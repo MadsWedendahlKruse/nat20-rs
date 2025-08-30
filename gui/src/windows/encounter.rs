@@ -470,17 +470,13 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
 
                     if confirm_targets {
                         let decision = self.take().unwrap().finalize();
-                        let result = encounter.process(world, decision).unwrap();
+                        let result = encounter.process(world, decision);
                         match result {
-                            GameEvent::ActionPerformed { action, results } => {
-                                // Handle action performed, e.g., apply effects, update state
-                                println!("Action performed: {:?}", action);
-                                for result in results {
-                                    println!("{}", result);
-                                }
+                            Ok(event) => {
+                                println!("Action processed successfully: {:?}", event);
                             }
-                            _ => {
-                                println!("{:?}", result);
+                            Err(err) => {
+                                println!("Error processing action: {:?}", err);
                             }
                         }
                     }

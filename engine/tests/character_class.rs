@@ -59,6 +59,25 @@ mod tests {
                     Skill::Acrobatics,
                     Skill::Perception,
                 ])),
+                LevelUpDecision::single_choice_with_id(
+                    "choice.starting_equipment.fighter",
+                    ChoiceItem::Equipment {
+                        items: vec![
+                            (1, registry::items::CHAINMAIL_ID.clone()),
+                            (1, registry::items::GREATSWORD_ID.clone()),
+                            (1, registry::items::FLAIL_ID.clone()),
+                            (8, registry::items::JAVELIN_ID.clone()),
+                        ],
+                        money: "4 GP".to_string(),
+                    },
+                ),
+                LevelUpDecision::single_choice_with_id(
+                    "choice.starting_equipment.soldier",
+                    ChoiceItem::Equipment {
+                        items: Vec::new(),
+                        money: "50 GP".to_string(),
+                    },
+                ),
                 // Level 2
                 LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
                 // Level 3
@@ -85,7 +104,7 @@ mod tests {
 
         {
             let effects = systems::effects::effects(&mut world, character);
-            assert_eq!(effects.len(), 5);
+            assert_eq!(effects.len(), 6);
             for effect_id in [
                 &registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID,
                 &registry::effects::IMPROVED_CRITICAL_ID,
