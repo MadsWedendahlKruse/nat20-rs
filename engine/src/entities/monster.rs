@@ -4,10 +4,11 @@ use crate::{
     components::{
         ability::AbilityScoreMap,
         actions::action::{ActionCooldownMap, ActionMap},
+        ai,
         damage::DamageResistances,
         effects::effects::Effect,
         health::{hit_points::HitPoints, life_state::LifeState},
-        id::Name,
+        id::{AIControllerId, Name},
         items::equipment::{
             armor::ArmorTrainingSet, loadout::Loadout, weapon::WeaponProficiencyMap,
         },
@@ -29,6 +30,8 @@ from_world!(
     pub struct Monster {
         pub tag: MonsterTag,
         pub name: Name,
+        // TODO: Can monsters be player controlled?
+        pub brain: AIControllerId,
         pub challenge_rating: ChallengeRating,
         pub hit_points: HitPoints,
         pub life_state: LifeState,
@@ -55,6 +58,7 @@ from_world!(
 impl Monster {
     pub fn new(
         name: Name,
+        brain: AIControllerId,
         challenge_rating: ChallengeRating,
         hit_points: HitPoints,
         size: CreatureSize,
@@ -65,6 +69,7 @@ impl Monster {
         Self {
             tag: MonsterTag,
             name,
+            brain,
             challenge_rating,
             hit_points,
             life_state: LifeState::Normal,

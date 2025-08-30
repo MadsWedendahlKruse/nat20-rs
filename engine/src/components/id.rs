@@ -42,7 +42,8 @@ id_newtypes!(
     FeatId,
     BackgroundId,
     RaceId,
-    SubraceId
+    SubraceId,
+    AIControllerId
 );
 
 impl SpellId {

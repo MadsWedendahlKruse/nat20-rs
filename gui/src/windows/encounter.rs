@@ -287,7 +287,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
                         });
                     }
 
-                    if self.current_entity() == *entity {
+                    if current_entity == *entity {
                         ui.table_set_bg_color(imgui::TableBgTarget::all(), SELECTED_BUTTON_COLOR);
                     }
 
@@ -312,6 +312,28 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
 
         // TODO: If it's not a characters turn, the AI can make a decision here?
         // Also a bit odd maybe to have it in the render function?
+        if !systems::ai::is_player_controlled(world, current_entity) {
+            let decision = systems::ai::decide_action(world, &self, &next_prompt, current_entity);
+            if let Some(decision) = decision {
+                println!("AI decided on action: {:?}", decision);
+                let result = self.process(world, decision);
+                match result {
+                    Ok(event) => {
+                        println!("Action processed successfully: {:?}", event);
+                    }
+                    Err(err) => {
+                        println!("Error processing action: {:?}", err);
+                    }
+                }
+            } else {
+                println!(
+                    "AI could not decide on action for prompt: {:?}. Assuming end turn.",
+                    next_prompt
+                );
+                self.end_turn(world, current_entity);
+            }
+            return;
+        }
 
         if decision_progress.is_none() {
             *decision_progress = Some(ActionDecisionProgress::from_prompt(next_prompt));

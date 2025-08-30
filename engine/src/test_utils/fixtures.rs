@@ -328,6 +328,7 @@ pub mod creatures {
             let name = Name::new("Goblin Warrior");
             let monster = Monster::new(
                 name.clone(),
+                registry::ai::RANDOM_CONTROLLER_ID.clone(),
                 ChallengeRating::new(1),
                 HitPoints::new(10),
                 CreatureSize::Small,

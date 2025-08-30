@@ -6,10 +6,11 @@ use crate::{
     components::{
         ability::AbilityScoreMap,
         actions::action::{ActionCooldownMap, ActionMap},
+        ai::PlayerControlledTag,
         damage::DamageResistances,
         effects::effects::Effect,
         health::{hit_points::HitPoints, life_state::LifeState},
-        id::{BackgroundId, FeatId, Name, RaceId, SubraceId},
+        id::{AIControllerId, BackgroundId, FeatId, Name, RaceId, SubraceId},
         items::{
             equipment::{armor::ArmorTrainingSet, loadout::Loadout, weapon::WeaponProficiencyMap},
             inventory::Inventory,
@@ -21,7 +22,7 @@ use crate::{
         skill::SkillSet,
         spells::spellbook::Spellbook,
     },
-    from_world,
+    from_world, registry,
 };
 
 #[derive(Debug, Clone)]
@@ -30,7 +31,12 @@ pub struct CharacterTag;
 from_world!(
     #[derive(Bundle, Clone)]
     pub struct Character {
-        pub tag: CharacterTag,
+        pub character_tag: CharacterTag,
+        /// By default, characters are player controlled. In case the player gets
+        /// possessed or mind controlled, this component can be removed from the
+        /// entity to make it AI controlled.
+        pub player_controlled: PlayerControlledTag,
+        pub brain: AIControllerId,
         pub name: Name,
         pub race: RaceId,
         pub subrace: Option<SubraceId>,
@@ -61,7 +67,10 @@ from_world!(
 impl Character {
     pub fn new(name: Name) -> Self {
         Self {
-            tag: CharacterTag,
+            character_tag: CharacterTag,
+            player_controlled: PlayerControlledTag,
+            // TODO: Update to an actual ID
+            brain: registry::ai::RANDOM_CONTROLLER_ID.clone(),
             name,
             race: RaceId::from_str(""),
             subrace: None,

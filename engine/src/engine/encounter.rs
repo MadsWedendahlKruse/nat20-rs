@@ -5,9 +5,10 @@ use hecs::{Entity, World};
 use crate::{
     components::{
         actions::{action::ReactionKind, targeting::TargetType},
+        ai::{AIController, PlayerControlledTag},
         d20::{D20CheckDC, D20CheckResult},
         health::life_state::{DEATH_SAVING_THROW_DC, LifeState},
-        id::{ActionId, EncounterId},
+        id::{AIControllerId, ActionId, EncounterId},
         modifier::{ModifierSet, ModifierSource},
         resource::RechargeRule,
         saving_throw::SavingThrowKind,
@@ -15,7 +16,7 @@ use crate::{
     },
     engine::game_state::{ActionData, EventLog, GameEvent, ReactionData},
     entities::{character::CharacterTag, monster::MonsterTag},
-    systems,
+    registry, systems,
 };
 
 #[derive(Debug, Clone)]
@@ -557,6 +558,19 @@ impl Encounter {
         self.start_turn(world);
     }
 
+    fn start_turn(&mut self, world: &mut World) {
+        systems::time::pass_time(world, self.current_entity(), &RechargeRule::OnTurn);
+
+        if self.should_skip_turn(world) {
+            self.end_turn(world, self.current_entity());
+            return;
+        }
+
+        self.pending_prompts.push_back(ActionPrompt::Action {
+            actor: self.current_entity(),
+        });
+    }
+
     // TODO: Some of this feels like it should belong somewhere else?
     fn should_skip_turn(&mut self, world: &mut World) -> bool {
         let current_entity = self.current_entity();
@@ -613,19 +627,6 @@ impl Encounter {
                 LifeState::Normal
             );
         };
-    }
-
-    fn start_turn(&mut self, world: &mut World) {
-        systems::time::pass_time(world, self.current_entity(), &RechargeRule::OnTurn);
-
-        if self.should_skip_turn(world) {
-            self.end_turn(world, self.current_entity());
-            return;
-        }
-
-        self.pending_prompts.push_back(ActionPrompt::Action {
-            actor: self.current_entity(),
-        });
     }
 
     pub fn round(&self) -> usize {

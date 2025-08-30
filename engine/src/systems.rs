@@ -1,4 +1,5 @@
 pub mod actions;
+pub mod ai;
 pub mod backgrounds;
 pub mod class;
 pub mod combat;
