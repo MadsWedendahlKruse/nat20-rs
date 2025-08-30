@@ -4,6 +4,7 @@ use nat20_rs::{
         ability::Ability,
         d20::D20CheckDC,
         modifier::{ModifierSet, ModifierSource},
+        resource::RechargeRule,
         saving_throw::SavingThrowKind,
         skill::Skill,
     },
@@ -22,6 +23,7 @@ pub enum CheckKind {
 pub enum CreatureDebugState {
     MainMenu,
     Check { kind: CheckKind, dc_value: i32 },
+    PassTime,
 }
 
 pub struct CreatureDebugWindow {
@@ -44,7 +46,12 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
             CreatureDebugState::MainMenu => {
                 if let Some(index) = render_uniform_buttons(
                     ui,
-                    ["Heal Full", "Saving Throw", "Skill Check"],
+                    [
+                        "Heal Full",
+                        "Pass Time (Rest etc.)",
+                        "Saving Throw",
+                        "Skill Check",
+                    ],
                     [20.0, 5.0],
                 ) {
                     match index {
@@ -53,12 +60,15 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                             ui.close_current_popup();
                         }
                         1 => {
+                            self.state = CreatureDebugState::PassTime;
+                        }
+                        2 => {
                             self.state = CreatureDebugState::Check {
                                 kind: CheckKind::SavingThrow,
                                 dc_value: 10,
                             };
                         }
-                        2 => {
+                        3 => {
                             self.state = CreatureDebugState::Check {
                                 kind: CheckKind::SkillCheck,
                                 dc_value: 10,
@@ -68,7 +78,6 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                     }
                 }
             }
-
             CreatureDebugState::Check { kind, dc_value } => match kind {
                 CheckKind::SavingThrow => {
                     ui.separator_with_text("Saving Throw");
@@ -140,6 +149,40 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                     }
                 }
             },
+
+            CreatureDebugState::PassTime => {
+                if let Some(index) =
+                    render_uniform_buttons(ui, ["New Turn", "Short Rest", "Long Rest"], [20.0, 5.0])
+                {
+                    match index {
+                        0 => {
+                            systems::time::pass_time(
+                                &mut game_state.world,
+                                self.creature,
+                                &RechargeRule::OnTurn,
+                            );
+                            ui.close_current_popup();
+                        }
+                        1 => {
+                            systems::time::pass_time(
+                                &mut game_state.world,
+                                self.creature,
+                                &RechargeRule::OnShortRest,
+                            );
+                            ui.close_current_popup();
+                        }
+                        2 => {
+                            systems::time::pass_time(
+                                &mut game_state.world,
+                                self.creature,
+                                &RechargeRule::OnLongRest,
+                            );
+                            ui.close_current_popup();
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+            }
         });
     }
 }

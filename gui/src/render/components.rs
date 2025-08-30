@@ -971,7 +971,6 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                         ui.same_line();
                         ui.text("Armor Class:");
                         ui.same_line();
-                        // TODO: New type for armor class
                         armor_class.render(ui);
 
                         ui.text("");
@@ -1168,7 +1167,20 @@ pub fn new_life_state_text(
             }
         }
 
-        LifeState::Stable => todo!(),
+        LifeState::Stable => {
+            if let Some(actor_component) = actor_component {
+                return vec![
+                    entity_component,
+                    ("was stabilized by".to_string(), TextKind::Normal),
+                    actor_component,
+                ];
+            } else {
+                return vec![
+                    entity_component,
+                    ("was stabilized".to_string(), TextKind::Normal),
+                ];
+            }
+        }
 
         LifeState::Dead => {
             if let Some(actor_component) = actor_component {

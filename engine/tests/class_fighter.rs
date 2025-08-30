@@ -13,7 +13,7 @@ mod tests {
             dice::{DiceSetRollResult, DieSize},
             health::hit_points::HitPoints,
             modifier::ModifierSet,
-            resource::ResourceMap,
+            resource::{RechargeRule, ResourceMap},
         },
         registry, systems,
         test_utils::fixtures,
@@ -86,7 +86,7 @@ mod tests {
         assert!(systems::actions::on_cooldown(&world, fighter, &action_id).is_some());
 
         // Simulate the start of the turn to remove the Action Surge effect
-        systems::turns::on_turn_start(&mut world, fighter);
+        systems::time::pass_time(&mut world, fighter, &RechargeRule::OnTurn);
 
         // Check that the Action Surge effect is removed after the turn starts
         let effects = systems::effects::effects(&world, fighter);

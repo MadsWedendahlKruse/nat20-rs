@@ -9,6 +9,7 @@ use crate::{
         health::life_state::{DEATH_SAVING_THROW_DC, LifeState},
         id::{ActionId, EncounterId},
         modifier::{ModifierSet, ModifierSource},
+        resource::RechargeRule,
         saving_throw::SavingThrowKind,
         skill::{Skill, SkillSet},
     },
@@ -615,7 +616,7 @@ impl Encounter {
     }
 
     fn start_turn(&mut self, world: &mut World) {
-        systems::turns::on_turn_start(world, self.current_entity());
+        systems::time::pass_time(world, self.current_entity(), &RechargeRule::OnTurn);
 
         if self.should_skip_turn(world) {
             self.end_turn(world, self.current_entity());
