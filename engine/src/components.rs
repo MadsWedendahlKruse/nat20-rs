@@ -2,7 +2,7 @@ pub mod ability;
 pub mod actions;
 pub mod background;
 pub mod class;
-pub mod d20_check;
+pub mod d20;
 pub mod damage;
 pub mod dice;
 pub mod effects;

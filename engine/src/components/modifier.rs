@@ -13,11 +13,11 @@ pub enum ModifierSource {
     Condition(String),    // e.g. "Poisoned"
     ClassFeature(String), // e.g. "Rage"
     Effect(EffectId),     // optional: unique ID for internal tracking
-    Custom(String),       // fallback for ad-hoc things
     Ability(Ability),     // e.g. "Strength"
     Proficiency(ProficiencyLevel),
-    Feat(String), // e.g. "Great Weapon Master"
-    None,         // Used for cases where no modifier is applicable
+    Feat(String),   // e.g. "Great Weapon Master"
+    Custom(String), // fallback for ad-hoc things
+    None,           // Used for cases where no modifier is applicable
 }
 
 impl fmt::Display for ModifierSource {
@@ -29,7 +29,7 @@ impl fmt::Display for ModifierSource {
             ModifierSource::Condition(name) => write!(f, "Condition: {}", name),
             ModifierSource::ClassFeature(name) => write!(f, "Class Feature: {}", name),
             ModifierSource::Effect(id) => write!(f, "Effect: {}", id),
-            ModifierSource::Custom(name) => write!(f, "Custom: {}", name),
+            ModifierSource::Custom(text) => write!(f, "{}", text),
             ModifierSource::Ability(ability) => write!(f, "{:?} Modifier", ability),
             ModifierSource::Proficiency(proficiency) => write!(f, "Proficiency: {:?}", proficiency),
             ModifierSource::Feat(feat) => write!(f, "Feat: {}", feat),

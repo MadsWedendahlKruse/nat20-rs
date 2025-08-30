@@ -5,33 +5,32 @@ use crate::{
         ability::{Ability, AbilityScoreMap},
         actions::action::{ActionKindResult, ActionKindSnapshot},
         damage::{
-            DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
-            MitigationOperation,
+            AttackRollResult, DamageMitigationEffect, DamageMitigationResult, DamageResistances,
+            DamageRollResult, MitigationOperation,
         },
-        health::{
-            hit_points::{self, HitPoints},
-            life_state::LifeState,
-        },
+        health::{hit_points::HitPoints, life_state::LifeState},
         level::CharacterLevels,
         modifier::ModifierSource,
-        saving_throw::SavingThrowSet,
+        saving_throw::{SavingThrowKind, SavingThrowSet},
     },
     entities::{character::CharacterTag, monster::MonsterTag},
     registry, systems,
 };
 
-pub fn heal(world: &mut World, target: Entity, amount: u32) {
+pub fn heal(world: &mut World, target: Entity, amount: u32) -> Option<LifeState> {
     if let Ok(mut hit_points) = world.get::<&mut HitPoints>(target) {
         hit_points.heal(amount);
         if let Ok(mut life_state) = world.get::<&mut LifeState>(target) {
             if hit_points.current() > 0 {
                 *life_state = LifeState::Normal;
+                return Some(LifeState::Normal);
             }
         }
     }
+    None
 }
 
-pub fn heal_full(world: &mut World, target: Entity) {
+pub fn heal_full(world: &mut World, target: Entity) -> Option<LifeState> {
     // TODO: Bit of a convoluted way to get avoid repeating the life state logic
     let hit_point_max = if let Ok(hit_points) = world.get::<&HitPoints>(target) {
         Some(hit_points.max())
@@ -39,38 +38,88 @@ pub fn heal_full(world: &mut World, target: Entity) {
         None
     };
     if let Some(max) = hit_point_max {
-        heal(world, target, max);
+        return heal(world, target, max);
     }
+    None
 }
 
 fn damage_internal(
     world: &mut World,
     target: Entity,
     damage_roll_result: &DamageRollResult,
+    attack_roll: Option<&AttackRollResult>,
     resistances: &DamageResistances,
-) -> Option<DamageMitigationResult> {
-    let (mitigation_result, current_hp) =
-        if let Ok(mut hit_points) = world.get::<&mut HitPoints>(target) {
+) -> (Option<DamageMitigationResult>, Option<LifeState>) {
+    let (mitigation_result, killed_by_damage, mut new_life_state) =
+        if let Ok((hit_points, life_state)) =
+            world.query_one_mut::<(&mut HitPoints, &mut LifeState)>(target)
+        {
+            // Track any changes to the life state of the target
+            let mut new_life_state = None;
+            // Check if the target is already at 0 HP
+            let hp_before_damage = hit_points.current();
+            if hit_points.current() == 0 {
+                match life_state {
+                    LifeState::Stable => {
+                        new_life_state = Some(LifeState::unconscious());
+                    }
+
+                    LifeState::Unconscious(death_saving_throws) => {
+                        if let Some(attack_roll) = attack_roll {
+                            if attack_roll.roll_result.is_crit {
+                                death_saving_throws.record_failure(2);
+                            } else {
+                                death_saving_throws.record_failure(1);
+                            }
+                        } else {
+                            death_saving_throws.record_failure(1);
+                        }
+
+                        let next_state = death_saving_throws.next_state();
+                        if !matches!(next_state, LifeState::Unconscious(_)) {
+                            // If the next state is not still unconscious, we need to update it
+                            new_life_state = Some(next_state);
+                        }
+                    }
+
+                    _ => {
+                        // Other valid states where HP would be zero are some form of
+                        // dead, so no-op
+                        // TODO: Validate that this is the case?
+                    }
+                }
+            }
+
             let mitigation_result = resistances.apply(damage_roll_result);
             hit_points.damage(mitigation_result.total.max(0) as u32);
-            (mitigation_result, hit_points.current())
+
+            (
+                mitigation_result,
+                hp_before_damage > 0 && hit_points.current() == 0,
+                new_life_state,
+            )
         } else {
-            return None;
+            return (None, None);
         };
 
-    if current_hp == 0 {
+    if killed_by_damage {
         // Monsters and Characters 'die' differently
-        if let Ok((_, life_state)) = world.query_one_mut::<(&MonsterTag, &mut LifeState)>(target) {
-            *life_state = LifeState::Defeated;
+        if let Ok(_) = world.get::<&MonsterTag>(target) {
+            new_life_state = Some(LifeState::Defeated);
         }
 
-        if let Ok((_, life_state)) = world.query_one_mut::<(&CharacterTag, &mut LifeState)>(target)
-        {
-            *life_state = LifeState::unconscious();
+        if let Ok(_) = world.get::<&CharacterTag>(target) {
+            new_life_state = Some(LifeState::unconscious());
         }
     }
 
-    Some(mitigation_result)
+    if let Some(new_life_state) = new_life_state {
+        if let Ok(mut life_state) = world.get::<&mut LifeState>(target) {
+            *life_state = new_life_state;
+        }
+    }
+
+    (Some(mitigation_result), new_life_state)
 }
 
 // TODO: This should return some more information, like for an attack roll
@@ -90,9 +139,12 @@ pub fn damage(
 
     match damage_source {
         ActionKindSnapshot::UnconditionalDamage { damage_roll } => {
+            let (damage_taken, new_life_state) =
+                damage_internal(world, target, damage_roll, None, &resistances);
             ActionKindResult::UnconditionalDamage {
                 damage_roll: damage_roll.clone(),
-                damage_taken: damage_internal(world, target, damage_roll, &resistances),
+                damage_taken: damage_taken,
+                new_life_state,
             }
         }
 
@@ -101,21 +153,29 @@ pub fn damage(
             damage_roll,
             damage_on_failure,
         } => {
-            let damage_taken = if !systems::combat::attack_hits(world, target, attack_roll) {
-                if let Some(damage_on_failure) = damage_on_failure {
-                    damage_internal(world, target, damage_on_failure, &resistances)
+            let (damage_taken, new_life_state) =
+                if !systems::combat::attack_hits(world, target, attack_roll) {
+                    if let Some(damage_on_failure) = damage_on_failure {
+                        damage_internal(
+                            world,
+                            target,
+                            damage_on_failure,
+                            Some(attack_roll),
+                            &resistances,
+                        )
+                    } else {
+                        (None, None)
+                    }
                 } else {
-                    None
-                }
-            } else {
-                damage_internal(world, target, damage_roll, &resistances)
-            };
+                    damage_internal(world, target, damage_roll, Some(attack_roll), &resistances)
+                };
 
             ActionKindResult::AttackRollDamage {
                 armor_class: systems::loadout::armor_class(world, target),
                 attack_roll: attack_roll.clone(),
                 damage_roll: damage_roll.clone(),
                 damage_taken,
+                new_life_state,
             }
         }
 
@@ -130,24 +190,31 @@ pub fn damage(
                 saving_throws.check_dc(&saving_throw_dc, world, target)
             };
 
-            let mut damage_taken = None;
+            let (mut damage_taken, mut new_life_state) = (None, None);
             if check_result.success {
                 if *half_damage_on_save {
                     // Apply half damage on successful save
+                    // TODO: This is definitely not the nicest way to do this
+                    let ability = match saving_throw_dc.key {
+                        SavingThrowKind::Ability(ability) => ability,
+                        SavingThrowKind::Death => Ability::Constitution,
+                    };
                     for component in damage_roll.components.iter() {
                         resistances.add_effect(
                             component.damage_type,
                             DamageMitigationEffect {
                                 // TODO: Not sure if this is the best source
-                                source: ModifierSource::Ability(saving_throw_dc.key),
+                                source: ModifierSource::Ability(ability),
                                 operation: MitigationOperation::Resistance,
                             },
                         );
                     }
-                    damage_taken = damage_internal(world, target, &damage_roll, &resistances);
+                    (damage_taken, new_life_state) =
+                        damage_internal(world, target, &damage_roll, None, &resistances);
                 }
             } else {
-                damage_taken = damage_internal(world, target, damage_roll, &resistances);
+                (damage_taken, new_life_state) =
+                    damage_internal(world, target, damage_roll, None, &resistances);
             }
 
             ActionKindResult::SavingThrowDamage {
@@ -156,6 +223,7 @@ pub fn damage(
                 half_damage_on_save: *half_damage_on_save,
                 damage_roll: damage_roll.clone(),
                 damage_taken,
+                new_life_state,
             }
         }
 

@@ -7,7 +7,7 @@ use crate::{
     components::{
         ability::Ability,
         actions::action::ActionContext,
-        d20_check::AdvantageType,
+        d20::AdvantageType,
         damage::{DamageSource, DamageType},
         effects::{
             effects::{Effect, EffectDuration},
@@ -20,6 +20,7 @@ use crate::{
         },
         modifier::ModifierSource,
         resource::{RechargeRule, Resource, ResourceMap},
+        saving_throw::SavingThrowKind,
         skill::{Skill, SkillSet},
     },
     registry, systems,
@@ -137,7 +138,7 @@ static ARMOR_OF_CONSTITUTION_SAVING_THROWS: LazyLock<Effect> = LazyLock::new(|| 
     );
 
     effect.on_saving_throw = HashMap::from([(
-        Ability::Constitution,
+        SavingThrowKind::Ability(Ability::Constitution),
         D20CheckHooks::with_check_hook(|_, _, d20_check| {
             d20_check.advantage_tracker_mut().add(
                 AdvantageType::Advantage,

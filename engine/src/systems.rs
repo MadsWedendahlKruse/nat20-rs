@@ -2,7 +2,7 @@ pub mod actions;
 pub mod backgrounds;
 pub mod class;
 pub mod combat;
-pub mod d20_check;
+pub mod d20;
 pub mod effects;
 pub mod feats;
 pub mod health;

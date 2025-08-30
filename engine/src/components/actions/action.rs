@@ -9,11 +9,12 @@ use hecs::{Entity, World};
 use crate::{
     components::{
         actions::targeting::{TargetTypeInstance, TargetingContext},
-        d20_check::D20CheckResult,
+        d20::D20CheckResult,
         damage::{
             AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
         },
         dice::{DiceSetRoll, DiceSetRollResult},
+        health::life_state::LifeState,
         id::{ActionId, EffectId, EntityIdentifier, ResourceId},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
         resource::{RechargeRule, ResourceCostMap, ResourceError, ResourceMap},
@@ -151,6 +152,7 @@ pub enum ActionKindResult {
     UnconditionalDamage {
         damage_roll: DamageRollResult,
         damage_taken: Option<DamageMitigationResult>,
+        new_life_state: Option<LifeState>,
     },
     AttackRollDamage {
         attack_roll: AttackRollResult,
@@ -158,6 +160,7 @@ pub enum ActionKindResult {
         armor_class: ArmorClass,
         damage_roll: DamageRollResult,
         damage_taken: Option<DamageMitigationResult>,
+        new_life_state: Option<LifeState>,
     },
     SavingThrowDamage {
         saving_throw_dc: SavingThrowDC,
@@ -165,6 +168,7 @@ pub enum ActionKindResult {
         half_damage_on_save: bool,
         damage_roll: DamageRollResult,
         damage_taken: Option<DamageMitigationResult>,
+        new_life_state: Option<LifeState>,
     },
     UnconditionalEffect {
         effect: EffectId,
@@ -181,6 +185,7 @@ pub enum ActionKindResult {
     },
     Healing {
         healing: DiceSetRollResult,
+        new_life_state: Option<LifeState>,
     },
     Utility,
     Composite {
@@ -410,9 +415,10 @@ impl ActionKindSnapshot {
             }
 
             ActionKindSnapshot::Healing { healing } => {
-                systems::health::heal(world, entity, healing.subtotal as u32);
+                let new_life_state = systems::health::heal(world, entity, healing.subtotal as u32);
                 ActionKindResult::Healing {
                     healing: healing.clone(),
+                    new_life_state,
                 }
             }
 
@@ -551,10 +557,14 @@ impl Display for ActionResult {
             ActionKindResult::UnconditionalDamage {
                 damage_roll,
                 damage_taken,
+                new_life_state,
             } => {
                 write!(f, "\tDamage Roll: {}\n", damage_roll)?;
                 if let Some(damage) = damage_taken {
                     write!(f, "\tDamage Taken: {}\n", damage)?;
+                }
+                if let Some(life_state) = new_life_state {
+                    write!(f, "\tNew Life State: {:?}\n", life_state)?;
                 }
             }
             ActionKindResult::AttackRollDamage {
@@ -562,12 +572,16 @@ impl Display for ActionResult {
                 armor_class,
                 damage_roll,
                 damage_taken,
+                new_life_state,
             } => {
                 write!(f, "\tAttack Roll: {}\n", attack_roll)?;
                 write!(f, "\tArmor Class: {:?}\n", armor_class)?;
                 write!(f, "\tDamage Roll: {}\n", damage_roll)?;
                 if let Some(damage) = damage_taken {
                     write!(f, "\tDamage Taken: {}\n", damage)?;
+                }
+                if let Some(life_state) = new_life_state {
+                    write!(f, "\tNew Life State: {:?}\n", life_state)?;
                 }
             }
             ActionKindResult::SavingThrowDamage {
@@ -576,6 +590,7 @@ impl Display for ActionResult {
                 half_damage_on_save,
                 damage_roll,
                 damage_taken,
+                new_life_state,
             } => {
                 write!(
                     f,
@@ -586,6 +601,9 @@ impl Display for ActionResult {
                 write!(f, "\tDamage Roll: {}\n", damage_roll)?;
                 if let Some(damage) = damage_taken {
                     write!(f, "\tDamage Taken: {}\n", damage)?;
+                }
+                if let Some(life_state) = new_life_state {
+                    write!(f, "\tNew Life State: {:?}\n", life_state)?;
                 }
             }
             ActionKindResult::UnconditionalEffect { effect, applied } => {
@@ -609,8 +627,14 @@ impl Display for ActionResult {
             ActionKindResult::BeneficialEffect { effect, applied } => {
                 write!(f, "\tBeneficial Effect: {}, Applied: {}\n", effect, applied)?;
             }
-            ActionKindResult::Healing { healing } => {
+            ActionKindResult::Healing {
+                healing,
+                new_life_state,
+            } => {
                 write!(f, "\tHealing: {}\n", healing)?;
+                if let Some(life_state) = new_life_state {
+                    write!(f, "\tNew Life State: {:?}\n", life_state)?;
+                }
             }
             ActionKindResult::Utility => {
                 write!(f, "\tUtility Action\n")?;

@@ -1,24 +1,10 @@
-use hecs::World;
-use imgui::{ChildFlags, TreeNodeFlags};
-use nat20_rs::{
-    components::id::Name,
-    engine::{
-        encounter,
-        game_state::{self, EventLog, GameEvent, GameState},
-    },
-    entities::character::CharacterTag,
-    systems,
-};
+use imgui::ChildFlags;
+use nat20_rs::{components::id::Name, engine::game_state::GameState};
 
 use crate::{
-    render::{
-        entities::CreatureRenderMode,
-        text::{TextKind, TextSegments},
-        utils::{
-            ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-            ImguiRenderableWithContext, render_button_disabled_conditionally,
-            render_uniform_buttons, render_window_at_cursor,
-        },
+    render::utils::{
+        ImguiRenderableMutWithContext, ImguiRenderableWithContext,
+        render_button_disabled_conditionally, render_uniform_buttons, render_window_at_cursor,
     },
     windows::{
         creature_debug::CreatureDebugWindow, encounter::EncounterWindow, level_up::LevelUpWindow,
@@ -242,92 +228,5 @@ impl MainMenuWindow {
 
                 ui.checkbox("Auto-scroll", auto_scroll_event_log);
             });
-    }
-}
-
-impl ImguiRenderableWithContext<&World> for EventLog {
-    fn render_with_context(&self, ui: &imgui::Ui, world: &World) {
-        for event in self {
-            match event {
-                GameEvent::EncounterStarted(encounter_id) => {
-                    ui.separator_with_text(&format!("Encounter {}", encounter_id));
-                }
-
-                GameEvent::EncounterEnded(encounter_id, combat_log) => {
-                    if ui.collapsing_header(
-                        format!("Combat log##{}", encounter_id),
-                        TreeNodeFlags::FRAMED,
-                    ) {
-                        combat_log.render_with_context(ui, world);
-                    }
-                    ui.separator();
-                }
-
-                GameEvent::SavingThrow(entity, result, dc) => {
-                    TextSegments::new(vec![
-                        (
-                            systems::helpers::get_component::<Name>(world, *entity).to_string(),
-                            TextKind::Actor,
-                        ),
-                        (
-                            // TODO: a vs an
-                            if result.success {
-                                "succeeded a".to_string()
-                            } else {
-                                "failed a".to_string()
-                            },
-                            TextKind::Normal,
-                        ),
-                        (dc.key.to_string(), TextKind::Ability),
-                        ("saving throw".to_string(), TextKind::Normal),
-                    ])
-                    .render(ui);
-
-                    if ui.is_item_hovered() {
-                        ui.tooltip(|| {
-                            ui.text("DC:");
-                            ui.same_line();
-                            dc.render(ui);
-                            ui.text("");
-                            ui.text("Saving Throw:");
-                            ui.same_line();
-                            result.render(ui);
-                        });
-                    }
-                }
-
-                GameEvent::SkillCheck(entity, result, dc) => {
-                    TextSegments::new(vec![
-                        (
-                            systems::helpers::get_component::<Name>(world, *entity).to_string(),
-                            TextKind::Actor,
-                        ),
-                        (
-                            if result.success {
-                                "succeeded a".to_string()
-                            } else {
-                                "failed a".to_string()
-                            },
-                            TextKind::Normal,
-                        ),
-                        (dc.key.to_string(), TextKind::Skill),
-                        ("skill check".to_string(), TextKind::Normal),
-                    ])
-                    .render(ui);
-
-                    if ui.is_item_hovered() {
-                        ui.tooltip(|| {
-                            ui.text("DC:");
-                            ui.same_line();
-                            dc.render(ui);
-                            ui.text("");
-                            ui.text("Skill Check:");
-                            ui.same_line();
-                            result.render(ui);
-                        });
-                    }
-                }
-            }
-        }
     }
 }

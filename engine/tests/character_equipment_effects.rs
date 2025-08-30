@@ -6,7 +6,7 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::Ability,
-            d20_check::RollMode,
+            d20::RollMode,
             id::ItemId,
             items::{
                 equipment::{
@@ -17,7 +17,7 @@ mod tests {
                 item::{Item, ItemRarity},
                 money::MonetaryValue,
             },
-            saving_throw::SavingThrowSet,
+            saving_throw::{SavingThrowKind, SavingThrowSet},
             skill::{Skill, SkillSet},
         },
         entities::character::Character,
@@ -137,7 +137,7 @@ mod tests {
         systems::loadout::equip(&mut world, entity, armor);
 
         let throw = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
-            Ability::Constitution,
+            SavingThrowKind::Ability(Ability::Constitution),
             &world,
             entity,
         );
@@ -147,7 +147,7 @@ mod tests {
             .expect("Failed to unequip armor");
 
         let throw = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
-            Ability::Constitution,
+            SavingThrowKind::Ability(Ability::Constitution),
             &world,
             entity,
         );

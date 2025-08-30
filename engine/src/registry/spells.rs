@@ -12,13 +12,14 @@ use crate::{
             action::{ActionContext, ActionKind, ReactionKind},
             targeting::{AreaShape, TargetType, TargetingContext, TargetingKind},
         },
-        d20_check::{D20Check, D20CheckDC},
+        d20::{D20Check, D20CheckDC},
         damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
         dice::DieSize,
         id::SpellId,
         modifier::{ModifierSet, ModifierSource},
         proficiency::{Proficiency, ProficiencyLevel},
         resource::ResourceCostMap,
+        saving_throw::SavingThrowKind,
         spells::{
             spell::{MagicSchool, Spell},
             spellbook::Spellbook,
@@ -213,7 +214,7 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
 
 const BASE_SPELL_SAVE_DC: i32 = 8;
 
-fn spell_save_dc(world: &World, caster: Entity, spell_id: &SpellId) -> D20CheckDC<Ability> {
+fn spell_save_dc(world: &World, caster: Entity, spell_id: &SpellId) -> D20CheckDC<SavingThrowKind> {
     let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, caster);
     let spellcasting_ability = systems::helpers::get_component::<Spellbook>(world, caster)
         .spellcasting_ability(spell_id)
@@ -243,7 +244,7 @@ fn spell_save_dc(world: &World, caster: Entity, spell_id: &SpellId) -> D20CheckD
     );
 
     D20CheckDC {
-        key: spellcasting_ability,
+        key: SavingThrowKind::Ability(spellcasting_ability),
         dc: spell_save_dc,
     }
 }

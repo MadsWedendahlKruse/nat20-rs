@@ -8,7 +8,7 @@ use nat20_rs::{
             action::{ActionKindResult, ActionResult},
             targeting::TargetTypeInstance,
         },
-        d20_check::{D20CheckDC, D20CheckResult, RollMode},
+        d20::{D20CheckDC, D20CheckResult, RollMode},
         damage::{
             AttackRollResult, DamageComponentMitigation, DamageComponentResult,
             DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRoll,
@@ -31,11 +31,10 @@ use nat20_rs::{
         proficiency::{Proficiency, ProficiencyLevel},
         race::{CreatureSize, CreatureType},
         resource::ResourceMap,
-        saving_throw::SavingThrowSet,
+        saving_throw::{SavingThrowKind, SavingThrowSet},
         skill::{Skill, SkillSet, skill_ability},
         spells::spellbook::{SpellSlotsMap, Spellbook},
     },
-    entities::character::CharacterTag,
     registry, systems,
 };
 use std::collections::HashSet;
@@ -43,12 +42,10 @@ use strum::IntoEnumIterator;
 
 use crate::{
     render::{
-        inventory::render_loadout_inventory,
         text::{TextKind, TextSegment, TextSegments, indent_text, item_rarity_color},
         utils::{
-            ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-            ImguiRenderableWithContext, SELECTED_BUTTON_COLOR, interpolate_color,
-            render_empty_button,
+            ImguiRenderable, ImguiRenderableMut, ImguiRenderableWithContext, SELECTED_BUTTON_COLOR,
+            interpolate_color, render_empty_button,
         },
     },
     table_with_columns,
@@ -198,16 +195,10 @@ impl ImguiRenderable for LifeState {
                 ui.text("");
             }
             LifeState::Unconscious(death_saving_throws) => {
-                // Render something like [_++|-__] where + is a success and - is a failure
+                // Render something like [++|-] where + is a success and - is a failure
                 let mut segments = Vec::new();
                 segments.push(("Unconscious: ".to_string(), TextKind::Details));
-                segments.push((
-                    format!(
-                        "[{}",
-                        "_".repeat((3 - death_saving_throws.successes()) as usize)
-                    ),
-                    TextKind::Details,
-                ));
+                segments.push(("[".to_string(), TextKind::Details));
                 segments.push((
                     format!("{}", "+".repeat(death_saving_throws.successes() as usize)),
                     TextKind::Green,
@@ -217,13 +208,7 @@ impl ImguiRenderable for LifeState {
                     format!("{}", "-".repeat(death_saving_throws.failures() as usize)),
                     TextKind::Red,
                 ));
-                segments.push((
-                    format!(
-                        "{}]",
-                        "_".repeat((3 - death_saving_throws.failures()) as usize)
-                    ),
-                    TextKind::Details,
-                ));
+                segments.push(("]".to_string(), TextKind::Details));
                 TextSegments::new(segments).render(ui);
             }
             _ => {
@@ -304,7 +289,8 @@ impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreMap {
         let style = ui.push_style_var(imgui::StyleVar::ButtonTextAlign([0.5, 0.5]));
         for (i, ability) in Ability::iter().enumerate() {
             let ability_score = self.get(ability);
-            let saving_throw_proficiency = saving_throws.get(ability).proficiency();
+            let saving_throw_kind = SavingThrowKind::Ability(ability);
+            let saving_throw_proficiency = saving_throws.get(saving_throw_kind).proficiency();
 
             if i > 0 {
                 ui.same_line();
@@ -332,7 +318,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreMap {
                         ])
                         .render(ui);
                     }
-                    let result = saving_throws.check(ability, context.0, context.1);
+                    let result = saving_throws.check(saving_throw_kind, context.0, context.1);
                     let modifiers = &result.modifier_breakdown;
                     let total = modifiers.total();
                     ui.text(format!("Bonus: {}{}", sign(total), total.abs()));
@@ -354,7 +340,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
             let mut prev_ability = Ability::Charisma;
 
             for skill in Skill::iter() {
-                let ability = skill_ability(skill);
+                let ability = skill_ability(skill).unwrap();
 
                 // If the ability has changed, render a separator
                 if ability != prev_ability {
@@ -934,11 +920,13 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
             ActionKindResult::UnconditionalDamage {
                 damage_roll,
                 damage_taken,
+                new_life_state,
             } => {
                 damage_taken.render_with_context(
                     ui,
                     (&target_name, indent_level + 1, "took no damage", None),
                 );
+                new_life_state.render_with_context(ui, (&target_name, indent_level + 1));
             }
 
             ActionKindResult::AttackRollDamage {
@@ -946,6 +934,7 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                 armor_class,
                 damage_roll,
                 damage_taken,
+                new_life_state,
             } => {
                 damage_taken.render_with_context(
                     ui,
@@ -956,6 +945,7 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                         Some(attack_roll.clone()),
                     ),
                 );
+                new_life_state.render_with_context(ui, (&target_name, indent_level + 1));
 
                 if ui.is_item_hovered() {
                     ui.tooltip(|| {
@@ -995,6 +985,7 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                 half_damage_on_save,
                 damage_roll,
                 damage_taken,
+                new_life_state,
             } => todo!(),
 
             ActionKindResult::UnconditionalEffect { effect, applied } => todo!(),
@@ -1015,7 +1006,10 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                 .render(ui);
             }
 
-            ActionKindResult::Healing { healing } => {
+            ActionKindResult::Healing {
+                healing,
+                new_life_state,
+            } => {
                 TextSegments::new(vec![
                     (target_name, TextKind::Target),
                     ("was healed for", TextKind::Normal),
@@ -1023,6 +1017,7 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                 ])
                 .with_indent(indent_level + 1)
                 .render(ui);
+                new_life_state.render_with_context(ui, (&target_name, indent_level + 1));
             }
 
             ActionKindResult::Utility => todo!(),
@@ -1109,7 +1104,29 @@ impl ImguiRenderable for DamageMitigationResult {
     }
 }
 
-impl ImguiRenderable for D20CheckDC<Ability> {
+impl ImguiRenderableWithContext<(&str, u8)> for Option<LifeState> {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&str, u8)) {
+        let (name, indent_level) = context;
+        // This is used to render a Life State which is being transitioned to
+        if let Some(life_state) = self {
+            let text = match life_state {
+                LifeState::Normal => "was restored to normal life",
+                LifeState::Unconscious(_) => "fell unconscious",
+                LifeState::Stable => "is now stable",
+                LifeState::Dead => "died",
+                LifeState::Defeated => "was defeated",
+            };
+            TextSegments::new(vec![
+                (name.to_string(), TextKind::Target),
+                (text.to_string(), TextKind::Normal),
+            ])
+            .with_indent(indent_level)
+            .render(ui);
+        }
+    }
+}
+
+impl ImguiRenderable for D20CheckDC<SavingThrowKind> {
     fn render(&self, ui: &imgui::Ui) {
         self.dc.render_with_context(ui, ModifierSetRenderMode::Line);
         ui.same_line();

@@ -12,7 +12,7 @@ mod tests {
             level::CharacterLevels,
             level_up::ChoiceItem,
             proficiency::ProficiencyLevel,
-            saving_throw::SavingThrowSet,
+            saving_throw::{SavingThrowKind, SavingThrowSet},
             skill::{Skill, SkillSet},
         },
         entities::character::Character,
@@ -111,7 +111,10 @@ mod tests {
                 systems::helpers::get_component::<SavingThrowSet>(&mut world, character);
             for ability in [Ability::Strength, Ability::Constitution] {
                 assert_eq!(
-                    saving_throws.get(ability).proficiency().level(),
+                    saving_throws
+                        .get(SavingThrowKind::Ability(ability))
+                        .proficiency()
+                        .level(),
                     &ProficiencyLevel::Proficient
                 );
             }

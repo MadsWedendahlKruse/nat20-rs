@@ -1,6 +1,6 @@
 use rand::Rng;
 
-use crate::components::d20_check::{D20_CRITICAL_FAILURE, D20_CRITICAL_SUCCESS};
+use crate::components::d20::{D20_CRITICAL_FAILURE, D20_CRITICAL_SUCCESS, D20CheckResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LifeState {
@@ -66,20 +66,28 @@ impl DeathSavingThrows {
         self.failures = 0;
     }
 
-    pub fn roll(&mut self) -> u8 {
-        let roll = rand::rng().random_range(1..=20);
-        if roll == D20_CRITICAL_SUCCESS {
+    pub fn update(&mut self, check_result: D20CheckResult) {
+        if check_result.is_crit {
             // Critical success
             self.record_success(2);
-        } else if roll >= DEATH_SAVING_THROW_DC {
-            self.record_success(1);
-        } else if roll == D20_CRITICAL_FAILURE {
+        } else if check_result.is_crit_fail {
             // Critical failure
             self.record_failure(2);
+        } else if check_result.success {
+            self.record_success(1);
         } else {
             self.record_failure(1);
         }
-        roll
+    }
+
+    pub fn next_state(&self) -> LifeState {
+        if self.is_dead() {
+            LifeState::Dead
+        } else if self.is_stable() {
+            LifeState::Stable
+        } else {
+            LifeState::Unconscious(*self)
+        }
     }
 }
 

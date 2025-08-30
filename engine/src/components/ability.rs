@@ -6,9 +6,9 @@ use std::{
 
 use super::modifier::{ModifierSet, ModifierSource};
 
-use strum::{EnumIter, IntoEnumIterator};
+use strum::{Display, EnumIter, IntoEnumIterator};
 
-#[derive(EnumIter, Hash, Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(EnumIter, Hash, Eq, PartialEq, Debug, Clone, Copy, Display)]
 pub enum Ability {
     Strength = 0,
     Dexterity = 1,
@@ -32,12 +32,6 @@ impl Ability {
 
     pub fn set() -> HashSet<Ability> {
         Ability::iter().collect()
-    }
-}
-
-impl fmt::Display for Ability {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
     }
 }
 

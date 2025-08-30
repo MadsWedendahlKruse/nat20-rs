@@ -4,36 +4,18 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        actions::{
-            action::{ActionContext, ActionResult, ReactionKind},
-            targeting::TargetType,
-        },
-        d20_check::D20CheckResult,
-        health::life_state::{self, LifeState},
+        actions::{action::ReactionKind, targeting::TargetType},
+        d20::{D20CheckDC, D20CheckResult},
+        health::life_state::{DEATH_SAVING_THROW_DC, LifeState},
         id::{ActionId, EncounterId},
-        resource::ResourceCostMap,
+        modifier::{ModifierSet, ModifierSource},
+        saving_throw::SavingThrowKind,
         skill::{Skill, SkillSet},
     },
+    engine::game_state::{ActionData, EventLog, GameEvent, ReactionData},
     entities::{character::CharacterTag, monster::MonsterTag},
     systems,
 };
-
-// TODO: struct name?
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActionData {
-    pub actor: Entity,
-    pub action_id: ActionId,
-    pub context: ActionContext,
-    pub targets: Vec<Entity>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReactionData {
-    pub reaction_id: ActionId,
-    pub context: ActionContext,
-    pub resource_cost: ResourceCostMap,
-    pub kind: ReactionKind,
-}
 
 #[derive(Debug, Clone)]
 pub enum ActionPrompt {
@@ -65,31 +47,6 @@ pub enum ActionDecision {
         /// The choice made by the player in response to the reaction prompt.
         /// This will be `None` if the player chose not to react.
         choice: Option<ReactionData>,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub enum CombatEvent {
-    NewRound {
-        round: usize,
-    },
-    /// The action was successfully performed, and the results are applied to the targets.
-    ActionPerformed {
-        action: ActionData,
-        results: Vec<ActionResult>,
-    },
-    ReactionTriggered {
-        reactor: Entity,
-        action: ActionData,
-    },
-    NoReactionTaken {
-        reactor: Entity,
-        action: ActionData,
-    },
-    ActionCancelled {
-        reactor: Entity,
-        reaction: ReactionData,
-        action: ActionData,
     },
 }
 
@@ -237,8 +194,6 @@ impl ActionDecision {
     }
 }
 
-pub type CombatLog = Vec<CombatEvent>;
-
 pub enum ParticipantsFilter {
     All,
     Characters,
@@ -276,7 +231,7 @@ pub struct Encounter {
     /// until the reaction is resolved. The decision will then be processed once
     /// the reaction is resolved. In most cases this will be a single decision.
     pending_decisions: VecDeque<ActionDecision>,
-    combat_log: CombatLog,
+    event_log: EventLog,
 }
 
 impl Encounter {
@@ -289,13 +244,13 @@ impl Encounter {
             initiative_order: Vec::new(),
             pending_prompts: VecDeque::new(),
             pending_decisions: VecDeque::new(),
-            combat_log: Vec::new(),
+            event_log: Vec::new(),
         };
         encounter.roll_initiative(world);
         encounter.start_turn(world);
-        encounter.combat_log.push(CombatEvent::NewRound {
-            round: encounter.round,
-        });
+        encounter
+            .event_log
+            .push(GameEvent::NewRound(encounter.id.clone(), encounter.round()));
         encounter
     }
 
@@ -332,19 +287,23 @@ impl Encounter {
     pub fn participants(&self, world: &World, filter: ParticipantsFilter) -> Vec<Entity> {
         match filter {
             ParticipantsFilter::All => self.participants.iter().cloned().collect(),
+
             ParticipantsFilter::Characters => world
                 .query::<&CharacterTag>()
                 .iter()
                 .map(|(e, _)| e)
                 .collect(),
+
             ParticipantsFilter::Monsters => world
                 .query::<&MonsterTag>()
                 .iter()
                 .map(|(e, _)| e)
                 .collect(),
+
             ParticipantsFilter::Specific(entities) => {
                 self.participants.intersection(&entities).cloned().collect()
             }
+
             ParticipantsFilter::LifeStates(life_states) => world
                 .query::<&LifeState>()
                 .iter()
@@ -356,6 +315,7 @@ impl Encounter {
                     }
                 })
                 .collect(),
+
             ParticipantsFilter::NotLifeStates(life_states) => world
                 .query::<&LifeState>()
                 .iter()
@@ -379,7 +339,7 @@ impl Encounter {
         &mut self,
         world: &mut World,
         decision: ActionDecision,
-    ) -> Result<CombatEvent, ActionError> {
+    ) -> Result<GameEvent, ActionError> {
         if self.pending_prompts.is_empty() {
             return Err(ActionError::MissingPrompt { decision });
         }
@@ -398,7 +358,7 @@ impl Encounter {
         world: &mut World,
         prompt: &ActionPrompt,
         decision: ActionDecision,
-    ) -> Result<CombatEvent, ActionError> {
+    ) -> Result<GameEvent, ActionError> {
         // Ensure the decision matches the current prompt
         prompt.is_valid_decision(&decision)?;
 
@@ -441,7 +401,7 @@ impl Encounter {
                             // Add the decision to pending decisions and resolve it
                             // after the reaction is resolved
                             self.pending_decisions.push_back(decision.clone());
-                            return Ok(CombatEvent::ReactionTriggered {
+                            return Ok(GameEvent::ReactionTriggered {
                                 reactor: *reactor,
                                 action: action.clone(),
                             });
@@ -468,7 +428,7 @@ impl Encounter {
                 // self.pending_prompts.pop_front();
 
                 let results = systems::actions::apply_to_targets(world, snapshots, &action.targets);
-                return Ok(CombatEvent::ActionPerformed {
+                return Ok(GameEvent::ActionPerformed {
                     action: action.clone(),
                     results,
                 });
@@ -485,19 +445,13 @@ impl Encounter {
                 if choice.is_none() {
                     // If no reaction was chosen just process the pending decision
                     self.pending_prompts.pop_front();
-                    // let result =
-                    //     self.process(world, self.pending_decisions.front().unwrap().clone())?;
-                    // return Ok(ActionDecisionResult::NoReactionTaken {
-                    //     reactor: *reactor,
-                    //     action: action.clone(),
-                    // });
 
                     let result = self.resolve_decision(
                         world,
                         &self.pending_prompts.front().unwrap().clone(),
                         self.pending_decisions.front().unwrap().clone(),
                     );
-                    self.log(&Ok(CombatEvent::NoReactionTaken {
+                    self.log(&Ok(GameEvent::NoReactionTaken {
                         reactor: *reactor,
                         action: action.clone(),
                     }));
@@ -554,7 +508,7 @@ impl Encounter {
                             );
                         }
 
-                        return Ok(CombatEvent::ActionCancelled {
+                        return Ok(GameEvent::ActionCancelled {
                             reactor: *reactor,
                             reaction: reaction.clone(),
                             action: action.clone(),
@@ -572,9 +526,9 @@ impl Encounter {
         }
     }
 
-    fn log(&mut self, result: &Result<CombatEvent, ActionError>) {
+    fn log(&mut self, result: &Result<GameEvent, ActionError>) {
         if let Ok(action_result) = result {
-            self.combat_log.push(action_result.clone());
+            self.event_log.push(action_result.clone());
         } else if let Err(err) = result {
             eprintln!("Error processing action: {:?}", err);
         }
@@ -596,33 +550,75 @@ impl Encounter {
         self.turn_index = (self.turn_index + 1) % self.participants.len();
         if self.turn_index == 0 {
             self.round += 1;
-            self.combat_log
-                .push(CombatEvent::NewRound { round: self.round });
+            self.event_log
+                .push(GameEvent::NewRound(self.id.clone(), self.round));
         }
 
         self.start_turn(world);
     }
 
+    // TODO: Some of this feels like it should belong somewhere else?
+    fn should_skip_turn(&mut self, world: &mut World) -> bool {
+        let current_entity = self.current_entity();
+
+        // Borrow checker forces potential death saving throws to be handled in
+        // a specific order
+
+        // 1) Peek life state without taking a mutable borrow
+        let is_unconscious = matches!(
+            *systems::helpers::get_component::<LifeState>(world, current_entity),
+            LifeState::Unconscious(_)
+        );
+
+        if is_unconscious {
+            // 2) Do the d20 roll (needs only &World)
+            let check_dc = D20CheckDC {
+                dc: ModifierSet::from_iter([(
+                    ModifierSource::Custom("Death Saving Throw".to_string()),
+                    DEATH_SAVING_THROW_DC as i32,
+                )]),
+                key: SavingThrowKind::Death,
+            };
+            let check_result = systems::d20::saving_throw_dc(world, current_entity, &check_dc);
+            self.event_log.push(GameEvent::SavingThrow(
+                current_entity,
+                check_result.clone(),
+                check_dc.clone(),
+            ));
+
+            // 3) Now take the mutable borrow and update
+            let mut life_state =
+                systems::helpers::get_component_mut::<LifeState>(world, current_entity);
+            if let LifeState::Unconscious(ref mut death_saving_throws) = *life_state {
+                death_saving_throws.update(check_result);
+
+                let next_state = death_saving_throws.next_state();
+
+                if next_state != *life_state {
+                    *life_state = next_state.clone();
+
+                    self.event_log.push(GameEvent::LifeStateChanged {
+                        entity: current_entity,
+                        new_state: next_state,
+                        actor: None,
+                    });
+                }
+            }
+
+            return true;
+        } else {
+            // Normal / other states => decide if they can act
+            return !matches!(
+                *systems::helpers::get_component::<LifeState>(world, current_entity),
+                LifeState::Normal
+            );
+        };
+    }
+
     fn start_turn(&mut self, world: &mut World) {
         systems::turns::on_turn_start(world, self.current_entity());
 
-        let skip_turn = {
-            let mut life_state = systems::helpers::get_component_mut::<life_state::LifeState>(
-                world,
-                self.current_entity(),
-            );
-            match *life_state {
-                LifeState::Normal => false,
-                LifeState::Unconscious(ref mut death_saving_throws) => {
-                    death_saving_throws.roll();
-                    true
-                }
-                _ => true,
-            }
-        };
-
-        if skip_turn {
-            // Automatically end the turn if the entity is not able to act
+        if self.should_skip_turn(world) {
             self.end_turn(world, self.current_entity());
             return;
         }
@@ -636,11 +632,11 @@ impl Encounter {
         self.round
     }
 
-    pub fn combat_log(&self) -> &CombatLog {
-        &self.combat_log
+    pub fn combat_log(&self) -> &EventLog {
+        &self.event_log
     }
 
-    pub fn combat_log_move(&mut self) -> CombatLog {
-        std::mem::take(&mut self.combat_log)
+    pub fn combat_log_move(&mut self) -> EventLog {
+        std::mem::take(&mut self.event_log)
     }
 }

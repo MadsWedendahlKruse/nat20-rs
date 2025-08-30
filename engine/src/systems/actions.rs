@@ -12,6 +12,7 @@ use crate::{
             },
             targeting::TargetingContext,
         },
+        health::life_state::LifeState,
         id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
         resource::{RechargeRule, ResourceCostMap, ResourceMap},

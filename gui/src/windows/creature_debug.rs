@@ -2,8 +2,9 @@ use hecs::Entity;
 use nat20_rs::{
     components::{
         ability::Ability,
-        d20_check::D20CheckDC,
+        d20::D20CheckDC,
         modifier::{ModifierSet, ModifierSource},
+        saving_throw::SavingThrowKind,
         skill::Skill,
     },
     engine::game_state::{GameEvent, GameState},
@@ -81,26 +82,24 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                     ui.separator();
                     let choice = render_uniform_buttons(
                         ui,
-                        Ability::iter().map(|ability| ability.to_string()),
+                        SavingThrowKind::iter().map(|ability| ability.to_string()),
                         [20.0, 5.0],
                     );
 
                     if let Some(index) = choice {
-                        let ability = Ability::iter().nth(index).expect("Invalid ability index");
+                        let kind = SavingThrowKind::iter()
+                            .nth(index)
+                            .expect("Invalid ability index");
                         let dc = D20CheckDC {
                             dc: ModifierSet::from_iter([(
                                 ModifierSource::Custom("Saving Throw DC".to_string()),
                                 *dc_value,
                             )]),
-                            key: ability,
+                            key: kind,
                         };
                         game_state.log_event(GameEvent::SavingThrow(
                             self.creature,
-                            systems::d20_check::saving_throw_dc(
-                                &game_state.world,
-                                self.creature,
-                                &dc,
-                            ),
+                            systems::d20::saving_throw_dc(&game_state.world, self.creature, &dc),
                             dc,
                         ));
                         ui.close_current_popup();
@@ -134,11 +133,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                         };
                         game_state.log_event(GameEvent::SkillCheck(
                             self.creature,
-                            systems::d20_check::skill_check_dc(
-                                &game_state.world,
-                                self.creature,
-                                &dc,
-                            ),
+                            systems::d20::skill_check_dc(&game_state.world, self.creature, &dc),
                             dc,
                         ));
                         ui.close_current_popup();

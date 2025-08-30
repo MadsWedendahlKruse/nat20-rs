@@ -7,7 +7,6 @@ use std::{
 use hecs::{Entity, World};
 
 use crate::components::{
-    ability::Ability,
     actions::action::{Action, ActionContext},
     damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
     effects::hooks::{
@@ -16,7 +15,8 @@ use crate::components::{
     },
     id::{EffectId, ResourceId},
     items::equipment::armor::ArmorClass,
-    modifier::{ModifierSet, ModifierSource},
+    modifier::ModifierSource,
+    saving_throw::SavingThrowKind,
     skill::Skill,
 };
 
@@ -77,7 +77,7 @@ pub struct Effect {
     // pub on_expire: EffectHook,
     pub on_unapply: EffectHook,
     pub on_skill_check: HashMap<Skill, D20CheckHooks>,
-    pub on_saving_throw: HashMap<Ability, D20CheckHooks>,
+    pub on_saving_throw: HashMap<SavingThrowKind, D20CheckHooks>,
     pub pre_attack_roll: AttackRollHook,
     pub post_attack_roll: AttackRollResultHook,
     pub on_armor_class: ArmorClassHook,

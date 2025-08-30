@@ -4,7 +4,7 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        d20_check::{D20Check, D20CheckResult},
+        d20::{D20Check, D20CheckResult},
         dice::{DiceSet, DiceSetRoll, DiceSetRollResult, DieSize},
         items::equipment::weapon::{Weapon, WeaponKind},
         modifier::{ModifierSet, ModifierSource},

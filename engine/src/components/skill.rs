@@ -3,7 +3,7 @@ use std::{fmt, hash::Hash};
 use crate::{
     components::{
         ability::Ability,
-        d20_check::{D20CheckDC, D20CheckSet},
+        d20::{D20CheckDC, D20CheckSet},
         effects::hooks::D20CheckHooks,
     },
     systems,
@@ -50,9 +50,9 @@ impl fmt::Display for Skill {
 #[macro_export]
 macro_rules! skill_ability_map {
     ( $( $skill:ident => $ability:ident ),* $(,)? ) => {
-        pub const fn skill_ability(skill: Skill) -> Ability {
+        pub const fn skill_ability(skill: Skill) -> Option<Ability> {
             match skill {
-                $( Skill::$skill => Ability::$ability ),*
+                $( Skill::$skill => Some(Ability::$ability) ),*
             }
         }
     };
@@ -111,10 +111,10 @@ mod tests {
 
     #[test]
     fn skill_ability_map() {
-        assert_eq!(skill_ability(Skill::Acrobatics), Ability::Dexterity);
-        assert_eq!(skill_ability(Skill::Athletics), Ability::Strength);
-        assert_eq!(skill_ability(Skill::Stealth), Ability::Dexterity);
-        assert_eq!(skill_ability(Skill::Arcana), Ability::Intelligence);
-        assert_eq!(skill_ability(Skill::History), Ability::Intelligence);
+        assert_eq!(skill_ability(Skill::Acrobatics), Some(Ability::Dexterity));
+        assert_eq!(skill_ability(Skill::Athletics), Some(Ability::Strength));
+        assert_eq!(skill_ability(Skill::Stealth), Some(Ability::Dexterity));
+        assert_eq!(skill_ability(Skill::Arcana), Some(Ability::Intelligence));
+        assert_eq!(skill_ability(Skill::History), Some(Ability::Intelligence));
     }
 }

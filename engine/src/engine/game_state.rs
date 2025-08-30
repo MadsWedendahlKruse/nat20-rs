@@ -4,22 +4,66 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        ability::Ability,
-        d20_check::{D20CheckDC, D20CheckResult},
-        id::EncounterId,
+        actions::action::{ActionContext, ActionResult, ReactionKind},
+        d20::{D20CheckDC, D20CheckResult},
+        health::life_state::LifeState,
+        id::{ActionId, EncounterId},
+        resource::ResourceCostMap,
+        saving_throw::SavingThrowKind,
         skill::Skill,
     },
-    engine::encounter::{
-        ActionDecision, ActionError, CombatEvent, CombatLog, Encounter, ParticipantsFilter,
-    },
+    engine::encounter::{ActionDecision, ActionError, Encounter, ParticipantsFilter},
 };
 
+// TODO: struct name?
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActionData {
+    pub actor: Entity,
+    pub action_id: ActionId,
+    pub context: ActionContext,
+    pub targets: Vec<Entity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReactionData {
+    pub reaction_id: ActionId,
+    pub context: ActionContext,
+    pub resource_cost: ResourceCostMap,
+    pub kind: ReactionKind,
+}
+
+#[derive(Debug, Clone)]
 // TODO: Not 100% sure this is the best solution
 pub enum GameEvent {
     EncounterStarted(EncounterId),
-    EncounterEnded(EncounterId, CombatLog),
-    SavingThrow(Entity, D20CheckResult, D20CheckDC<Ability>),
+    EncounterEnded(EncounterId, EventLog),
+    NewRound(EncounterId, usize),
+    /// The action was successfully performed, and the results are applied to the targets.
+    ActionPerformed {
+        action: ActionData,
+        results: Vec<ActionResult>,
+    },
+    ReactionTriggered {
+        reactor: Entity,
+        action: ActionData,
+    },
+    NoReactionTaken {
+        reactor: Entity,
+        action: ActionData,
+    },
+    ActionCancelled {
+        reactor: Entity,
+        reaction: ReactionData,
+        action: ActionData,
+    },
+    SavingThrow(Entity, D20CheckResult, D20CheckDC<SavingThrowKind>),
     SkillCheck(Entity, D20CheckResult, D20CheckDC<Skill>),
+    LifeStateChanged {
+        entity: Entity,
+        new_state: LifeState,
+        /// The entity that caused the change, if any
+        actor: Option<Entity>,
+    },
 }
 
 pub type EventLog = Vec<GameEvent>;
@@ -83,7 +127,7 @@ impl GameState {
         }
     }
 
-    pub fn process(&mut self, decision: ActionDecision) -> Result<CombatEvent, ActionError> {
+    pub fn process(&mut self, decision: ActionDecision) -> Result<GameEvent, ActionError> {
         let entity = decision.actor();
         if let Some(encounter_id) = self.in_combat.get(&entity) {
             if let Some(encounter) = self.encounters.get_mut(encounter_id) {

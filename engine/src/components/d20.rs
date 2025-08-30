@@ -269,7 +269,7 @@ where
     K: Eq + Hash + IntoEnumIterator + Copy,
 {
     checks: HashMap<K, D20Check>,
-    ability_mapper: fn(K) -> Ability,
+    ability_mapper: fn(K) -> Option<Ability>,
     get_hooks: fn(K, &World, Entity) -> Vec<D20CheckHooks>,
 }
 
@@ -278,7 +278,7 @@ where
     K: Eq + Hash + IntoEnumIterator + Copy,
 {
     pub fn new(
-        ability_mapper: fn(K) -> Ability,
+        ability_mapper: fn(K) -> Option<Ability>,
         get_hooks: fn(K, &World, Entity) -> Vec<D20CheckHooks>,
     ) -> Self {
         let checks = K::iter()
@@ -321,12 +321,13 @@ where
 
     pub fn check(&self, key: K, world: &World, entity: Entity) -> D20CheckResult {
         let mut d20 = self.get(key).clone();
-        let ability = (self.ability_mapper)(key);
-        let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, entity);
-        d20.add_modifier(
-            ModifierSource::Ability(ability),
-            ability_scores.ability_modifier(ability).total(),
-        );
+        if let Some(ability) = (self.ability_mapper)(key) {
+            let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, entity);
+            d20.add_modifier(
+                ModifierSource::Ability(ability),
+                ability_scores.ability_modifier(ability).total(),
+            );
+        }
 
         d20.roll_hooks(world, entity, &(self.get_hooks)(key, world, entity))
     }

@@ -8,7 +8,7 @@ use strum::{Display, EnumIter};
 use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
-        d20_check::D20Check,
+        d20::D20Check,
         damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
         dice::{DiceSet, DieSize},
         id::{ActionId, EffectId},

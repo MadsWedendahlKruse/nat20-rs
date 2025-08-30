@@ -13,11 +13,8 @@ use nat20_rs::{
         spells::spellbook::Spellbook,
     },
     engine::{
-        encounter::{
-            ActionData, ActionDecision, ActionPrompt, CombatEvent, CombatLog, Encounter,
-            ParticipantsFilter, ReactionData,
-        },
-        game_state::GameState,
+        encounter::{ActionDecision, ActionPrompt, Encounter, ParticipantsFilter},
+        game_state::{ActionData, EventLog, GameEvent, GameState, ReactionData},
     },
     registry, systems,
 };
@@ -312,6 +309,10 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
             return;
         }
         let next_prompt = next_prompt.unwrap();
+
+        // TODO: If it's not a characters turn, the AI can make a decision here?
+        // Also a bit odd maybe to have it in the render function?
+
         if decision_progress.is_none() {
             *decision_progress = Some(ActionDecisionProgress::from_prompt(next_prompt));
             println!(
@@ -471,7 +472,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                         let decision = self.take().unwrap().finalize();
                         let result = encounter.process(world, decision).unwrap();
                         match result {
-                            CombatEvent::ActionPerformed { action, results } => {
+                            GameEvent::ActionPerformed { action, results } => {
                                 // Handle action performed, e.g., apply effects, update state
                                 println!("Action performed: {:?}", action);
                                 for result in results {
@@ -672,137 +673,6 @@ impl
 
             _ => {
                 ui.text(format!("Targeting kind {:?} is not implemented yet.", self));
-            }
-        }
-    }
-}
-
-impl ImguiRenderableWithContext<&World> for CombatLog {
-    fn render_with_context(&self, ui: &imgui::Ui, world: &World) {
-        for entry in self {
-            match entry {
-                CombatEvent::ActionPerformed { action, results } => {
-                    TextSegments::new(vec![
-                        (
-                            &systems::helpers::get_component::<Name>(world, action.actor)
-                                .to_string(),
-                            TextKind::Actor,
-                        ),
-                        (&"used".to_string(), TextKind::Normal),
-                        (&action.action_id.to_string(), TextKind::Action),
-                    ])
-                    .render(ui);
-
-                    if action.targets.len() == 1 && action.targets[0] != action.actor {
-                        ui.same_line();
-                        TextSegments::new(vec![
-                            ("on", TextKind::Normal),
-                            (
-                                systems::helpers::get_component::<Name>(world, action.targets[0])
-                                    .as_str(),
-                                TextKind::Target,
-                            ),
-                        ])
-                        .render(ui);
-                    }
-
-                    for result in results {
-                        result.render_with_context(ui, 0);
-                    }
-                }
-
-                CombatEvent::ReactionTriggered { reactor, action } => {
-                    let mut segments = vec![
-                        (
-                            systems::helpers::get_component_clone::<Name>(world, action.actor)
-                                .to_string(),
-                            TextKind::Actor,
-                        ),
-                        ("used".to_string(), TextKind::Normal),
-                        (action.action_id.to_string(), TextKind::Action),
-                    ];
-                    for (i, action_target) in action.targets.iter().enumerate() {
-                        if i == 0 {
-                            segments.push(("on".to_string(), TextKind::Normal));
-                        } else {
-                            segments.push((", ".to_string(), TextKind::Normal));
-                        }
-                        segments.push((
-                            systems::helpers::get_component_clone::<Name>(world, *action_target)
-                                .to_string(),
-                            TextKind::Target,
-                        ));
-                    }
-                    TextSegments::new(segments).render(ui);
-
-                    TextSegments::new(vec![
-                        (
-                            systems::helpers::get_component::<Name>(world, *reactor).to_string(),
-                            TextKind::Actor,
-                        ),
-                        ("is reacting to".to_string(), TextKind::Normal),
-                        (
-                            format!(
-                                "{}'s",
-                                systems::helpers::get_component::<Name>(world, action.actor)
-                                    .as_str(),
-                            ),
-                            TextKind::Actor,
-                        ),
-                        (action.action_id.to_string(), TextKind::Action),
-                    ])
-                    .render(ui);
-                }
-
-                CombatEvent::ActionCancelled {
-                    reactor,
-                    reaction,
-                    action,
-                } => {
-                    TextSegments::new(vec![
-                        (
-                            systems::helpers::get_component::<Name>(world, *reactor).to_string(),
-                            TextKind::Actor,
-                        ),
-                        ("cancelled".to_string(), TextKind::Normal),
-                        (
-                            format!(
-                                "{}'s",
-                                systems::helpers::get_component::<Name>(world, action.actor)
-                                    .as_str(),
-                            ),
-                            TextKind::Actor,
-                        ),
-                        (action.action_id.to_string(), TextKind::Action),
-                        ("using".to_string(), TextKind::Normal),
-                        (reaction.reaction_id.to_string(), TextKind::Action),
-                    ])
-                    .render(ui);
-                }
-
-                CombatEvent::NoReactionTaken { reactor, action } => {
-                    TextSegments::new(vec![
-                        (
-                            systems::helpers::get_component::<Name>(world, *reactor).to_string(),
-                            TextKind::Actor,
-                        ),
-                        ("did not react to".to_string(), TextKind::Normal),
-                        (
-                            format!(
-                                "{}'s",
-                                systems::helpers::get_component::<Name>(world, action.actor)
-                                    .as_str(),
-                            ),
-                            TextKind::Actor,
-                        ),
-                        (action.action_id.to_string(), TextKind::Action),
-                    ])
-                    .render(ui);
-                }
-
-                CombatEvent::NewRound { round } => {
-                    ui.separator_with_text(format!("Round {}", round));
-                }
             }
         }
     }

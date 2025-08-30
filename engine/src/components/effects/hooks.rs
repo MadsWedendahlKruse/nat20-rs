@@ -4,7 +4,7 @@ use hecs::{Entity, World};
 
 use crate::components::{
     actions::action::{Action, ActionContext},
-    d20_check::{D20Check, D20CheckResult},
+    d20::{D20Check, D20CheckResult},
     damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
     id::ResourceId,
     items::equipment::armor::ArmorClass,

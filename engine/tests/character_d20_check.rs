@@ -6,7 +6,7 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::{Ability, AbilityScore, AbilityScoreMap},
-            d20_check::RollMode,
+            d20::RollMode,
             id::ItemId,
             items::{
                 equipment::{
@@ -17,7 +17,7 @@ mod tests {
             },
             modifier::ModifierSource,
             proficiency::{Proficiency, ProficiencyLevel},
-            saving_throw::SavingThrowSet,
+            saving_throw::{SavingThrowKind, SavingThrowSet},
             skill::{Skill, SkillSet},
         },
         entities::character::Character,
@@ -45,7 +45,7 @@ mod tests {
         }
 
         let result = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
-            Ability::Strength,
+            SavingThrowKind::Ability(Ability::Strength),
             &world,
             entity,
         );
@@ -64,12 +64,12 @@ mod tests {
         systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity)
             .set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
         systems::helpers::get_component_mut::<SavingThrowSet>(&mut world, entity).set_proficiency(
-            Ability::Strength,
+            SavingThrowKind::Ability(Ability::Strength),
             Proficiency::new(ProficiencyLevel::Proficient, ModifierSource::None),
         );
 
         let result = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
-            Ability::Strength,
+            SavingThrowKind::Ability(Ability::Strength),
             &world,
             entity,
         );
@@ -88,12 +88,12 @@ mod tests {
         systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity)
             .set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
         systems::helpers::get_component_mut::<SavingThrowSet>(&mut world, entity).set_proficiency(
-            Ability::Strength,
+            SavingThrowKind::Ability(Ability::Strength),
             Proficiency::new(ProficiencyLevel::Expertise, ModifierSource::None),
         );
 
         let result = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
-            Ability::Strength,
+            SavingThrowKind::Ability(Ability::Strength),
             &world,
             entity,
         );

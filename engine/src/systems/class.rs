@@ -6,6 +6,7 @@ use crate::{
         level_up::ChoiceItem,
         proficiency::ProficiencyLevel,
         resource::ResourceMap,
+        saving_throw::SavingThrowKind,
     },
     registry,
 };
@@ -45,7 +46,7 @@ pub fn increment_class_level(
 
     for ability in class.saving_throw_proficiencies.iter() {
         systems::helpers::get_component_mut::<SavingThrowSet>(world, entity).set_proficiency(
-            *ability,
+            SavingThrowKind::Ability(*ability),
             Proficiency::new(
                 ProficiencyLevel::Proficient,
                 ModifierSource::ClassFeature(class_name.to_string().clone()),
