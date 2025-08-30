@@ -1,6 +1,4 @@
-use rand::Rng;
-
-use crate::components::d20::{D20_CRITICAL_FAILURE, D20_CRITICAL_SUCCESS, D20CheckResult};
+use crate::components::d20::D20CheckResult;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LifeState {
@@ -9,8 +7,7 @@ pub enum LifeState {
     Unconscious(DeathSavingThrows), // at 0 HP and making saves
     Stable,                         // at 0 HP but not making saves
     Dead,                           // dead but still an entity (corpse)
-    // TODO: Alternative to 'Defeated'?
-    Defeated, // non-PC, slated for cleanup/despawn
+    Defeated,                       // Same as 'Dead' but for players
 }
 
 impl LifeState {
@@ -53,7 +50,7 @@ impl DeathSavingThrows {
         self.failures = (self.failures + count).min(DEATH_SAVING_THROW_FAILURE_THRESHOLD);
     }
 
-    pub fn is_dead(&self) -> bool {
+    pub fn is_defeated(&self) -> bool {
         self.failures >= DEATH_SAVING_THROW_FAILURE_THRESHOLD
     }
 
@@ -81,8 +78,8 @@ impl DeathSavingThrows {
     }
 
     pub fn next_state(&self) -> LifeState {
-        if self.is_dead() {
-            LifeState::Dead
+        if self.is_defeated() {
+            LifeState::Defeated
         } else if self.is_stable() {
             LifeState::Stable
         } else {
@@ -119,11 +116,11 @@ mod tests {
     #[test]
     fn test_is_dead_and_is_stable() {
         let mut dst = DeathSavingThrows::new();
-        assert!(!dst.is_dead());
+        assert!(!dst.is_defeated());
         assert!(!dst.is_stable());
 
         dst.record_failure(DEATH_SAVING_THROW_FAILURE_THRESHOLD);
-        assert!(dst.is_dead());
+        assert!(dst.is_defeated());
 
         dst.reset();
         dst.record_success(DEATH_SAVING_THROW_SUCCESS_THRESHOLD);

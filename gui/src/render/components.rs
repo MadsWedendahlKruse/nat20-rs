@@ -916,17 +916,26 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
             TargetTypeInstance::None => todo!(),
         };
 
-        match &self.result {
+        match &self.kind {
             ActionKindResult::UnconditionalDamage {
                 damage_roll,
                 damage_taken,
                 new_life_state,
             } => {
-                damage_taken.render_with_context(
-                    ui,
-                    (&target_name, indent_level + 1, "took no damage", None),
-                );
-                new_life_state.render_with_context(ui, (&target_name, indent_level + 1));
+                ui.group(|| {
+                    damage_taken.render_with_context(
+                        ui,
+                        (&target_name, indent_level + 1, "took no damage", None),
+                    );
+                    new_life_state.render_with_context(
+                        ui,
+                        (
+                            &target_name,
+                            Some(self.performer.name().as_str()),
+                            indent_level + 1,
+                        ),
+                    );
+                });
             }
 
             ActionKindResult::AttackRollDamage {
@@ -936,16 +945,25 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                 damage_taken,
                 new_life_state,
             } => {
-                damage_taken.render_with_context(
-                    ui,
-                    (
-                        &target_name,
-                        indent_level + 1,
-                        "was not hit",
-                        Some(attack_roll.clone()),
-                    ),
-                );
-                new_life_state.render_with_context(ui, (&target_name, indent_level + 1));
+                ui.group(|| {
+                    damage_taken.render_with_context(
+                        ui,
+                        (
+                            &target_name,
+                            indent_level + 1,
+                            "was not hit",
+                            Some(attack_roll.clone()),
+                        ),
+                    );
+                    new_life_state.render_with_context(
+                        ui,
+                        (
+                            &target_name,
+                            Some(self.performer.name().as_str()),
+                            indent_level + 1,
+                        ),
+                    );
+                });
 
                 if ui.is_item_hovered() {
                     ui.tooltip(|| {
@@ -1009,7 +1027,7 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
             ActionKindResult::Healing {
                 healing,
                 new_life_state,
-            } => {
+            } => ui.group(|| {
                 TextSegments::new(vec![
                     (target_name, TextKind::Target),
                     ("was healed for", TextKind::Normal),
@@ -1017,8 +1035,15 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                 ])
                 .with_indent(indent_level + 1)
                 .render(ui);
-                new_life_state.render_with_context(ui, (&target_name, indent_level + 1));
-            }
+                new_life_state.render_with_context(
+                    ui,
+                    (
+                        &target_name,
+                        Some(self.performer.name().as_str()),
+                        indent_level + 1,
+                    ),
+                );
+            }),
 
             ActionKindResult::Utility => todo!(),
 
@@ -1104,24 +1129,84 @@ impl ImguiRenderable for DamageMitigationResult {
     }
 }
 
-impl ImguiRenderableWithContext<(&str, u8)> for Option<LifeState> {
-    fn render_with_context(&self, ui: &imgui::Ui, context: (&str, u8)) {
-        let (name, indent_level) = context;
-        // This is used to render a Life State which is being transitioned to
+pub fn new_life_state_text(
+    entity: &str,
+    new_state: &LifeState,
+    actor: Option<&str>,
+) -> Vec<(String, TextKind)> {
+    let entity_component = (entity.to_string(), TextKind::Target);
+    let actor_component = actor.map(|a| (a.to_string(), TextKind::Actor));
+
+    match new_state {
+        LifeState::Normal => {
+            if let Some(actor_component) = actor_component {
+                return vec![
+                    entity_component,
+                    ("was revived by".to_string(), TextKind::Normal),
+                    actor_component,
+                ];
+            } else {
+                return vec![
+                    entity_component,
+                    ("was revived".to_string(), TextKind::Normal),
+                ];
+            }
+        }
+
+        LifeState::Unconscious(_) => {
+            if let Some(actor_component) = actor_component {
+                return vec![
+                    entity_component,
+                    ("was knocked unconscious by".to_string(), TextKind::Normal),
+                    actor_component,
+                ];
+            } else {
+                return vec![
+                    entity_component,
+                    ("fell unconscious".to_string(), TextKind::Normal),
+                ];
+            }
+        }
+
+        LifeState::Stable => todo!(),
+
+        LifeState::Dead => {
+            if let Some(actor_component) = actor_component {
+                return vec![
+                    entity_component,
+                    ("was killed by".to_string(), TextKind::Normal),
+                    actor_component,
+                ];
+            } else {
+                return vec![entity_component, ("died".to_string(), TextKind::Normal)];
+            }
+        }
+
+        LifeState::Defeated => {
+            if let Some(actor_component) = actor_component {
+                return vec![
+                    entity_component,
+                    ("was defeated by".to_string(), TextKind::Normal),
+                    actor_component,
+                ];
+            } else {
+                return vec![
+                    entity_component,
+                    ("was defeated".to_string(), TextKind::Normal),
+                ];
+            }
+        }
+    }
+}
+
+impl ImguiRenderableWithContext<(&str, Option<&str>, u8)> for Option<LifeState> {
+    // This is used to render a LifeState which is being transitioned to
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&str, Option<&str>, u8)) {
+        let (entity, actor, indent_level) = context;
         if let Some(life_state) = self {
-            let text = match life_state {
-                LifeState::Normal => "was restored to normal life",
-                LifeState::Unconscious(_) => "fell unconscious",
-                LifeState::Stable => "is now stable",
-                LifeState::Dead => "died",
-                LifeState::Defeated => "was defeated",
-            };
-            TextSegments::new(vec![
-                (name.to_string(), TextKind::Target),
-                (text.to_string(), TextKind::Normal),
-            ])
-            .with_indent(indent_level)
-            .render(ui);
+            TextSegments::new(new_life_state_text(entity, life_state, actor))
+                .with_indent(indent_level)
+                .render(ui);
         }
     }
 }

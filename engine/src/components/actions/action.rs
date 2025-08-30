@@ -211,8 +211,9 @@ pub struct Action {
 /// multiple `ActionResult` instances can be collected.
 #[derive(Debug, Clone)]
 pub struct ActionResult {
+    pub performer: EntityIdentifier,
     pub target: TargetTypeInstance,
-    pub result: ActionKindResult,
+    pub kind: ActionKindResult,
 }
 
 /// Represents a provider of actions, which can be used to retrieve available actions
@@ -344,8 +345,9 @@ impl Action {
         targets
             .iter()
             .map(|target| ActionResult {
+                performer: EntityIdentifier::from_world(world, performer),
                 target: TargetTypeInstance::Entity(EntityIdentifier::from_world(world, *target)),
-                result: self.kind.perform(world, performer, context, *target),
+                kind: self.kind.perform(world, performer, context, *target),
             })
             .collect()
     }

@@ -495,7 +495,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
             } => {
                 let mut confirm_reaction = false;
                 render_window_at_cursor(ui, "Reaction", true, || {
-                    let mut segments = vec![
+                    TextSegments::new(vec![
                         (
                             systems::helpers::get_component_clone::<Name>(world, action.actor)
                                 .to_string(),
@@ -503,20 +503,21 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                         ),
                         ("used".to_string(), TextKind::Normal),
                         (action.action_id.to_string(), TextKind::Action),
-                    ];
-                    for (i, action_target) in action.targets.iter().enumerate() {
-                        if i == 0 {
-                            segments.push(("on".to_string(), TextKind::Normal));
-                        } else {
-                            segments.push((", ".to_string(), TextKind::Normal));
-                        }
-                        segments.push((
-                            systems::helpers::get_component_clone::<Name>(world, *action_target)
-                                .to_string(),
+                        ("on".to_string(), TextKind::Normal),
+                        (
+                            action
+                                .targets
+                                .iter()
+                                .map(|t| {
+                                    systems::helpers::get_component_clone::<Name>(world, *t)
+                                        .to_string()
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", "),
                             TextKind::Target,
-                        ));
-                    }
-                    TextSegments::new(segments).render(ui);
+                        ),
+                    ])
+                    .render(ui);
 
                     ui.text("Choose how to react");
 

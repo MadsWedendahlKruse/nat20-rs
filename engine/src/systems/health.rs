@@ -105,7 +105,7 @@ fn damage_internal(
     if killed_by_damage {
         // Monsters and Characters 'die' differently
         if let Ok(_) = world.get::<&MonsterTag>(target) {
-            new_life_state = Some(LifeState::Defeated);
+            new_life_state = Some(LifeState::Dead);
         }
 
         if let Ok(_) = world.get::<&CharacterTag>(target) {
@@ -153,8 +153,8 @@ pub fn damage(
             damage_on_failure,
         } => {
             let attack_roll = attack_roll(world, performer, context).roll(world, performer);
-            let is_crit = attack_roll.roll_result.is_crit;
-            let damage_roll = damage(world, performer, context).roll();
+            let damage_roll =
+                damage(world, performer, context).roll_crit_damage(attack_roll.roll_result.is_crit);
             let damage_on_failure = damage_on_failure
                 .as_ref()
                 .map(|f| f(world, performer, context).roll());

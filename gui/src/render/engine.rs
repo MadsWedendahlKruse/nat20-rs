@@ -7,6 +7,7 @@ use nat20_rs::{
 };
 
 use crate::render::{
+    components::new_life_state_text,
     text::{TextKind, TextSegments},
     utils::{ImguiRenderable, ImguiRenderableWithContext},
 };
@@ -20,10 +21,8 @@ impl ImguiRenderableWithContext<&World> for EventLog {
                 }
 
                 GameEvent::EncounterEnded(encounter_id, combat_log) => {
-                    if ui.collapsing_header(
-                        format!("Combat log##{}", encounter_id),
-                        TreeNodeFlags::FRAMED,
-                    ) {
+                    if ui.collapsing_header(format!("Log##{}", encounter_id), TreeNodeFlags::FRAMED)
+                    {
                         combat_log.render_with_context(ui, world);
                     }
                     ui.separator();
@@ -148,9 +147,10 @@ impl ImguiRenderableWithContext<&World> for EventLog {
                     .render(ui);
                 }
 
-                GameEvent::NewRound(entity_id, round) => {
+                GameEvent::NewRound(encounter_id, round) => {
                     ui.separator_with_text(format!("Round {}", round));
                 }
+
                 GameEvent::SavingThrow(entity, result, dc) => {
                     TextSegments::new(vec![
                         (
@@ -227,77 +227,9 @@ impl ImguiRenderableWithContext<&World> for EventLog {
                         Some(systems::helpers::get_component::<Name>(world, a).to_string())
                     });
 
-                    match new_state {
-                        LifeState::Normal => {
-                            if let Some(actor_name) = actor_name {
-                                TextSegments::new(vec![
-                                    (entity_name, TextKind::Actor),
-                                    ("was revived by".to_string(), TextKind::Normal),
-                                    (actor_name, TextKind::Actor),
-                                ])
-                                .render(ui);
-                            } else {
-                                TextSegments::new(vec![
-                                    (entity_name, TextKind::Actor),
-                                    ("was revived".to_string(), TextKind::Normal),
-                                ])
-                                .render(ui);
-                            }
-                        }
-
-                        LifeState::Unconscious(_) => {
-                            if let Some(actor_name) = actor_name {
-                                TextSegments::new(vec![
-                                    (entity_name, TextKind::Actor),
-                                    ("was knocked unconscious by".to_string(), TextKind::Normal),
-                                    (actor_name, TextKind::Actor),
-                                ])
-                                .render(ui);
-                            } else {
-                                TextSegments::new(vec![
-                                    (entity_name, TextKind::Actor),
-                                    ("fell unconscious".to_string(), TextKind::Normal),
-                                ])
-                                .render(ui);
-                            }
-                        }
-
-                        LifeState::Stable => todo!(),
-
-                        LifeState::Dead => {
-                            if let Some(actor_name) = actor_name {
-                                TextSegments::new(vec![
-                                    (entity_name, TextKind::Actor),
-                                    ("was killed by".to_string(), TextKind::Normal),
-                                    (actor_name, TextKind::Actor),
-                                ])
-                                .render(ui);
-                            } else {
-                                TextSegments::new(vec![
-                                    (entity_name, TextKind::Actor),
-                                    ("died".to_string(), TextKind::Normal),
-                                ])
-                                .render(ui);
-                            }
-                        }
-
-                        LifeState::Defeated => {
-                            if let Some(actor_name) = actor_name {
-                                TextSegments::new(vec![
-                                    (entity_name, TextKind::Actor),
-                                    ("was defeated by".to_string(), TextKind::Normal),
-                                    (actor_name, TextKind::Actor),
-                                ])
-                                .render(ui);
-                            } else {
-                                TextSegments::new(vec![
-                                    (entity_name, TextKind::Actor),
-                                    ("was defeated".to_string(), TextKind::Normal),
-                                ])
-                                .render(ui);
-                            }
-                        }
-                    }
+                    let segments =
+                        new_life_state_text(&entity_name, new_state, actor_name.as_deref());
+                    TextSegments::new(segments).render(ui);
                 }
             }
         }
