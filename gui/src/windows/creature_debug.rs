@@ -154,33 +154,15 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                 if let Some(index) =
                     render_uniform_buttons(ui, ["New Turn", "Short Rest", "Long Rest"], [20.0, 5.0])
                 {
-                    match index {
-                        0 => {
-                            systems::time::pass_time(
-                                &mut game_state.world,
-                                self.creature,
-                                &RechargeRule::OnTurn,
-                            );
-                            ui.close_current_popup();
-                        }
-                        1 => {
-                            systems::time::pass_time(
-                                &mut game_state.world,
-                                self.creature,
-                                &RechargeRule::OnShortRest,
-                            );
-                            ui.close_current_popup();
-                        }
-                        2 => {
-                            systems::time::pass_time(
-                                &mut game_state.world,
-                                self.creature,
-                                &RechargeRule::OnLongRest,
-                            );
-                            ui.close_current_popup();
-                        }
+                    let passed_time = match index {
+                        0 => RechargeRule::OnTurn,
+                        1 => RechargeRule::OnShortRest,
+                        2 => RechargeRule::OnLongRest,
                         _ => unreachable!(),
-                    }
+                    };
+
+                    systems::time::pass_time(&mut game_state.world, self.creature, &passed_time);
+                    ui.close_current_popup();
                 }
             }
         });
