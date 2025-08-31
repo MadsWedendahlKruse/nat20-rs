@@ -7,7 +7,6 @@ use crate::{
     components::{
         actions::targeting::{TargetType, TargetingKind},
         ai::AIController,
-        faction::Attitude,
         id::AIControllerId,
     },
     engine::{
@@ -69,7 +68,7 @@ impl AIController for RandomController {
                                 .into_iter()
                                 .filter(|target| {
                                     let target_attitude =
-                                        systems::factions::attitude_from_to(world, *actor, *target);
+                                        systems::factions::mutual_attitude(world, *actor, *target);
                                     target_attitude
                                         == systems::ai::recommeneded_target_attitude(
                                             world,

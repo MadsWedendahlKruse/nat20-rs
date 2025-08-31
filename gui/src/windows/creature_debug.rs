@@ -1,6 +1,7 @@
 use hecs::Entity;
 use nat20_rs::{
     components::{
+        ai::PlayerControlledTag,
         d20::D20CheckDC,
         modifier::{ModifierSet, ModifierSource},
         resource::RechargeRule,
@@ -23,6 +24,7 @@ pub enum CreatureDebugState {
     MainMenu,
     Check { kind: CheckKind, dc_value: i32 },
     PassTime,
+    TogglePlayerControl,
 }
 
 pub struct CreatureDebugWindow {
@@ -48,6 +50,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                     [
                         "Heal Full",
                         "Pass Time (Rest etc.)",
+                        "Toggle Player Control",
                         "Saving Throw",
                         "Skill Check",
                     ],
@@ -62,12 +65,15 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                             self.state = CreatureDebugState::PassTime;
                         }
                         2 => {
+                            self.state = CreatureDebugState::TogglePlayerControl;
+                        }
+                        3 => {
                             self.state = CreatureDebugState::Check {
                                 kind: CheckKind::SavingThrow,
                                 dc_value: 10,
                             };
                         }
-                        3 => {
+                        4 => {
                             self.state = CreatureDebugState::Check {
                                 kind: CheckKind::SkillCheck,
                                 dc_value: 10,
@@ -77,6 +83,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                     }
                 }
             }
+
             CreatureDebugState::Check { kind, dc_value } => match kind {
                 CheckKind::SavingThrow => {
                     ui.separator_with_text("Saving Throw");
@@ -161,6 +168,31 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                     };
 
                     systems::time::pass_time(&mut game_state.world, self.creature, &passed_time);
+                    ui.close_current_popup();
+                }
+            }
+
+            CreatureDebugState::TogglePlayerControl => {
+                if let Some(index) = render_uniform_buttons(
+                    ui,
+                    ["Set Player Controlled", "Set AI Controlled"],
+                    [20.0, 5.0],
+                ) {
+                    match index {
+                        0 => {
+                            game_state
+                                .world
+                                .insert_one(self.creature, PlayerControlledTag)
+                                .ok();
+                        }
+                        1 => {
+                            game_state
+                                .world
+                                .remove_one::<PlayerControlledTag>(self.creature)
+                                .ok();
+                        }
+                        _ => unreachable!(),
+                    }
                     ui.close_current_popup();
                 }
             }
