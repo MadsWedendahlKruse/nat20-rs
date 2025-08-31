@@ -9,6 +9,7 @@ use crate::{
         ai::PlayerControlledTag,
         damage::DamageResistances,
         effects::effects::Effect,
+        faction::FactionSet,
         health::{hit_points::HitPoints, life_state::LifeState},
         id::{AIControllerId, BackgroundId, FeatId, Name, RaceId, SubraceId},
         items::{
@@ -61,6 +62,7 @@ from_world!(
         pub feats: Vec<FeatId>,
         pub actions: ActionMap,
         pub cooldowns: ActionCooldownMap,
+        pub factions: FactionSet,
     }
 );
 
@@ -96,6 +98,7 @@ impl Character {
             // TODO: Default actions like jump, dash, help, etc.
             actions: ActionMap::new(),
             cooldowns: HashMap::new(),
+            factions: FactionSet::from([registry::factions::PLAYERS_ID.clone()]),
         }
     }
 }

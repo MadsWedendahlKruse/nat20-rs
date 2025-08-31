@@ -5,6 +5,7 @@ pub mod class;
 pub mod combat;
 pub mod d20;
 pub mod effects;
+pub mod factions;
 pub mod feats;
 pub mod health;
 pub mod helpers;

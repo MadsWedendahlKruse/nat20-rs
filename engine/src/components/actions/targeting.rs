@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    components::{health::life_state::LifeState, id::EntityIdentifier},
+    components::{faction::Attitude, health::life_state::LifeState, id::EntityIdentifier},
     math::point::Point,
 };
 
@@ -45,7 +45,7 @@ pub enum TargetType {
         /// in some cases it could be used to specifically target dead creatures
         /// (e.g. Revivify).
         allowed_states: HashSet<LifeState>,
-        /// If true, the allowed_states set is inverted. I.e. the target must NOT
+        /// If true, the allowed_states set is inverted, i.e. the target must NOT
         /// be in one of the allowed states.
         invert: bool,
     }, // Self,       // Explicit "this actor" (optional; could be special-cased)

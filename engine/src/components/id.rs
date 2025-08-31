@@ -43,7 +43,8 @@ id_newtypes!(
     BackgroundId,
     RaceId,
     SubraceId,
-    AIControllerId
+    AIControllerId,
+    FactionId
 );
 
 impl SpellId {

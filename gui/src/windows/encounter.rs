@@ -1,4 +1,8 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    thread::{sleep, sleep_ms},
+    time::Duration,
+};
 
 use hecs::{Entity, World};
 use imgui::ChildFlags;
@@ -53,14 +57,8 @@ enum ActionDecisionProgress {
 impl ActionDecisionProgress {
     pub fn from_prompt(prompt: &ActionPrompt) -> Self {
         match prompt {
-            ActionPrompt::Action { actor } => Self::Action {
-                actor: *actor,
-                action_options: ActionMap::new(),
-                chosen_action: None,
-                context_options: Vec::new(),
-                chosen_context: None,
-                targets: Vec::new(),
-            },
+            ActionPrompt::Action { actor } => Self::action_with_actor(*actor),
+
             ActionPrompt::Reaction {
                 reactor,
                 action,
@@ -71,6 +69,17 @@ impl ActionDecisionProgress {
                 options: options.clone(),
                 choice: None,
             },
+        }
+    }
+
+    pub fn action_with_actor(actor: Entity) -> Self {
+        Self::Action {
+            actor,
+            action_options: ActionMap::new(),
+            chosen_action: None,
+            context_options: Vec::new(),
+            chosen_context: None,
+            targets: Vec::new(),
         }
     }
 
@@ -303,39 +312,24 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
         ui.separator();
         ui.text(format!("Round: {}", self.round()));
 
-        let next_prompt = self.next_prompt();
-        if next_prompt.is_none() {
-            ui.text("No actions pending");
-            return;
-        }
-        let next_prompt = next_prompt.unwrap();
-
         // TODO: If it's not a characters turn, the AI can make a decision here?
         // Also a bit odd maybe to have it in the render function?
-        if !systems::ai::is_player_controlled(world, current_entity) {
-            let decision = systems::ai::decide_action(world, &self, &next_prompt, current_entity);
-            if let Some(decision) = decision {
-                println!("AI decided on action: {:?}", decision);
-                let result = self.process(world, decision);
-                match result {
-                    Ok(event) => {
-                        println!("Action processed successfully: {:?}", event);
-                    }
-                    Err(err) => {
-                        println!("Error processing action: {:?}", err);
-                    }
-                }
-            } else {
-                println!(
-                    "AI could not decide on action for prompt: {:?}. Assuming end turn.",
-                    next_prompt
-                );
-                self.end_turn(world, current_entity);
-            }
-            return;
+        let player_controlled = systems::ai::is_player_controlled(world, current_entity);
+
+        if !player_controlled {
+            handle_ai_decision(self, world, current_entity);
         }
 
-        if decision_progress.is_none() {
+        // TODO: Everything below this line is a bit messy and should be cleaned up
+
+        if player_controlled && decision_progress.is_none() {
+            let next_prompt = self.next_prompt();
+            if next_prompt.is_none() {
+                ui.text("No action prompt available.");
+                return;
+            }
+            let next_prompt = next_prompt.unwrap();
+
             *decision_progress = Some(ActionDecisionProgress::from_prompt(next_prompt));
             println!(
                 "Starting action decision progress for prompt: {:?}",
@@ -347,10 +341,12 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
         // are always rendered. In the event of a reaction prompt, the actions
         // will then be disabled. This requires a little bit of special treatment
 
-        let actions_disabled = !matches!(
-            decision_progress.as_ref().unwrap(),
-            ActionDecisionProgress::Action { .. }
-        );
+        let actions_disabled = decision_progress.is_none()
+            || !matches!(
+                decision_progress.as_ref().unwrap(),
+                ActionDecisionProgress::Action { .. }
+            )
+            || !player_controlled;
 
         ui.separator_with_text(format!("Current turn: {}", current_name));
 
@@ -382,6 +378,34 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
         if let Some(token) = disabled_token {
             token.end();
         }
+    }
+}
+
+fn handle_ai_decision(encounter: &mut Encounter, world: &mut World, current_entity: Entity) {
+    let next_prompt = encounter.next_prompt();
+    if next_prompt.is_none() {
+        panic!("AI decision requested but no prompt available");
+    }
+    let next_prompt = next_prompt.unwrap();
+    let decision = systems::ai::decide_action(world, &encounter, &next_prompt, current_entity);
+
+    if let Some(decision) = decision {
+        println!("AI decided on action: {:?}", decision);
+        let result = encounter.process(world, decision);
+        match result {
+            Ok(event) => {
+                println!("Action processed successfully: {:?}", event);
+            }
+            Err(err) => {
+                println!("Error processing action: {:?}", err);
+            }
+        }
+    } else {
+        println!(
+            "AI could not decide on action for prompt: {:?}. Assuming end turn.",
+            next_prompt
+        );
+        encounter.end_turn(world, current_entity);
     }
 }
 

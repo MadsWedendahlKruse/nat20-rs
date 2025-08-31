@@ -305,6 +305,7 @@ pub mod creatures {
         use crate::{
             components::{
                 ability::AbilityScoreMap,
+                faction::FactionSet,
                 health::hit_points::HitPoints,
                 id::{EntityIdentifier, ItemId, Name},
                 items::{
@@ -342,6 +343,7 @@ pub mod creatures {
                     (Ability::Wisdom, 10),
                     (Ability::Charisma, 8),
                 ]),
+                FactionSet::from([registry::factions::GOBLINS_ID.clone()]),
             );
             let entity = world.spawn(monster);
             let _ = monster_equipment(

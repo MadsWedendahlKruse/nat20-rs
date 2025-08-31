@@ -15,6 +15,7 @@ use crate::{
         d20::{D20Check, D20CheckDC},
         damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
         dice::DieSize,
+        faction::Attitude,
         id::SpellId,
         modifier::{ModifierSet, ModifierSource},
         proficiency::{Proficiency, ProficiencyLevel},

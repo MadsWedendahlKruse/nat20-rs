@@ -7,6 +7,7 @@ use crate::{
         ai,
         damage::DamageResistances,
         effects::effects::Effect,
+        faction::{self, FactionSet},
         health::{hit_points::HitPoints, life_state::LifeState},
         id::{AIControllerId, Name},
         items::equipment::{
@@ -52,6 +53,7 @@ from_world!(
         pub cooldowns: ActionCooldownMap,
         pub weapon_proficiencies: WeaponProficiencyMap,
         pub armor_training: ArmorTrainingSet,
+        pub factions: FactionSet,
     }
 );
 
@@ -65,6 +67,7 @@ impl Monster {
         creature_type: CreatureType,
         speed: Speed,
         abilities: AbilityScoreMap,
+        factions: FactionSet,
     ) -> Self {
         Self {
             tag: MonsterTag,
@@ -88,6 +91,7 @@ impl Monster {
             cooldowns: ActionCooldownMap::default(),
             weapon_proficiencies: WeaponProficiencyMap::new(),
             armor_training: ArmorTrainingSet::default(),
+            factions,
         }
     }
 }

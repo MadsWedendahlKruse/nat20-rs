@@ -14,7 +14,7 @@ use crate::{
         class::ClassName,
         damage::{AttackRoll, DamageRoll},
         dice::{DiceSet, DiceSetRoll, DieSize},
-        health::life_state::LifeState,
+        faction::Attitude,
         id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
         level::CharacterLevels,
