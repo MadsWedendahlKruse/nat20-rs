@@ -96,7 +96,7 @@ static WEAPON_ATTACK: LazyLock<Action> = LazyLock::new(|| Action {
     kind: ActionKind::AttackRollDamage {
         attack_roll: WEAPON_ATTACK_ROLL.clone(),
         damage: WEAPON_DAMAGE_ROLL.clone(),
-        damage_on_failure: None,
+        damage_on_miss: None,
     },
     targeting: WEAPON_TARGETING.clone(),
     resource_cost: DEFAULT_RESOURCE_COST.clone(),

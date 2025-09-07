@@ -58,7 +58,7 @@ impl fmt::Display for DamageComponent {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DamageComponentResult {
     pub result: DiceSetRollResult,
     pub damage_type: DamageType,
@@ -83,7 +83,7 @@ impl fmt::Display for DamageComponentResult {
 
 /// This is used in the attack roll hook so we e.g. only apply Fighting Style
 /// Archery when making a ranged attack
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DamageSource {
     // TODO: Could also just use the entire weapon instead? Would be a lot of cloning unless
     // we introduce a lifetime for a reference
@@ -200,7 +200,7 @@ impl fmt::Display for DamageRoll {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DamageRollResult {
     pub label: String,
     pub components: Vec<DamageComponentResult>,
@@ -363,7 +363,7 @@ impl fmt::Display for DamageResistances {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DamageComponentMitigation {
     pub damage_type: DamageType,
     pub original: DiceSetRollResult,
@@ -398,7 +398,7 @@ impl fmt::Display for DamageComponentMitigation {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DamageMitigationResult {
     pub components: Vec<DamageComponentMitigation>,
     pub total: i32,
@@ -421,7 +421,7 @@ pub struct AttackRoll {
     crit_threshold: u8, // Default critical threshold is 20
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AttackRollResult {
     pub roll_result: D20CheckResult,
     pub source: DamageSource,

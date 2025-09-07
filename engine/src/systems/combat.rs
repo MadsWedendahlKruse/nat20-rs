@@ -22,6 +22,17 @@ pub fn attack_roll(world: &World, entity: Entity, slot: &EquipmentSlot) -> Attac
     }
 }
 
+pub fn attack_roll_against_target(
+    world: &World,
+    entity: Entity,
+    slot: &EquipmentSlot,
+    target: Entity,
+) -> AttackRollResult {
+    let mut attack_roll_result = attack_roll(world, entity, slot).roll(world, entity);
+    attack_roll_result.roll_result.success = attack_hits(world, target, &attack_roll_result);
+    attack_roll_result
+}
+
 pub fn damage_roll(world: &World, entity: Entity, slot: &EquipmentSlot) -> DamageRoll {
     if let Some(loadout) = world.get::<&Loadout>(entity).ok() {
         loadout.damage_roll(world, entity, slot)

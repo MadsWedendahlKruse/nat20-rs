@@ -6,8 +6,6 @@ use std::{
 use hecs::Entity;
 use uuid::Uuid;
 
-pub type EncounterId = Uuid;
-
 macro_rules! id_newtypes {
     ($($name:ident),+) => {
         $(

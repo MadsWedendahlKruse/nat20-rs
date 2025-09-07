@@ -7,7 +7,7 @@ use crate::{
         actions::{
             action::{
                 Action, ActionContext, ActionCooldownMap, ActionMap, ActionProvider, ActionResult,
-                ReactionKind, ReactionSet,
+                ReactionResult, ReactionSet,
             },
             targeting::TargetingContext,
         },
@@ -16,10 +16,14 @@ use crate::{
         resource::{RechargeRule, ResourceCostMap, ResourceMap},
         spells::spellbook::Spellbook,
     },
+    engine::{
+        event::{ActionData, Event, EventId, ReactionData},
+        game_state::GameState,
+    },
     registry, systems,
 };
 
-pub fn get_action(action_id: &ActionId) -> Option<Action> {
+pub fn get_action_clone(action_id: &ActionId) -> Option<Action> {
     // Start by checking if the action exists in the action registry
     if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id) {
         return Some(action.clone());
@@ -158,21 +162,22 @@ pub fn available_actions(
     actions
 }
 
-pub fn perform_action(
-    world: &mut World,
-    performer: Entity,
-    action_id: &ActionId,
-    context: &ActionContext,
-    targets: &[Entity],
-) -> Vec<ActionResult> {
+pub fn perform_action(game_state: &mut GameState, action_data: &ActionData) {
+    let ActionData {
+        actor: performer,
+        action_id,
+        context,
+        targets,
+    } = action_data;
     // TODO: Handle missing action
     let mut action =
-        get_action(action_id).expect("Action not found in character's actions or registry");
+        get_action_clone(action_id).expect("Action not found in character's actions or registry");
+    // Set the action on cooldown if applicable
     if let Some(cooldown) = action.cooldown {
-        systems::helpers::get_component_mut::<ActionCooldownMap>(world, performer)
+        systems::helpers::get_component_mut::<ActionCooldownMap>(&mut game_state.world, *performer)
             .insert(action_id.clone(), cooldown);
     }
-    action.perform(world, performer, &context, &targets)
+    action.perform(game_state, *performer, &context, &targets);
 }
 
 pub fn targeting_context(
@@ -182,14 +187,14 @@ pub fn targeting_context(
     context: &ActionContext,
 ) -> TargetingContext {
     // TODO: Handle missing action
-    get_action(action_id).unwrap().targeting()(world, entity, context)
+    get_action_clone(action_id).unwrap().targeting()(world, entity, context)
 }
 
 fn filter_reactions(actions: &ActionMap) -> ReactionSet {
     actions
         .iter()
         .filter_map(|(action_id, _)| {
-            if let Some(action) = get_action(action_id) {
+            if let Some(action) = get_action_clone(action_id) {
                 if action.reaction_trigger.is_some() {
                     return Some(action_id.clone());
                 }
@@ -208,14 +213,11 @@ pub fn available_reactions(world: &World, entity: Entity) -> ReactionSet {
 }
 
 // TODO: Struct for the return type?
-pub fn available_reactions_to_action(
+pub fn available_reactions_to_event(
     world: &World,
     reactor: Entity,
-    actor: Entity,
-    action_id: &ActionId,
-    context: &ActionContext,
-    targets: &[Entity],
-) -> Vec<(ActionId, Vec<ActionContext>, ResourceCostMap, ReactionKind)> {
+    event: &Event,
+) -> Vec<ReactionResult> {
     let mut reactions = Vec::new();
     for (reaction_id, (contexts, resource_cost)) in
         systems::actions::available_actions(world, reactor)
@@ -233,13 +235,10 @@ pub fn available_reactions_to_action(
         };
 
         if let Some(trigger) = &reaction.reaction_trigger {
-            if let Some(kind) = trigger(world, reactor, actor, action_id, context, targets) {
-                reactions.push((
-                    reaction_id.clone(),
-                    contexts.clone(),
-                    resource_cost.clone(),
-                    kind,
-                ));
+            for context in &contexts {
+                if let Some(result) = trigger(reactor, event, context) {
+                    reactions.push(result);
+                }
             }
         }
     }

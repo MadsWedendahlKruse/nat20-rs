@@ -8,8 +8,8 @@ use nat20_rs::{
         saving_throw::SavingThrowKind,
         skill::Skill,
     },
-    engine::game_state::{GameEvent, GameState},
-    systems,
+    engine::game_state::GameState,
+    systems::{self, d20::D20CheckDCKind},
 };
 use strum::IntoEnumIterator;
 
@@ -105,18 +105,14 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                         let kind = SavingThrowKind::iter()
                             .nth(index)
                             .expect("Invalid ability index");
-                        let dc = D20CheckDC {
+                        let dc = D20CheckDCKind::SavingThrow(D20CheckDC {
                             dc: ModifierSet::from_iter([(
                                 ModifierSource::Custom("Saving Throw DC".to_string()),
                                 *dc_value,
                             )]),
                             key: kind,
-                        };
-                        game_state.log_event(GameEvent::SavingThrow(
-                            self.creature,
-                            systems::d20::saving_throw_dc(&game_state.world, self.creature, &dc),
-                            dc,
-                        ));
+                        });
+                        systems::d20::check(game_state, self.creature, &dc);
                         ui.close_current_popup();
                     }
                 }
@@ -139,18 +135,14 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
 
                     if let Some(index) = choice {
                         let skill = Skill::iter().nth(index).expect("Invalid skill index");
-                        let dc = D20CheckDC {
+                        let dc = D20CheckDCKind::Skill(D20CheckDC {
                             dc: ModifierSet::from_iter([(
                                 ModifierSource::Custom("Saving Throw DC".to_string()),
                                 *dc_value,
                             )]),
                             key: skill,
-                        };
-                        game_state.log_event(GameEvent::SkillCheck(
-                            self.creature,
-                            systems::d20::skill_check_dc(&game_state.world, self.creature, &dc),
-                            dc,
-                        ));
+                        });
+                        systems::d20::check(game_state, self.creature, &dc);
                         ui.close_current_popup();
                     }
                 }

@@ -1,20 +1,34 @@
+use std::{f32::consts::E, ops::Deref, sync::Arc};
+
 use hecs::{Entity, World};
 
 use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
-        actions::action::{ActionContext, ActionKind, ActionKindResult},
+        actions::{
+            action::{ActionContext, ActionKind, ActionKindResult, ActionResult},
+            targeting::TargetTypeInstance,
+        },
         damage::{
             AttackRollResult, DamageMitigationEffect, DamageMitigationResult, DamageResistances,
             DamageRollResult, MitigationOperation,
         },
         health::{hit_points::HitPoints, life_state::LifeState},
+        id::{ActionId, EntityIdentifier},
         level::CharacterLevels,
         modifier::ModifierSource,
-        saving_throw::{SavingThrowKind, SavingThrowSet},
+        saving_throw::{self, SavingThrowKind, SavingThrowSet},
+    },
+    engine::{
+        event::{ActionData, Event, EventId, EventKind, EventListener, EventOrListener},
+        game_state::{self, GameState},
     },
     entities::{character::CharacterTag, monster::MonsterTag},
-    registry, systems,
+    registry,
+    systems::{
+        self,
+        d20::{D20CheckDCKind, D20ResultKind},
+    },
 };
 
 pub fn heal(world: &mut World, target: Entity, amount: u32) -> Option<LifeState> {
@@ -50,6 +64,14 @@ fn damage_internal(
     attack_roll: Option<&AttackRollResult>,
     resistances: &DamageResistances,
 ) -> (Option<DamageMitigationResult>, Option<LifeState>) {
+    // TODO: For something like Shield, which is triggered *IF the target is hit*,
+    // we need to simulate the outcome of the action, and then have the reaction
+    // be triggered by the outcome of this simulation. And then we need to actually
+    // apply the simulated damage after the reaction is resolved.
+    // To simulate damage I guess we can just clone the HitPoints and LifeState
+    // components, and then apply the damage to the clones?
+    // TODO: New event type ActionSimulated?
+
     let (mitigation_result, killed_by_damage, mut new_life_state) =
         if let Ok((hit_points, life_state)) =
             world.query_one_mut::<(&mut HitPoints, &mut LifeState)>(target)
@@ -123,72 +145,277 @@ fn damage_internal(
 }
 
 pub fn damage(
-    world: &mut World,
+    game_state: &mut GameState,
     performer: Entity,
     target: Entity,
-    action: &ActionKind,
+    action_id: &ActionId,
+    action_kind: &ActionKind,
     context: &ActionContext,
-) -> ActionKindResult {
-    let mut resistances = if let Ok(resistances) = world.get::<&mut DamageResistances>(target) {
-        resistances.clone()
-    } else {
-        DamageResistances::new()
-    };
+) {
+    let resistances =
+        if let Ok(resistances) = &game_state.world.get::<&mut DamageResistances>(target) {
+            resistances.deref().clone()
+        } else {
+            DamageResistances::new()
+        };
 
-    match action {
+    let (event, listener) = match action_kind {
         ActionKind::UnconditionalDamage { damage } => {
-            let damage_roll = damage(world, performer, context).roll();
-            let (damage_taken, new_life_state) =
-                damage_internal(world, target, &damage_roll, None, &resistances);
-            ActionKindResult::UnconditionalDamage {
-                damage_roll: damage_roll.clone(),
-                damage_taken: damage_taken,
-                new_life_state,
-            }
+            // Create the damage roll event
+            let damage_roll = damage(&game_state.world, performer, context).roll();
+            let event = Event::new(EventKind::DamageRollPerformed(
+                performer,
+                damage_roll.clone(),
+            ));
+
+            // Create an event listener to handle the result of the damage roll
+            let event_listener = EventListener {
+                trigger_id: event.id,
+                // filter: Arc::new({
+                //     let performer = *performer;
+                //     move |event| {
+                //         matches!(
+                //             &event.kind,
+                //             EventKind::DamageRollResolved(p, _)
+                //                 if *p == performer
+                //         )
+                //     }
+                // }),
+                callback: Arc::new({
+                    let action_id = action_id.clone();
+                    let context = context.clone();
+                    let target = target;
+                    let resistances = resistances.clone();
+                    move |game_state, event| match &event.kind {
+                        EventKind::DamageRollResolved(performer, damage_roll_result) => {
+                            let (damage_taken, new_life_state) = damage_internal(
+                                &mut game_state.world,
+                                target,
+                                damage_roll_result,
+                                None,
+                                &resistances,
+                            );
+
+                            EventOrListener::Event(Event::new(EventKind::ActionPerformed {
+                                action: ActionData {
+                                    actor: *performer,
+                                    action_id: action_id.clone(),
+                                    context: context.clone(),
+                                    targets: vec![target],
+                                },
+                                results: vec![ActionResult {
+                                    performer: EntityIdentifier::from_world(
+                                        &game_state.world,
+                                        *performer,
+                                    ),
+                                    target: TargetTypeInstance::Entity(
+                                        EntityIdentifier::from_world(&game_state.world, target),
+                                    ),
+                                    kind: ActionKindResult::UnconditionalDamage {
+                                        damage_roll: damage_roll.clone(),
+                                        damage_taken,
+                                        new_life_state,
+                                    },
+                                }],
+                            }))
+                        }
+                        _ => {
+                            panic!("Unexpected event kind in damage roll callback: {:?}", event);
+                        }
+                    }
+                }),
+            };
+
+            (event, event_listener)
         }
 
         ActionKind::AttackRollDamage {
             attack_roll,
             damage,
-            damage_on_failure,
+            damage_on_miss,
         } => {
-            let attack_roll = attack_roll(world, performer, context).roll(world, performer);
-            let damage_roll =
-                damage(world, performer, context).roll_crit_damage(attack_roll.roll_result.is_crit);
-            let damage_on_failure = damage_on_failure
-                .as_ref()
-                .map(|f| f(world, performer, context).roll());
+            // TODO: The attack roll obtained here doesn't actually correctly reflect
+            // whether the attack hits or not, because it doesn't take into account
+            // the target's AC
+            let attack_roll = attack_roll(&game_state.world, performer, context)
+                .roll(&game_state.world, performer);
+            let armor_class = systems::loadout::armor_class(&game_state.world, target);
+            let ActionContext::Weapon { slot } = context else {
+                panic!("AttackRollDamage action must be used with a weapon");
+            };
 
-            let (damage_taken, new_life_state) =
-                if !systems::combat::attack_hits(world, target, &attack_roll) {
-                    if let Some(damage_on_failure) = damage_on_failure {
-                        damage_internal(
-                            world,
-                            target,
-                            &damage_on_failure,
-                            Some(&attack_roll),
-                            &resistances,
-                        )
-                    } else {
-                        (None, None)
+            // Create an event to represent the attack roll being made
+            let event = Event::new(EventKind::D20CheckPerformed(
+                performer,
+                D20ResultKind::AttackRoll {
+                    result: attack_roll.clone(),
+                },
+                Some(D20CheckDCKind::AttackRoll(
+                    *slot,
+                    target,
+                    armor_class.clone(),
+                )),
+            ));
+
+            // Create an event listener to handle the result of the attack roll
+            // This listener will handle applying damage based on whether the attack
+            // hits or misses, and will also handle critical hits
+            let event_listener = EventListener {
+                trigger_id: event.id,
+
+                // filter: Arc::new({
+                //     let performer = performer;
+                //     move |event| {
+                //         matches!(&event.kind, EventKind::D20CheckResolved(p, _, dc) if *p == performer
+                //         && matches!(dc, Some(D20CheckDCKind::AttackRoll(t, _)) if *t == target))
+                //     }
+                // }),
+                callback: Arc::new({
+                    let action_id = action_id.clone();
+                    let context = context.clone();
+                    let resistances = resistances.clone();
+
+                    let damage = damage.clone();
+                    let damage_on_miss = damage_on_miss.clone();
+
+                    move |game_state, event| match &event.kind {
+                        EventKind::D20CheckResolved(performer, result, dc) => {
+                            // Determine the damage to apply based on whether the attack hits or misses
+                            let (damage_roll, is_crit) = if result.is_success(dc.as_ref().unwrap())
+                            {
+                                (
+                                    damage(&game_state.world, *performer, &context),
+                                    result.d20_result().is_crit,
+                                )
+                            } else if let Some(damage_on_miss) = &damage_on_miss {
+                                (
+                                    damage_on_miss(&game_state.world, *performer, &context),
+                                    false,
+                                )
+                            } else {
+                                // If the attack misses and there's no damage on miss, no damage is dealt
+                                return EventOrListener::Event(Event::new(
+                                    EventKind::ActionPerformed {
+                                        action: ActionData {
+                                            actor: *performer,
+                                            action_id: action_id.clone(),
+                                            context: context.clone(),
+                                            targets: vec![target],
+                                        },
+                                        results: vec![ActionResult {
+                                            performer: EntityIdentifier::from_world(
+                                                &game_state.world,
+                                                *performer,
+                                            ),
+                                            target: TargetTypeInstance::Entity(
+                                                EntityIdentifier::from_world(
+                                                    &game_state.world,
+                                                    target,
+                                                ),
+                                            ),
+                                            kind: ActionKindResult::AttackRollDamage {
+                                                attack_roll: attack_roll.clone(),
+                                                armor_class: armor_class.clone(),
+                                                damage_roll: None,
+                                                damage_taken: None,
+                                                new_life_state: None,
+                                            },
+                                        }],
+                                    },
+                                ));
+                            };
+
+                            // Create the damage roll event
+                            let damage_roll = damage_roll.roll_crit_damage(is_crit);
+                            let event = Event::new(EventKind::DamageRollPerformed(
+                                *performer,
+                                damage_roll.clone(),
+                            ));
+
+                            // Create an event listener to handle the result of the damage roll
+                            return EventOrListener::Listener(EventListener {
+                                trigger_id: event.id,
+                                // filter: Arc::new({
+                                //     let performer = *performer;
+                                //     move |event| {
+                                //         matches!(
+                                //             &event.kind,
+                                //             EventKind::DamageRollResolved(p, _)
+                                //                 if *p == performer
+                                //         )
+                                //     }
+                                // }),
+                                callback: Arc::new({
+                                    let action_id = action_id.clone();
+                                    let context = context.clone();
+                                    let target = target;
+                                    let resistances = resistances.clone();
+                                    let attack_roll = attack_roll.clone();
+                                    let armor_class = armor_class.clone();
+                                    move |game_state, event| match &event.kind {
+                                        EventKind::DamageRollResolved(
+                                            performer,
+                                            damage_roll_result,
+                                        ) => {
+                                            let (damage_taken, new_life_state) = damage_internal(
+                                                &mut game_state.world,
+                                                target,
+                                                damage_roll_result,
+                                                Some(&attack_roll),
+                                                &resistances,
+                                            );
+
+                                            return EventOrListener::Event(Event::new(
+                                                EventKind::ActionPerformed {
+                                                    action: ActionData {
+                                                        actor: *performer,
+                                                        action_id: action_id.clone(),
+                                                        context: context.clone(),
+                                                        targets: vec![target],
+                                                    },
+                                                    results: vec![ActionResult {
+                                                        performer: EntityIdentifier::from_world(
+                                                            &game_state.world,
+                                                            *performer,
+                                                        ),
+                                                        target: TargetTypeInstance::Entity(
+                                                            EntityIdentifier::from_world(
+                                                                &game_state.world,
+                                                                target,
+                                                            ),
+                                                        ),
+                                                        kind: ActionKindResult::AttackRollDamage {
+                                                            attack_roll: attack_roll.clone(),
+                                                            armor_class: armor_class.clone(),
+                                                            damage_roll: Some(
+                                                                damage_roll_result.clone(),
+                                                            ),
+                                                            damage_taken,
+                                                            new_life_state,
+                                                        },
+                                                    }],
+                                                },
+                                            ));
+                                        }
+                                        _ => {
+                                            panic!(
+                                                "Unexpected event kind in damage roll callback: {:?}",
+                                                event
+                                            );
+                                        }
+                                    }
+                                }),
+                            });
+                        }
+
+                        _ => {
+                            panic!("Unexpected event kind in attack roll callback: {:?}", event);
+                        }
                     }
-                } else {
-                    damage_internal(
-                        world,
-                        target,
-                        &damage_roll,
-                        Some(&attack_roll),
-                        &resistances,
-                    )
-                };
+                }),
+            };
 
-            ActionKindResult::AttackRollDamage {
-                armor_class: systems::loadout::armor_class(world, target),
-                attack_roll: attack_roll.clone(),
-                damage_roll: damage_roll.clone(),
-                damage_taken,
-                new_life_state,
-            }
+            (event, event_listener)
         }
 
         ActionKind::SavingThrowDamage {
@@ -196,65 +423,154 @@ pub fn damage(
             half_damage_on_save,
             damage,
         } => {
-            let saving_throw_dc = saving_throw(world, performer, context);
-            let damage_roll = damage(world, performer, context).roll();
+            let saving_throw_dc = saving_throw(&game_state.world, performer, context);
 
-            let check_result = {
-                let saving_throws =
-                    systems::helpers::get_component::<&SavingThrowSet>(world, target);
-                saving_throws.check_dc(&saving_throw_dc, world, target)
+            let damage_roll = damage(&game_state.world, performer, context).roll();
+            let event = Event::new(EventKind::DamageRollPerformed(
+                performer,
+                damage_roll.clone(),
+            ));
+
+            // Create an event listener to handle the result of the damage roll
+            let event_listener = EventListener {
+                trigger_id: event.id,
+                // filter: Arc::new({
+                //     let performer = *performer;
+                //     move |event| {
+                //         matches!(
+                //             &event.kind,
+                //             EventKind::DamageRollResolved(p, _)
+                //                 if *p == performer
+                //         )
+                //     }
+                // }),
+                callback: Arc::new({
+                    let action_id = action_id.clone();
+                    let context = context.clone();
+                    let target = target;
+                    let resistances = resistances.clone();
+                    let saving_throw_dc = saving_throw_dc.clone();
+                    let half_damage_on_save = *half_damage_on_save;
+                    move |game_state, event| match &event.kind {
+                        EventKind::DamageRollResolved(performer, damage_roll_result) => {
+                            // Create an event to represent the saving throw being made
+                            let saving_throw_event_id = systems::d20::check(
+                                game_state,
+                                *performer,
+                                &D20CheckDCKind::SavingThrow(saving_throw_dc.clone()),
+                            );
+
+                            // Create an event listener to handle the result of the saving throw
+                            return EventOrListener::Listener(EventListener {
+                                trigger_id: saving_throw_event_id,
+                                callback: Arc::new({
+                                    let action_id = action_id.clone();
+                                    let context = context.clone();
+                                    let target = target;
+                                    let resistances = resistances.clone();
+                                    let saving_throw_dc = saving_throw_dc.clone();
+                                    let damage_roll_result = damage_roll_result.clone();
+                                    let half_damage_on_save = half_damage_on_save;
+                                    move |game_state, event| match &event.kind {
+                                        EventKind::D20CheckResolved(performer, result, dc) => {
+                                            let mut resistances = resistances.clone();
+                                            if result.is_success(dc.as_ref().unwrap())
+                                                && half_damage_on_save
+                                            {
+                                                // Apply half damage on successful save
+
+                                                let ability = match saving_throw_dc.key {
+                                                    SavingThrowKind::Ability(ability) => ability,
+                                                    SavingThrowKind::Death => Ability::Constitution,
+                                                };
+                                                for component in
+                                                    damage_roll_result.components.iter()
+                                                {
+                                                    resistances.add_effect(
+                                                        component.damage_type,
+                                                        DamageMitigationEffect {
+                                                            // TODO: Not sure if this is the best source
+                                                            source: ModifierSource::Ability(
+                                                                ability,
+                                                            ),
+                                                            operation:
+                                                                MitigationOperation::Resistance,
+                                                        },
+                                                    );
+                                                }
+                                            }
+
+                                            let (damage_taken, new_life_state) = damage_internal(
+                                                &mut game_state.world,
+                                                target,
+                                                &damage_roll_result,
+                                                None,
+                                                &resistances,
+                                            );
+
+                                            return EventOrListener::Event(Event::new(
+                                                EventKind::ActionPerformed {
+                                                    action: ActionData {
+                                                        actor: *performer,
+                                                        action_id: action_id.clone(),
+                                                        context: context.clone(),
+                                                        targets: vec![target],
+                                                    },
+                                                    results: vec![ActionResult {
+                                                        performer: EntityIdentifier::from_world(
+                                                            &game_state.world,
+                                                            *performer,
+                                                        ),
+                                                        target: TargetTypeInstance::Entity(
+                                                            EntityIdentifier::from_world(
+                                                                &game_state.world,
+                                                                target,
+                                                            ),
+                                                        ),
+                                                        kind: ActionKindResult::SavingThrowDamage {
+                                                            saving_throw_dc: saving_throw_dc
+                                                                .clone(),
+                                                            saving_throw_result: result
+                                                                .d20_result()
+                                                                .clone(),
+                                                            half_damage_on_save,
+                                                            damage_roll: damage_roll_result.clone(),
+                                                            damage_taken,
+                                                            new_life_state,
+                                                        },
+                                                    }],
+                                                },
+                                            ));
+                                        }
+                                        _ => {
+                                            panic!(
+                                                "Unexpected event kind in saving throw callback: {:?}",
+                                                event
+                                            );
+                                        }
+                                    }
+                                }),
+                            });
+                        }
+                        _ => {
+                            panic!("Unexpected event kind in damage roll callback: {:?}", event);
+                        }
+                    }
+                }),
             };
 
-            let (mut damage_taken, mut new_life_state) = (None, None);
-            if check_result.success {
-                if *half_damage_on_save {
-                    // Apply half damage on successful save
-                    // TODO: This is definitely not the nicest way to do this
-                    let ability = match saving_throw_dc.key {
-                        SavingThrowKind::Ability(ability) => ability,
-                        SavingThrowKind::Death => Ability::Constitution,
-                    };
-                    for component in damage_roll.components.iter() {
-                        resistances.add_effect(
-                            component.damage_type,
-                            DamageMitigationEffect {
-                                // TODO: Not sure if this is the best source
-                                source: ModifierSource::Ability(ability),
-                                operation: MitigationOperation::Resistance,
-                            },
-                        );
-                    }
-                    (damage_taken, new_life_state) =
-                        damage_internal(world, target, &damage_roll, None, &resistances);
-                }
-            } else {
-                (damage_taken, new_life_state) =
-                    damage_internal(world, target, &damage_roll, None, &resistances);
-            }
-
-            ActionKindResult::SavingThrowDamage {
-                saving_throw_dc: saving_throw_dc.clone(),
-                saving_throw_result: check_result,
-                half_damage_on_save: *half_damage_on_save,
-                damage_roll: damage_roll.clone(),
-                damage_taken,
-                new_life_state,
-            }
+            (event, event_listener)
         }
 
-        // TODO: Not sure how to handle composite actions yet
-        // ActionKindSnapshot::Composite { actions } => {
-        //     for action in actions {
-        //         self.take_damage(action);
-        //     }
-        // }
         _ => {
             panic!(
-                "systems::health::damage called with unsupported damage source (action snapshot): {:?}",
-                action
+                "systems::health::damage called with unsupported action kind: {:?}",
+                action_kind
             );
         }
-    }
+    };
+
+    game_state.process_event_with_listener(event, listener);
 }
 
 pub fn is_alive(world: &World, entity: Entity) -> bool {

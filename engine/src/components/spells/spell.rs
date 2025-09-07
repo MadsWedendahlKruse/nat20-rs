@@ -2,12 +2,18 @@ use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use hecs::{Entity, World};
 
-use crate::components::{
-    actions::{
-        action::{Action, ActionContext, ActionKind, ReactionKind},
-        targeting::TargetingContext,
+use crate::{
+    components::{
+        actions::{
+            action::{Action, ActionContext, ActionKind, ReactionResult},
+            targeting::TargetingContext,
+        },
+        id::{ActionId, ResourceId, SpellId},
     },
-    id::{ActionId, ResourceId, SpellId},
+    engine::{
+        event::{Event, EventKind},
+        game_state::GameState,
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -39,18 +45,7 @@ impl Spell {
         resource_cost: HashMap<ResourceId, u8>,
         targeting: Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
         reaction_trigger: Option<
-            Arc<
-                dyn Fn(
-                        &World,
-                        Entity,
-                        Entity,
-                        &ActionId,
-                        &ActionContext,
-                        &[Entity],
-                    ) -> Option<ReactionKind>
-                    + Send
-                    + Sync,
-            >,
+            Arc<dyn Fn(Entity, &Event, &ActionContext) -> Option<ReactionResult> + Send + Sync>,
         >,
     ) -> Self {
         let action_id = id.to_action_id();

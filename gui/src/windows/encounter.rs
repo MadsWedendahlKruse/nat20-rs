@@ -12,13 +12,14 @@ use nat20_rs::{
             action::{ActionContext, ActionMap},
             targeting::{TargetType, TargetingContext, TargetingKind},
         },
-        id::{ActionId, EncounterId, Name},
+        id::{ActionId, Name},
         resource::ResourceMap,
         spells::spellbook::Spellbook,
     },
     engine::{
-        encounter::{ActionDecision, ActionPrompt, Encounter, ParticipantsFilter},
-        game_state::{ActionData, GameState, ReactionData},
+        encounter::{Encounter, EncounterId, ParticipantsFilter},
+        event::{ActionData, ActionPrompt, ReactionData},
+        game_state::GameState,
     },
     registry, systems,
 };
@@ -330,7 +331,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
             }
             let next_prompt = next_prompt.unwrap();
 
-            *decision_progress = Some(ActionDecisionProgress::from_prompt(next_prompt));
+            *decision_progress = Some(ActionDecisionProgress::from_prompt(&next_prompt));
             println!(
                 "Starting action decision progress for prompt: {:?}",
                 next_prompt
@@ -391,7 +392,7 @@ fn handle_ai_decision(encounter: &mut Encounter, world: &mut World, current_enti
 
     if let Some(decision) = decision {
         println!("AI decided on action: {:?}", decision);
-        let result = encounter.process(world, decision);
+        let result = encounter.submit_decision(world, decision);
         match result {
             Ok(event) => {
                 println!("Action processed successfully: {:?}", event);
@@ -516,7 +517,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
 
                     if confirm_targets {
                         let decision = self.take().unwrap().finalize();
-                        let result = encounter.process(world, decision);
+                        let result = encounter.submit_decision(world, decision);
                         match result {
                             Ok(event) => {
                                 println!("Action processed successfully: {:?}", event);
@@ -597,7 +598,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
 
                 if confirm_reaction {
                     let decision = self.take().unwrap().finalize();
-                    let result = encounter.process(world, decision).unwrap();
+                    let result = encounter.submit_decision(world, decision).unwrap();
                     match result {
                         _ => {
                             println!("{:?}", result);

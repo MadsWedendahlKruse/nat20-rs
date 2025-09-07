@@ -10,8 +10,8 @@ use crate::{
         id::AIControllerId,
     },
     engine::{
-        encounter::{ActionDecision, ActionPrompt, Encounter, ParticipantsFilter},
-        game_state::ActionData,
+        encounter::{Encounter, ParticipantsFilter},
+        event::{ActionData, ActionDecision, ActionPrompt},
     },
     systems,
 };
@@ -55,7 +55,7 @@ impl AIController for RandomController {
                 let (contexts, _) = actions.get(action_id)?;
                 let context = contexts.choose(rng)?;
 
-                let action_kind = systems::actions::get_action(action_id)?.kind;
+                let action_kind = systems::actions::get_action_clone(action_id)?.kind;
                 let targeting =
                     systems::actions::targeting_context(world, *actor, action_id, context);
                 let mut targets = Vec::new();
@@ -111,9 +111,9 @@ impl AIController for RandomController {
             }
             ActionPrompt::Reaction {
                 reactor,
-                action,
+                event,
                 options,
-            } => todo!(),
+            } => todo!("Implement reaction decision for RandomController AI"),
         }
     }
 }

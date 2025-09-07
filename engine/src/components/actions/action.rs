@@ -8,7 +8,10 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        actions::targeting::{TargetTypeInstance, TargetingContext},
+        actions::{
+            action,
+            targeting::{TargetTypeInstance, TargetingContext},
+        },
         d20::D20CheckResult,
         damage::{
             AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
@@ -20,6 +23,10 @@ use crate::{
         resource::{RechargeRule, ResourceCostMap, ResourceError, ResourceMap},
         saving_throw::{self, SavingThrowDC, SavingThrowSet},
         spells::spellbook::Spellbook,
+    },
+    engine::{
+        event::{self, ActionData, Event, EventId, EventKind, EventListener},
+        game_state::{self, GameState},
     },
     systems::{self},
 };
@@ -54,7 +61,7 @@ pub enum ActionKind {
     AttackRollDamage {
         attack_roll: Arc<dyn Fn(&World, Entity, &ActionContext) -> AttackRoll + Send + Sync>,
         damage: Arc<dyn Fn(&World, Entity, &ActionContext) -> DamageRoll + Send + Sync>,
-        damage_on_failure:
+        damage_on_miss:
             Option<Arc<dyn Fn(&World, Entity, &ActionContext) -> DamageRoll + Send + Sync>>,
     },
     /// Actions that require a saving throw to avoid or reduce damage.
@@ -94,16 +101,21 @@ pub enum ActionKind {
     /// This can be used for actions that have multiple effects, such as a spell
     /// that deals damage and applies a beneficial effect.
     Composite { actions: Vec<ActionKind> },
+
+    Reaction {
+        // TODO: What should this return?
+        reaction: Arc<dyn Fn(&mut GameState, Entity, &Event, &ActionContext) + Send + Sync>,
+    },
     /// Custom actions can have any kind of effect, including damage, healing, or utility.
     /// Please note that this should only be used for actions that don't fit into the
     /// standard categories.
-    Custom(Arc<dyn Fn(&World, Entity, &ActionContext) -> ActionKindResult + Send + Sync>),
+    Custom(Arc<dyn Fn(&World, Entity, &ActionContext) + Send + Sync>),
 }
 
 /// The result of applying an action to a target.
 /// This is the final result of the action, which includes any damage dealt,
 /// effects applied, or healing done.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ActionKindResult {
     UnconditionalDamage {
         damage_roll: DamageRollResult,
@@ -114,7 +126,7 @@ pub enum ActionKindResult {
         attack_roll: AttackRollResult,
         /// Armor class of the target being attacked
         armor_class: ArmorClass,
-        damage_roll: DamageRollResult,
+        damage_roll: Option<DamageRollResult>,
         damage_taken: Option<DamageMitigationResult>,
         new_life_state: Option<LifeState>,
     },
@@ -147,30 +159,20 @@ pub enum ActionKindResult {
     Composite {
         actions: Vec<ActionKindResult>,
     },
+    Reaction {
+        result: ReactionResult,
+    },
     Custom {
         // TODO: Add more fields as needed for custom spells
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ReactionKind {
-    ModifyAction {
-        action: ActionId,
-        // TODO: implement
-        // modification:
-        //     Arc<dyn Fn(&World, Entity, &ActionContext) -> ActionKindSnapshot + Send + Sync>,
-    },
-    NewAction {
-        action: ActionId,
-        context: ActionContext,
-        targets: Vec<Entity>,
-    },
-    CancelAction {
-        action: ActionId,
-        context: ActionContext,
-        targets: Vec<Entity>,
-        consume_resources: bool,
-    },
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReactionResult {
+    NewEvent { event: EventKind },
+    ModifyEvent { event: Arc<Event> },
+    CancelEvent { event_id: EventId },
+    NoEffect,
 }
 
 #[derive(Clone)]
@@ -183,33 +185,13 @@ pub struct Action {
     /// Optional cooldown for the action
     pub cooldown: Option<RechargeRule>,
     /// If the action is a reaction, this will describe what triggers the reaction.
-    /// * World: The game world in which the action is being performed.
-    /// * (first)  Entity: The entity that is performing the reaction.
-    /// * (second) Entity: The entity that is performing the action which triggers
-    ///   the reaction.
-    /// * ActionId: The ID of the action that is being performed.
-    /// * ActionContext: The context in which the action is being performed.
-    /// * &\[Entity\]: The targets of the action.
-    // TODO: Struct with a nice name instead of all these fields?
-    pub reaction_trigger: Option<
-        Arc<
-            dyn Fn(
-                    &World,
-                    Entity,
-                    Entity,
-                    &ActionId,
-                    &ActionContext,
-                    &[Entity],
-                ) -> Option<ReactionKind>
-                + Send
-                + Sync,
-        >,
-    >,
+    pub reaction_trigger:
+        Option<Arc<dyn Fn(Entity, &Event, &ActionContext) -> Option<ReactionResult> + Send + Sync>>,
 }
 
 /// Represents the result of performing an action on a single target. For actions that affect multiple targets,
 /// multiple `ActionResult` instances can be collected.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ActionResult {
     pub performer: EntityIdentifier,
     pub target: TargetTypeInstance,
@@ -236,64 +218,143 @@ pub trait ActionProvider {
 impl ActionKind {
     pub fn perform(
         &self,
-        world: &mut World,
+        game_state: &mut GameState,
         performer: Entity,
+        action_id: &ActionId,
         context: &ActionContext,
         target: Entity,
-    ) -> ActionKindResult {
+    ) {
         match self {
             ActionKind::UnconditionalDamage { .. }
             | ActionKind::AttackRollDamage { .. }
             | ActionKind::SavingThrowDamage { .. } => {
-                systems::health::damage(world, performer, target, self, context)
+                systems::health::damage(game_state, performer, target, action_id, self, context)
             }
 
-            ActionKind::UnconditionalEffect { effect } => ActionKindResult::UnconditionalEffect {
-                effect: effect.clone(),
-                applied: true, // TODO: Unconditional effects are always applied
-            },
+            ActionKind::UnconditionalEffect { effect } => {
+                systems::effects::add_effect(&mut game_state.world, target, effect);
+                let _ = game_state.process_event(Event::new(EventKind::ActionPerformed {
+                    action: ActionData {
+                        actor: performer,
+                        action_id: action_id.clone(),
+                        context: context.clone(),
+                        targets: vec![target],
+                    },
+                    results: vec![ActionResult {
+                        performer: EntityIdentifier::from_world(&game_state.world, performer),
+                        target: TargetTypeInstance::Entity(EntityIdentifier::from_world(
+                            &game_state.world,
+                            target,
+                        )),
+                        kind: ActionKindResult::UnconditionalEffect {
+                            effect: effect.clone(),
+                            applied: true, // TODO: Unconditional effects are always applied?
+                        },
+                    }],
+                }));
+            }
 
             ActionKind::SavingThrowEffect {
                 saving_throw,
                 effect,
             } => {
-                let saving_throw = saving_throw(world, performer, context);
-                ActionKindResult::SavingThrowEffect {
-                    saving_throw: saving_throw.clone(),
-                    effect: effect.clone(),
-                    applied: systems::helpers::get_component::<SavingThrowSet>(world, target)
-                        .check_dc(&saving_throw, world, target)
-                        .success,
-                }
+                // let saving_throw = saving_throw(game_state.world, performer, context);
+                // ActionKindResult::SavingThrowEffect {
+                //     saving_throw: saving_throw.clone(),
+                //     effect: effect.clone(),
+                //     applied: systems::helpers::get_component::<SavingThrowSet>(
+                //         game_state.world,
+                //         target,
+                //     )
+                //     .check_dc(&saving_throw, game_state.world, target)
+                //     .success,
+                // }
+                todo!("SavingThrowEffect is not yet implemented");
             }
 
             ActionKind::BeneficialEffect { effect } => {
-                systems::effects::add_effect(world, target, effect);
-                ActionKindResult::BeneficialEffect {
-                    effect: effect.clone(),
-                    applied: true, // TODO: Beneficial effects are always applied?
-                }
+                systems::effects::add_effect(&mut game_state.world, target, effect);
+                let _ = game_state.process_event(Event::new(EventKind::ActionPerformed {
+                    action: ActionData {
+                        actor: performer,
+                        action_id: action_id.clone(),
+                        context: context.clone(),
+                        targets: vec![target],
+                    },
+                    results: vec![ActionResult {
+                        performer: EntityIdentifier::from_world(&game_state.world, performer),
+                        target: TargetTypeInstance::Entity(EntityIdentifier::from_world(
+                            &game_state.world,
+                            target,
+                        )),
+                        kind: ActionKindResult::BeneficialEffect {
+                            effect: effect.clone(),
+                            applied: true, // TODO: Beneficial effects are always applied?
+                        },
+                    }],
+                }));
             }
 
             ActionKind::Healing { heal } => {
-                let healing = heal(world, performer, context).roll();
-                let new_life_state = systems::health::heal(world, target, healing.subtotal as u32);
-                ActionKindResult::Healing {
-                    healing,
-                    new_life_state,
+                let healing = heal(&game_state.world, performer, context).roll();
+                let new_life_state =
+                    systems::health::heal(&mut game_state.world, target, healing.subtotal as u32);
+                let _ = game_state.process_event(Event::new(EventKind::ActionPerformed {
+                    action: ActionData {
+                        actor: performer,
+                        action_id: action_id.clone(),
+                        context: context.clone(),
+                        targets: vec![target],
+                    },
+                    results: vec![ActionResult {
+                        performer: EntityIdentifier::from_world(&game_state.world, performer),
+                        target: TargetTypeInstance::Entity(EntityIdentifier::from_world(
+                            &game_state.world,
+                            target,
+                        )),
+                        kind: ActionKindResult::Healing {
+                            healing,
+                            new_life_state,
+                        },
+                    }],
+                }));
+            }
+
+            ActionKind::Utility { .. } => {
+                let _ = game_state.process_event(Event::new(EventKind::ActionPerformed {
+                    action: ActionData {
+                        actor: performer,
+                        action_id: action_id.clone(),
+                        context: context.clone(),
+                        targets: vec![target],
+                    },
+                    results: vec![ActionResult {
+                        performer: EntityIdentifier::from_world(&game_state.world, performer),
+                        target: TargetTypeInstance::Entity(EntityIdentifier::from_world(
+                            &game_state.world,
+                            target,
+                        )),
+                        kind: ActionKindResult::Utility,
+                    }],
+                }));
+            }
+
+            ActionKind::Composite { actions } => {
+                // TODO: Almost seems too easy?
+                for action in actions {
+                    action.perform(game_state, performer, action_id, context, target);
                 }
             }
 
-            ActionKind::Utility { .. } => ActionKindResult::Utility,
+            ActionKind::Reaction { reaction } => {
+                // reaction(game_state, performer, &game_state.events[&event_id]);
+                todo!("Reactions are not yet implemented");
+            }
 
-            ActionKind::Composite { actions } => ActionKindResult::Composite {
-                actions: actions
-                    .iter()
-                    .map(|a| a.perform(world, performer, context, target))
-                    .collect(),
-            },
-
-            ActionKind::Custom(custom) => custom(world, target, context),
+            ActionKind::Custom(custom) => {
+                // custom(game_state.world, target, context)
+                todo!("Custom actions are not yet implemented");
+            }
         }
     }
 }
@@ -314,6 +375,7 @@ impl Debug for ActionKind {
             ActionKind::Healing { .. } => write!(f, "Healing"),
             ActionKind::Utility { .. } => write!(f, "Utility"),
             ActionKind::Composite { actions } => write!(f, "Composite({:?})", actions),
+            ActionKind::Reaction { .. } => write!(f, "Reaction"),
             ActionKind::Custom(_) => write!(f, "CustomAction"),
         }
     }
@@ -322,34 +384,30 @@ impl Debug for ActionKind {
 impl Action {
     pub fn perform(
         &mut self,
-        world: &mut World,
+        game_state: &mut GameState,
         performer: Entity,
         context: &ActionContext,
         targets: &[Entity],
-    ) -> Vec<ActionResult> {
+    ) {
         // TODO: Not a fan of having to clone to avoid borrowing issues, but
         // hopefully since most of the effect just have a no-op as their
         // on_action component it'll be cheap to clone
-        let hooks: Vec<_> = systems::effects::effects(world, performer)
+        let hooks: Vec<_> = systems::effects::effects(&game_state.world, performer)
             .iter()
             .filter_map(|effect| Some(effect.on_action.clone()))
             .collect();
 
         for hook in hooks {
-            hook(world, performer, self, context);
+            hook(&mut game_state.world, performer, self, context);
         }
 
         // TODO: Resource might error?
-        let _ = self.spend_resources(world, performer, context);
+        let _ = self.spend_resources(&mut game_state.world, performer, context);
 
-        targets
-            .iter()
-            .map(|target| ActionResult {
-                performer: EntityIdentifier::from_world(world, performer),
-                target: TargetTypeInstance::Entity(EntityIdentifier::from_world(world, *target)),
-                kind: self.kind.perform(world, performer, context, *target),
-            })
-            .collect()
+        for target in targets {
+            self.kind
+                .perform(game_state, performer, &self.id, context, *target);
+        }
     }
 
     fn spend_resources(

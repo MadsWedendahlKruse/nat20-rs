@@ -982,7 +982,7 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                             ui.text("");
                             ui.text("Damage Roll:");
                             ui.same_line();
-                            damage_roll.render(ui);
+                            damage_roll.as_ref().unwrap().render(ui);
 
                             ui.text("");
                             ui.text("Damage Taken:");
@@ -1049,6 +1049,10 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
             ActionKindResult::Composite { actions } => todo!(),
 
             ActionKindResult::Custom {} => todo!(),
+
+            ActionKindResult::Reaction { result } => {
+                todo!()
+            }
         }
     }
 }

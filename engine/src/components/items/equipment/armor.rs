@@ -23,7 +23,7 @@ pub enum ArmorType {
     Heavy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArmorDexterityBonus {
     Unlimited,   // No limit on Dexterity bonus
     Limited(u8), // Maximum Dexterity bonus allowed
@@ -38,7 +38,7 @@ impl ArmorDexterityBonus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArmorClass {
     pub base: (i32, ModifierSource),
     pub dexterity_bonus: ArmorDexterityBonus,

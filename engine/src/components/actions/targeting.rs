@@ -64,7 +64,7 @@ impl TargetType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TargetTypeInstance {
     // TODO: Do we need all of these?
     Entity(EntityIdentifier),

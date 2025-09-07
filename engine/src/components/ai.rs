@@ -1,6 +1,9 @@
 use hecs::{Entity, World};
 
-use crate::engine::encounter::{ActionDecision, ActionPrompt, Encounter};
+use crate::engine::{
+    encounter::Encounter,
+    event::{ActionDecision, ActionPrompt},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PlayerControlledTag;

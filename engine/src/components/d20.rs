@@ -224,7 +224,7 @@ impl fmt::Display for D20Check {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct D20CheckResult {
     pub advantage_tracker: AdvantageTracker,
     pub rolls: Vec<u8>,
@@ -235,6 +235,15 @@ pub struct D20CheckResult {
     pub is_crit: bool,
     pub is_crit_fail: bool,
     pub success: bool,
+}
+
+impl D20CheckResult {
+    pub fn is_success<T>(&self, dc: &D20CheckDC<T>) -> bool
+    where
+        T: IntoEnumIterator + Copy + Eq + Hash,
+    {
+        self.is_crit || (!self.is_crit_fail && self.total >= dc.dc.total() as u32)
+    }
 }
 
 impl fmt::Display for D20CheckResult {
@@ -341,7 +350,7 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct D20CheckDC<T>
 where
     T: IntoEnumIterator + Copy + Eq + Hash,
@@ -360,7 +369,7 @@ impl fmt::Display for D20CheckDC<Ability> {
 
 #[cfg(test)]
 mod tests {
-    use crate::components::{id::ItemId, items::item::Item};
+    use crate::components::id::ItemId;
 
     use super::*;
 

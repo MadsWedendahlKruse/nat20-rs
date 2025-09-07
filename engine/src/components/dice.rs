@@ -112,7 +112,7 @@ impl fmt::Display for DiceSetRoll {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiceSetRollResult {
     pub label: String,
     pub die_size: DieSize,

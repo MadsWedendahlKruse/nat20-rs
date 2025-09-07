@@ -7,7 +7,10 @@ use crate::{
         faction::Attitude,
         id::AIControllerId,
     },
-    engine::encounter::{ActionDecision, ActionPrompt, Encounter},
+    engine::{
+        encounter::Encounter,
+        event::{ActionDecision, ActionPrompt},
+    },
     registry, systems,
 };
 
@@ -60,5 +63,7 @@ pub fn recommeneded_target_attitude(
         ActionKind::Utility {  } => todo!(),
 
         ActionKind::Custom(_) => todo!(),
+
+        ActionKind::Reaction { .. } => todo!(),
     }
 }

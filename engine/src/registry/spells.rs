@@ -9,7 +9,7 @@ use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
         actions::{
-            action::{ActionContext, ActionKind, ReactionKind},
+            action::{self, ActionContext, ActionKind, ReactionResult},
             targeting::{AreaShape, TargetType, TargetingContext, TargetingKind},
         },
         d20::{D20Check, D20CheckDC},
@@ -26,8 +26,13 @@ use crate::{
             spellbook::Spellbook,
         },
     },
+    engine::event::{ActionData, Event, EventKind, EventListener, EventOrListener, ReactionData},
     math::point::Point,
-    registry, systems,
+    registry,
+    systems::{
+        self,
+        d20::{D20CheckDCKind, D20ResultKind},
+    },
 };
 
 pub static SPELL_REGISTRY: LazyLock<HashMap<SpellId, Spell>> = LazyLock::new(|| {
@@ -47,7 +52,68 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
         COUNTERSPELL_ID.clone(),
         3, // Level 3 spell
         MagicSchool::Abjuration,
-        ActionKind::Utility {},
+        ActionKind::Reaction {
+            reaction: Arc::new(|game_state, reactor, trigger_event, action_context| {
+                let action = match &trigger_event.kind {
+                    EventKind::ActionRequested { action } => action,
+                    _ => panic!("Invalid event kind for Counterspell reaction"),
+                };
+
+                let spell_save_dc = spell_save_dc(&game_state.world, reactor, &COUNTERSPELL_ID);
+
+                let saving_throw_event_id = systems::d20::check(
+                    game_state,
+                    reactor,
+                    &D20CheckDCKind::SavingThrow(spell_save_dc.clone()),
+                );
+
+                // Wait for the actor to perform a CON save
+                game_state.add_event_listener(EventListener {
+                    trigger_id: saving_throw_event_id,
+
+                    // Once the save is resolved, continue processing the Counterspell
+                    callback: Arc::new({
+                        let trigger_event = trigger_event.clone();
+                        let action_context = action_context.clone();
+                        move |game_state, event| match &event.kind {
+                            EventKind::D20CheckResolved(actor, result_kind, dc_kind) => {
+                                match result_kind {
+                                    D20ResultKind::SavingThrow { kind, result } => {
+                                        let result = if result.success {
+                                            // Successful save, Counterspell fails
+                                            ReactionResult::NoEffect
+                                        } else {
+                                            // Failed save, Counterspell succeeds
+                                            ReactionResult::CancelEvent {
+                                                event_id: trigger_event.id.clone(),
+                                            }
+                                        };
+
+                                        EventOrListener::Event(Event::new(
+                                            EventKind::ReactionPerformed {
+                                                reactor: reactor,
+                                                reaction: ReactionData {
+                                                    reaction_id: COUNTERSPELL_ID
+                                                        .clone()
+                                                        .to_action_id(),
+                                                    context: action_context.clone(),
+                                                    // resource_cost: todo!(),
+                                                    kind: result,
+                                                }
+                                                .into(),
+                                                event: trigger_event.clone().into(),
+                                            },
+                                        ))
+                                    }
+                                    _ => panic!("Invalid result kind in Counterspell callback"),
+                                }
+                            }
+                            _ => panic!("Invalid event kind in Counterspell callback"),
+                        }
+                    }),
+                });
+            }),
+        },
         ResourceCostMap::from([(registry::resources::REACTION.clone(), 1)]),
         Arc::new(|_, _, _| TargetingContext {
             kind: TargetingKind::Single,
@@ -55,24 +121,33 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
             max_range: 60,
             valid_target_types: vec![TargetType::entity_not_dead()],
         }),
-        Some(Arc::new(
-            |world, reactor, actor, action_id, action_context, targets| {
-                if reactor == actor {
-                    // Cannot counterspell yourself
-                    return None;
+        Some(Arc::new(|reactor, trigger_event, reaction_context| {
+            match &trigger_event.kind {
+                EventKind::ActionRequested { action } => {
+                    if reactor == action.actor {
+                        // Cannot counterspell yourself
+                        return None;
+                    }
+                    // TODO: Can we just counterspell spells of any level?
+                    match action.context {
+                        ActionContext::Spell { level } => {
+                            return Some(ReactionResult::NewEvent {
+                                event: EventKind::ActionRequested {
+                                    action: ActionData {
+                                        actor: reactor,
+                                        action_id: COUNTERSPELL_ID.clone().to_action_id(),
+                                        context: reaction_context.clone(),
+                                        targets: vec![action.actor],
+                                    },
+                                },
+                            });
+                        }
+                        _ => return None,
+                    }
                 }
-                // TODO: Can we just counterspell spells of any level?
-                if let ActionContext::Spell { level } = action_context {
-                    return Some(ReactionKind::CancelAction {
-                        action: action_id.clone(),
-                        context: action_context.clone(),
-                        targets: targets.to_vec(),
-                        consume_resources: true,
-                    });
-                }
-                None
-            },
-        )),
+                _ => None,
+            }
+        })),
     )
 });
 
@@ -97,7 +172,7 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
                     "Eldritch Blast".to_string(),
                 )
             }),
-            damage_on_failure: None,
+            damage_on_miss: None,
         },
         HashMap::from([(registry::resources::ACTION.clone(), 1)]),
         Arc::new(|world, entity, _| {
