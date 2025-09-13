@@ -78,7 +78,7 @@ impl D20ResultKind {
 }
 
 #[must_use]
-pub fn check(game_state: &mut GameState, entity: Entity, dc: &D20CheckDCKind) -> EventId {
+pub fn check(game_state: &mut GameState, entity: Entity, dc: &D20CheckDCKind) -> Event {
     let world = &game_state.world;
     let result = match dc {
         D20CheckDCKind::SavingThrow(dc) => D20ResultKind::SavingThrow {
@@ -98,17 +98,21 @@ pub fn check(game_state: &mut GameState, entity: Entity, dc: &D20CheckDCKind) ->
             todo!("systems::d20 attack roll checks are not yet implemented");
         }
     };
-    process_event(game_state, entity, result, Some(dc.clone()))
+    Event::new(EventKind::D20CheckPerformed(
+        entity,
+        result,
+        Some(dc.clone()),
+    ))
 }
 
-fn process_event(
-    game_state: &mut GameState,
-    entity: Entity,
-    result: D20ResultKind,
-    dc: Option<D20CheckDCKind>,
-) -> EventId {
-    let event = Event::new(EventKind::D20CheckPerformed(entity, result.clone(), dc));
-    let event_id = event.id;
-    game_state.process_event(event);
-    event_id
-}
+// fn process_event(
+//     game_state: &mut GameState,
+//     entity: Entity,
+//     result: D20ResultKind,
+//     dc: Option<D20CheckDCKind>,
+// ) -> EventId {
+//     let event = Event::new(EventKind::D20CheckPerformed(entity, result.clone(), dc));
+//     let event_id = event.id;
+//     game_state.process_event(event);
+//     event_id
+// }

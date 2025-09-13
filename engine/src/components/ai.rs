@@ -2,7 +2,7 @@ use hecs::{Entity, World};
 
 use crate::engine::{
     encounter::Encounter,
-    event::{ActionDecision, ActionPrompt},
+    event::{ActionDecisionPartial, ActionPrompt},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -15,5 +15,5 @@ pub trait AIController: Send + Sync + 'static {
         encounter: &Encounter,
         prompt: &ActionPrompt,
         actor: Entity,
-    ) -> Option<ActionDecision>;
+    ) -> Option<ActionDecisionPartial>;
 }

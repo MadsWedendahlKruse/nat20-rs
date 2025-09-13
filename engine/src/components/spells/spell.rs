@@ -44,9 +44,7 @@ impl Spell {
         kind: ActionKind,
         resource_cost: HashMap<ResourceId, u8>,
         targeting: Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
-        reaction_trigger: Option<
-            Arc<dyn Fn(Entity, &Event, &ActionContext) -> Option<ReactionResult> + Send + Sync>,
-        >,
+        reaction_trigger: Option<Arc<dyn Fn(Entity, &Event) -> bool + Send + Sync>>,
     ) -> Self {
         let action_id = id.to_action_id();
         Self {

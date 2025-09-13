@@ -11,7 +11,7 @@ use crate::{
     },
     engine::{
         encounter::{Encounter, ParticipantsFilter},
-        event::{ActionData, ActionDecision, ActionPrompt},
+        event::{ActionData, ActionDecision, ActionDecisionPartial, ActionPrompt},
     },
     systems,
 };
@@ -36,7 +36,7 @@ impl AIController for RandomController {
         encounter: &Encounter,
         prompt: &ActionPrompt,
         actor: Entity,
-    ) -> Option<ActionDecision> {
+    ) -> Option<ActionDecisionPartial> {
         let rng = &mut rand::rng();
 
         // TODO: Validation that it's the actor's turn?
@@ -100,7 +100,7 @@ impl AIController for RandomController {
                     }
                 }
 
-                Some(ActionDecision::Action {
+                Some(ActionDecisionPartial::Action {
                     action: ActionData {
                         actor: *actor,
                         action_id: action_id.clone(),
@@ -109,11 +109,20 @@ impl AIController for RandomController {
                     },
                 })
             }
-            ActionPrompt::Reaction {
-                reactor,
-                event,
-                options,
-            } => todo!("Implement reaction decision for RandomController AI"),
+
+            ActionPrompt::Reactions { event, options } => {
+                let options_for_actor = options.get(&actor)?;
+                if options_for_actor.is_empty() {
+                    return None;
+                }
+
+                let choice = options_for_actor.iter().choose(rng)?.clone();
+                Some(ActionDecisionPartial::Reaction {
+                    reactor: actor,
+                    event: event.clone(),
+                    choice: Some(choice),
+                })
+            }
         }
     }
 }

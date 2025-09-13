@@ -1,27 +1,21 @@
-use std::{collections::VecDeque, f32::consts::E, ops::Deref, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    sync::Arc,
+};
 
-use hecs::{Entity, World};
+use hecs::Entity;
 use uuid::Uuid;
 
 use crate::{
     components::{
-        actions::action::{ActionContext, ActionResult, ReactionResult},
-        d20::{D20CheckDC, D20CheckResult},
+        actions::action::{ActionContext, ActionResult},
         damage::DamageRollResult,
         health::life_state::LifeState,
         id::ActionId,
         resource::ResourceCostMap,
-        saving_throw::SavingThrowKind,
-        skill::Skill,
     },
-    engine::{
-        encounter::{Encounter, EncounterId},
-        game_state::GameState,
-    },
-    systems::{
-        self,
-        d20::{D20CheckDCKind, D20ResultKind},
-    },
+    engine::{encounter::EncounterId, game_state::GameState},
+    systems::d20::{D20CheckDCKind, D20ResultKind},
 };
 
 pub type EventId = Uuid;
@@ -56,53 +50,12 @@ impl Event {
             EventKind::ActionRequested { action } => Some(action.actor),
             EventKind::ActionPerformed { action, .. } => Some(action.actor),
             EventKind::ReactionTriggered { reactor, .. } => Some(*reactor),
-            EventKind::ReactionRequested { reactor, .. } => Some(*reactor),
-            EventKind::ReactionPerformed { reactor, .. } => Some(*reactor),
             EventKind::LifeStateChanged { actor, .. } => *actor,
             EventKind::D20CheckPerformed(entity, _, _) => Some(*entity),
             EventKind::D20CheckResolved(entity, _, _) => Some(*entity),
             EventKind::DamageRollPerformed(entity, _) => Some(*entity),
             EventKind::DamageRollResolved(entity, _) => Some(*entity),
             _ => None,
-        }
-    }
-
-    // TODO: I guess this is where the event actually "does" something?
-    pub fn advance_event(&self, game_state: &mut GameState) {
-        match &self.kind {
-            // --- ACTION EVENTS ---
-            EventKind::ActionRequested { action } => {
-                // TODO: Where do we validate the action can be performed?
-                systems::actions::perform_action(game_state, action);
-            }
-
-            // TODO: Probably don't have to do anything here?
-            // EventKind::ActionPerformed { action, results } => todo!(),
-
-            // --- REACTION EVENTS ---
-            EventKind::ReactionRequested {
-                reactor,
-                reaction,
-                event,
-            } => match reaction.deref() {
-                ReactionResult::NewEvent { event } => todo!(),
-                ReactionResult::ModifyEvent { event } => todo!(),
-                ReactionResult::CancelEvent { event_id } => todo!(),
-                ReactionResult::NoEffect => todo!(),
-            },
-
-            _ => {} // No follow-up event
-
-            EventKind::D20CheckPerformed(entity, kind, dc_kind) => {
-                game_state.process_event(
-                    Event::new(EventKind::D20CheckResolved(
-                        *entity,
-                        kind.clone(),
-                        dc_kind.clone(),
-                    ))
-                    .as_response_to(self.id),
-                );
-            }
         }
     }
 }
@@ -129,16 +82,11 @@ pub enum EventKind {
         /// might trigger a Counterspell reaction.
         trigger_event: Arc<Event>,
     },
-    ReactionRequested {
-        reactor: Entity,
-        reaction: Arc<ReactionResult>,
-        event: Arc<Event>,
-    },
-    ReactionPerformed {
-        reactor: Entity,
-        reaction: Arc<ReactionData>,
-        event: Arc<Event>,
-    },
+    // ReactionPerformed {
+    //     reactor: Entity,
+    //     reaction: Arc<ReactionData>,
+    //     event: Arc<Event>,
+    // },
     LifeStateChanged {
         entity: Entity,
         new_state: LifeState,
@@ -160,11 +108,46 @@ pub enum EncounterEvent {
     NewRound(EncounterId, usize),
 }
 
-pub type EventLog = Vec<Event>;
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct EventLog {
+    pub events: Vec<Event>,
+    /// Track which entities have reacted to which events in this log. This is
+    /// used to prevent an entity from reacting to the same event multiple times.
+    /// TODO: Not sure if this is the best solution.
+    pub reactors: HashMap<EventId, HashSet<Entity>>,
+}
+
+impl EventLog {
+    pub fn new() -> Self {
+        Self {
+            events: Vec::new(),
+            reactors: HashMap::new(),
+        }
+    }
+
+    pub fn push(&mut self, event: Event) {
+        self.events.push(event);
+    }
+
+    pub fn record_reaction(&mut self, event_id: EventId, reactor: Entity) {
+        self.reactors
+            .entry(event_id)
+            .or_insert_with(HashSet::new)
+            .insert(reactor);
+    }
+
+    pub fn has_reacted(&self, event_id: &EventId, reactor: &Entity) -> bool {
+        if let Some(reactors) = self.reactors.get(event_id) {
+            return reactors.contains(reactor);
+        }
+        false
+    }
+}
+
 pub type EventQueue = VecDeque<Event>;
 
 // TODO: struct name?
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ActionData {
     pub actor: Entity,
     pub action_id: ActionId,
@@ -174,28 +157,50 @@ pub struct ActionData {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReactionData {
+    pub reactor: Entity,
+    // The event that triggered this reaction
+    pub event: Arc<Event>,
     pub reaction_id: ActionId,
     pub context: ActionContext,
-    // pub resource_cost: ResourceCostMap,
-    pub kind: ReactionResult,
+    pub resource_cost: ResourceCostMap,
+}
+
+impl From<&ReactionData> for ActionData {
+    fn from(value: &ReactionData) -> Self {
+        ActionData {
+            actor: value.reactor,
+            action_id: value.reaction_id.clone(),
+            context: value.context.clone(),
+            targets: vec![value.event.actor().unwrap()], // TODO: What if no actor?
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct EventListener {
-    pub trigger_id: EventId,
-    // pub filter: EventFilter,
-    pub callback: EventCallback,
+    trigger_id: EventId,
+    callback: EventCallback,
 }
 
-// type EventFilter = Arc<dyn Fn(&Event) -> bool + Send + Sync + 'static>;
-type EventCallback = Arc<dyn Fn(&mut GameState, &Event) -> EventOrListener + Send + Sync + 'static>;
+type EventCallback = Arc<dyn Fn(&mut GameState, &Event) -> CallbackResult + Send + Sync + 'static>;
 
-pub enum EventOrListener {
+pub enum CallbackResult {
     Event(Event),
-    Listener(EventListener),
+    EventWithCallback(Event, EventCallback),
 }
 
 impl EventListener {
+    pub fn new(trigger_id: EventId, callback: EventCallback) -> Self {
+        Self {
+            trigger_id,
+            callback,
+        }
+    }
+
+    pub fn trigger_id(&self) -> EventId {
+        self.trigger_id
+    }
+
     pub fn matches(&self, event: &Event) -> bool {
         if let Some(id) = event.response_to {
             if id == self.trigger_id {
@@ -203,17 +208,18 @@ impl EventListener {
             }
         }
         return false;
-        // (self.filter)(event)
     }
 
     pub fn callback(&self, game_state: &mut GameState, event: &Event) {
         let result = (self.callback)(game_state, event);
         match result {
-            EventOrListener::Event(event) => {
-                game_state.process_event(event);
+            CallbackResult::Event(event) => {
+                let _ = game_state.process_event(event);
             }
-            EventOrListener::Listener(listener) => {
-                game_state.add_event_listener(listener);
+            CallbackResult::EventWithCallback(event, callback) => {
+                let event_id = event.id;
+                game_state
+                    .process_event_with_listener(event, EventListener::new(event_id, callback));
             }
         }
     }
@@ -221,18 +227,33 @@ impl EventListener {
 
 #[derive(Debug, Clone)]
 pub enum ActionPrompt {
+    /// Prompt an entity to perform an action
     Action {
         /// The entity that should perform the action
         actor: Entity,
     },
-    Reaction {
-        /// The entity that is reacting
-        reactor: Entity,
-        /// The event that triggered the reaction
+    /// Prompt all entities that can react to an event to make a reaction decision.
+    /// While actions are prompted one at a time, an action can trigger multiple
+    /// reactions, and we need to give everyone a fair chance to react before we
+    /// can proceede
+    Reactions {
+        /// The event that triggered the reactions
         event: Event,
-        /// The options available for the reaction. When responding to the prompt,
-        /// the player must choose one of these options, or choose not to react.
-        options: Vec<ReactionResult>,
+        /// The options available for those reacting. The key is the entity which
+        /// is reaction, and the value is their options
+        options: HashMap<Entity, Vec<ReactionData>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ActionDecisionPartial {
+    /// For actions this is the full decision
+    Action { action: ActionData },
+    /// For reactions this is just the choice made by a single reactor
+    Reaction {
+        reactor: Entity,
+        event: Event,
+        choice: Option<ReactionData>,
     },
 }
 
@@ -241,14 +262,12 @@ pub enum ActionDecision {
     Action {
         action: ActionData,
     },
-    Reaction {
-        /// The entity that is reacting
-        reactor: Entity,
-        /// The action this is a reaction to
+    Reactions {
+        /// The event that triggered the reaction
         event: Event,
-        /// The choice made by the player in response to the reaction prompt.
-        /// This will be `None` if the player chose not to react.
-        choice: Option<ReactionResult>,
+        /// The choices made by each entity which could react to the event. If the
+        /// entity chose not to react, this will be 'None'
+        choices: HashMap<Entity, Option<ReactionData>>,
     },
 }
 
@@ -267,6 +286,7 @@ pub enum ActionError {
     },
     MissingPrompt {
         decision: ActionDecision,
+        prompts: Vec<ActionPrompt>,
     },
     NotYourTurn {
         decision: ActionDecision,
@@ -288,10 +308,10 @@ macro_rules! ensure_equal {
 }
 
 impl ActionPrompt {
-    pub fn actor(&self) -> Entity {
+    pub fn actors(&self) -> Vec<Entity> {
         match self {
-            ActionPrompt::Action { actor } => *actor,
-            ActionPrompt::Reaction { event, .. } => event.actor().unwrap(),
+            ActionPrompt::Action { actor } => vec![*actor],
+            ActionPrompt::Reactions { options, .. } => options.keys().cloned().collect(),
         }
     }
 
@@ -314,21 +334,19 @@ impl ActionPrompt {
             }
 
             (
-                ActionPrompt::Reaction {
-                    reactor: prompt_reactor,
+                ActionPrompt::Reactions {
                     event: prompt_event,
                     options,
                 },
-                ActionDecision::Reaction {
-                    reactor: decision_reactor,
+                ActionDecision::Reactions {
                     event: decision_event,
-                    choice,
+                    choices,
                 },
             ) => {
                 ensure_equal!(
-                    prompt_reactor,
-                    decision_reactor,
-                    "reactor",
+                    options.keys().collect::<HashSet<_>>(),
+                    choices.keys().collect::<HashSet<_>>(),
+                    "reactors",
                     FieldMismatch,
                     self,
                     decision
@@ -342,16 +360,17 @@ impl ActionPrompt {
                     decision
                 );
 
-                // Optional: check if reaction_decision is one of the prompt options
-                if let Some(choice) = choice {
-                    if !options.contains(choice) {
-                        return Err(ActionError::FieldMismatch {
-                            field: "reaction_decision",
-                            expected: format!("one of {:?}", options),
-                            actual: format!("{:?}", choice),
-                            prompt: self.clone(),
-                            decision: decision.clone(),
-                        });
+                for reactor in options.keys() {
+                    if let Some(choice) = choices.get(reactor).unwrap() {
+                        if !options.get(reactor).unwrap().contains(&choice) {
+                            return Err(ActionError::FieldMismatch {
+                                field: "choices",
+                                expected: format!("one of {:?}", options),
+                                actual: format!("{:?}", choice),
+                                prompt: self.clone(),
+                                decision: decision.clone(),
+                            });
+                        }
                     }
                 }
             }
@@ -368,17 +387,10 @@ impl ActionPrompt {
 }
 
 impl ActionDecision {
-    pub fn actor(&self) -> Entity {
+    pub fn actors(&self) -> Vec<Entity> {
         match self {
-            ActionDecision::Action { action, .. } => action.actor,
-            ActionDecision::Reaction { event, .. } => event.actor().unwrap(),
+            ActionDecision::Action { action, .. } => vec![action.actor],
+            ActionDecision::Reactions { choices, .. } => choices.keys().cloned().collect(),
         }
     }
-
-    // pub fn action_id(&self) -> &ActionId {
-    //     match self {
-    //         ActionDecision::Action { action, .. } => &action.action_id,
-    //         ActionDecision::Reaction { action, .. } => &action.action_id,
-    //     }
-    // }
 }

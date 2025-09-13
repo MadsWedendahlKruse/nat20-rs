@@ -20,7 +20,7 @@ use crate::{
         saving_throw::{self, SavingThrowKind, SavingThrowSet},
     },
     engine::{
-        event::{ActionData, Event, EventId, EventKind, EventListener, EventOrListener},
+        event::{ActionData, CallbackResult, Event, EventId, EventKind, EventListener},
         game_state::{self, GameState},
     },
     entities::{character::CharacterTag, monster::MonsterTag},
@@ -169,19 +169,9 @@ pub fn damage(
             ));
 
             // Create an event listener to handle the result of the damage roll
-            let event_listener = EventListener {
-                trigger_id: event.id,
-                // filter: Arc::new({
-                //     let performer = *performer;
-                //     move |event| {
-                //         matches!(
-                //             &event.kind,
-                //             EventKind::DamageRollResolved(p, _)
-                //                 if *p == performer
-                //         )
-                //     }
-                // }),
-                callback: Arc::new({
+            let event_listener = EventListener::new(
+                event.id,
+                Arc::new({
                     let action_id = action_id.clone();
                     let context = context.clone();
                     let target = target;
@@ -196,7 +186,7 @@ pub fn damage(
                                 &resistances,
                             );
 
-                            EventOrListener::Event(Event::new(EventKind::ActionPerformed {
+                            CallbackResult::Event(Event::new(EventKind::ActionPerformed {
                                 action: ActionData {
                                     actor: *performer,
                                     action_id: action_id.clone(),
@@ -224,7 +214,7 @@ pub fn damage(
                         }
                     }
                 }),
-            };
+            );
 
             (event, event_listener)
         }
@@ -260,17 +250,9 @@ pub fn damage(
             // Create an event listener to handle the result of the attack roll
             // This listener will handle applying damage based on whether the attack
             // hits or misses, and will also handle critical hits
-            let event_listener = EventListener {
-                trigger_id: event.id,
-
-                // filter: Arc::new({
-                //     let performer = performer;
-                //     move |event| {
-                //         matches!(&event.kind, EventKind::D20CheckResolved(p, _, dc) if *p == performer
-                //         && matches!(dc, Some(D20CheckDCKind::AttackRoll(t, _)) if *t == target))
-                //     }
-                // }),
-                callback: Arc::new({
+            let event_listener = EventListener::new(
+                event.id,
+                Arc::new({
                     let action_id = action_id.clone();
                     let context = context.clone();
                     let resistances = resistances.clone();
@@ -294,7 +276,7 @@ pub fn damage(
                                 )
                             } else {
                                 // If the attack misses and there's no damage on miss, no damage is dealt
-                                return EventOrListener::Event(Event::new(
+                                return CallbackResult::Event(Event::new(
                                     EventKind::ActionPerformed {
                                         action: ActionData {
                                             actor: *performer,
@@ -333,19 +315,9 @@ pub fn damage(
                             ));
 
                             // Create an event listener to handle the result of the damage roll
-                            return EventOrListener::Listener(EventListener {
-                                trigger_id: event.id,
-                                // filter: Arc::new({
-                                //     let performer = *performer;
-                                //     move |event| {
-                                //         matches!(
-                                //             &event.kind,
-                                //             EventKind::DamageRollResolved(p, _)
-                                //                 if *p == performer
-                                //         )
-                                //     }
-                                // }),
-                                callback: Arc::new({
+                            return CallbackResult::EventWithCallback(
+                                event,
+                                Arc::new({
                                     let action_id = action_id.clone();
                                     let context = context.clone();
                                     let target = target;
@@ -365,7 +337,7 @@ pub fn damage(
                                                 &resistances,
                                             );
 
-                                            return EventOrListener::Event(Event::new(
+                                            return CallbackResult::Event(Event::new(
                                                 EventKind::ActionPerformed {
                                                     action: ActionData {
                                                         actor: *performer,
@@ -405,7 +377,7 @@ pub fn damage(
                                         }
                                     }
                                 }),
-                            });
+                            );
                         }
 
                         _ => {
@@ -413,7 +385,7 @@ pub fn damage(
                         }
                     }
                 }),
-            };
+            );
 
             (event, event_listener)
         }
@@ -432,19 +404,9 @@ pub fn damage(
             ));
 
             // Create an event listener to handle the result of the damage roll
-            let event_listener = EventListener {
-                trigger_id: event.id,
-                // filter: Arc::new({
-                //     let performer = *performer;
-                //     move |event| {
-                //         matches!(
-                //             &event.kind,
-                //             EventKind::DamageRollResolved(p, _)
-                //                 if *p == performer
-                //         )
-                //     }
-                // }),
-                callback: Arc::new({
+            let event_listener = EventListener::new(
+                event.id,
+                Arc::new({
                     let action_id = action_id.clone();
                     let context = context.clone();
                     let target = target;
@@ -454,16 +416,16 @@ pub fn damage(
                     move |game_state, event| match &event.kind {
                         EventKind::DamageRollResolved(performer, damage_roll_result) => {
                             // Create an event to represent the saving throw being made
-                            let saving_throw_event_id = systems::d20::check(
+                            let saving_throw_event = systems::d20::check(
                                 game_state,
                                 *performer,
                                 &D20CheckDCKind::SavingThrow(saving_throw_dc.clone()),
                             );
 
                             // Create an event listener to handle the result of the saving throw
-                            return EventOrListener::Listener(EventListener {
-                                trigger_id: saving_throw_event_id,
-                                callback: Arc::new({
+                            return CallbackResult::EventWithCallback(
+                                saving_throw_event,
+                                Arc::new({
                                     let action_id = action_id.clone();
                                     let context = context.clone();
                                     let target = target;
@@ -508,7 +470,7 @@ pub fn damage(
                                                 &resistances,
                                             );
 
-                                            return EventOrListener::Event(Event::new(
+                                            return CallbackResult::Event(Event::new(
                                                 EventKind::ActionPerformed {
                                                     action: ActionData {
                                                         actor: *performer,
@@ -550,14 +512,14 @@ pub fn damage(
                                         }
                                     }
                                 }),
-                            });
+                            );
                         }
                         _ => {
                             panic!("Unexpected event kind in damage roll callback: {:?}", event);
                         }
                     }
                 }),
-            };
+            );
 
             (event, event_listener)
         }

@@ -217,8 +217,9 @@ pub fn available_reactions_to_event(
     world: &World,
     reactor: Entity,
     event: &Event,
-) -> Vec<ReactionResult> {
+) -> Vec<ReactionData> {
     let mut reactions = Vec::new();
+
     for (reaction_id, (contexts, resource_cost)) in
         systems::actions::available_actions(world, reactor)
     {
@@ -235,12 +236,24 @@ pub fn available_reactions_to_event(
         };
 
         if let Some(trigger) = &reaction.reaction_trigger {
-            for context in &contexts {
-                if let Some(result) = trigger(reactor, event, context) {
-                    reactions.push(result);
+            if trigger(reactor, event) {
+                for context in &contexts {
+                    // TODO: Lots of duplicated information here
+                    reactions.push(ReactionData {
+                        reactor,
+                        event: event.clone().into(),
+                        reaction_id: reaction_id.clone(),
+                        context: ActionContext::Reaction {
+                            trigger_event: Box::new(event.clone()),
+                            resource_cost: resource_cost.clone(),
+                            context: Box::new(context.clone()),
+                        },
+                        resource_cost: resource_cost.clone(),
+                    });
                 }
             }
         }
     }
+
     reactions
 }

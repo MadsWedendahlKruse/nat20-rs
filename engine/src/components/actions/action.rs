@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    fmt::{Debug, Display},
+    fmt::Debug,
     sync::Arc,
 };
 
@@ -8,10 +8,7 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        actions::{
-            action,
-            targeting::{TargetTypeInstance, TargetingContext},
-        },
+        actions::targeting::{TargetTypeInstance, TargetingContext},
         d20::D20CheckResult,
         damage::{
             AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
@@ -21,19 +18,19 @@ use crate::{
         id::{ActionId, EffectId, EntityIdentifier, ResourceId},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
         resource::{RechargeRule, ResourceCostMap, ResourceError, ResourceMap},
-        saving_throw::{self, SavingThrowDC, SavingThrowSet},
+        saving_throw::SavingThrowDC,
         spells::spellbook::Spellbook,
     },
     engine::{
-        event::{self, ActionData, Event, EventId, EventKind, EventListener},
-        game_state::{self, GameState},
+        event::{ActionData, Event, EventId, EventKind},
+        game_state::GameState,
     },
     systems::{self},
 };
 
 /// Represents the context in which an action is performed.
 /// This can be used to determine the type of action (e.g. weapon, spell, etc.)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ActionContext {
     // TODO: Not sure if Weapon needs more info?
     Weapon {
@@ -44,6 +41,16 @@ pub enum ActionContext {
     /// For example, Fireball deals more damage when cast at a higher level.
     Spell {
         level: u8,
+    },
+    Reaction {
+        /// Reactions can be triggered by a variety of events, so it is important
+        /// to know what event triggered the reaction. This can be used to determine
+        /// the effect of the reaction (e.g. Counterspell, Shield, etc.)
+        trigger_event: Box<Event>,
+        resource_cost: ResourceCostMap,
+        /// Useful to know if the reaction is e.g. a spell.
+        /// Note: don't nest reactions :)
+        context: Box<ActionContext>,
     },
     // TODO: Not sure if Other is needed
     Other,
@@ -169,9 +176,14 @@ pub enum ActionKindResult {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ReactionResult {
-    NewEvent { event: EventKind },
-    ModifyEvent { event: Arc<Event> },
-    CancelEvent { event_id: EventId },
+    // TODO: Should Modify just contain the new event after modification?
+    ModifyEvent {
+        event: Arc<Event>,
+    },
+    CancelEvent {
+        event_id: EventId,
+        resources_refunded: ResourceCostMap,
+    },
     NoEffect,
 }
 
@@ -185,8 +197,7 @@ pub struct Action {
     /// Optional cooldown for the action
     pub cooldown: Option<RechargeRule>,
     /// If the action is a reaction, this will describe what triggers the reaction.
-    pub reaction_trigger:
-        Option<Arc<dyn Fn(Entity, &Event, &ActionContext) -> Option<ReactionResult> + Send + Sync>>,
+    pub reaction_trigger: Option<Arc<dyn Fn(Entity, &Event) -> bool + Send + Sync>>,
 }
 
 /// Represents the result of performing an action on a single target. For actions that affect multiple targets,
@@ -346,10 +357,18 @@ impl ActionKind {
                 }
             }
 
-            ActionKind::Reaction { reaction } => {
-                // reaction(game_state, performer, &game_state.events[&event_id]);
-                todo!("Reactions are not yet implemented");
-            }
+            ActionKind::Reaction { reaction } => match context {
+                ActionContext::Reaction {
+                    trigger_event,
+                    context: reaction_context,
+                    ..
+                } => {
+                    reaction(game_state, performer, trigger_event, reaction_context);
+                }
+                _ => {
+                    panic!("ActionContext must be Reaction for Reaction actions");
+                }
+            },
 
             ActionKind::Custom(custom) => {
                 // custom(game_state.world, target, context)

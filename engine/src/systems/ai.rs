@@ -2,14 +2,11 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        actions::action::{Action, ActionKind},
-        ai::PlayerControlledTag,
-        faction::Attitude,
-        id::AIControllerId,
+        actions::action::ActionKind, ai::PlayerControlledTag, faction::Attitude, id::AIControllerId,
     },
     engine::{
         encounter::Encounter,
-        event::{ActionDecision, ActionPrompt},
+        event::{ActionDecisionPartial, ActionPrompt},
     },
     registry, systems,
 };
@@ -23,7 +20,7 @@ pub fn decide_action(
     encounter: &Encounter,
     prompt: &ActionPrompt,
     actor: Entity,
-) -> Option<ActionDecision> {
+) -> Option<ActionDecisionPartial> {
     let controller_id = systems::helpers::get_component::<AIControllerId>(world, actor);
 
     registry::ai::AI_CONTROLLER_REGISTRY

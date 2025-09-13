@@ -129,12 +129,12 @@ impl MainMenuWindow {
                             *debug_window = Some(CreatureDebugWindow::new(*entity));
                             ui.open_popup("Debug");
                         }
-
-                        if let Some(debug_gui) = debug_window {
-                            debug_gui.render_mut_with_context(ui, game_state);
-                        }
                     }
                 });
+
+                if let Some(debug_gui) = debug_window {
+                    debug_gui.render_mut_with_context(ui, game_state);
+                }
 
                 ui.separator();
                 if ui.button("Spawn Creature") {

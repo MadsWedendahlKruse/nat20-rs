@@ -1,11 +1,11 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     thread::{sleep, sleep_ms},
     time::Duration,
 };
 
 use hecs::{Entity, World};
-use imgui::ChildFlags;
+use imgui::{ChildFlags, TreeNodeFlags};
 use nat20_rs::{
     components::{
         actions::{
@@ -17,9 +17,11 @@ use nat20_rs::{
         spells::spellbook::Spellbook,
     },
     engine::{
-        encounter::{Encounter, EncounterId, ParticipantsFilter},
-        event::{ActionData, ActionPrompt, ReactionData},
-        game_state::GameState,
+        encounter::{self, Encounter, EncounterId, ParticipantsFilter},
+        event::{
+            ActionData, ActionDecision, ActionDecisionPartial, ActionPrompt, Event, ReactionData,
+        },
+        game_state::{self, GameState},
     },
     registry, systems,
 };
@@ -46,12 +48,12 @@ enum ActionDecisionProgress {
         context_options: Vec<ActionContext>,
         chosen_context: Option<ActionContext>,
         targets: Vec<Entity>,
+        targets_confirmed: bool,
     },
-    Reaction {
-        reactor: Entity,
-        action: ActionData,
-        options: Vec<ReactionData>,
-        choice: Option<ReactionData>,
+    Reactions {
+        event: Event,
+        options: HashMap<Entity, Vec<ReactionData>>,
+        choices: HashMap<Entity, Option<ReactionData>>,
     },
 }
 
@@ -60,15 +62,10 @@ impl ActionDecisionProgress {
         match prompt {
             ActionPrompt::Action { actor } => Self::action_with_actor(*actor),
 
-            ActionPrompt::Reaction {
-                reactor,
-                action,
-                options,
-            } => Self::Reaction {
-                reactor: *reactor,
-                action: action.clone(),
+            ActionPrompt::Reactions { event, options } => Self::Reactions {
+                event: event.clone(),
                 options: options.clone(),
-                choice: None,
+                choices: HashMap::new(),
             },
         }
     }
@@ -81,6 +78,131 @@ impl ActionDecisionProgress {
             context_options: Vec::new(),
             chosen_context: None,
             targets: Vec::new(),
+            targets_confirmed: false,
+        }
+    }
+
+    pub fn add_partial_decision(&mut self, decision: ActionDecisionPartial) {
+        match (self, decision) {
+            (
+                ActionDecisionProgress::Action {
+                    actor,
+                    chosen_action,
+                    chosen_context,
+                    targets,
+                    ..
+                },
+                ActionDecisionPartial::Action {
+                    action:
+                        ActionData {
+                            actor: decision_actor,
+                            action_id,
+                            context,
+                            targets: decision_targets,
+                        },
+                },
+            ) => {
+                assert_eq!(*actor, decision_actor);
+                *chosen_action = Some(action_id);
+                *chosen_context = Some(context);
+                *targets = decision_targets;
+            }
+
+            (
+                ActionDecisionProgress::Reactions { choices, .. },
+                ActionDecisionPartial::Reaction {
+                    reactor, choice, ..
+                },
+            ) => {
+                choices.insert(reactor, choice);
+            }
+
+            _ => {
+                panic!("Mismatched decision type");
+            }
+        }
+    }
+
+    pub fn actors(&self) -> Vec<Entity> {
+        match self {
+            ActionDecisionProgress::Action { actor, .. } => vec![*actor],
+            ActionDecisionProgress::Reactions { options, .. } => options.keys().cloned().collect(),
+        }
+    }
+
+    pub fn decision_from(&self, entity: Entity) -> Option<ActionDecisionPartial> {
+        match self {
+            ActionDecisionProgress::Action {
+                actor,
+                chosen_action,
+                chosen_context,
+                targets,
+                targets_confirmed,
+                ..
+            } => {
+                if *actor == entity
+                    && chosen_action.is_some()
+                    && chosen_context.is_some()
+                    && *targets_confirmed
+                {
+                    Some(ActionDecisionPartial::Action {
+                        action: ActionData {
+                            actor: *actor,
+                            action_id: chosen_action.as_ref().unwrap().clone(),
+                            context: chosen_context.as_ref().unwrap().clone(),
+                            targets: targets.clone(),
+                        },
+                    })
+                } else {
+                    None
+                }
+            }
+
+            ActionDecisionProgress::Reactions { choices, event, .. } => {
+                if let Some(choice) = choices.get(&entity) {
+                    Some(ActionDecisionPartial::Reaction {
+                        reactor: entity,
+                        event: event.clone(),
+                        choice: choice.clone(),
+                    })
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    pub fn has_decision_from(&self, entity: Entity) -> bool {
+        self.decision_from(entity).is_some()
+    }
+
+    pub fn is_complete(&self) -> bool {
+        match self {
+            ActionDecisionProgress::Action {
+                chosen_action,
+                chosen_context,
+                targets_confirmed: action_confirmed,
+                ..
+            } => chosen_action.is_some() && chosen_context.is_some() && *action_confirmed,
+
+            ActionDecisionProgress::Reactions {
+                choices, options, ..
+            } => {
+                // All reactors must have made a choice
+                for (reactor, reactor_options) in options {
+                    if !choices.contains_key(reactor) {
+                        return false;
+                    }
+
+                    // If they made a choice, it must be valid
+                    if let Some(choice) = &choices[reactor] {
+                        if !reactor_options.iter().any(|opt| opt == choice) {
+                            return false;
+                        }
+                    }
+                }
+                true
+            }
         }
     }
 
@@ -88,11 +210,10 @@ impl ActionDecisionProgress {
         match self {
             ActionDecisionProgress::Action {
                 actor,
-                action_options,
                 chosen_action,
-                context_options,
                 chosen_context,
                 targets,
+                ..
             } => ActionDecision::Action {
                 action: ActionData {
                     actor: actor.clone(),
@@ -101,16 +222,9 @@ impl ActionDecisionProgress {
                     targets: targets.clone(),
                 },
             },
-            ActionDecisionProgress::Reaction {
-                reactor,
-                action,
-                options,
-                choice,
-            } => ActionDecision::Reaction {
-                reactor,
-                action,
-                choice,
-            },
+            ActionDecisionProgress::Reactions { event, choices, .. } => {
+                ActionDecision::Reactions { event, choices }
+            }
         }
     }
 }
@@ -205,7 +319,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterWindow {
 
                 if let Some(encounter_ptr) = encounter_ptr {
                     // Now safe to mutably borrow world
-                    let world = &mut game_state.world;
+                    // let world = &mut game_state.world;
 
                     // SAFETY: we know no other mutable borrow of the encounter exists at this point
                     let encounter = unsafe { &mut *encounter_ptr };
@@ -217,11 +331,10 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterWindow {
                                 | ChildFlags::AUTO_RESIZE_Y,
                         )
                         .build(|| {
-                            encounter.render_mut_with_context(ui, (world, decision_progress));
+                            encounter.render_mut_with_context(ui, (game_state, decision_progress));
                         });
 
                     ui.same_line();
-
                     ui.child_window(format!("Combat Log: {}", self.id))
                         .child_flags(
                             ChildFlags::ALWAYS_AUTO_RESIZE
@@ -239,7 +352,9 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterWindow {
                                 )
                                 .size([0.0, 500.0])
                                 .build(|| {
-                                    encounter.combat_log().render_with_context(ui, world);
+                                    encounter
+                                        .combat_log()
+                                        .render_with_context(ui, &game_state.world);
 
                                     if *auto_scroll_combat_log
                                         && ui.scroll_y() >= ui.scroll_max_y() - 5.0
@@ -249,6 +364,87 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterWindow {
                                 });
 
                             ui.checkbox("Auto-scroll", auto_scroll_combat_log);
+                        });
+
+                    ui.same_line();
+                    ui.child_window(format!("Encounter Debug##{}", self.id))
+                        .child_flags(
+                            ChildFlags::ALWAYS_AUTO_RESIZE
+                                | ChildFlags::AUTO_RESIZE_X
+                                | ChildFlags::AUTO_RESIZE_Y,
+                        )
+                        .build(|| {
+                            ui.separator_with_text("Encounter Debug Info");
+
+                            ui.child_window("Debug Info Content")
+                                .child_flags(
+                                    ChildFlags::ALWAYS_AUTO_RESIZE
+                                        | ChildFlags::AUTO_RESIZE_X
+                                        | ChildFlags::BORDERS,
+                                )
+                                .size([0.0, 500.0])
+                                .build(|| {
+                                    ui.text(self.id.to_string());
+
+                                    if ui.collapsing_header("Participants", TreeNodeFlags::FRAMED) {
+                                        for participant in encounter.participants(
+                                            &game_state.world,
+                                            ParticipantsFilter::All,
+                                        ) {
+                                            let name =
+                                                systems::helpers::get_component_clone::<Name>(
+                                                    &game_state.world,
+                                                    participant,
+                                                )
+                                                .to_string();
+                                            ui.text(format!("{} ({:?})", name, participant));
+                                        }
+                                    }
+
+                                    if ui
+                                        .collapsing_header("Pending Prompts", TreeNodeFlags::FRAMED)
+                                    {
+                                        for prompt in encounter.pending_prompts() {
+                                            ui.text(format!("{:#?}", prompt));
+                                        }
+                                    }
+
+                                    if ui.collapsing_header(
+                                        "Decision Progress",
+                                        TreeNodeFlags::FRAMED,
+                                    ) {
+                                        if let Some(progress) = decision_progress {
+                                            for actor in progress.actors() {
+                                                let name = systems::helpers::get_component_clone::<
+                                                    Name,
+                                                >(
+                                                    &game_state.world, actor
+                                                )
+                                                .to_string();
+
+                                                if let Some(decision) =
+                                                    progress.decision_from(actor)
+                                                {
+                                                    ui.text(format!(
+                                                        "{}'s decision: {:#?}",
+                                                        name, decision
+                                                    ));
+                                                } else {
+                                                    ui.text(format!(
+                                                        "{} has not decided yet",
+                                                        name
+                                                    ));
+                                                }
+
+                                                ui.separator();
+                                            }
+
+                                            ui.text(format!("{:#?}", progress));
+                                        } else {
+                                            ui.text("No decision in progress");
+                                        }
+                                    }
+                                });
                         });
                 } else {
                     ui.text("Encounter not found!");
@@ -268,25 +464,26 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterWindow {
     }
 }
 
-impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgress>)>
+impl ImguiRenderableMutWithContext<(&mut GameState, &mut Option<ActionDecisionProgress>)>
     for Encounter
 {
     fn render_mut_with_context(
         &mut self,
         ui: &imgui::Ui,
-        context: (&mut World, &mut Option<ActionDecisionProgress>),
+        context: (&mut GameState, &mut Option<ActionDecisionProgress>),
     ) {
         ui.separator_with_text("Participants");
-        let (world, decision_progress) = context;
+        let (game_state, decision_progress) = context;
 
         let initiative_order = self.initiative_order();
         let current_entity = self.current_entity();
         let current_name =
-            systems::helpers::get_component_clone::<Name>(world, current_entity).to_string();
+            systems::helpers::get_component_clone::<Name>(&game_state.world, current_entity)
+                .to_string();
 
         if let Some(table) = table_with_columns!(ui, "Initiative Order", "", "Participant",) {
             for (entity, initiative) in initiative_order {
-                if let Ok(_) = world.query_one_mut::<&Name>(*entity) {
+                if let Ok(_) = &game_state.world.query_one_mut::<&Name>(*entity) {
                     // Initiative column
                     ui.table_next_column();
                     ui.text(initiative.total.to_string());
@@ -303,7 +500,8 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
 
                     // Participant column
                     ui.table_next_column();
-                    entity.render_with_context(ui, (world, CreatureRenderMode::Compact));
+                    entity
+                        .render_with_context(ui, (&game_state.world, CreatureRenderMode::Compact));
                 }
             }
 
@@ -313,24 +511,14 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
         ui.separator();
         ui.text(format!("Round: {}", self.round()));
 
-        // TODO: If it's not a characters turn, the AI can make a decision here?
-        // Also a bit odd maybe to have it in the render function?
-        let player_controlled = systems::ai::is_player_controlled(world, current_entity);
-
-        if !player_controlled {
-            handle_ai_decision(self, world, current_entity);
+        let next_prompt = self.next_pending_prompt();
+        if next_prompt.is_none() {
+            ui.text("No action prompt available.");
+            return;
         }
+        let next_prompt = next_prompt.unwrap();
 
-        // TODO: Everything below this line is a bit messy and should be cleaned up
-
-        if player_controlled && decision_progress.is_none() {
-            let next_prompt = self.next_prompt();
-            if next_prompt.is_none() {
-                ui.text("No action prompt available.");
-                return;
-            }
-            let next_prompt = next_prompt.unwrap();
-
+        if decision_progress.is_none() {
             *decision_progress = Some(ActionDecisionProgress::from_prompt(&next_prompt));
             println!(
                 "Starting action decision progress for prompt: {:?}",
@@ -338,104 +526,107 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<ActionDecisionProgre
             );
         }
 
-        // For the sake of visual clarity the current entity's available actions
-        // are always rendered. In the event of a reaction prompt, the actions
-        // will then be disabled. This requires a little bit of special treatment
+        // Check which actors have note yet made a decision
+        let actors = next_prompt.actors();
+        let mut rendered_player_ui = false;
+        for actor in actors {
+            if !decision_progress.as_ref().unwrap().has_decision_from(actor) {
+                // Check if any of the actors are AI controlled
+                if !systems::ai::is_player_controlled(&game_state.world, actor) {
+                    if let Some(decision) =
+                        systems::ai::decide_action(&game_state.world, self, &next_prompt, actor)
+                    {
+                        println!("AI decided on action: {:?}", decision);
+                        decision_progress
+                            .as_mut()
+                            .unwrap()
+                            .add_partial_decision(decision);
+                    } else {
+                        // TODO: This is probably going to break something at some point...
+                        println!(
+                            "AI could not decide on action for prompt: {:?}. Assuming end turn.",
+                            next_prompt
+                        );
+                        self.end_turn(game_state, actor);
+                        break;
+                    }
+                } else {
+                    if rendered_player_ui {
+                        continue;
+                    } else {
+                        rendered_player_ui = true;
+                    }
 
-        let actions_disabled = decision_progress.is_none()
-            || !matches!(
-                decision_progress.as_ref().unwrap(),
-                ActionDecisionProgress::Action { .. }
-            )
-            || !player_controlled;
+                    // For the sake of visual clarity the current entity's available actions
+                    // are always rendered. In the event of a reaction prompt, the actions
+                    // will then be disabled. This requires a little bit of special treatment
 
-        ui.separator_with_text(format!("Current turn: {}", current_name));
+                    let actions_disabled = !matches!(
+                        decision_progress.as_ref().unwrap(),
+                        ActionDecisionProgress::Action { .. }
+                    );
 
-        let disabled_token = if actions_disabled {
-            // Render whatever the actual decision progress is
-            decision_progress.render_mut_with_context(ui, (world, self));
+                    ui.separator_with_text(format!("Current turn: {}", current_name));
 
-            // Render placeholder action selection UI
-            let token = Some(ui.begin_disabled(actions_disabled));
-            Some(ActionDecisionProgress::from_prompt(&ActionPrompt::Action {
-                actor: current_entity,
-            }))
-            .render_mut_with_context(ui, (world, self));
+                    let disabled_token = if actions_disabled {
+                        // Render whatever the actual decision progress is
+                        decision_progress.render_mut_with_context(ui, game_state);
 
-            token
-        } else {
-            // Render the actual action selection UI
-            decision_progress.render_mut_with_context(ui, (world, self));
-            None
-        };
+                        // Render placeholder action selection UI
+                        let token = Some(ui.begin_disabled(actions_disabled));
+                        Some(ActionDecisionProgress::from_prompt(&ActionPrompt::Action {
+                            actor: current_entity,
+                        }))
+                        .render_mut_with_context(ui, game_state);
 
-        ui.separator();
+                        token
+                    } else {
+                        // Render the actual action selection UI
+                        decision_progress.render_mut_with_context(ui, game_state);
+                        None
+                    };
 
-        if ui.button("End Turn") {
-            decision_progress.take(); // Clear decision progress
-            self.end_turn(world, current_entity);
-        }
+                    ui.separator();
 
-        if let Some(token) = disabled_token {
-            token.end();
+                    if ui.button("End Turn") {
+                        decision_progress.take(); // Clear decision progress
+                        self.end_turn(game_state, current_entity);
+                        break;
+                    }
+
+                    if let Some(token) = disabled_token {
+                        token.end();
+                    }
+                }
+            }
         }
     }
 }
 
-fn handle_ai_decision(encounter: &mut Encounter, world: &mut World, current_entity: Entity) {
-    let next_prompt = encounter.next_prompt();
-    if next_prompt.is_none() {
-        panic!("AI decision requested but no prompt available");
-    }
-    let next_prompt = next_prompt.unwrap();
-    let decision = systems::ai::decide_action(world, &encounter, &next_prompt, current_entity);
-
-    if let Some(decision) = decision {
-        println!("AI decided on action: {:?}", decision);
-        let result = encounter.submit_decision(world, decision);
-        match result {
-            Ok(event) => {
-                println!("Action processed successfully: {:?}", event);
-            }
-            Err(err) => {
-                println!("Error processing action: {:?}", err);
-            }
-        }
-    } else {
-        println!(
-            "AI could not decide on action for prompt: {:?}. Assuming end turn.",
-            next_prompt
-        );
-        encounter.end_turn(world, current_entity);
-    }
-}
-
-impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
-    for Option<ActionDecisionProgress>
-{
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: (&mut World, &mut Encounter)) {
+impl ImguiRenderableMutWithContext<&mut GameState> for Option<ActionDecisionProgress> {
+    fn render_mut_with_context(&mut self, ui: &imgui::Ui, game_state: &mut GameState) {
         if self.is_none() {
             ui.text("No action decision in progress.");
             return;
         }
 
-        let (world, encounter) = context;
-        let current_entity = encounter.current_entity();
         match self.as_mut().unwrap() {
             ActionDecisionProgress::Action {
-                actor: _,
+                actor,
                 action_options,
                 chosen_action,
                 context_options,
                 chosen_context,
                 targets,
+                targets_confirmed,
             } => {
                 ui.separator_with_text("Resources");
-                systems::helpers::get_component::<ResourceMap>(world, current_entity).render(ui);
+                systems::helpers::get_component::<ResourceMap>(&game_state.world, *actor)
+                    .render(ui);
 
                 {
                     let spellbook =
-                        systems::helpers::get_component::<Spellbook>(world, current_entity);
+                        systems::helpers::get_component::<Spellbook>(&game_state.world, *actor);
                     let spell_slots = spellbook.spell_slots();
                     if !spell_slots.is_empty() {
                         ui.separator_with_text("Spell Slots");
@@ -445,7 +636,8 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
 
                 ui.separator_with_text("Actions");
                 if action_options.is_empty() {
-                    *action_options = systems::actions::available_actions(world, current_entity);
+                    *action_options =
+                        systems::actions::available_actions(&game_state.world, *actor);
                 }
                 for (action_id, (contexts, resource_cost)) in action_options {
                     // Don't render reactions (actions that *only* cost a reaction)
@@ -475,13 +667,12 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                     });
                 }
 
-                let mut confirm_targets = false;
                 let mut cancel_action = false;
                 if chosen_action.is_some() && chosen_context.is_some() {
                     render_window_at_cursor(ui, "Target Selection", true, || {
                         TextSegments::new(vec![
                             (
-                                systems::helpers::get_component::<Name>(world, current_entity)
+                                systems::helpers::get_component::<Name>(&game_state.world, *actor)
                                     .to_string(),
                                 TextKind::Actor,
                             ),
@@ -494,20 +685,21 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                         .render(ui);
 
                         let targeting_context = systems::actions::targeting_context(
-                            world,
-                            current_entity,
+                            &game_state.world,
+                            *actor,
                             chosen_action.as_ref().unwrap(),
                             chosen_context.as_ref().unwrap(),
                         );
 
+                        let encounter_id = game_state.encounter_for_entity(actor).unwrap().clone();
                         targeting_context.render_with_context(
                             ui,
-                            (world, encounter, targets, &mut confirm_targets),
+                            (game_state, encounter_id, targets, targets_confirmed),
                         );
 
                         ui.separator();
                         if ui.button("Confirm Targets") {
-                            confirm_targets = true;
+                            *targets_confirmed = true;
                         }
                         ui.separator();
                         if ui.button("Cancel Action") {
@@ -515,9 +707,9 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                         }
                     });
 
-                    if confirm_targets {
+                    if *targets_confirmed {
                         let decision = self.take().unwrap().finalize();
-                        let result = encounter.submit_decision(world, decision);
+                        let result = game_state.submit_decision(decision);
                         match result {
                             Ok(event) => {
                                 println!("Action processed successfully: {:?}", event);
@@ -534,71 +726,84 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
                 }
             }
 
-            ActionDecisionProgress::Reaction {
-                reactor,
-                action,
+            ActionDecisionProgress::Reactions {
+                event,
                 options,
-                choice,
+                choices,
             } => {
-                let mut confirm_reaction = false;
-                render_window_at_cursor(ui, "Reaction", true, || {
-                    TextSegments::new(vec![
-                        (
-                            systems::helpers::get_component_clone::<Name>(world, action.actor)
-                                .to_string(),
-                            TextKind::Actor,
-                        ),
-                        ("used".to_string(), TextKind::Normal),
-                        (action.action_id.to_string(), TextKind::Action),
-                        ("on".to_string(), TextKind::Normal),
-                        (
-                            action
-                                .targets
-                                .iter()
-                                .map(|t| {
-                                    systems::helpers::get_component_clone::<Name>(world, *t)
-                                        .to_string()
-                                })
-                                .collect::<Vec<_>>()
-                                .join(", "),
-                            TextKind::Target,
-                        ),
-                    ])
-                    .render(ui);
+                render_window_at_cursor(ui, "Reactions", true, || {
+                    // TODO: Render the event that triggered the reaction
+                    ui.text(format!("Event: {:?}", event)); // TEMP
+
+                    // TextSegments::new(vec![
+                    //     (
+                    //         systems::helpers::get_component_clone::<Name>(world, action.actor)
+                    //             .to_string(),
+                    //         TextKind::Actor,
+                    //     ),
+                    //     ("used".to_string(), TextKind::Normal),
+                    //     (action.action_id.to_string(), TextKind::Action),
+                    //     ("on".to_string(), TextKind::Normal),
+                    //     (
+                    //         action
+                    //             .targets
+                    //             .iter()
+                    //             .map(|t| {
+                    //                 systems::helpers::get_component_clone::<Name>(world, *t)
+                    //                     .to_string()
+                    //             })
+                    //             .collect::<Vec<_>>()
+                    //             .join(", "),
+                    //         TextKind::Target,
+                    //     ),
+                    // ])
+                    // .render(ui);
 
                     ui.text("Choose how to react");
 
-                    ui.separator_with_text(
-                        systems::helpers::get_component_clone::<Name>(world, *reactor).as_str(),
-                    );
-                    for option in options {
-                        if render_button_selectable(
-                            ui,
-                            format!(
-                                "{}: {:?}\nCost: {:?}",
-                                option.reaction_id, option.context, option.resource_cost
-                            ),
-                            [0., 0.],
-                            choice.as_ref() == Some(option),
-                        ) {
-                            if choice.as_ref() == Some(option) {
-                                *choice = None;
+                    for (reactor, options) in options {
+                        ui.separator_with_text(
+                            systems::helpers::get_component_clone::<Name>(
+                                &game_state.world,
+                                *reactor,
+                            )
+                            .as_str(),
+                        );
+
+                        for option in options {
+                            let option_selected = if let Some(choice) = choices.get(reactor) {
+                                choice.as_ref() == Some(option)
                             } else {
-                                *choice = Some(option.clone());
+                                false
+                            };
+
+                            if render_button_selectable(
+                                ui,
+                                format!(
+                                    "{}: {:?}\nCost: {:?}##{:?}",
+                                    option.reaction_id,
+                                    option.context,
+                                    option.resource_cost,
+                                    reactor
+                                ),
+                                [0., 0.],
+                                option_selected,
+                            ) {
+                                choices.insert(*reactor, Some(option.clone()));
+                            }
+
+                            if ui.button(format!("Don't react##{:?}", reactor)) {
+                                choices.insert(*reactor, None);
                             }
                         }
                     }
 
                     ui.separator();
-
-                    if ui.button("Confirm Reaction") {
-                        confirm_reaction = true;
-                    }
                 });
 
-                if confirm_reaction {
+                if self.as_ref().unwrap().is_complete() {
                     let decision = self.take().unwrap().finalize();
-                    let result = encounter.submit_decision(world, decision).unwrap();
+                    let result = game_state.submit_decision(decision).unwrap();
                     match result {
                         _ => {
                             println!("{:?}", result);
@@ -610,15 +815,15 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Encounter)>
     }
 }
 
-impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut bool)>
+impl ImguiRenderableWithContext<(&mut GameState, EncounterId, &mut Vec<Entity>, &mut bool)>
     for TargetingContext
 {
     fn render_with_context(
         &self,
         ui: &imgui::Ui,
-        context: (&mut World, &Encounter, &mut Vec<Entity>, &mut bool),
+        context: (&mut GameState, EncounterId, &mut Vec<Entity>, &mut bool),
     ) {
-        let (world, encounter, targets, confirm_targets) = context;
+        let (game_state, encounter, targets, confirm_targets) = context;
 
         for target_type in &self.valid_target_types {
             match target_type {
@@ -626,7 +831,7 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
                     let filter = ParticipantsFilter::from(target_type.clone());
                     self.kind.render_with_context(
                         ui,
-                        (world, encounter, targets, confirm_targets, filter),
+                        (game_state, encounter, targets, confirm_targets, filter),
                     );
                 }
             }
@@ -636,8 +841,8 @@ impl ImguiRenderableWithContext<(&mut World, &Encounter, &mut Vec<Entity>, &mut 
 
 impl
     ImguiRenderableWithContext<(
-        &mut World,
-        &Encounter,
+        &mut GameState,
+        EncounterId,
         &mut Vec<Entity>,
         &mut bool,
         ParticipantsFilter,
@@ -647,20 +852,24 @@ impl
         &self,
         ui: &imgui::Ui,
         context: (
-            &mut World,
-            &Encounter,
+            &mut GameState,
+            EncounterId,
             &mut Vec<Entity>,
             &mut bool,
             ParticipantsFilter,
         ),
     ) {
-        let (world, encounter, targets, confirm_targets, filter) = context;
+        let (game_state, encounter, targets, confirm_targets, filter) = context;
 
+        let participants = game_state
+            .encounter(&encounter)
+            .unwrap()
+            .participants(&game_state.world, filter);
         match &self {
             TargetingKind::Single => {
                 ui.text("Select a single target:");
-                for entity in encounter.participants(&world, filter) {
-                    if let Ok(name) = world.query_one_mut::<&Name>(entity) {
+                for entity in participants {
+                    if let Ok(name) = game_state.world.query_one_mut::<&Name>(entity) {
                         if render_button_selectable(
                             ui,
                             format!("{}##{:?}", name.as_str(), entity),
@@ -684,8 +893,8 @@ impl
                     max_targets
                 ));
                 ui.separator_with_text("Possible targets");
-                for entity in encounter.participants(&world, filter) {
-                    if let Ok(name) = world.query_one_mut::<&Name>(entity) {
+                for entity in participants {
+                    if let Ok(name) = game_state.world.query_one_mut::<&Name>(entity) {
                         if ui.button(format!("{}##{:?}", name.as_str(), entity))
                             && targets.len() < max_targets
                         {
@@ -696,7 +905,7 @@ impl
                 ui.separator_with_text("Selected targets");
                 let mut remove_target = None;
                 for (i, target) in (&mut *targets).iter().enumerate() {
-                    if let Ok(name) = world.query_one_mut::<&Name>(*target) {
+                    if let Ok(name) = game_state.world.query_one_mut::<&Name>(*target) {
                         if ui.button(format!("{}##{}", name.as_str(), i)) {
                             remove_target = Some(i);
                         }
@@ -711,7 +920,7 @@ impl
             }
 
             TargetingKind::SelfTarget => {
-                targets.push(encounter.current_entity());
+                targets.push(game_state.encounter(&encounter).unwrap().current_entity());
                 *confirm_targets = true;
             }
 

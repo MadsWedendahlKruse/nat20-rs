@@ -17,7 +17,7 @@ use crate::render::{
 
 impl ImguiRenderableWithContext<&World> for EventLog {
     fn render_with_context(&self, ui: &imgui::Ui, world: &World) {
-        for entry in self {
+        for entry in self.events.iter() {
             match &entry.kind {
                 EventKind::Encounter(encounter_event) => match encounter_event {
                     EncounterEvent::EncounterStarted(encounter_id) => {
@@ -242,7 +242,7 @@ impl ImguiRenderableWithContext<&World> for EventLog {
                 }
 
                 _ => {
-                    ui.text(format!("Unhandled event: {:?}", entry));
+                    ui.text(format!("{:#?}", entry));
                 }
             }
         }

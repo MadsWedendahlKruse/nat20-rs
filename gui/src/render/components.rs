@@ -5,7 +5,7 @@ use nat20_rs::{
     components::{
         ability::{Ability, AbilityScore, AbilityScoreMap},
         actions::{
-            action::{ActionKindResult, ActionResult},
+            action::{ActionKindResult, ActionResult, ReactionResult},
             targeting::TargetTypeInstance,
         },
         d20::{D20CheckDC, D20CheckResult, RollMode},
@@ -1050,9 +1050,25 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
 
             ActionKindResult::Custom {} => todo!(),
 
-            ActionKindResult::Reaction { result } => {
-                todo!()
-            }
+            ActionKindResult::Reaction { result } => match result {
+                ReactionResult::ModifyEvent { event } => {
+                    todo!()
+                }
+
+                ReactionResult::CancelEvent {
+                    event_id,
+                    resources_refunded,
+                } => TextSegments::new(vec![
+                    (self.performer.name().to_string(), TextKind::Actor),
+                    ("canceled action".to_string(), TextKind::Normal),
+                    (format!("{}", event_id), TextKind::Details),
+                ])
+                .render(ui),
+
+                ReactionResult::NoEffect => {
+                    // TODO: Don't render anything?
+                }
+            },
         }
     }
 }

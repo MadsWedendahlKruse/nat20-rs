@@ -1,4 +1,4 @@
-use hecs::World;
+use hecs::{Entity, World};
 use nat20_rs::{
     components::id::Name,
     entities::{
@@ -77,12 +77,18 @@ impl ImguiRenderableMutWithContext<&mut World> for SpawnPredefinedWindow {
                 });
 
             if let Some(entity) = entity_to_spawn {
-                if let Ok(_) = self.world.get::<&CharacterTag>(entity) {
-                    main_world.spawn(Character::from_world(&self.world, entity));
-                }
-                if let Ok(_) = self.world.get::<&MonsterTag>(entity) {
-                    main_world.spawn(Monster::from_world(&self.world, entity));
-                }
+                let spawned_entity = if let Ok(_) = self.world.get::<&CharacterTag>(entity) {
+                    main_world.spawn(Character::from_world(&self.world, entity))
+                } else if let Ok(_) = self.world.get::<&MonsterTag>(entity) {
+                    main_world.spawn(Monster::from_world(&self.world, entity))
+                } else {
+                    panic!("Entity to spawn is neither a Character nor a Monster");
+                };
+
+                // Ensure the spawned entity has a unique name in the main world
+                // (much easier to debug this way)
+                set_unique_name(main_world, spawned_entity);
+
                 entity_to_spawn.take();
             }
 
@@ -91,5 +97,33 @@ impl ImguiRenderableMutWithContext<&mut World> for SpawnPredefinedWindow {
                 self.spawning_completed = true;
             }
         });
+    }
+}
+
+fn set_unique_name(world: &mut World, entity: Entity) {
+    let name = if let Ok(name) = world.get::<&Name>(entity) {
+        name.as_str().to_string()
+    } else {
+        "Unnamed".to_string()
+    };
+    let mut unique_name = name.clone();
+    let mut counter = 0;
+
+    while world
+        .query::<&Name>()
+        .iter()
+        .any(|(_, n)| n.as_str() == unique_name)
+    {
+        unique_name = format!("{} ({})", name, counter);
+        counter += 1;
+    }
+
+    if counter < 1 {
+        // Name is already unique, no need to update
+        return;
+    }
+
+    if let Ok(mut name) = world.get::<&mut Name>(entity) {
+        *name = Name::new(unique_name);
     }
 }

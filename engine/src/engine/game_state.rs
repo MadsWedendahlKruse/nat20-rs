@@ -6,11 +6,14 @@ use std::{
 use hecs::{Entity, World};
 
 use crate::{
-    components::actions::targeting::TargetType,
+    components::actions::{
+        action::{ActionKindResult, ReactionResult},
+        targeting::TargetType,
+    },
     engine::{
         encounter::{Encounter, EncounterId, ParticipantsFilter},
         event::{
-            self, ActionDecision, ActionError, ActionPrompt, EncounterEvent, Event, EventId,
+            ActionData, ActionDecision, ActionError, ActionPrompt, EncounterEvent, Event, EventId,
             EventKind, EventListener, EventLog, EventQueue,
         },
     },
@@ -76,6 +79,10 @@ impl GameState {
         self.encounters.get_mut(encounter_id)
     }
 
+    pub fn encounter_for_entity(&self, entity: &Entity) -> Option<&EncounterId> {
+        self.in_combat.get(entity)
+    }
+
     pub fn end_encounter(&mut self, encounter_id: &EncounterId) {
         if let Some(mut encounter) = self.encounters.remove(encounter_id) {
             for entity in encounter.participants(&self.world, ParticipantsFilter::All) {
@@ -94,56 +101,84 @@ impl GameState {
     }
 
     pub fn submit_decision(&mut self, decision: ActionDecision) -> Result<(), ActionError> {
-        let entity = decision.actor();
+        // Check that all of the actors involved in the decision have a are all
+        // either in combat or all out of combat
+        let mut encounter_id = None;
+        for actor in decision.actors() {
+            let actor_encounter_id = self.in_combat.get(&actor);
+            if let Some(id) = encounter_id {
+                if actor_encounter_id != Some(id) {
+                    // TODO: If this ever triggers then it'd be nice with a bit
+                    // more context
+                    panic!(
+                        "All actors in a decision must be either in combat or out of combat together"
+                    );
+                }
+            } else {
+                encounter_id = actor_encounter_id.as_ref().cloned();
+            }
+        }
 
-        // If the entity is in combat, then they're only allowed to submit
-        // decisions if it's their turn and they have a pending prompt
-        if let Some(encounter_id) = self.in_combat.get(&entity) {
+        // If the entities are in combat, then check that there is a pending
+        // prompt for them, and that the decision is valid for that prompt
+        if let Some(encounter_id) = encounter_id {
             if let Some(encounter) = self.encounters.get_mut(encounter_id) {
-                if self.pending_prompts.is_empty() {
-                    return Err(ActionError::MissingPrompt { decision });
+                if encounter.pending_prompts().is_empty() {
+                    return Err(ActionError::MissingPrompt {
+                        decision,
+                        prompts: encounter.pending_prompts().iter().cloned().collect(),
+                    });
                 }
 
-                if encounter.current_entity() != entity {
-                    return Err(ActionError::NotYourTurn { decision });
-                }
-
-                let prompt = encounter.next_prompt().unwrap();
-                prompt.is_valid_decision(&decision)?
+                let prompt = encounter.pop_prompt().unwrap();
+                prompt.is_valid_decision(&decision)?;
             } else {
                 panic!("Inconsistent state: entity is in combat but encounter not found");
             }
         }
 
-        let event = self.next_event(decision.clone())?;
-
-        self.process_event(event)?;
+        self.process_decision(decision)?;
 
         Ok(())
     }
 
-    fn next_event(&mut self, decision: ActionDecision) -> Result<Event, ActionError> {
+    fn process_decision(&mut self, decision: ActionDecision) -> Result<(), ActionError> {
         // Convert the decision into the appropriate event to process
         match &decision {
-            ActionDecision::Action { action } => Ok(Event::new(EventKind::ActionRequested {
-                action: action.clone(),
-            })),
+            ActionDecision::Action { action } => {
+                self.process_event(Event::new(EventKind::ActionRequested {
+                    action: action.clone(),
+                }))
+            }
 
-            ActionDecision::Reaction {
-                reactor,
-                event,
-                choice,
-            } => {
-                if let Some(reaction) = choice {
-                    Ok(Event::new(EventKind::ReactionRequested {
-                        reactor: *reactor,
-                        reaction: reaction.clone().into(),
-                        event: event.clone().into(),
-                    }))
-                } else {
-                    // No reaction chosen, simply continue with the pending event
-                    Ok(self.pending_events.pop_front().unwrap())
+            ActionDecision::Reactions { event, choices } => {
+                for (_, choice) in choices {
+                    // Process the chosen reactions, if any
+                    if let Some(reaction) = choice {
+                        self.process_event(Event::new(EventKind::ActionRequested {
+                            action: ActionData::from(reaction),
+                        }))?;
+                    }
                 }
+                // After processing all reactions, continue with the pending event
+                // (if any). Otherwise, if this happened inside an encounter, then
+                // prompt the current actor for their next action
+                if let Some(pending_event) = self.pending_events.pop_front() {
+                    self.process_event(pending_event)?;
+                } else if let Some(encounter_id) = self.in_combat.get(&event.actor().unwrap()) {
+                    if let Some(encounter) = self.encounters.get_mut(encounter_id) {
+                        encounter.queue_prompt(
+                            ActionPrompt::Action {
+                                actor: encounter.current_entity(),
+                            },
+                            true,
+                        );
+                    } else {
+                        panic!("Inconsistent state: entity is in combat but encounter not found");
+                    }
+                }
+
+                Ok(())
             }
         }
     }
@@ -153,53 +188,84 @@ impl GameState {
         self.log_event(event.clone());
 
         // 1. Check if the event is awaited (a response to a previous event)
-        let mut listener_event = None;
+        let mut awaited_event = None;
         if let Some(event_id) = event.response_to {
             if let Some(event_listener) = self.event_listeners.get(&event_id) {
                 if event_listener.matches(&event) {
-                    listener_event = Some(&event);
+                    awaited_event = Some(&event);
                 }
             }
         }
-        if let Some(event) = listener_event {
-            let event_listener = self.event_listeners.remove(&event.id).unwrap();
-            (event_listener.callback)(self, event);
+        if let Some(event) = awaited_event {
+            let event_listener = self
+                .event_listeners
+                .remove(&event.response_to.unwrap())
+                .unwrap();
+            event_listener.callback(self, event);
         }
 
+        // TODO: What about reactions outside of combat?
         // 2. If the actor is in combat, check if anyone can react to the event
         if let Some(actor) = event.actor() {
             if let Some(encounter_id) = self.in_combat.get(&actor) {
                 if let Some(encounter) = self.encounters.get_mut(encounter_id) {
-                    let mut reactions_triggered = false;
+                    let mut reaction_options = None;
+
                     for reactor in &encounter.participants(
                         &self.world,
                         ParticipantsFilter::from(TargetType::entity_not_dead()),
                     ) {
+                        if self.event_log.has_reacted(&event.id, reactor) {
+                            println!(
+                                "Entity {:?} has already reacted to event {:?}",
+                                reactor, event.id
+                            );
+                            continue;
+                        }
+
                         let reactions = systems::actions::available_reactions_to_event(
                             &self.world,
                             *reactor,
                             &event,
                         );
+
+                        println!(
+                            "Entity {:?} has {} available reactions to event {:?}",
+                            reactor,
+                            reactions.len(),
+                            event.id
+                        );
+
                         if !reactions.is_empty() {
-                            reactions_triggered = true;
+                            // Record the available reactions for this reactor
+                            reaction_options
+                                .get_or_insert_with(HashMap::new)
+                                .insert(*reactor, reactions);
 
-                            // If available, prompt the reactor for a reaction
-                            self.pending_prompts.push_front(ActionPrompt::Reaction {
-                                reactor: *reactor,
-                                event: event.clone(),
-                                options: reactions,
-                            });
-
-                            self.event_log
-                                .push(Event::new(EventKind::ReactionTriggered {
+                            encounter.log_event(
+                                Event::new(EventKind::ReactionTriggered {
                                     reactor: *reactor,
                                     trigger_event: event.clone().into(),
-                                }));
-                            // Save the event for later processing
-                            self.pending_events.push_back(event.clone());
+                                })
+                                .as_response_to(event.id),
+                            );
+
+                            self.event_log.record_reaction(event.id, *reactor);
                         }
                     }
-                    if reactions_triggered {
+
+                    if let Some(options) = reaction_options {
+                        // Prompt all reactors for their reaction
+                        encounter.queue_prompt(
+                            ActionPrompt::Reactions {
+                                event: event.clone(),
+                                options,
+                            },
+                            false,
+                        );
+
+                        // Save the event being reacted to for later processing
+                        self.pending_events.push_back(event);
                         return Ok(());
                     }
                 } else {
@@ -209,9 +275,66 @@ impl GameState {
         }
 
         // 3. Advance the event
-        event.advance_event(self);
+        self.advance_event(event);
 
         Ok(())
+    }
+
+    // TODO: I guess this is where the event actually "does" something? New name?
+    pub fn advance_event(&mut self, event: Event) {
+        match &event.kind {
+            EventKind::ActionRequested { action } => {
+                // TODO: Where do we validate the action can be performed?
+                systems::actions::perform_action(self, action);
+            }
+
+            EventKind::ActionPerformed { results, .. } => {
+                for action_result in results {
+                    match &action_result.kind {
+                        ActionKindResult::Reaction {
+                            result: reaction_result,
+                        } => {
+                            match reaction_result {
+                                ReactionResult::CancelEvent {
+                                    event_id,
+                                    resources_refunded,
+                                } => {
+                                    // TODO: Do something with the resources
+                                    self.pending_events.retain(|e| &e.id != event_id);
+                                }
+
+                                // TODO: How to handle this properly?
+                                ReactionResult::ModifyEvent { event } => {}
+
+                                ReactionResult::NoEffect => { /* Do nothing */ }
+                            }
+                        }
+
+                        _ => {}
+                    }
+                }
+            }
+
+            EventKind::D20CheckPerformed(entity, kind, dc_kind) => {
+                let _ = self.process_event(
+                    Event::new(EventKind::D20CheckResolved(
+                        *entity,
+                        kind.clone(),
+                        dc_kind.clone(),
+                    ))
+                    .as_response_to(event.id),
+                );
+            }
+
+            EventKind::DamageRollPerformed(entity, damage) => {
+                let _ = self.process_event(
+                    Event::new(EventKind::DamageRollResolved(*entity, damage.clone()))
+                        .as_response_to(event.id),
+                );
+            }
+
+            _ => {} // No follow-up event
+        }
     }
 
     fn log_event(&mut self, event: Event) {
@@ -234,7 +357,7 @@ impl GameState {
 
     pub fn add_event_listener(&mut self, event_listener: EventListener) {
         self.event_listeners
-            .insert(event_listener.trigger_id, event_listener);
+            .insert(event_listener.trigger_id(), event_listener);
     }
 
     pub fn process_event_with_listener(

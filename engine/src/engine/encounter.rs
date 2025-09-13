@@ -14,19 +14,21 @@ use crate::{
         health::life_state::{DEATH_SAVING_THROW_DC, LifeState},
         id::{AIControllerId, ActionId},
         modifier::{ModifierSet, ModifierSource},
-        resource::RechargeRule,
+        resource::{RechargeRule, ResourceMap},
         saving_throw::SavingThrowKind,
         skill::{Skill, SkillSet},
     },
     engine::{
         event::{
-            self, ActionData, ActionPrompt, EncounterEvent, Event, EventId, EventKind,
-            EventListener, EventLog, EventOrListener, EventQueue, ReactionData,
+            self, ActionData, ActionDecision, ActionError, ActionPrompt, CallbackResult,
+            EncounterEvent, Event, EventId, EventKind, EventListener, EventLog, EventQueue,
+            ReactionData,
         },
         game_state::{self, GameState},
     },
     entities::{character::CharacterTag, monster::MonsterTag},
-    registry, systems,
+    registry::{self, resources},
+    systems,
 };
 
 pub type EncounterId = Uuid;
@@ -57,6 +59,7 @@ impl From<TargetType> for ParticipantsFilter {
     }
 }
 
+#[derive(Debug)]
 pub struct Encounter {
     id: EncounterId,
     participants: HashSet<Entity>,
@@ -77,7 +80,7 @@ impl Encounter {
             turn_index: 0,
             initiative_order: Vec::new(),
             pending_prompts: VecDeque::new(),
-            event_log: Vec::new(),
+            event_log: EventLog::new(),
         };
         encounter.roll_initiative(&game_state.world);
         encounter.start_turn(game_state);
@@ -120,7 +123,23 @@ impl Encounter {
         idx
     }
 
-    pub fn next_prompt(&mut self) -> Option<ActionPrompt> {
+    pub fn pending_prompts(&self) -> &VecDeque<ActionPrompt> {
+        &self.pending_prompts
+    }
+
+    pub(crate) fn queue_prompt(&mut self, prompt: ActionPrompt, at_front: bool) {
+        if at_front {
+            self.pending_prompts.push_front(prompt);
+        } else {
+            self.pending_prompts.push_back(prompt);
+        }
+    }
+
+    pub fn next_pending_prompt(&self) -> Option<&ActionPrompt> {
+        self.pending_prompts.front()
+    }
+
+    pub(crate) fn pop_prompt(&mut self) -> Option<ActionPrompt> {
         self.pending_prompts.pop_front()
     }
 
@@ -192,9 +211,14 @@ impl Encounter {
             panic!("Cannot end turn for entity that is not the current entity");
         }
 
-        for prompt in game_state.pending_prompts.iter() {
-            if prompt.actor() != entity {
-                panic!("Cannot end turn while there are pending prompts for other entities");
+        for prompt in self.pending_prompts.iter() {
+            for respondent in prompt.actors() {
+                if respondent != entity {
+                    panic!(
+                        "Attempted to end turn for {:?} but there is a pending prompt for {:?}",
+                        entity, respondent
+                    );
+                }
             }
         }
 
@@ -227,8 +251,8 @@ impl Encounter {
         );
 
         if is_unconscious {
-            // TODO: Implement death saving throws
-            
+            // TODO: Re-implement death saving throws
+
             // 2) Do the d20 roll (needs only &World)
             // let check_dc = D20CheckDC {
             //     dc: ModifierSet::from_iter([(
