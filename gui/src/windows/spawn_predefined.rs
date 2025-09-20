@@ -1,6 +1,6 @@
 use hecs::{Entity, World};
 use nat20_rs::{
-    components::id::Name,
+    components::{id::Name, resource::RechargeRule},
     entities::{
         character::{Character, CharacterTag},
         monster::{Monster, MonsterTag},
@@ -35,8 +35,8 @@ impl SpawnPredefinedWindow {
         for spawner in spawners {
             let entity = spawner(&mut world).id();
             println!("Spawned predefined entity: {:?}", entity);
-            // They spawn with zero health, so we heal them to full
-            systems::health::heal_full(&mut world, entity);
+            // Ensure all resources are fully recharged
+            systems::time::pass_time(&mut world, entity, &RechargeRule::LongRest);
         }
 
         Self {

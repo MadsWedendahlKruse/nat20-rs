@@ -24,7 +24,7 @@ use crate::{
         id::{EntityIdentifier, SpellId},
         modifier::{ModifierSet, ModifierSource},
         proficiency::{Proficiency, ProficiencyLevel},
-        resource::ResourceCostMap,
+        resource::ResourceAmountMap,
         saving_throw::{self, SavingThrowKind},
         spells::{
             spell::{MagicSchool, Spell},
@@ -55,7 +55,7 @@ pub static COUNTERSPELL_ID: LazyLock<SpellId> =
 static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
     Spell::new(
         COUNTERSPELL_ID.clone(),
-        3, // Level 3 spell
+        3,
         MagicSchool::Abjuration,
         ActionKind::Reaction {
             reaction: Arc::new(|game_state, reactor, trigger_event, reaction_context| {
@@ -73,78 +73,86 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
 
                 let saving_throw_event = systems::d20::check(
                     game_state,
-                    reactor,
+                    trigger_action.actor,
                     &D20CheckDCKind::SavingThrow(spell_save_dc.clone()),
                 );
-                let saving_throw_event_id = saving_throw_event.id;
-
                 // Wait for the actor to perform a CON save
-                let _ = game_state.process_event_with_listener(
+                let _ = game_state.process_event_with_callback(
                     saving_throw_event,
-                    EventListener::new(
-                        saving_throw_event_id,
-                        // Once the save is resolved, continue processing the Counterspell
-                        Arc::new({
-                            let trigger_event = trigger_event.clone();
-                            let reaction_context = reaction_context.clone();
-                            move |game_state, event| match &event.kind {
-                                EventKind::D20CheckResolved(actor, result_kind, dc_kind) => {
-                                    match result_kind {
-                                        D20ResultKind::SavingThrow { kind, result } => {
-                                            let result = if result.success {
-                                                // Successful save, Counterspell fails
-                                                ReactionResult::NoEffect
-                                            } else {
-                                                // Failed save, Counterspell succeeds
-                                                ReactionResult::CancelEvent {
-                                                    event_id: trigger_event.id.clone(),
-                                                    // Spell slots are not consumed by Counterspell
-                                                    // TODO: How do we do that? Spell slots aren't a resource
-                                                    // TODO: This is wrong
-                                                    resources_refunded: ResourceCostMap::from([(
-                                                        registry::resources::REACTION.clone(),
-                                                        1,
-                                                    )]),
-                                                }
-                                            };
+                    // Once the save is resolved, continue processing the Counterspell
+                    Arc::new({
+                        let trigger_event = trigger_event.clone();
+                        let trigger_action = trigger_action.clone();
+                        let reaction_context = reaction_context.clone();
+                        move |game_state, event| match &event.kind {
+                            EventKind::D20CheckResolved(actor, result_kind, dc_kind) => {
+                                match result_kind {
+                                    D20ResultKind::SavingThrow { kind, result } => {
+                                        let result = if result.success {
+                                            // Successful save, Counterspell fails
+                                            ReactionResult::NoEffect
+                                        } else {
+                                            // Spell slots are not consumed by Counterspell
+                                            let mut resources_refunded = ResourceAmountMap::new();
+                                            resources_refunded.insert(
+                                                registry::resources::SPELL_SLOT_ID.clone(),
+                                                trigger_action
+                                                    .resource_cost
+                                                    .get(&registry::resources::SPELL_SLOT_ID)
+                                                    .cloned()
+                                                    .unwrap(),
+                                            );
+                                            // Failed save, Counterspell succeeds
+                                            ReactionResult::CancelEvent {
+                                                event: trigger_event.clone().into(),
+                                                resources_refunded,
+                                            }
+                                        };
 
-                                            CallbackResult::Event(Event::new(
-                                                EventKind::ActionPerformed {
-                                                    action: ActionData {
-                                                        actor: reactor,
-                                                        action_id: COUNTERSPELL_ID
-                                                            .clone()
-                                                            .to_action_id(),
-                                                        context: reaction_context.clone(),
-                                                        targets: vec![*actor],
-                                                    },
-                                                    results: vec![ActionResult {
-                                                        performer: EntityIdentifier::from_world(
-                                                            &game_state.world,
-                                                            reactor,
-                                                        ),
-                                                        target: TargetTypeInstance::Entity(
-                                                            EntityIdentifier::from_world(
-                                                                &game_state.world,
-                                                                *actor,
-                                                            ),
-                                                        ),
-                                                        kind: ActionKindResult::Reaction { result },
-                                                    }],
+                                        CallbackResult::Event(Event::new(
+                                            EventKind::ActionPerformed {
+                                                action: ActionData {
+                                                    actor: reactor,
+                                                    action_id: COUNTERSPELL_ID
+                                                        .clone()
+                                                        .to_action_id(),
+                                                    context: reaction_context.clone(),
+                                                    resource_cost: ResourceAmountMap::from([(
+                                                        registry::resources::REACTION_ID.clone(),
+                                                        registry::resources::REACTION
+                                                            .build_amount(1),
+                                                    )]),
+                                                    targets: vec![*actor],
                                                 },
-                                            ))
-                                        }
-                                        _ => panic!("Invalid result kind in Counterspell callback"),
+                                                results: vec![ActionResult {
+                                                    performer: EntityIdentifier::from_world(
+                                                        &game_state.world,
+                                                        reactor,
+                                                    ),
+                                                    target: TargetTypeInstance::Entity(
+                                                        EntityIdentifier::from_world(
+                                                            &game_state.world,
+                                                            *actor,
+                                                        ),
+                                                    ),
+                                                    kind: ActionKindResult::Reaction { result },
+                                                }],
+                                            },
+                                        ))
                                     }
+                                    _ => panic!("Invalid result kind in Counterspell callback"),
                                 }
-                                _ => panic!("Invalid event kind in Counterspell callback"),
                             }
-                        }),
-                    ),
+                            _ => panic!("Invalid event kind in Counterspell callback"),
+                        }
+                    }),
                 );
             }),
         },
-        ResourceCostMap::from([(registry::resources::REACTION.clone(), 1)]),
+        ResourceAmountMap::from([(
+            registry::resources::REACTION_ID.clone(),
+            registry::resources::REACTION.build_amount(1),
+        )]),
         Arc::new(|_, _, _| TargetingContext {
             kind: TargetingKind::Single,
             normal_range: 60,
@@ -159,10 +167,14 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
                         return false;
                     }
                     // TODO: Can we just counterspell spells of any level?
-                    // TODO: This check doesn't work for reactions
                     // Find a way to get rid of ActionContext::Reaction
-                    match action.context {
+                    match &action.context {
                         ActionContext::Spell { level } => true,
+                        // TODO: *NOT* a fan of having to check both of these
+                        ActionContext::Reaction { context, .. } => match context.as_ref() {
+                            ActionContext::Spell { level } => true,
+                            _ => false,
+                        },
                         _ => false,
                     }
                 }
@@ -178,7 +190,7 @@ pub static ELDRITCH_BLAST_ID: LazyLock<SpellId> =
 static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
     Spell::new(
         ELDRITCH_BLAST_ID.clone(),
-        0, // Cantrip
+        0,
         MagicSchool::Evocation,
         ActionKind::AttackRollDamage {
             attack_roll: Arc::new(|world, caster, _| {
@@ -195,7 +207,7 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
             }),
             damage_on_miss: None,
         },
-        HashMap::from([(registry::resources::ACTION.clone(), 1)]),
+        registry::actions::DEFAULT_RESOURCE_COST.clone(),
         Arc::new(|world, entity, _| {
             let caster_level = systems::helpers::level(world, entity)
                 .unwrap()
@@ -244,7 +256,7 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
                 )
             }),
         },
-        HashMap::from([(registry::resources::ACTION.clone(), 1)]),
+        registry::actions::DEFAULT_RESOURCE_COST.clone(),
         Arc::new(|_, _, _| TargetingContext {
             kind: TargetingKind::Area {
                 shape: AreaShape::Sphere { radius: 20 },
@@ -291,7 +303,7 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
                 damage_roll
             }),
         },
-        HashMap::from([(registry::resources::ACTION.clone(), 1)]),
+        registry::actions::DEFAULT_RESOURCE_COST.clone(),
         Arc::new(|_, _, action_context| {
             let spell_level = match action_context {
                 ActionContext::Spell { level } => *level,

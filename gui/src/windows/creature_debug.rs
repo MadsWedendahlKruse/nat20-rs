@@ -48,6 +48,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                 if let Some(index) = render_uniform_buttons(
                     ui,
                     [
+                        "Despawn",
                         "Heal Full",
                         "Pass Time (Rest etc.)",
                         "Toggle Player Control",
@@ -58,22 +59,26 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                 ) {
                     match index {
                         0 => {
-                            systems::health::heal_full(&mut game_state.world, self.creature);
+                            game_state.world.despawn(self.creature).ok();
                             ui.close_current_popup();
                         }
                         1 => {
-                            self.state = CreatureDebugState::PassTime;
+                            systems::health::heal_full(&mut game_state.world, self.creature);
+                            ui.close_current_popup();
                         }
                         2 => {
-                            self.state = CreatureDebugState::TogglePlayerControl;
+                            self.state = CreatureDebugState::PassTime;
                         }
                         3 => {
+                            self.state = CreatureDebugState::TogglePlayerControl;
+                        }
+                        4 => {
                             self.state = CreatureDebugState::Check {
                                 kind: CheckKind::SavingThrow,
                                 dc_value: 10,
                             };
                         }
-                        4 => {
+                        5 => {
                             self.state = CreatureDebugState::Check {
                                 kind: CheckKind::SkillCheck,
                                 dc_value: 10,
@@ -153,9 +158,9 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                     render_uniform_buttons(ui, ["New Turn", "Short Rest", "Long Rest"], [20.0, 5.0])
                 {
                     let passed_time = match index {
-                        0 => RechargeRule::OnTurn,
-                        1 => RechargeRule::OnShortRest,
-                        2 => RechargeRule::OnLongRest,
+                        0 => RechargeRule::Turn,
+                        1 => RechargeRule::ShortRest,
+                        2 => RechargeRule::LongRest,
                         _ => unreachable!(),
                     };
 

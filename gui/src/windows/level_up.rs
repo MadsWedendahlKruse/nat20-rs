@@ -908,7 +908,7 @@ impl ImguiRenderable for LevelUpGains {
         if !self.resources.is_empty() {
             ui.separator();
             for resource in &self.resources {
-                ui.bullet_text(format!("Resource: {}", resource.kind()));
+                ui.bullet_text(format!("Resource: {}", resource.id()));
             }
         }
     }

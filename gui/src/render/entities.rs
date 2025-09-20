@@ -81,7 +81,11 @@ impl ImguiRenderableWithContext<(&World, CreatureRenderMode)> for Entity {
                     }
 
                     if let Some(tab) = ui.tab_item("Spellbook") {
-                        systems::helpers::get_component::<Spellbook>(world, entity).render(ui);
+                        systems::helpers::get_component::<Spellbook>(world, entity)
+                            .render_with_context(
+                                ui,
+                                &systems::helpers::get_component::<ResourceMap>(world, entity),
+                            );
                         tab.end();
                     }
 
@@ -197,7 +201,11 @@ impl ImguiRenderableMutWithContext<(&mut World)> for Entity {
             }
 
             if let Some(tab) = ui.tab_item("Spellbook") {
-                systems::helpers::get_component_mut::<Spellbook>(world, entity).render_mut(ui);
+                if let Ok((spellbook, resources)) =
+                    world.query_one_mut::<(&mut Spellbook, &mut ResourceMap)>(entity)
+                {
+                    spellbook.render_mut_with_context(ui, resources);
+                }
                 tab.end();
             }
 

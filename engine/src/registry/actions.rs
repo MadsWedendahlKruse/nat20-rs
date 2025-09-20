@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{Arc, LazyLock},
 };
 
@@ -14,12 +14,11 @@ use crate::{
         class::ClassName,
         damage::{AttackRoll, DamageRoll},
         dice::{DiceSet, DiceSetRoll, DieSize},
-        faction::Attitude,
         id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
         level::CharacterLevels,
         modifier::{ModifierSet, ModifierSource},
-        resource::RechargeRule,
+        resource::{RechargeRule, ResourceAmount},
     },
     registry, systems,
 };
@@ -44,8 +43,11 @@ static ACTION_SURGE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(|
                 effect: registry::effects::ACTION_SURGE_ID.clone(),
             },
             targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
-            resource_cost: HashMap::from([(registry::resources::ACTION_SURGE.clone(), 1)]),
-            cooldown: Some(RechargeRule::OnTurn),
+            resource_cost: HashMap::from([(
+                registry::resources::ACTION_SURGE_ID.clone(),
+                registry::resources::ACTION_SURGE.build_amount(1),
+            )]),
+            cooldown: Some(RechargeRule::Turn),
             reaction_trigger: None,
         },
         Some(ActionContext::Other),
@@ -80,7 +82,10 @@ static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(||
                 }),
             },
             targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
-            resource_cost: HashMap::from([(registry::resources::BONUS_ACTION.clone(), 1)]),
+            resource_cost: HashMap::from([(
+                registry::resources::BONUS_ACTION_ID.clone(),
+                registry::resources::BONUS_ACTION.build_amount(1),
+            )]),
             cooldown: None,
             reaction_trigger: None,
         },
@@ -155,5 +160,10 @@ static WEAPON_TARGETING: LazyLock<
     )
 });
 
-static DEFAULT_RESOURCE_COST: LazyLock<HashMap<ResourceId, u8>> =
-    LazyLock::new(|| HashMap::from([(registry::resources::ACTION.clone(), 1)]));
+pub static DEFAULT_RESOURCE_COST: LazyLock<HashMap<ResourceId, ResourceAmount>> =
+    LazyLock::new(|| {
+        HashMap::from([(
+            registry::resources::ACTION_ID.clone(),
+            registry::resources::ACTION.build_amount(1),
+        )])
+    });

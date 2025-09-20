@@ -16,7 +16,7 @@ use nat20_rs::{
         },
         effects::effects::{Effect, EffectDuration},
         health::{hit_points::HitPoints, life_state::LifeState},
-        id::{FeatId, Name, RaceId, SpellId, SubraceId},
+        id::{FeatId, Name, RaceId, ResourceId, SpellId, SubraceId},
         items::{
             equipment::{
                 armor::{Armor, ArmorClass, ArmorDexterityBonus, ArmorType},
@@ -30,22 +30,28 @@ use nat20_rs::{
         modifier::ModifierSet,
         proficiency::{Proficiency, ProficiencyLevel},
         race::{CreatureSize, CreatureType},
-        resource::ResourceMap,
+        resource::{self, Resource, ResourceAmount, ResourceKind, ResourceMap},
         saving_throw::{SavingThrowKind, SavingThrowSet},
         skill::{Skill, SkillSet, skill_ability},
-        spells::spellbook::{SpellSlotsMap, Spellbook},
+        spells::spellbook::Spellbook,
     },
-    registry, systems,
+    registry,
+    systems::{
+        self,
+        d20::{D20CheckDCKind, D20ResultKind},
+    },
 };
 use std::collections::HashSet;
 use strum::IntoEnumIterator;
 
 use crate::{
     render::{
+        engine::render_event_description,
         text::{TextKind, TextSegment, TextSegments, indent_text, item_rarity_color},
         utils::{
-            ImguiRenderable, ImguiRenderableMut, ImguiRenderableWithContext, SELECTED_BUTTON_COLOR,
-            interpolate_color, render_empty_button,
+            ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
+            ImguiRenderableWithContext, SELECTED_BUTTON_COLOR, interpolate_color,
+            render_empty_button,
         },
     },
     table_with_columns,
@@ -381,16 +387,31 @@ static FILLED_RESOURCE_ICON: &str = "O"; // Placeholder for filled resource icon
 
 impl ImguiRenderable for ResourceMap {
     fn render(&self, ui: &imgui::Ui) {
+        // Split resources into flat and tiered
+        let flat_resources: Vec<(&ResourceId, &Resource)> = self
+            .iter()
+            .filter(|(_, r)| matches!(r.kind(), ResourceKind::Flat(_)))
+            .collect();
+        let tiered_resources: Vec<(&ResourceId, &Resource)> = self
+            .iter()
+            .filter(|(_, r)| matches!(r.kind(), ResourceKind::Tiered { .. }))
+            .collect();
+
         if let Some(table) = table_with_columns!(ui, "Resources", "Resource", "Count", "Recharge") {
-            for (resource_id, resource) in self.iter() {
+            for (resource_id, resource) in flat_resources.iter() {
                 // Resource ID column
                 ui.table_next_column();
                 ui.text(resource_id.to_string());
-                // Current uses column
+                // Resource count column
                 ui.table_next_column();
-                let current = resource.current_uses();
-                let max = resource.max_uses();
-                ui.text(format!("{}/{}", current, max));
+                match resource.kind() {
+                    ResourceKind::Flat(budget) => {
+                        ui.text(format!("{}/{}", budget.current_uses, budget.max_uses));
+                    }
+                    _ => {
+                        ui.text("Expected ResourceKind::Flat");
+                    }
+                }
                 // let mut text = String::new();
                 // for i in (0..max).rev() {
                 //     if i < current {
@@ -406,12 +427,34 @@ impl ImguiRenderable for ResourceMap {
             }
             table.end();
         }
+
+        for (resource_id, resource) in tiered_resources {
+            ui.separator_with_text(resource_id.to_string());
+            if let Some(table) = table_with_columns!(ui, resource_id.to_string(), "Level", "Slots")
+            {
+                match resource.kind() {
+                    ResourceKind::Tiered(budgets) => {
+                        for (tier, budget) in budgets {
+                            // Level column
+                            ui.table_next_column();
+                            ui.text(roman_numeral(*tier));
+                            // Current uses column
+                            ui.table_next_column();
+                            ui.text(format!("{}/{}", budget.current_uses, budget.max_uses));
+                        }
+                    }
+                    _ => {
+                        ui.text("Expected ResourceKind::Tiered");
+                    }
+                }
+                table.end();
+            }
+        }
     }
 }
 
-fn spell_level_roman_numeral(level: u8) -> &'static str {
+fn roman_numeral(level: u8) -> &'static str {
     match level {
-        0 => "Cantrips",
         1 => "I",
         2 => "II",
         3 => "III",
@@ -437,12 +480,17 @@ enum RenderMode {
     Editable,
 }
 
-fn render_spellbook_ui(ui: &imgui::Ui, sb: &Spellbook, mode: RenderMode) -> Vec<SpellbookUiAction> {
+fn render_spellbook_ui(
+    ui: &imgui::Ui,
+    spellbook: &Spellbook,
+    resources: &ResourceMap,
+    mode: RenderMode,
+) -> Vec<SpellbookUiAction> {
     let mut actions = Vec::new();
 
     // --- Cantrips ---
     ui.separator_with_text("Cantrips");
-    for spell_id in sb.all_spells() {
+    for spell_id in spellbook.all_spells() {
         let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
         if spell.is_cantrip() {
             let _disabled = match mode {
@@ -457,15 +505,11 @@ fn render_spellbook_ui(ui: &imgui::Ui, sb: &Spellbook, mode: RenderMode) -> Vec<
 
     // --- Prepared Spells ---
     ui.separator_with_text("Prepared Spells");
-    let prepared_spells: HashSet<SpellId> = sb.prepared_spells().clone();
+    let prepared_spells: HashSet<SpellId> = spellbook.prepared_spells().clone();
     let mut rendered = 0;
     for spell_id in &prepared_spells {
         let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
-        let label = format!(
-            "{} ({})",
-            spell_id,
-            spell_level_roman_numeral(spell.base_level())
-        );
+        let label = format!("{} ({})", spell_id, roman_numeral(spell.base_level()));
 
         let _disabled = match mode {
             RenderMode::ReadOnly => Some(ui.begin_disabled(true)),
@@ -478,16 +522,17 @@ fn render_spellbook_ui(ui: &imgui::Ui, sb: &Spellbook, mode: RenderMode) -> Vec<
         }
         rendered += 1;
     }
-    for i in rendered..sb.max_prepared_spells() {
+    for i in rendered..spellbook.max_prepared_spells() {
         render_empty_button(ui, &format!("Empty##{}", i));
     }
 
     // --- All Spells ---
     ui.separator_with_text("All Spells");
+
     if let Some(table) = table_with_columns!(ui, "Spells", "Level", "Spells", "Slots") {
         // group by level
         let mut spells_by_level: HashMap<u8, Vec<&SpellId>> = HashMap::new();
-        let all_spells = sb.all_spells().clone();
+        let all_spells = spellbook.all_spells().clone();
         for spell_id in &all_spells {
             let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
             spells_by_level
@@ -497,17 +542,25 @@ fn render_spellbook_ui(ui: &imgui::Ui, sb: &Spellbook, mode: RenderMode) -> Vec<
         }
         let max_level = spells_by_level.keys().max().cloned().unwrap_or(0);
 
+        let slots = resources
+            .get(&registry::resources::SPELL_SLOT_ID)
+            .and_then(|r| match r.kind() {
+                ResourceKind::Tiered(budgets) => Some(budgets),
+                _ => panic!("Expected ResourceKind::Tiered for SPELL_SLOT"),
+            })
+            .unwrap();
+
         for level in 1..=max_level {
             // Level
             ui.table_next_column();
-            ui.text(spell_level_roman_numeral(level));
+            ui.text(roman_numeral(level));
 
             // Spells
             ui.table_next_column();
             if let Some(spells) = spells_by_level.get(&level) {
                 for spell_id in spells {
                     let label = spell_id.to_string();
-                    let is_prepared = sb.is_spell_prepared(spell_id);
+                    let is_prepared = spellbook.is_spell_prepared(spell_id);
 
                     let prepared_style = is_prepared.then(|| {
                         ui.push_style_color(imgui::StyleColor::Button, SELECTED_BUTTON_COLOR)
@@ -532,8 +585,11 @@ fn render_spellbook_ui(ui: &imgui::Ui, sb: &Spellbook, mode: RenderMode) -> Vec<
 
             // Slots
             ui.table_next_column();
-            let slots = sb.spell_slots_for_level(level);
-            ui.text(format!("{}/{}", slots.current(), slots.maximum()));
+            if let Some(budget) = slots.get(&level) {
+                ui.text(format!("{}/{}", budget.current_uses, budget.max_uses));
+            } else {
+                ui.text("0/0");
+            }
         }
         table.end();
     }
@@ -541,39 +597,22 @@ fn render_spellbook_ui(ui: &imgui::Ui, sb: &Spellbook, mode: RenderMode) -> Vec<
     actions
 }
 
-impl ImguiRenderable for Spellbook {
-    fn render(&self, ui: &imgui::Ui) {
+impl ImguiRenderableWithContext<&ResourceMap> for Spellbook {
+    fn render_with_context(&self, ui: &imgui::Ui, resources: &ResourceMap) {
         // Read-only: render and ignore any clicks (they’re disabled anyway)
-        let _ = render_spellbook_ui(ui, self, RenderMode::ReadOnly);
+        let _ = render_spellbook_ui(ui, self, resources, RenderMode::ReadOnly);
     }
 }
 
-impl ImguiRenderableMut for Spellbook {
-    fn render_mut(&mut self, ui: &imgui::Ui) {
-        // Editable: render, then apply the collected intents
-        let actions = render_spellbook_ui(ui, self, RenderMode::Editable);
+impl ImguiRenderableMutWithContext<&ResourceMap> for Spellbook {
+    fn render_mut_with_context(&mut self, ui: &imgui::Ui, resources: &ResourceMap) {
+        // Mutable: render, then apply the collected intents
+        let actions = render_spellbook_ui(ui, self, resources, RenderMode::Editable);
         for a in actions {
             match a {
                 SpellbookUiAction::Prepare(id) => self.prepare_spell(&id),
                 SpellbookUiAction::Unprepare(id) => self.unprepare_spell(&id),
             };
-        }
-    }
-}
-
-impl ImguiRenderable for SpellSlotsMap {
-    fn render(&self, ui: &imgui::Ui) {
-        if let Some(table) = table_with_columns!(ui, "Spell Slots", "Level", "Slots") {
-            let mut sorted_levels: Vec<_> = self.keys().cloned().collect();
-            sorted_levels.sort();
-            for level in sorted_levels {
-                let slots = self.get(&level).unwrap();
-                ui.table_next_column();
-                ui.text(spell_level_roman_numeral(level));
-                ui.table_next_column();
-                ui.text(format!("{}/{}", slots.current(), slots.maximum()));
-            }
-            table.end();
         }
     }
 }
@@ -903,9 +942,9 @@ impl ImguiRenderable for DamageComponentMitigation {
     }
 }
 
-impl ImguiRenderableWithContext<u8> for ActionResult {
-    fn render_with_context(&self, ui: &imgui::Ui, context: u8) {
-        let indent_level = context;
+impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, u8)) {
+        let (world, indent_level) = context;
 
         let target_name = match &self.target {
             TargetTypeInstance::Entity(entity) => entity.name().as_str(),
@@ -1056,17 +1095,18 @@ impl ImguiRenderableWithContext<u8> for ActionResult {
                 }
 
                 ReactionResult::CancelEvent {
-                    event_id,
+                    event,
                     resources_refunded,
-                } => TextSegments::new(vec![
-                    (self.performer.name().to_string(), TextKind::Actor),
-                    ("canceled action".to_string(), TextKind::Normal),
-                    (format!("{}", event_id), TextKind::Details),
-                ])
-                .render(ui),
+                } => {
+                    ui.same_line();
+                    TextSegment::new("cancelling", TextKind::Normal).render(ui);
+                    ui.same_line();
+                    render_event_description(ui, event, world);
+                }
 
                 ReactionResult::NoEffect => {
-                    // TODO: Don't render anything?
+                    ui.same_line();
+                    TextSegment::new("with no effect", TextKind::Normal).render(ui)
                 }
             },
         }
@@ -1267,6 +1307,51 @@ impl ImguiRenderable for D20CheckDC<Skill> {
     }
 }
 
+impl ImguiRenderable for D20CheckDCKind {
+    fn render(&self, ui: &imgui::Ui) {
+        match self {
+            D20CheckDCKind::SavingThrow(dc) => dc.render(ui),
+            D20CheckDCKind::Skill(dc) => dc.render(ui),
+            D20CheckDCKind::AttackRoll(_, target, armor_class) => {
+                armor_class.render(ui);
+            }
+        }
+    }
+}
+
+impl ImguiRenderable for D20ResultKind {
+    fn render(&self, ui: &imgui::Ui) {
+        match self {
+            // D20ResultKind::SavingThrow { kind, result } => {
+            //     TextSegments::new(vec![
+            //         ("Saving Throw:".to_string(), TextKind::Normal),
+            //         (kind.to_string(), TextKind::Ability),
+            //     ])
+            //     .render(ui);
+            //     indent_text(ui, 1);
+            //     result.render(ui);
+            // }
+            // D20ResultKind::Skill { skill, result } => {
+            //     TextSegments::new(vec![
+            //         ("Skill Check:".to_string(), TextKind::Normal),
+            //         (skill.to_string(), TextKind::Skill),
+            //     ])
+            //     .render(ui);
+            //     indent_text(ui, 1);
+            //     result.render(ui);
+            // }
+            D20ResultKind::SavingThrow { result, .. } | D20ResultKind::Skill { result, .. } => {
+                result.render(ui);
+            }
+            D20ResultKind::AttackRoll { result } => {
+                TextSegment::new("Attack Roll:", TextKind::Normal).render(ui);
+                indent_text(ui, 1);
+                result.render(ui);
+            }
+        }
+    }
+}
+
 impl ImguiRenderable for (RaceId, Option<SubraceId>) {
     fn render(&self, ui: &imgui::Ui) {
         let (race, subrace) = self;
@@ -1348,5 +1433,28 @@ impl ImguiRenderable for CreatureSize {
 impl ImguiRenderable for CreatureType {
     fn render(&self, ui: &imgui::Ui) {
         TextSegment::new(self.to_string(), TextKind::Details).render(ui);
+    }
+}
+
+impl ImguiRenderableWithContext<&World> for Vec<Entity> {
+    fn render_with_context(&self, ui: &imgui::Ui, world: &World) {
+        if self.len() == 1 {
+            ui.same_line();
+            TextSegment::new(
+                systems::helpers::get_component::<Name>(world, self[0]).as_str(),
+                TextKind::Target,
+            )
+            .render(ui);
+        } else if self.len() > 1 {
+            for action_target in self.iter() {
+                indent_text(ui, 1);
+                TextSegment::new(
+                    systems::helpers::get_component_clone::<Name>(world, *action_target)
+                        .to_string(),
+                    TextKind::Target,
+                )
+                .render(ui);
+            }
+        }
     }
 }

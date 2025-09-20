@@ -13,11 +13,11 @@ use crate::{
         },
         id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
-        resource::{RechargeRule, ResourceCostMap, ResourceMap},
+        resource::{RechargeRule, ResourceAmountMap, ResourceMap},
         spells::spellbook::Spellbook,
     },
     engine::{
-        event::{ActionData, Event, EventId, ReactionData},
+        event::{self, ActionData, Event, EventId, EventKind, ReactionData},
         game_state::GameState,
     },
     registry, systems,
@@ -56,11 +56,10 @@ fn add_action_to_map(
     let resource_cost = &action.resource_cost().clone();
     action_map
         .entry(action_id.clone())
-        .and_modify(|(action_context, action_resource_cost)| {
-            action_context.push(context.clone().unwrap());
-            action_resource_cost.extend(resource_cost.clone());
+        .and_modify(|action_data| {
+            action_data.push((context.clone().unwrap(), resource_cost.clone()));
         })
-        .or_insert((vec![context.clone().unwrap()], resource_cost.clone()));
+        .or_insert(vec![(context.clone().unwrap(), resource_cost.clone())]);
 }
 
 pub fn on_cooldown(world: &World, entity: Entity, action_id: &ActionId) -> Option<RechargeRule> {
@@ -74,17 +73,18 @@ pub fn on_cooldown(world: &World, entity: Entity, action_id: &ActionId) -> Optio
 pub fn all_actions(world: &World, entity: Entity) -> ActionMap {
     let mut actions = systems::helpers::get_component_clone::<ActionMap>(world, entity);
 
-    actions.extend(systems::helpers::get_component::<Spellbook>(world, entity).all_actions());
+    actions.extend(systems::helpers::get_component::<Spellbook>(world, entity).actions());
 
-    actions.extend(systems::helpers::get_component::<Loadout>(world, entity).all_actions());
+    actions.extend(systems::helpers::get_component::<Loadout>(world, entity).actions());
 
     actions
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum ActionUsability {
     Usable,
     OnCooldown(RechargeRule),
-    NotEnoughResources(ResourceCostMap),
+    NotEnoughResources(ResourceAmountMap),
     ResourceNotFound(ResourceId),
 }
 
@@ -92,23 +92,18 @@ pub fn action_usable(
     world: &World,
     entity: Entity,
     action_id: &ActionId,
-    contexts: &Vec<ActionContext>,
-    resource_cost: &mut ResourceCostMap,
+    // TODO: Is context really not needed here?
+    action_context: &ActionContext,
+    resource_cost: &ResourceAmountMap,
 ) -> ActionUsability {
     if let Some(cooldown) = on_cooldown(world, entity, action_id) {
         return ActionUsability::OnCooldown(cooldown);
     }
 
-    for action_context in contexts {
-        for effect in systems::effects::effects(world, entity).iter() {
-            (effect.on_resource_cost)(world, entity, action_context, resource_cost);
-        }
-    }
-
     let resources = systems::helpers::get_component::<ResourceMap>(world, entity);
     for (resource_id, amount) in &*resource_cost {
         if let Some(resource) = resources.get(resource_id) {
-            if resource.current_uses() < *amount {
+            if !resource.can_afford(amount) {
                 return ActionUsability::NotEnoughResources(resource_cost.clone());
             }
         } else {
@@ -119,44 +114,29 @@ pub fn action_usable(
     ActionUsability::Usable
 }
 
-pub fn available_actions(
-    world: &World,
-    entity: Entity,
-) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)> {
+pub fn available_actions(world: &World, entity: Entity) -> ActionMap {
     let mut actions = systems::helpers::get_component_clone::<ActionMap>(world, entity);
 
-    actions.extend(systems::helpers::get_component::<Spellbook>(world, entity).available_actions());
+    actions.extend(systems::helpers::get_component::<Spellbook>(world, entity).actions());
 
-    actions.extend(systems::helpers::get_component::<Loadout>(world, entity).available_actions());
+    actions.extend(systems::helpers::get_component::<Loadout>(world, entity).actions());
 
-    // Remove actions that are on cooldown or where the character does not
-    // have the required resources
-    actions.retain(|action_id, (action_contexts, resource_cost)| {
-        if on_cooldown(world, entity, action_id).is_some() {
-            // Action is on cooldown
-            return false;
-        }
-
-        for action_context in action_contexts {
+    actions.retain(|action_id, action_data| {
+        action_data.retain_mut(|(action_context, resource_cost)| {
             for effect in systems::effects::effects(world, entity).iter() {
                 (effect.on_resource_cost)(world, entity, action_context, resource_cost);
             }
-        }
 
-        let resources = systems::helpers::get_component::<ResourceMap>(world, entity);
-        for (resource_id, amount) in resource_cost {
-            if let Some(resource) = resources.get(resource_id) {
-                if resource.current_uses() < *amount {
-                    // Not enough resources for this action
-                    return false;
-                }
-            } else {
-                // Resource not found
+            if !matches!(
+                action_usable(world, entity, action_id, &action_context, resource_cost),
+                ActionUsability::Usable,
+            ) {
                 return false;
             }
-        }
+            true
+        });
 
-        true
+        !action_data.is_empty() // Keep the action if there's at least one usable context
     });
 
     actions
@@ -167,6 +147,7 @@ pub fn perform_action(game_state: &mut GameState, action_data: &ActionData) {
         actor: performer,
         action_id,
         context,
+        resource_cost,
         targets,
     } = action_data;
     // TODO: Handle missing action
@@ -177,7 +158,7 @@ pub fn perform_action(game_state: &mut GameState, action_data: &ActionData) {
         systems::helpers::get_component_mut::<ActionCooldownMap>(&mut game_state.world, *performer)
             .insert(action_id.clone(), cooldown);
     }
-    action.perform(game_state, *performer, &context, &targets);
+    action.perform(game_state, *performer, &context, resource_cost, &targets);
 }
 
 pub fn targeting_context(
@@ -220,9 +201,7 @@ pub fn available_reactions_to_event(
 ) -> Vec<ReactionData> {
     let mut reactions = Vec::new();
 
-    for (reaction_id, (contexts, resource_cost)) in
-        systems::actions::available_actions(world, reactor)
-    {
+    for (reaction_id, contexts_and_costs) in systems::actions::available_actions(world, reactor) {
         // TODO: Would be nice if we didn't have to check two different registries
         let reaction = if let Some((reaction, _)) =
             registry::actions::ACTION_REGISTRY.get(&reaction_id)
@@ -237,7 +216,7 @@ pub fn available_reactions_to_event(
 
         if let Some(trigger) = &reaction.reaction_trigger {
             if trigger(reactor, event) {
-                for context in &contexts {
+                for (context, resource_cost) in &contexts_and_costs {
                     // TODO: Lots of duplicated information here
                     reactions.push(ReactionData {
                         reactor,

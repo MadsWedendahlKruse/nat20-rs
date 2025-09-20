@@ -19,7 +19,7 @@ use crate::{
             item::Item,
         },
         modifier::ModifierSource,
-        resource::{RechargeRule, Resource, ResourceMap},
+        resource::{RechargeRule, Resource, ResourceAmount, ResourceMap},
         saving_throw::SavingThrowKind,
         skill::{Skill, SkillSet},
     },
@@ -114,15 +114,15 @@ static ACTION_SURGE: LazyLock<Effect> = LazyLock::new(|| {
     );
     effect.on_apply = Arc::new(|world, entity| {
         let _ = systems::helpers::get_component_mut::<ResourceMap>(world, entity)
-            .get_mut(&registry::resources::ACTION)
+            .get_mut(&registry::resources::ACTION_ID)
             .unwrap()
-            .add_use();
+            .add_uses(&ResourceAmount::Flat(1));
     });
     effect.on_unapply = Arc::new(|world, entity| {
         let _ = systems::helpers::get_component_mut::<ResourceMap>(world, entity)
-            .get_mut(&registry::resources::ACTION)
+            .get_mut(&registry::resources::ACTION_ID)
             .unwrap()
-            .remove_use();
+            .remove_uses(&ResourceAmount::Flat(1));
     });
     effect
 });
@@ -463,7 +463,7 @@ mod helpers {
                 // If the Action doesn't cost an "Action" this effect is not relevant
                 if !action
                     .resource_cost()
-                    .contains_key(&registry::resources::ACTION)
+                    .contains_key(&registry::resources::ACTION_ID)
                 {
                     return;
                 }
@@ -476,25 +476,21 @@ mod helpers {
                 // "Extra Attack" charges.
                 let mut resources =
                     systems::helpers::get_component_mut::<ResourceMap>(world, performer);
-                if let Some(extra_attack) = resources.get(&registry::resources::EXTRA_ATTACK) {
-                    if extra_attack.current_uses() > 0 {
-                        return;
-                    }
+                if resources.can_afford(
+                    &registry::resources::EXTRA_ATTACK_ID.clone(),
+                    &registry::resources::EXTRA_ATTACK.build_amount(1),
+                ) {
+                    return;
                 }
 
                 // Consume the action and give the "Extra Attack" charges
                 // TODO: Assume the action has been validated?
-                let _ = resources
-                    .get_mut(&registry::resources::ACTION)
-                    .unwrap()
-                    .spend(1);
+                let _ = resources.spend(
+                    &registry::resources::ACTION_ID,
+                    &registry::resources::ACTION.build_amount(1),
+                );
                 resources.add(
-                    Resource::new(
-                        registry::resources::EXTRA_ATTACK.clone(),
-                        charges,
-                        RechargeRule::Never,
-                    )
-                    .unwrap(),
+                    registry::resources::EXTRA_ATTACK.build_resource(charges),
                     true, // Set current uses to max uses
                 );
             }
@@ -507,18 +503,22 @@ mod helpers {
             }
 
             // If the Action doesn't cost an "Action" this effect is not relevant
-            if !resource_cost.contains_key(&registry::resources::ACTION) {
+            if !resource_cost.contains_key(&registry::resources::ACTION_ID) {
                 return;
             }
 
             // If the character has any "Extra Attack" charges, we use those instead
             // of the "Action" resource.
             let resources = systems::helpers::get_component::<ResourceMap>(world, performer);
-            if let Some(extra_attack) = resources.get(&registry::resources::EXTRA_ATTACK) {
-                if extra_attack.current_uses() > 0 {
-                    resource_cost.remove(&registry::resources::ACTION);
-                    resource_cost.insert(registry::resources::EXTRA_ATTACK.clone(), 1);
-                }
+            if resources.can_afford(
+                &registry::resources::EXTRA_ATTACK_ID.clone(),
+                &registry::resources::EXTRA_ATTACK.build_amount(1),
+            ) {
+                resource_cost.remove(&registry::resources::ACTION_ID);
+                resource_cost.insert(
+                    registry::resources::EXTRA_ATTACK_ID.clone(),
+                    registry::resources::EXTRA_ATTACK.build_amount(1),
+                );
             }
         });
 

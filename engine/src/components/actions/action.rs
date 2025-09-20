@@ -17,7 +17,7 @@ use crate::{
         health::life_state::LifeState,
         id::{ActionId, EffectId, EntityIdentifier, ResourceId},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
-        resource::{RechargeRule, ResourceCostMap, ResourceError, ResourceMap},
+        resource::{self, RechargeRule, ResourceAmountMap, ResourceError, ResourceMap},
         saving_throw::SavingThrowDC,
         spells::spellbook::Spellbook,
     },
@@ -47,7 +47,7 @@ pub enum ActionContext {
         /// to know what event triggered the reaction. This can be used to determine
         /// the effect of the reaction (e.g. Counterspell, Shield, etc.)
         trigger_event: Box<Event>,
-        resource_cost: ResourceCostMap,
+        resource_cost: ResourceAmountMap,
         /// Useful to know if the reaction is e.g. a spell.
         /// Note: don't nest reactions :)
         context: Box<ActionContext>,
@@ -181,8 +181,8 @@ pub enum ReactionResult {
         event: Arc<Event>,
     },
     CancelEvent {
-        event_id: EventId,
-        resources_refunded: ResourceCostMap,
+        event: Arc<Event>,
+        resources_refunded: ResourceAmountMap,
     },
     NoEffect,
 }
@@ -193,7 +193,7 @@ pub struct Action {
     pub kind: ActionKind,
     pub targeting: Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
     /// e.g. Action, Bonus Action, Reaction
-    pub resource_cost: HashMap<ResourceId, u8>,
+    pub resource_cost: ResourceAmountMap,
     /// Optional cooldown for the action
     pub cooldown: Option<RechargeRule>,
     /// If the action is a reaction, this will describe what triggers the reaction.
@@ -219,28 +219,32 @@ pub trait ActionProvider {
     /// Each action is paired with its context, which provides additional information
     /// about how the action can be performed (e.g. weapon type, spell level, etc.)
     /// as well as the resource cost of the action.
-    fn all_actions(&self) -> ActionMap;
-
-    /// Returns a collection of available actions for the character. i.e. actions
-    /// that can be performed at the current time.
-    fn available_actions(&self) -> ActionMap;
+    fn actions(&self) -> ActionMap;
 }
 
 impl ActionKind {
+    // TODO: Just pass ActionData instead of all these params?
     pub fn perform(
         &self,
         game_state: &mut GameState,
         performer: Entity,
         action_id: &ActionId,
         context: &ActionContext,
+        resource_cost: ResourceAmountMap,
         target: Entity,
     ) {
         match self {
             ActionKind::UnconditionalDamage { .. }
             | ActionKind::AttackRollDamage { .. }
-            | ActionKind::SavingThrowDamage { .. } => {
-                systems::health::damage(game_state, performer, target, action_id, self, context)
-            }
+            | ActionKind::SavingThrowDamage { .. } => systems::health::damage(
+                game_state,
+                performer,
+                target,
+                action_id,
+                self,
+                context,
+                resource_cost,
+            ),
 
             ActionKind::UnconditionalEffect { effect } => {
                 systems::effects::add_effect(&mut game_state.world, target, effect);
@@ -249,6 +253,7 @@ impl ActionKind {
                         actor: performer,
                         action_id: action_id.clone(),
                         context: context.clone(),
+                        resource_cost,
                         targets: vec![target],
                     },
                     results: vec![ActionResult {
@@ -290,6 +295,7 @@ impl ActionKind {
                         actor: performer,
                         action_id: action_id.clone(),
                         context: context.clone(),
+                        resource_cost,
                         targets: vec![target],
                     },
                     results: vec![ActionResult {
@@ -315,6 +321,7 @@ impl ActionKind {
                         actor: performer,
                         action_id: action_id.clone(),
                         context: context.clone(),
+                        resource_cost,
                         targets: vec![target],
                     },
                     results: vec![ActionResult {
@@ -337,6 +344,7 @@ impl ActionKind {
                         actor: performer,
                         action_id: action_id.clone(),
                         context: context.clone(),
+                        resource_cost,
                         targets: vec![target],
                     },
                     results: vec![ActionResult {
@@ -353,7 +361,14 @@ impl ActionKind {
             ActionKind::Composite { actions } => {
                 // TODO: Almost seems too easy?
                 for action in actions {
-                    action.perform(game_state, performer, action_id, context, target);
+                    action.perform(
+                        game_state,
+                        performer,
+                        action_id,
+                        context,
+                        resource_cost.clone(),
+                        target,
+                    );
                 }
             }
 
@@ -406,6 +421,7 @@ impl Action {
         game_state: &mut GameState,
         performer: Entity,
         context: &ActionContext,
+        resource_cost: &ResourceAmountMap,
         targets: &[Entity],
     ) {
         // TODO: Not a fan of having to clone to avoid borrowing issues, but
@@ -420,12 +436,21 @@ impl Action {
             hook(&mut game_state.world, performer, self, context);
         }
 
-        // TODO: Resource might error?
-        let _ = self.spend_resources(&mut game_state.world, performer, context);
+        // TEMP: Skip resource spending for now since it's done in the game state
+        // let spent_resources = self
+        //     .spend_resources(&mut game_state.world, performer, context, resource_cost)
+        //     .unwrap();
 
         for target in targets {
-            self.kind
-                .perform(game_state, performer, &self.id, context, *target);
+            self.kind.perform(
+                game_state,
+                performer,
+                &self.id,
+                context,
+                // spent_resources.clone(),
+                ResourceAmountMap::new(),
+                *target,
+            );
         }
     }
 
@@ -434,29 +459,16 @@ impl Action {
         world: &mut World,
         entity: Entity,
         context: &ActionContext,
-    ) -> Result<(), ResourceError> {
-        let mut resource_cost = self.resource_cost.clone();
+        resource_cost: &ResourceAmountMap,
+    ) -> Result<ResourceAmountMap, ResourceError> {
+        let mut resource_cost = resource_cost.clone();
         for effects in systems::effects::effects(world, entity).iter() {
             (effects.on_resource_cost)(world, entity, context, &mut resource_cost);
         }
 
-        for (resource, amount) in &resource_cost {
-            let mut resources = systems::helpers::get_component_mut::<ResourceMap>(world, entity);
-            if let Some(resource) = resources.get_mut(resource) {
-                resource.spend(*amount)?;
-            }
-        }
-        // TODO: Not really a fan of this special treatment for spell slots
-        match context {
-            ActionContext::Spell { level } => {
-                systems::helpers::get_component_mut::<Spellbook>(world, entity)
-                    .use_spell_slot(*level);
-            }
-            _ => {
-                // Other action contexts might not require resource spending
-            }
-        }
-        Ok(())
+        systems::resources::spend(world, entity, &resource_cost)?;
+
+        Ok(resource_cost)
     }
 
     pub fn id(&self) -> &ActionId {
@@ -473,11 +485,11 @@ impl Action {
         &self.targeting
     }
 
-    pub fn resource_cost(&self) -> &HashMap<ResourceId, u8> {
+    pub fn resource_cost(&self) -> &ResourceAmountMap {
         &self.resource_cost
     }
 
-    pub fn resource_cost_mut(&mut self) -> &mut HashMap<ResourceId, u8> {
+    pub fn resource_cost_mut(&mut self) -> &mut ResourceAmountMap {
         &mut self.resource_cost
     }
 }
@@ -488,6 +500,7 @@ impl Debug for Action {
             .field("id", &self.id)
             .field("kind", &self.kind)
             .field("resource_cost", &self.resource_cost)
+            .field("cooldown", &self.cooldown)
             .finish()
     }
 }
@@ -500,7 +513,7 @@ impl PartialEq for Action {
 }
 
 // TODO: Combine these two?
-pub type ActionMap = HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)>;
+pub type ActionMap = HashMap<ActionId, Vec<(ActionContext, ResourceAmountMap)>>;
 
 pub type ActionCooldownMap = HashMap<ActionId, RechargeRule>;
 

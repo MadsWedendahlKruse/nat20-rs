@@ -2,9 +2,12 @@ use imgui::ChildFlags;
 use nat20_rs::{components::id::Name, engine::game_state::GameState};
 
 use crate::{
-    render::utils::{
-        ImguiRenderableMutWithContext, ImguiRenderableWithContext,
-        render_button_disabled_conditionally, render_uniform_buttons, render_window_at_cursor,
+    render::{
+        engine::LogLevel,
+        utils::{
+            ImguiRenderableMutWithContext, ImguiRenderableWithContext,
+            render_button_disabled_conditionally, render_uniform_buttons, render_window_at_cursor,
+        },
     },
     windows::{
         creature_debug::CreatureDebugWindow, encounter::EncounterWindow, level_up::LevelUpWindow,
@@ -121,10 +124,6 @@ impl MainMenuWindow {
                         entity.render_mut_with_context(ui, &mut game_state.world);
                         ui.separator();
 
-                        if ui.button(format!("Remove Character##{:?}", entity)) {
-                            let _ = game_state.world.despawn(*entity);
-                        }
-
                         if ui.button(format!("Debug##{:?}", entity)) {
                             *debug_window = Some(CreatureDebugWindow::new(*entity));
                             ui.open_popup("Debug");
@@ -219,7 +218,7 @@ impl MainMenuWindow {
                     .build(|| {
                         game_state
                             .event_log
-                            .render_with_context(ui, &game_state.world);
+                            .render_with_context(ui, &(&game_state.world, &LogLevel::Info));
 
                         if *auto_scroll_event_log && ui.scroll_y() >= ui.scroll_max_y() - 5.0 {
                             ui.set_scroll_here_y_with_ratio(1.0);

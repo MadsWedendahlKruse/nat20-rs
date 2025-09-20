@@ -6,7 +6,7 @@ use strum::IntoEnumIterator;
 use crate::{
     components::{
         ability::AbilityScoreMap,
-        actions::action::{ActionContext, ActionProvider},
+        actions::action::{ActionContext, ActionMap, ActionProvider},
         damage::{AttackRoll, AttackRollResult, DamageRoll},
         id::{ActionId, EffectId},
         items::{
@@ -20,7 +20,7 @@ use crate::{
             item::Item,
         },
         modifier::{ModifierSet, ModifierSource},
-        resource::ResourceCostMap,
+        resource::ResourceAmountMap,
     },
     registry,
     systems::{self},
@@ -327,8 +327,8 @@ impl Loadout {
 }
 
 impl ActionProvider for Loadout {
-    fn all_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)> {
-        let mut actions = HashMap::new();
+    fn actions(&self) -> ActionMap {
+        let mut actions = ActionMap::new();
 
         // TODO: There has to be a nicer way to do this
         for slot in EquipmentSlot::weapon_slots() {
@@ -340,11 +340,10 @@ impl ActionProvider for Loadout {
                         let resource_cost = &action.resource_cost().clone();
                         actions
                             .entry(action_id.clone())
-                            .and_modify(|a: &mut (Vec<ActionContext>, ResourceCostMap)| {
-                                a.0.push(context.clone());
-                                a.1.extend(resource_cost.clone());
+                            .and_modify(|entry| {
+                                entry.push((context.clone(), resource_cost.clone()));
                             })
-                            .or_insert((vec![context], resource_cost.clone()));
+                            .or_insert(vec![(context, resource_cost.clone())]);
                     }
                 }
             }
@@ -352,49 +351,7 @@ impl ActionProvider for Loadout {
 
         actions
     }
-
-    fn available_actions(&self) -> HashMap<ActionId, (Vec<ActionContext>, ResourceCostMap)> {
-        self.all_actions()
-    }
 }
-
-// impl fmt::Display for Loadout {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         write!(f, "Loadout:\n")?;
-
-//         if self.weapons.is_empty() {
-//             write!(f, "\tNo weapons equipped\n")?;
-//         } else {
-//             for (weapon_type, weapon_map) in &self.weapons {
-//                 write!(f, "\t{:?} Weapon(s):\n", weapon_type)?;
-//                 for (hand, weapon) in weapon_map {
-//                     write!(
-//                         f,
-//                         "\t\t{} in {:?} hand\n",
-//                         weapon.equipment().item.name,
-//                         hand
-//                     )?;
-//                 }
-//             }
-//         }
-
-//         if let Some(armor) = &self.armor {
-//             write!(f, "\tArmor: {}\n", armor.equipment.item.name)?;
-//         } else {
-//             write!(f, "\tNo armor equipped\n")?;
-//         }
-
-//         if self.equipment.is_empty() {
-//             write!(f, "\tNo equipment items equipped\n")?;
-//         } else {
-//             for (slot, item) in &self.equipment {
-//                 write!(f, "\t{:?}: {}\n", slot, item.item.name)?;
-//             }
-//         }
-
-//         Ok(())
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -607,7 +564,7 @@ mod tests {
     fn available_actions_no_weapons() {
         // TODO: Should return unarmed attack
         let loadout = Loadout::new();
-        let actions = loadout.all_actions();
+        let actions = loadout.actions();
         assert_eq!(actions.len(), 0);
     }
 
@@ -627,7 +584,7 @@ mod tests {
             .clone();
         loadout.equip(weapon2);
 
-        let actions = loadout.all_actions();
+        let actions = loadout.actions();
         for action in &actions {
             println!("{:?}", action);
         }
@@ -635,11 +592,11 @@ mod tests {
         // Both melee and ranged attacks use the same ActionId, but their
         // contexts are different
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[&registry::actions::WEAPON_ATTACK_ID].0.len(), 2);
-        for (_, (contexts, _)) in actions {
-            for context in contexts {
+        assert_eq!(actions[&registry::actions::WEAPON_ATTACK_ID].len(), 2);
+        for (_, data) in actions {
+            for (context, ..) in data {
                 match context {
-                    ActionContext::Weapon { slot } => {}
+                    ActionContext::Weapon { .. } => {}
                     _ => panic!("Unexpected action context: {:?}", context),
                 }
             }

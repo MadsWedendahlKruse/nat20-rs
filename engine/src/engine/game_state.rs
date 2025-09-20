@@ -6,18 +6,21 @@ use std::{
 use hecs::{Entity, World};
 
 use crate::{
-    components::actions::{
-        action::{ActionKindResult, ReactionResult},
-        targeting::TargetType,
+    components::{
+        actions::{
+            action::{ActionKindResult, ReactionResult},
+            targeting::TargetType,
+        },
+        resource,
     },
     engine::{
         encounter::{Encounter, EncounterId, ParticipantsFilter},
         event::{
-            ActionData, ActionDecision, ActionError, ActionPrompt, EncounterEvent, Event, EventId,
-            EventKind, EventListener, EventLog, EventQueue,
+            ActionData, ActionDecision, ActionError, ActionPrompt, EncounterEvent, Event,
+            EventCallback, EventId, EventKind, EventListener, EventLog, EventQueue,
         },
     },
-    systems,
+    systems::{self, actions::ActionUsability},
 };
 
 // TODO: WorldState instead?
@@ -101,7 +104,7 @@ impl GameState {
     }
 
     pub fn submit_decision(&mut self, decision: ActionDecision) -> Result<(), ActionError> {
-        // Check that all of the actors involved in the decision have a are all
+        // Check that all of the actors involved in the decision have are all
         // either in combat or all out of combat
         let mut encounter_id = None;
         for actor in decision.actors() {
@@ -146,6 +149,7 @@ impl GameState {
         // Convert the decision into the appropriate event to process
         match &decision {
             ActionDecision::Action { action } => {
+                self.validate_action(action, true)?;
                 self.process_event(Event::new(EventKind::ActionRequested {
                     action: action.clone(),
                 }))
@@ -155,31 +159,69 @@ impl GameState {
                 for (_, choice) in choices {
                     // Process the chosen reactions, if any
                     if let Some(reaction) = choice {
-                        self.process_event(Event::new(EventKind::ActionRequested {
-                            action: ActionData::from(reaction),
-                        }))?;
+                        let action = ActionData::from(reaction);
+                        self.validate_action(&action, true)?;
+                        self.process_event(Event::new(EventKind::ActionRequested { action }))?;
                     }
                 }
-                // After processing all reactions, continue with the pending event
-                // (if any). Otherwise, if this happened inside an encounter, then
-                // prompt the current actor for their next action
-                if let Some(pending_event) = self.pending_events.pop_front() {
-                    self.process_event(pending_event)?;
-                } else if let Some(encounter_id) = self.in_combat.get(&event.actor().unwrap()) {
+                // Check if the reaction triggered more reactions
+                let mut resume_pending_events = false;
+                if let Some(encounter_id) = self.in_combat.get(&event.actor().unwrap()) {
                     if let Some(encounter) = self.encounters.get_mut(encounter_id) {
-                        encounter.queue_prompt(
-                            ActionPrompt::Action {
-                                actor: encounter.current_entity(),
-                            },
-                            true,
-                        );
+                        if let Some(prompt) = encounter.next_pending_prompt() {
+                            if let ActionPrompt::Reactions { .. } = prompt {
+                                // There are more reactions to process, so just return
+                                return Ok(());
+                            }
+                            // No more reactions, continue with the pending events
+                            // (if any)
+                            resume_pending_events = true;
+                        }
                     } else {
                         panic!("Inconsistent state: entity is in combat but encounter not found");
                     }
                 }
-
+                if resume_pending_events {
+                    while let Some(event) = self.pending_events.pop_front() {
+                        self.advance_event(event);
+                    }
+                }
                 Ok(())
             }
+        }
+    }
+
+    fn validate_action(
+        &mut self,
+        action: &ActionData,
+        spend_resources: bool,
+    ) -> Result<(), ActionError> {
+        let ActionData {
+            actor,
+            action_id,
+            context: action_context,
+            resource_cost,
+            ..
+        } = action;
+        let usability = systems::actions::action_usable(
+            &self.world,
+            *actor,
+            action_id,
+            action_context,
+            resource_cost,
+        );
+        match usability {
+            ActionUsability::Usable => {
+                if spend_resources {
+                    systems::resources::spend(&mut self.world, *actor, resource_cost);
+                }
+                Ok(())
+            }
+            // TODO: Proper error handling
+            _ => panic!(
+                "Action {:?} is not usable by entity {:?}: {:?}",
+                action_id, actor, usability
+            ),
         }
     }
 
@@ -242,30 +284,30 @@ impl GameState {
                                 .get_or_insert_with(HashMap::new)
                                 .insert(*reactor, reactions);
 
-                            encounter.log_event(
-                                Event::new(EventKind::ReactionTriggered {
-                                    reactor: *reactor,
-                                    trigger_event: event.clone().into(),
-                                })
-                                .as_response_to(event.id),
-                            );
-
                             self.event_log.record_reaction(event.id, *reactor);
                         }
                     }
 
                     if let Some(options) = reaction_options {
+                        encounter.log_event(
+                            Event::new(EventKind::ReactionTriggered {
+                                trigger_event: event.clone().into(),
+                                reactors: options.keys().cloned().collect(),
+                            })
+                            .as_response_to(event.id),
+                        );
+
                         // Prompt all reactors for their reaction
                         encounter.queue_prompt(
                             ActionPrompt::Reactions {
                                 event: event.clone(),
                                 options,
                             },
-                            false,
+                            true,
                         );
 
                         // Save the event being reacted to for later processing
-                        self.pending_events.push_back(event);
+                        self.pending_events.push_front(event);
                         return Ok(());
                     }
                 } else {
@@ -296,11 +338,18 @@ impl GameState {
                         } => {
                             match reaction_result {
                                 ReactionResult::CancelEvent {
-                                    event_id,
+                                    event,
                                     resources_refunded,
                                 } => {
-                                    // TODO: Do something with the resources
-                                    self.pending_events.retain(|e| &e.id != event_id);
+                                    let actor = self.pending_events.iter().find_map(|e| {
+                                        if e.id == event.id { e.actor() } else { None }
+                                    });
+                                    systems::resources::restore(
+                                        &mut self.world,
+                                        actor.unwrap(),
+                                        resources_refunded,
+                                    );
+                                    self.pending_events.retain(|e| e.id != event.id);
                                 }
 
                                 // TODO: How to handle this properly?
@@ -360,12 +409,12 @@ impl GameState {
             .insert(event_listener.trigger_id(), event_listener);
     }
 
-    pub fn process_event_with_listener(
+    pub fn process_event_with_callback(
         &mut self,
         event: Event,
-        event_listener: EventListener,
+        callback: EventCallback,
     ) -> Result<(), ActionError> {
-        self.add_event_listener(event_listener);
+        self.add_event_listener(EventListener::new(event.id, callback));
         self.process_event(event)
     }
 }

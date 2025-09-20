@@ -12,7 +12,7 @@ use crate::{
         damage::DamageRollResult,
         health::life_state::LifeState,
         id::ActionId,
-        resource::ResourceCostMap,
+        resource::ResourceAmountMap,
     },
     engine::{encounter::EncounterId, game_state::GameState},
     systems::d20::{D20CheckDCKind, D20ResultKind},
@@ -49,7 +49,8 @@ impl Event {
         match &self.kind {
             EventKind::ActionRequested { action } => Some(action.actor),
             EventKind::ActionPerformed { action, .. } => Some(action.actor),
-            EventKind::ReactionTriggered { reactor, .. } => Some(*reactor),
+            // TODO: What to do here? Multiple reactors?
+            EventKind::ReactionTriggered { reactors, .. } => Some(*reactors.iter().next()?),
             EventKind::LifeStateChanged { actor, .. } => *actor,
             EventKind::D20CheckPerformed(entity, _, _) => Some(*entity),
             EventKind::D20CheckResolved(entity, _, _) => Some(*entity),
@@ -77,10 +78,10 @@ pub enum EventKind {
         results: Vec<ActionResult>,
     },
     ReactionTriggered {
-        reactor: Entity,
         /// The event that triggered the reaction, e.g. an ActionRequested event
         /// might trigger a Counterspell reaction.
         trigger_event: Arc<Event>,
+        reactors: HashSet<Entity>,
     },
     // ReactionPerformed {
     //     reactor: Entity,
@@ -101,6 +102,23 @@ pub enum EventKind {
     DamageRollResolved(Entity, DamageRollResult),
 }
 
+impl EventKind {
+    pub fn name(&self) -> &'static str {
+        match self {
+            EventKind::Encounter(_) => "Encounter",
+            EventKind::ActionRequested { .. } => "ActionRequested",
+            EventKind::ActionPerformed { .. } => "ActionPerformed",
+            EventKind::ReactionTriggered { .. } => "ReactionTriggered",
+            EventKind::LifeStateChanged { .. } => "LifeStateChanged",
+            EventKind::D20CheckPerformed(_, _, _) => "D20CheckPerformed",
+            EventKind::D20CheckResolved(_, _, _) => "D20CheckResolved",
+            EventKind::DamageRollPerformed(_, _) => "DamageRollPerformed",
+            EventKind::DamageRollResolved(_, _) => "DamageRollResolved",
+        }
+    }
+}
+
+// TODO: Do we need this?
 #[derive(Debug, Clone, PartialEq)]
 pub enum EncounterEvent {
     EncounterStarted(EncounterId),
@@ -152,6 +170,7 @@ pub struct ActionData {
     pub actor: Entity,
     pub action_id: ActionId,
     pub context: ActionContext,
+    pub resource_cost: ResourceAmountMap,
     pub targets: Vec<Entity>,
 }
 
@@ -162,7 +181,7 @@ pub struct ReactionData {
     pub event: Arc<Event>,
     pub reaction_id: ActionId,
     pub context: ActionContext,
-    pub resource_cost: ResourceCostMap,
+    pub resource_cost: ResourceAmountMap,
 }
 
 impl From<&ReactionData> for ActionData {
@@ -171,6 +190,7 @@ impl From<&ReactionData> for ActionData {
             actor: value.reactor,
             action_id: value.reaction_id.clone(),
             context: value.context.clone(),
+            resource_cost: value.resource_cost.clone(),
             targets: vec![value.event.actor().unwrap()], // TODO: What if no actor?
         }
     }
@@ -182,7 +202,8 @@ pub struct EventListener {
     callback: EventCallback,
 }
 
-type EventCallback = Arc<dyn Fn(&mut GameState, &Event) -> CallbackResult + Send + Sync + 'static>;
+pub type EventCallback =
+    Arc<dyn Fn(&mut GameState, &Event) -> CallbackResult + Send + Sync + 'static>;
 
 pub enum CallbackResult {
     Event(Event),
@@ -217,9 +238,7 @@ impl EventListener {
                 let _ = game_state.process_event(event);
             }
             CallbackResult::EventWithCallback(event, callback) => {
-                let event_id = event.id;
-                game_state
-                    .process_event_with_listener(event, EventListener::new(event_id, callback));
+                game_state.process_event_with_callback(event, callback);
             }
         }
     }

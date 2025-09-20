@@ -90,30 +90,13 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
             (20, vec![registry::effects::THREE_EXTRA_ATTACKS_ID.clone()]),
         ]),
         HashMap::from([
-            (1, vec![second_wind(2)]),
-            (
-                2,
-                vec![
-                    Resource::new(
-                        registry::resources::ACTION_SURGE.clone(),
-                        1,
-                        RechargeRule::OnShortRest,
-                    )
-                    .unwrap(),
-                ],
-            ),
-            (4, vec![second_wind(3)]),
-            (10, vec![second_wind(4)]),
+            (1, vec![registry::resources::SECOND_WIND.build_resource(2)]),
+            (2, vec![registry::resources::ACTION_SURGE.build_resource(1)]),
+            (4, vec![registry::resources::SECOND_WIND.build_resource(3)]),
+            (10, vec![registry::resources::SECOND_WIND.build_resource(4)]),
             (
                 17,
-                vec![
-                    Resource::new(
-                        registry::resources::ACTION_SURGE.clone(),
-                        2,
-                        RechargeRule::OnShortRest,
-                    )
-                    .unwrap(),
-                ],
+                vec![registry::resources::ACTION_SURGE.build_resource(2)],
             ),
         ]),
         HashMap::from([(
@@ -173,15 +156,6 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         ]),
     )
 });
-
-fn second_wind(charges: u8) -> Resource {
-    Resource::new(
-        registry::resources::SECOND_WIND.clone(),
-        charges,
-        RechargeRule::OnShortRest,
-    )
-    .unwrap()
-}
 
 // [x] Level 3: Improved Critical
 // [~] Level 3: Remarkable Athlete

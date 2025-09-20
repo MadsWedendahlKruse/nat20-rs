@@ -293,7 +293,6 @@ pub mod creatures {
             );
 
             let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
-            spellbook.update_spell_slots(5);
             spellbook.add_spell(&registry::spells::ELDRITCH_BLAST_ID, Ability::Charisma);
 
             EntityIdentifier::new(entity, name)

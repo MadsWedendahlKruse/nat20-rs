@@ -14,7 +14,7 @@ mod tests {
             health::hit_points::HitPoints,
             id::ActionId,
             modifier::ModifierSet,
-            resource::{RechargeRule, ResourceMap},
+            resource::{RechargeRule, ResourceAmountMap, ResourceMap},
         },
         engine::{
             event::ActionData,
@@ -36,27 +36,21 @@ mod tests {
             available_actions.contains_key(&action_id),
             "Fighter should have Action Surge action"
         );
-        let (context, _) = available_actions.get(&action_id).unwrap();
+        let contexts_and_costs = available_actions.get(&action_id).unwrap();
 
         {
             let resources =
                 systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter);
             // Check that the fighter has one charge of Action Surge
-            assert_eq!(
-                resources
-                    .get(&registry::resources::ACTION_SURGE)
-                    .unwrap()
-                    .current_uses(),
-                1
-            );
+            assert!(resources.can_afford(
+                &registry::resources::ACTION_SURGE_ID,
+                &registry::resources::ACTION_SURGE.build_amount(1)
+            ));
             // Check that the fighter has one action before using Action Surge
-            assert_eq!(
-                resources
-                    .get(&registry::resources::ACTION)
-                    .unwrap()
-                    .current_uses(),
-                1
-            );
+            assert!(resources.can_afford(
+                &registry::resources::ACTION_ID,
+                &registry::resources::ACTION.build_amount(1)
+            ));
         }
 
         let _ = systems::actions::perform_action(
@@ -64,7 +58,8 @@ mod tests {
             &ActionData {
                 actor: fighter,
                 action_id: action_id.clone(),
-                context: context[0].clone(),
+                context: contexts_and_costs[0].0.clone(),
+                resource_cost: contexts_and_costs[0].1.clone(),
                 targets: vec![fighter],
             },
         );
@@ -82,19 +77,18 @@ mod tests {
         }
 
         // Check that the fighter has two actions after using Action Surge
-        assert_eq!(
-            systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter)
-                .get(&registry::resources::ACTION)
-                .unwrap()
-                .current_uses(),
-            2
+        assert!(
+            systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
+                &registry::resources::ACTION_ID,
+                &registry::resources::ACTION.build_amount(2)
+            ),
         );
 
         // Check that the Action Surge action is on cooldown
         assert!(systems::actions::on_cooldown(&game_state.world, fighter, &action_id).is_some());
 
         // Simulate the start of the turn to remove the Action Surge effect
-        systems::time::pass_time(&mut game_state.world, fighter, &RechargeRule::OnTurn);
+        systems::time::pass_time(&mut game_state.world, fighter, &RechargeRule::Turn);
 
         // Check that the Action Surge effect is removed after the turn starts
         let effects = systems::effects::effects(&game_state.world, fighter);
@@ -108,22 +102,21 @@ mod tests {
 
         let resources = systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter);
         // Check that the fighter has one action after the turn starts
-        assert_eq!(
-            resources
-                .get(&registry::resources::ACTION)
-                .unwrap()
-                .current_uses(),
-            1
+        assert!(
+            !resources.can_afford(
+                &registry::resources::ACTION_ID,
+                &registry::resources::ACTION.build_amount(2)
+            ) && resources.can_afford(
+                &registry::resources::ACTION_ID,
+                &registry::resources::ACTION.build_amount(1)
+            )
         );
 
         // Check that the Action Surge action is out of charges
-        assert_eq!(
-            resources
-                .get(&registry::resources::ACTION_SURGE)
-                .unwrap()
-                .current_uses(),
-            0
-        );
+        assert!(!resources.can_afford(
+            &registry::resources::ACTION_SURGE_ID,
+            &registry::resources::ACTION_SURGE.build_amount(1)
+        ));
     }
 
     #[test]
@@ -138,15 +131,14 @@ mod tests {
             available_actions.contains_key(&action_id),
             "Fighter should have Second Wind action"
         );
-        let (context, _) = available_actions.get(&action_id).unwrap();
+        let contexts_and_costs = available_actions.get(&action_id).unwrap();
 
         // Check that the fighter has two charges of Second Wind
-        assert_eq!(
-            systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter)
-                .get(&registry::resources::SECOND_WIND)
-                .unwrap()
-                .current_uses(),
-            2
+        assert!(
+            systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
+                &registry::resources::SECOND_WIND_ID,
+                &registry::resources::SECOND_WIND.build_amount(2)
+            )
         );
 
         // Let the fighter take some damage
@@ -168,6 +160,7 @@ mod tests {
             &ActionId::from_str("test.damage"),
             &damage_source,
             &ActionContext::Other,
+            ResourceAmountMap::new(),
         );
 
         // Check that the fighter's HP is reduced
@@ -184,7 +177,8 @@ mod tests {
             &ActionData {
                 actor: fighter,
                 action_id: action_id.clone(),
-                context: context[0].clone(),
+                context: contexts_and_costs[0].0.clone(),
+                resource_cost: contexts_and_costs[0].1.clone(),
                 targets: vec![fighter],
             },
         );

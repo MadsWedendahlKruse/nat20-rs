@@ -30,14 +30,14 @@ pub fn pass_time(world: &mut World, entity: Entity, passed_time: &RechargeRule) 
     systems::effects::effects_mut(world, entity).retain(|effect| !effect.is_expired());
 
     match passed_time {
-        RechargeRule::OnShortRest => {
+        RechargeRule::ShortRest => {
             // SRD says we should spend Hit Dice here, but for now it's easier
             // to just heal half our max HP
             let half_max_hp = systems::helpers::get_component::<HitPoints>(world, entity).max() / 2;
             systems::health::heal(world, entity, half_max_hp);
         }
 
-        RechargeRule::OnLongRest => {
+        RechargeRule::LongRest => {
             // TODO: Do we need to do anything else here?
             systems::health::heal_full(world, entity);
         }

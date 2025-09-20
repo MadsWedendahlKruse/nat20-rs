@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{fmt, sync::Arc};
 
 use hecs::{Entity, World};
 
@@ -6,8 +6,8 @@ use crate::components::{
     actions::action::{Action, ActionContext},
     d20::{D20Check, D20CheckResult},
     damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
-    id::ResourceId,
     items::equipment::armor::ArmorClass,
+    resource::ResourceAmountMap,
 };
 
 pub type EffectHook = Arc<dyn Fn(&mut World, Entity) + Send + Sync>;
@@ -21,7 +21,7 @@ pub type DamageRollResultHook = Arc<dyn Fn(&World, Entity, &mut DamageRollResult
 pub type ActionHook = Arc<dyn Fn(&mut World, Entity, &Action, &ActionContext) + Send + Sync>;
 // TODO: Struct or type alias for the resource map?
 pub type ResourceCostHook =
-    Arc<dyn Fn(&World, Entity, &ActionContext, &mut HashMap<ResourceId, u8>) + Send + Sync>;
+    Arc<dyn Fn(&World, Entity, &ActionContext, &mut ResourceAmountMap) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct D20CheckHooks {

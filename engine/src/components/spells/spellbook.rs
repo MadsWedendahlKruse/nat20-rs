@@ -5,32 +5,9 @@ use crate::{
         ability::Ability,
         actions::action::{ActionContext, ActionMap, ActionProvider},
         id::{ActionId, ResourceId, SpellId},
-        resource::ResourceCostMap,
     },
-    registry,
+    registry, systems,
 };
-
-#[derive(Debug, Clone)]
-pub struct SpellSlots {
-    current: u8,
-    maximum: u8,
-}
-
-impl SpellSlots {
-    pub fn new(current: u8, maximum: u8) -> Self {
-        Self { current, maximum }
-    }
-
-    pub fn current(&self) -> u8 {
-        self.current
-    }
-
-    pub fn maximum(&self) -> u8 {
-        self.maximum
-    }
-}
-
-pub type SpellSlotsMap = HashMap<u8, SpellSlots>;
 
 #[derive(Debug, Clone)]
 pub struct Spellbook {
@@ -44,9 +21,6 @@ pub struct Spellbook {
     /// The ability to use when casting the spell. This depends on the class the
     /// spell was learned as
     spellcasting_ability: HashMap<SpellId, Ability>,
-    /// Spell slots available for each spell level.
-    /// Spell slots could be treated as a resource, but that really overcomplicates things.
-    spell_slots: SpellSlotsMap,
 }
 
 impl Spellbook {
@@ -56,7 +30,6 @@ impl Spellbook {
             prepared_spells: HashSet::new(),
             max_prepared_spells: 0,
             spellcasting_ability: HashMap::new(),
-            spell_slots: HashMap::new(),
         }
     }
 
@@ -92,85 +65,6 @@ impl Spellbook {
 
     pub fn spellcasting_ability(&self, spell_id: &SpellId) -> Option<&Ability> {
         self.spellcasting_ability.get(spell_id)
-    }
-
-    pub fn spell_slots(&self) -> &SpellSlotsMap {
-        &self.spell_slots
-    }
-
-    pub fn spell_slots_for_level(&self, level: u8) -> SpellSlots {
-        if let Some(slots) = self.spell_slots.get(&level) {
-            slots.clone()
-        } else {
-            SpellSlots::new(0, 0)
-        }
-    }
-
-    pub fn update_spell_slots(&mut self, caster_level: u8) {
-        // Calculate new spell slots based on caster level
-        let spell_slots = Self::spell_slots_per_level(caster_level);
-        for spell_level in 1..=spell_slots.len() as u8 {
-            let slots = spell_slots[spell_level as usize - 1];
-            self.spell_slots
-                .insert(spell_level, SpellSlots::new(slots, slots));
-        }
-    }
-
-    fn spell_slots_per_level(caster_level: u8) -> Vec<u8> {
-        match caster_level {
-            1 => vec![2],
-            2 => vec![3],
-            3 => vec![4, 2],
-            4 => vec![4, 3],
-            5 => vec![4, 3, 2],
-            6 => vec![4, 3, 3],
-            7 => vec![4, 3, 3, 1],
-            8 => vec![4, 3, 3, 2],
-            9 => vec![4, 3, 3, 3, 1],
-            10 => vec![4, 3, 3, 3, 2],
-            11..=12 => vec![4, 3, 3, 3, 2, 1],
-            13..=14 => vec![4, 3, 3, 3, 2, 1, 1],
-            15..=16 => vec![4, 3, 3, 3, 2, 1, 1, 1],
-            17..=18 => vec![4, 3, 3, 3, 2, 1, 1, 1, 1],
-            19 => vec![4, 3, 3, 3, 3, 2, 1, 1, 1],
-            20 => vec![4, 3, 3, 3, 3, 2, 2, 1, 1],
-            _ => vec![],
-        }
-    }
-
-    pub fn use_spell_slot(&mut self, level: u8) -> bool {
-        // TODO: Error instead of bool?
-        if let Some(slots) = self.spell_slots.get_mut(&level) {
-            if slots.current() > 0 {
-                slots.current -= 1;
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    }
-
-    pub fn restore_spell_slot(&mut self, level: u8) {
-        if let Some(slots) = self.spell_slots.get_mut(&level) {
-            slots.current += 1;
-        } else {
-            // TODO: Is it allowed to restore a slot of a higher level than the current max?
-            self.spell_slots.insert(level, SpellSlots::new(1, 0));
-        }
-    }
-
-    pub fn restore_all_spell_slots(&mut self) {
-        let slots: Vec<(u8, u8)> = self
-            .spell_slots
-            .iter()
-            .map(|(level, slots)| (*level, slots.maximum()))
-            .collect();
-        for (level, max_slots) in slots {
-            self.spell_slots
-                .insert(level, SpellSlots::new(max_slots, max_slots));
-        }
     }
 
     pub fn set_max_prepared_spells(&mut self, max: usize) {
@@ -209,76 +103,48 @@ impl Spellbook {
         }
         false
     }
-
-    fn spell_slots_for_base_level(
-        &self,
-        base_level: u8,
-        use_current_slots: bool,
-    ) -> HashMap<u8, u8> {
-        let mut spell_slots = HashMap::new();
-        let max_level = self.spell_slots.keys().max().cloned().unwrap_or(0);
-        if base_level > max_level {
-            // No slots available for levels higher than the max
-            return spell_slots;
-        }
-        for level in base_level..=max_level {
-            if let Some(slots) = self.spell_slots.get(&level) {
-                let slots = if use_current_slots {
-                    slots.current()
-                } else {
-                    slots.maximum()
-                };
-                if slots == 0 {
-                    // Skip levels with no slots
-                    continue;
-                }
-                spell_slots.insert(level, slots);
-            }
-        }
-        spell_slots
-    }
-
-    fn action_map_from_slots(
-        &self,
-        use_current_slots: bool,
-    ) -> HashMap<ActionId, (Vec<ActionContext>, HashMap<ResourceId, u8>)> {
-        let mut actions = HashMap::new();
-        for spell_id in &self.spells {
-            let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
-            if !spell.is_cantrip() && !self.prepared_spells.contains(spell_id) {
-                // Skip spells that are not prepared
-                continue;
-            }
-            let available_slots = if spell.base_level() == 0 {
-                // Cantrips always have 1 slot available
-                HashMap::from([(0, 1)])
-            } else {
-                self.spell_slots_for_base_level(spell.base_level(), use_current_slots)
-            };
-            let contexts: Vec<_> = available_slots
-                .iter()
-                .map(|(level, _)| ActionContext::Spell { level: *level })
-                .collect();
-            if contexts.is_empty() {
-                // Skip spells with no available slots
-                continue;
-            }
-            actions.insert(
-                spell.action().id().clone(),
-                (contexts, spell.action().resource_cost().clone()),
-            );
-        }
-        actions
-    }
 }
 
 impl ActionProvider for Spellbook {
-    fn available_actions(&self) -> ActionMap {
-        self.action_map_from_slots(true)
-    }
+    fn actions(&self) -> ActionMap {
+        let mut actions = ActionMap::new();
 
-    fn all_actions(&self) -> ActionMap {
-        self.action_map_from_slots(false)
+        for spell_id in &self.spells {
+            let spell = registry::spells::SPELL_REGISTRY
+                .get(spell_id)
+                .expect(format!("Missing spell in registry: {} ", spell_id).as_str());
+
+            if spell.is_cantrip() {
+                let context = ActionContext::Spell { level: 0 };
+                actions.insert(
+                    spell.action().id().clone(),
+                    vec![(context, spell.action().resource_cost().clone())],
+                );
+                continue;
+            }
+
+            if !self.prepared_spells.contains(spell_id) {
+                // Skip spells that are not prepared
+                continue;
+            }
+
+            for level in spell.base_level()..=systems::spells::MAX_SPELL_LEVEL {
+                let context = ActionContext::Spell { level };
+
+                let mut resource_cost = spell.action().resource_cost().clone();
+                resource_cost.insert(
+                    registry::resources::SPELL_SLOT_ID.clone(),
+                    registry::resources::SPELL_SLOT.build_cost(level, 1),
+                );
+
+                actions
+                    .entry(spell.action().id().clone())
+                    .or_insert_with(Vec::new)
+                    .push((context, resource_cost));
+            }
+        }
+
+        actions
     }
 }
 
@@ -327,32 +193,6 @@ mod tests {
 
         assert!(spellbook.unprepare_spell(spell_id));
         assert!(!spellbook.is_spell_prepared(spell_id));
-    }
-
-    #[test]
-    fn test_spell_slots_update_and_use_restore() {
-        let spell_id = &registry::spells::MAGIC_MISSILE_ID;
-
-        let mut spellbook = Spellbook::new();
-        spellbook.add_spell(spell_id, Ability::Intelligence);
-        spellbook.update_spell_slots(3); // Should give [4,2]
-
-        let slots_lvl1 = spellbook.spell_slots_for_level(1);
-        assert_eq!(slots_lvl1.current(), 4);
-        assert_eq!(slots_lvl1.maximum(), 4);
-
-        assert!(spellbook.use_spell_slot(1));
-        assert_eq!(spellbook.spell_slots_for_level(1).current(), 3);
-
-        spellbook.restore_spell_slot(1);
-        assert_eq!(spellbook.spell_slots_for_level(1).current(), 4);
-
-        spellbook.use_spell_slot(2);
-        spellbook.use_spell_slot(2);
-        assert!(!spellbook.use_spell_slot(2)); // Only 2 slots at level 2
-
-        spellbook.restore_all_spell_slots();
-        assert_eq!(spellbook.spell_slots_for_level(2).current(), 2);
     }
 
     #[test]

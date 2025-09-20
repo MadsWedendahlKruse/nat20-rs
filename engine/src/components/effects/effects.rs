@@ -16,6 +16,7 @@ use crate::components::{
     id::{EffectId, ResourceId},
     items::equipment::armor::ArmorClass,
     modifier::ModifierSource,
+    resource::ResourceAmountMap,
     saving_throw::SavingThrowKind,
     skill::Skill,
 };
@@ -113,7 +114,7 @@ impl Effect {
             on_action: Arc::new(|_: &mut World, _: Entity, _: &Action, _: &ActionContext| {})
                 as ActionHook,
             on_resource_cost: Arc::new(
-                |_: &World, _: Entity, _: &ActionContext, _: &mut HashMap<ResourceId, u8>| {},
+                |_: &World, _: Entity, _: &ActionContext, _: &mut ResourceAmountMap| {},
             ) as ResourceCostHook,
             replaces: None,
         }

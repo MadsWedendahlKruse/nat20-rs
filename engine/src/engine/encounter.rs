@@ -140,7 +140,13 @@ impl Encounter {
     }
 
     pub(crate) fn pop_prompt(&mut self) -> Option<ActionPrompt> {
-        self.pending_prompts.pop_front()
+        let front = self.pending_prompts.pop_front();
+        if self.pending_prompts.is_empty() {
+            self.pending_prompts.push_back(ActionPrompt::Action {
+                actor: self.current_entity(),
+            });
+        }
+        front
     }
 
     pub fn participants(&self, world: &World, filter: ParticipantsFilter) -> Vec<Entity> {
@@ -193,7 +199,7 @@ impl Encounter {
         systems::time::pass_time(
             &mut game_state.world,
             self.current_entity(),
-            &RechargeRule::OnTurn,
+            &RechargeRule::Turn,
         );
 
         if self.should_skip_turn(game_state) {

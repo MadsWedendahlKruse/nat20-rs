@@ -1,19 +1,18 @@
-use std::{collections::HashMap, hash::Hash, sync::Arc};
+use std::{hash::Hash, sync::Arc};
 
 use hecs::{Entity, World};
 
 use crate::{
     components::{
         actions::{
-            action::{Action, ActionContext, ActionKind, ReactionResult},
+            action::{Action, ActionContext, ActionKind},
             targeting::TargetingContext,
         },
-        id::{ActionId, ResourceId, SpellId},
+        id::SpellId,
+        resource::{ResourceAmount, ResourceAmountMap},
     },
-    engine::{
-        event::{Event, EventKind},
-        game_state::GameState,
-    },
+    engine::event::Event,
+    registry,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -31,7 +30,6 @@ pub enum MagicSchool {
 #[derive(Debug, Clone)]
 pub struct Spell {
     id: SpellId,
-    base_level: u8,
     school: MagicSchool,
     action: Action,
 }
@@ -42,14 +40,25 @@ impl Spell {
         base_level: u8,
         school: MagicSchool,
         kind: ActionKind,
-        resource_cost: HashMap<ResourceId, u8>,
+        resource_cost: ResourceAmountMap,
         targeting: Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
         reaction_trigger: Option<Arc<dyn Fn(Entity, &Event) -> bool + Send + Sync>>,
     ) -> Self {
         let action_id = id.to_action_id();
+        let mut resource_cost = resource_cost;
+        if base_level > 0 && !resource_cost.contains_key(&registry::resources::SPELL_SLOT_ID) {
+            // Ensure the spell has a spell slot cost if it's not a cantrip
+            resource_cost.insert(
+                registry::resources::SPELL_SLOT_ID.clone(),
+                ResourceAmount::Tiered {
+                    tier: base_level,
+                    amount: 1,
+                },
+            );
+        }
+
         Self {
             id,
-            base_level,
             school,
             action: Action {
                 id: action_id,
@@ -67,11 +76,22 @@ impl Spell {
     }
 
     pub fn base_level(&self) -> u8 {
-        self.base_level
+        for (resource, cost) in self.action.resource_cost() {
+            if *resource == *registry::resources::SPELL_SLOT_ID {
+                match cost {
+                    ResourceAmount::Flat(_) => panic!("Spell slot cost cannot be flat"),
+                    ResourceAmount::Tiered { tier, .. } => {
+                        return *tier;
+                    }
+                }
+            }
+        }
+        // TODO: What to do if no spell slot cost is found?
+        0
     }
 
     pub fn is_cantrip(&self) -> bool {
-        self.base_level == 0
+        self.base_level() == 0
     }
 
     pub fn school(&self) -> MagicSchool {
@@ -81,36 +101,6 @@ impl Spell {
     pub fn action(&self) -> &Action {
         &self.action
     }
-
-    // TODO: Apparently not used anywhere?
-    // pub fn snapshot(
-    //     &self,
-    //     world: &World,
-    //     caster: Entity,
-    //     spell_level: &u8,
-    // ) -> Result<ActionKindSnapshot, SnapshotError> {
-    //     if spell_level < &self.base_level {
-    //         return Err(SnapshotError::DowncastingNotAllowed(
-    //             self.base_level,
-    //             *spell_level,
-    //         ));
-    //     }
-    //     if self.is_cantrip() && spell_level > &self.base_level {
-    //         return Err(SnapshotError::UpcastingCantripNotAllowed);
-    //     }
-    //     // TODO: Something like BG3 Lightning Charges with Magic Missile would not work
-    //     // with this snapshotting, since each damage instance would add an effect to the
-    //     // caster, which would not be reflected in the snapshot.
-    //     // ---
-    //     // Might not be an issue anymore???
-    //     Ok(self.action.kind().snapshot(
-    //         world,
-    //         caster,
-    //         &ActionContext::Spell {
-    //             level: *spell_level,
-    //         },
-    //     ))
-    // }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
