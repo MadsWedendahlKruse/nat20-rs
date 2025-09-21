@@ -74,78 +74,70 @@ fn cost_builder_tiered(tier: u8, amount: u8) -> ResourceAmount {
 }
 
 // --- DEFAULT RESOURCES ---
+macro_rules! flat_resource {
+    ($name:ident, $id_name:ident, $id_str:expr, $recharge:expr) => {
+        pub static $id_name: LazyLock<ResourceId> = LazyLock::new(|| ResourceId::from_str($id_str));
 
-pub static ACTION_ID: LazyLock<ResourceId> =
-    LazyLock::new(|| ResourceId::from_str("resource.action"));
+        pub static $name: LazyLock<FlatResourceRegistryEntry> =
+            LazyLock::new(|| FlatResourceRegistryEntry {
+                resource_builer: |amount| resource_builder_flat(&$id_name, amount, $recharge),
+                cost_builder: |amount| cost_builder_flat(amount),
+            });
+    };
+}
 
-pub static ACTION: LazyLock<FlatResourceRegistryEntry> =
-    LazyLock::new(|| FlatResourceRegistryEntry {
-        resource_builer: |amount| resource_builder_flat(&ACTION_ID, amount, RechargeRule::Turn),
-        cost_builder: |amount| cost_builder_flat(amount),
-    });
-
-pub static BONUS_ACTION_ID: LazyLock<ResourceId> =
-    LazyLock::new(|| ResourceId::from_str("resource.bonus_action"));
-
-pub static BONUS_ACTION: LazyLock<FlatResourceRegistryEntry> =
-    LazyLock::new(|| FlatResourceRegistryEntry {
-        resource_builer: |amount| {
-            resource_builder_flat(&BONUS_ACTION_ID, amount, RechargeRule::Turn)
-        },
-        cost_builder: |amount| cost_builder_flat(amount),
-    });
-
-pub static REACTION_ID: LazyLock<ResourceId> =
-    LazyLock::new(|| ResourceId::from_str("resource.reaction"));
-
-pub static REACTION: LazyLock<FlatResourceRegistryEntry> =
-    LazyLock::new(|| FlatResourceRegistryEntry {
-        resource_builer: |amount| resource_builder_flat(&REACTION_ID, amount, RechargeRule::Turn),
-        cost_builder: |amount| cost_builder_flat(amount),
-    });
+// --- DEFAULT RESOURCES ---
+flat_resource!(ACTION, ACTION_ID, "resource.action", RechargeRule::Turn);
+flat_resource!(
+    BONUS_ACTION,
+    BONUS_ACTION_ID,
+    "resource.bonus_action",
+    RechargeRule::Turn
+);
+flat_resource!(
+    REACTION,
+    REACTION_ID,
+    "resource.reaction",
+    RechargeRule::Turn
+);
 
 // --- CLASS RESOURCES ---
+flat_resource!(
+    ACTION_SURGE,
+    ACTION_SURGE_ID,
+    "resource.action_surge",
+    RechargeRule::ShortRest
+);
+flat_resource!(
+    EXTRA_ATTACK,
+    EXTRA_ATTACK_ID,
+    "resource.extra_attack",
+    RechargeRule::Never
+);
+flat_resource!(
+    SECOND_WIND,
+    SECOND_WIND_ID,
+    "resource.second_wind",
+    RechargeRule::ShortRest
+);
 
-pub static ACTION_SURGE_ID: LazyLock<ResourceId> =
-    LazyLock::new(|| ResourceId::from_str("resource.action_surge"));
+macro_rules! tiered_resource {
+    ($name:ident, $id_name:ident, $id_str:expr, $recharge:expr) => {
+        pub static $id_name: LazyLock<ResourceId> = LazyLock::new(|| ResourceId::from_str($id_str));
 
-pub static ACTION_SURGE: LazyLock<FlatResourceRegistryEntry> =
-    LazyLock::new(|| FlatResourceRegistryEntry {
-        resource_builer: |amount| {
-            resource_builder_flat(&ACTION_SURGE_ID, amount, RechargeRule::ShortRest)
-        },
-        cost_builder: |amount| cost_builder_flat(amount),
-    });
+        pub static $name: LazyLock<TieredResourceRegistryEntry> =
+            LazyLock::new(|| TieredResourceRegistryEntry {
+                resource_builer: |tier, amount| {
+                    resource_builder_tiered(&$id_name, tier, amount, $recharge)
+                },
+                cost_builder: |tier, amount| cost_builder_tiered(tier, amount),
+            });
+    };
+}
 
-pub static EXTRA_ATTACK_ID: LazyLock<ResourceId> =
-    LazyLock::new(|| ResourceId::from_str("resource.extra_attack"));
-
-pub static EXTRA_ATTACK: LazyLock<FlatResourceRegistryEntry> =
-    LazyLock::new(|| FlatResourceRegistryEntry {
-        resource_builer: |amount| {
-            resource_builder_flat(&EXTRA_ATTACK_ID, amount, RechargeRule::Never)
-        },
-        cost_builder: |amount| cost_builder_flat(amount),
-    });
-
-pub static SECOND_WIND_ID: LazyLock<ResourceId> =
-    LazyLock::new(|| ResourceId::from_str("resource.second_wind"));
-
-pub static SECOND_WIND: LazyLock<FlatResourceRegistryEntry> =
-    LazyLock::new(|| FlatResourceRegistryEntry {
-        resource_builer: |amount| {
-            resource_builder_flat(&SECOND_WIND_ID, amount, RechargeRule::ShortRest)
-        },
-        cost_builder: |amount| cost_builder_flat(amount),
-    });
-
-pub static SPELL_SLOT_ID: LazyLock<ResourceId> =
-    LazyLock::new(|| ResourceId::from_str("resource.spell_slot"));
-
-pub static SPELL_SLOT: LazyLock<TieredResourceRegistryEntry> =
-    LazyLock::new(|| TieredResourceRegistryEntry {
-        resource_builer: |tier, amount| {
-            resource_builder_tiered(&SPELL_SLOT_ID, tier, amount, RechargeRule::LongRest)
-        },
-        cost_builder: |tier, amount| cost_builder_tiered(tier, amount),
-    });
+tiered_resource!(
+    SPELL_SLOT,
+    SPELL_SLOT_ID,
+    "resource.spell_slot",
+    RechargeRule::LongRest
+);
