@@ -18,7 +18,8 @@ pub type D20CheckHook = Arc<dyn Fn(&World, Entity, &mut D20Check) + Send + Sync>
 pub type D20CheckResultHook = Arc<dyn Fn(&World, Entity, &mut D20CheckResult) + Send + Sync>;
 pub type DamageRollHook = Arc<dyn Fn(&World, Entity, &mut DamageRoll) + Send + Sync>;
 pub type DamageRollResultHook = Arc<dyn Fn(&World, Entity, &mut DamageRollResult) + Send + Sync>;
-pub type ActionHook = Arc<dyn Fn(&mut World, Entity, &Action, &ActionContext) + Send + Sync>;
+pub type ActionHook =
+    Arc<dyn Fn(&mut World, Entity, &Action, &ActionContext, &ResourceAmountMap) + Send + Sync>;
 // TODO: Struct or type alias for the resource map?
 pub type ResourceCostHook =
     Arc<dyn Fn(&World, Entity, &ActionContext, &mut ResourceAmountMap) + Send + Sync>;

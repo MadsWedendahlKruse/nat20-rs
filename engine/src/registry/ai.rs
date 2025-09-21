@@ -55,7 +55,7 @@ impl AIController for RandomController {
                 let contexts_and_costs = actions.get(action_id)?;
                 let (context, resource_cost) = contexts_and_costs.choose(rng)?;
 
-                let action_kind = systems::actions::get_action_clone(action_id)?.kind;
+                let action_kind = &systems::actions::get_action(action_id)?.kind;
                 let targeting =
                     systems::actions::targeting_context(world, *actor, action_id, &context);
                 let mut targets = Vec::new();

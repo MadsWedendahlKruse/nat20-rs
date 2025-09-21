@@ -23,15 +23,15 @@ use crate::{
     registry, systems,
 };
 
-pub fn get_action_clone(action_id: &ActionId) -> Option<Action> {
+pub fn get_action(action_id: &ActionId) -> Option<&Action> {
     // Start by checking if the action exists in the action registry
     if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id) {
-        return Some(action.clone());
+        return Some(action);
     }
     // If not found, check the spell registry
     let spell_id = action_id.to_spell_id();
     if let Some(spell) = registry::spells::SPELL_REGISTRY.get(&spell_id) {
-        return Some(spell.action().clone());
+        return Some(spell.action());
     }
     None
 }
@@ -151,8 +151,9 @@ pub fn perform_action(game_state: &mut GameState, action_data: &ActionData) {
         targets,
     } = action_data;
     // TODO: Handle missing action
-    let mut action =
-        get_action_clone(action_id).expect("Action not found in character's actions or registry");
+    let mut action = get_action(action_id)
+        .cloned()
+        .expect("Action not found in character's actions or registry");
     // Set the action on cooldown if applicable
     if let Some(cooldown) = action.cooldown {
         systems::helpers::get_component_mut::<ActionCooldownMap>(&mut game_state.world, *performer)
@@ -168,14 +169,14 @@ pub fn targeting_context(
     context: &ActionContext,
 ) -> TargetingContext {
     // TODO: Handle missing action
-    get_action_clone(action_id).unwrap().targeting()(world, entity, context)
+    get_action(action_id).unwrap().targeting()(world, entity, context)
 }
 
 fn filter_reactions(actions: &ActionMap) -> ReactionSet {
     actions
         .iter()
         .filter_map(|(action_id, _)| {
-            if let Some(action) = get_action_clone(action_id) {
+            if let Some(action) = get_action(action_id) {
                 if action.reaction_trigger.is_some() {
                     return Some(action_id.clone());
                 }

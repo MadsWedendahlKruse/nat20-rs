@@ -111,8 +111,9 @@ impl Effect {
                 as DamageRollHook,
             post_damage_roll: Arc::new(|_: &World, _: Entity, _: &mut DamageRollResult| {})
                 as DamageRollResultHook,
-            on_action: Arc::new(|_: &mut World, _: Entity, _: &Action, _: &ActionContext| {})
-                as ActionHook,
+            on_action: Arc::new(
+                |_: &mut World, _: Entity, _: &Action, _: &ActionContext, _: &ResourceAmountMap| {},
+            ) as ActionHook,
             on_resource_cost: Arc::new(
                 |_: &World, _: Entity, _: &ActionContext, _: &mut ResourceAmountMap| {},
             ) as ResourceCostHook,

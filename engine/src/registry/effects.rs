@@ -247,7 +247,7 @@ pub static EXTRA_ATTACK_ID: LazyLock<EffectId> =
     LazyLock::new(|| EffectId::from_str("effect.extra_attack"));
 
 static EXTRA_ATTACK: LazyLock<Effect> =
-    LazyLock::new(|| helpers::extra_attack_effect(EXTRA_ATTACK_ID.clone(), 2));
+    LazyLock::new(|| helpers::extra_attack_effect(EXTRA_ATTACK_ID.clone(), 1));
 
 // TODO: In the SRD fighting styles are a specific type of Feat, but I don't think that's necessary
 
@@ -429,12 +429,11 @@ pub static TWO_EXTRA_ATTACKS_ID: LazyLock<EffectId> =
     LazyLock::new(|| EffectId::from_str("effect.fighter.two_extra_attacks"));
 
 static TWO_EXTRA_ATTACKS: LazyLock<Effect> = LazyLock::new(|| {
-    let mut effect = helpers::extra_attack_effect(TWO_EXTRA_ATTACKS_ID.clone(), 3);
+    let mut effect = helpers::extra_attack_effect(TWO_EXTRA_ATTACKS_ID.clone(), 2);
     effect.replaces = Some(EXTRA_ATTACK_ID.clone());
     effect
 });
 
-#[macro_use]
 mod helpers {
     use crate::components::damage::{
         DamageMitigationEffect, DamageResistances, DamageType, MitigationOperation,
@@ -453,7 +452,7 @@ mod helpers {
             // This closure captures the `charges` variable, so we can use it in the
             // closure without having to pass it as an argument.
             let charges = charges;
-            move |world, performer, action, context| {
+            move |world, performer, action, context, resource_cost| {
                 // Check that this is only applied for weapon attacks
                 // TODO: Is this logic sufficient? (And is it the nicest way to do this?)
                 if !matches!(context, ActionContext::Weapon { .. }) {
@@ -461,10 +460,7 @@ mod helpers {
                 }
 
                 // If the Action doesn't cost an "Action" this effect is not relevant
-                if !action
-                    .resource_cost()
-                    .contains_key(&registry::resources::ACTION_ID)
-                {
+                if !resource_cost.contains_key(&registry::resources::ACTION_ID) {
                     return;
                 }
 

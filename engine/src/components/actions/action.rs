@@ -433,13 +433,14 @@ impl Action {
             .collect();
 
         for hook in hooks {
-            hook(&mut game_state.world, performer, self, context);
+            hook(
+                &mut game_state.world,
+                performer,
+                self,
+                context,
+                resource_cost,
+            );
         }
-
-        // TEMP: Skip resource spending for now since it's done in the game state
-        // let spent_resources = self
-        //     .spend_resources(&mut game_state.world, performer, context, resource_cost)
-        //     .unwrap();
 
         for target in targets {
             self.kind.perform(

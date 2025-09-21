@@ -5,7 +5,7 @@ use nat20_rs::{
     components::{
         ability::{Ability, AbilityScore, AbilityScoreMap},
         actions::{
-            action::{ActionKindResult, ActionResult, ReactionResult},
+            action::{ActionContext, ActionKind, ActionKindResult, ActionResult, ReactionResult},
             targeting::TargetTypeInstance,
         },
         d20::{D20CheckDC, D20CheckResult, RollMode},
@@ -14,9 +14,10 @@ use nat20_rs::{
             DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRoll,
             DamageRollResult, MitigationOperation,
         },
+        dice::DiceSetRoll,
         effects::effects::{Effect, EffectDuration},
         health::{hit_points::HitPoints, life_state::LifeState},
-        id::{FeatId, Name, RaceId, ResourceId, SpellId, SubraceId},
+        id::{ActionId, FeatId, Name, RaceId, ResourceId, SpellId, SubraceId},
         items::{
             equipment::{
                 armor::{Armor, ArmorClass, ArmorDexterityBonus, ArmorType},
@@ -30,7 +31,7 @@ use nat20_rs::{
         modifier::ModifierSet,
         proficiency::{Proficiency, ProficiencyLevel},
         race::{CreatureSize, CreatureType},
-        resource::{self, Resource, ResourceAmount, ResourceKind, ResourceMap},
+        resource::{self, Resource, ResourceAmount, ResourceAmountMap, ResourceKind, ResourceMap},
         saving_throw::{SavingThrowKind, SavingThrowSet},
         skill::{Skill, SkillSet, skill_ability},
         spells::spellbook::Spellbook,
@@ -1456,5 +1457,97 @@ impl ImguiRenderableWithContext<&World> for Vec<Entity> {
                 .render(ui);
             }
         }
+    }
+}
+
+impl ImguiRenderableWithContext<(&World, Entity, &ActionContext)> for ActionKind {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity, &ActionContext)) {
+        let (world, entity, action_context) = context;
+        match self {
+            ActionKind::UnconditionalDamage { damage } => {
+                damage(world, entity, action_context).render(ui);
+            }
+
+            ActionKind::AttackRollDamage { damage, .. } => {
+                damage(world, entity, action_context).render(ui);
+            }
+
+            ActionKind::SavingThrowDamage { damage, .. } => {
+                damage(world, entity, action_context).render(ui);
+            }
+
+            ActionKind::UnconditionalEffect { effect } => {
+                todo!()
+            }
+
+            ActionKind::SavingThrowEffect {
+                saving_throw,
+                effect,
+            } => todo!(),
+
+            ActionKind::BeneficialEffect { effect } => {
+                TextSegment::new(format!("{}", effect), TextKind::Effect).render(ui);
+            }
+
+            ActionKind::Healing { heal } => {
+                // TODO: More info? Modifiers?
+                let healing = heal(world, entity, action_context);
+                TextSegment::new(
+                    format!("{}-{} Healing", healing.min_roll(), healing.max_roll()),
+                    TextKind::Healing,
+                )
+                .render(ui);
+            }
+
+            ActionKind::Utility {} => todo!(),
+
+            ActionKind::Composite { actions } => todo!(),
+
+            ActionKind::Reaction { reaction } => todo!(),
+
+            ActionKind::Custom(_) => todo!(),
+        }
+    }
+}
+
+impl ImguiRenderable for ResourceAmountMap {
+    fn render(&self, ui: &imgui::Ui) {
+        if self.is_empty() {
+            ui.text("No cost");
+            return;
+        }
+
+        for (resource, amount) in self.iter() {
+            let amount_text = match amount {
+                ResourceAmount::Flat(amount) => amount.to_string(),
+                ResourceAmount::Tiered { tier, amount } => format!("{} Level {}", amount, tier),
+            };
+            ui.text(format!("{} {}", amount_text, resource));
+        }
+    }
+}
+
+// TODO: Pretty janky 'type' here
+impl ImguiRenderableWithContext<(&World, Entity)>
+    for (&ActionId, &mut Vec<(ActionContext, ResourceAmountMap)>)
+{
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
+        let (world, entity) = context;
+
+        let (action_id, contexts_and_costs) = self;
+        let action = systems::actions::get_action(action_id).unwrap();
+
+        ui.separator_with_text(&action_id.to_string());
+
+        // TODO: For now just render the first context and cost
+        let context_and_cost = &contexts_and_costs[0];
+
+        action
+            .kind
+            .render_with_context(ui, (world, entity, &context_and_cost.0));
+
+        ui.separator();
+
+        context_and_cost.1.render(ui);
     }
 }

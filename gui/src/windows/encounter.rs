@@ -704,6 +704,13 @@ impl ImguiRenderableMutWithContext<&mut GameState> for Option<ActionDecisionProg
                             *context_and_cost_options = contexts_and_costs.clone();
                         }
                     }
+
+                    if ui.is_item_hovered() {
+                        ui.tooltip(|| {
+                            (action_id, contexts_and_costs)
+                                .render_with_context(ui, (&game_state.world, *actor));
+                        });
+                    }
                 }
 
                 if chosen_action.is_some() && chosen_context_and_cost.is_none() {
