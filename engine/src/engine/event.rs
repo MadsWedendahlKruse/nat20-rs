@@ -208,6 +208,7 @@ pub type EventCallback =
 pub enum CallbackResult {
     Event(Event),
     EventWithCallback(Event, EventCallback),
+    None,
 }
 
 impl EventListener {
@@ -235,11 +236,12 @@ impl EventListener {
         let result = (self.callback)(game_state, event);
         match result {
             CallbackResult::Event(event) => {
-                let _ = game_state.process_event(event);
+                game_state.process_event(event);
             }
             CallbackResult::EventWithCallback(event, callback) => {
                 game_state.process_event_with_callback(event, callback);
             }
+            CallbackResult::None => {}
         }
     }
 }

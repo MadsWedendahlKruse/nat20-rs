@@ -67,14 +67,6 @@ fn damage_internal(
     attack_roll: Option<&AttackRollResult>,
     resistances: &DamageResistances,
 ) -> (Option<DamageMitigationResult>, Option<LifeState>) {
-    // TODO: For something like Shield, which is triggered *IF the target is hit*,
-    // we need to simulate the outcome of the action, and then have the reaction
-    // be triggered by the outcome of this simulation. And then we need to actually
-    // apply the simulated damage after the reaction is resolved.
-    // To simulate damage I guess we can just clone the HitPoints and LifeState
-    // components, and then apply the damage to the clones?
-    // TODO: New event type ActionSimulated?
-
     let (mitigation_result, killed_by_damage, mut new_life_state) =
         if let Ok((hit_points, life_state)) =
             world.query_one_mut::<(&mut HitPoints, &mut LifeState)>(target)
@@ -441,6 +433,8 @@ pub fn damage(
 
                                             let ability = match saving_throw_dc.key {
                                                 SavingThrowKind::Ability(ability) => ability,
+                                                // TODO: Saving throw damage should never be used with
+                                                // Death saves???
                                                 SavingThrowKind::Death => Ability::Constitution,
                                             };
                                             for component in damage_roll_result.components.iter() {

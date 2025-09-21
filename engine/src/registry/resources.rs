@@ -123,7 +123,7 @@ pub static EXTRA_ATTACK_ID: LazyLock<ResourceId> =
 pub static EXTRA_ATTACK: LazyLock<FlatResourceRegistryEntry> =
     LazyLock::new(|| FlatResourceRegistryEntry {
         resource_builer: |amount| {
-            resource_builder_flat(&EXTRA_ATTACK_ID, amount, RechargeRule::Turn)
+            resource_builder_flat(&EXTRA_ATTACK_ID, amount, RechargeRule::Never)
         },
         cost_builder: |amount| cost_builder_flat(amount),
     });

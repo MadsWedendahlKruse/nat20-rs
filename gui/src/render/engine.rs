@@ -248,7 +248,7 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                         D20CheckDCKind::SavingThrow(dc) => {
                             vec![
                                 (dc.key.to_string(), TextKind::Ability),
-                                ("check".to_string(), TextKind::Normal),
+                                ("saving throw".to_string(), TextKind::Normal),
                             ]
                         }
                         D20CheckDCKind::Skill(dc) => vec![

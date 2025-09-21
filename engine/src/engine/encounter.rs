@@ -28,7 +28,7 @@ use crate::{
     },
     entities::{character::CharacterTag, monster::MonsterTag},
     registry::{self, resources},
-    systems,
+    systems::{self, d20::D20CheckDCKind},
 };
 
 pub type EncounterId = Uuid;
@@ -247,51 +247,61 @@ impl Encounter {
     fn should_skip_turn(&mut self, game_state: &mut GameState) -> bool {
         let current_entity = self.current_entity();
 
-        // Borrow checker forces potential death saving throws to be handled in
-        // a specific order
-
-        // 1) Peek life state without taking a mutable borrow
         let is_unconscious = matches!(
             *systems::helpers::get_component::<LifeState>(&game_state.world, current_entity),
             LifeState::Unconscious(_)
         );
 
         if is_unconscious {
-            // TODO: Re-implement death saving throws
+            let death_saving_throw_event = systems::d20::check(
+                game_state,
+                current_entity,
+                &D20CheckDCKind::SavingThrow(D20CheckDC {
+                    dc: ModifierSet::from_iter([(
+                        ModifierSource::Custom("Death Saving Throw".to_string()),
+                        DEATH_SAVING_THROW_DC as i32,
+                    )]),
+                    key: SavingThrowKind::Death,
+                }),
+            );
 
-            // 2) Do the d20 roll (needs only &World)
-            // let check_dc = D20CheckDC {
-            //     dc: ModifierSet::from_iter([(
-            //         ModifierSource::Custom("Death Saving Throw".to_string()),
-            //         DEATH_SAVING_THROW_DC as i32,
-            //     )]),
-            //     key: SavingThrowKind::Death,
-            // };
-            // let check_result = systems::d20::saving_throw_dc(world, current_entity, &check_dc);
-            // self.event_log.push(Event::SavingThrow(
-            //     current_entity,
-            //     check_result.clone(),
-            //     check_dc.clone(),
-            // ));
+            game_state.process_event_with_callback(
+                death_saving_throw_event,
+                Arc::new({
+                    move |game_state, event| match &event.kind {
+                        EventKind::D20CheckResolved(performer, result, dc) => {
+                            let mut life_state = systems::helpers::get_component_mut::<LifeState>(
+                                &mut game_state.world,
+                                *performer,
+                            );
 
-            // // 3) Now take the mutable borrow and update
-            // let mut life_state =
-            //     systems::helpers::get_component_mut::<LifeState>(world, current_entity);
-            // if let LifeState::Unconscious(ref mut death_saving_throws) = *life_state {
-            //     death_saving_throws.update(check_result);
+                            if let LifeState::Unconscious(ref mut death_saving_throws) = *life_state
+                            {
+                                death_saving_throws.update(result.d20_result());
 
-            //     let next_state = death_saving_throws.next_state();
+                                let next_state = death_saving_throws.next_state();
 
-            //     if next_state != *life_state {
-            //         *life_state = next_state.clone();
+                                if next_state != *life_state {
+                                    *life_state = next_state.clone();
 
-            //         self.event_log.push(Event::new(EventKind::LifeStateChanged {
-            //             entity: current_entity,
-            //             new_state: next_state,
-            //             actor: None,
-            //         }));
-            //     }
-            // }
+                                    return CallbackResult::Event(Event::new(
+                                        EventKind::LifeStateChanged {
+                                            entity: current_entity,
+                                            new_state: next_state,
+                                            actor: None,
+                                        },
+                                    ));
+                                } else {
+                                    return CallbackResult::None;
+                                }
+                            } else {
+                                return CallbackResult::None;
+                            }
+                        }
+                        _ => panic!("Expected D20CheckResolved event"),
+                    }
+                }),
+            );
 
             return true;
         } else {

@@ -258,10 +258,6 @@ impl GameState {
                         ParticipantsFilter::from(TargetType::entity_not_dead()),
                     ) {
                         if self.event_log.has_reacted(&event.id, reactor) {
-                            println!(
-                                "Entity {:?} has already reacted to event {:?}",
-                                reactor, event.id
-                            );
                             continue;
                         }
 
@@ -269,13 +265,6 @@ impl GameState {
                             &self.world,
                             *reactor,
                             &event,
-                        );
-
-                        println!(
-                            "Entity {:?} has {} available reactions to event {:?}",
-                            reactor,
-                            reactions.len(),
-                            event.id
                         );
 
                         if !reactions.is_empty() {

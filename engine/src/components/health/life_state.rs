@@ -63,7 +63,7 @@ impl DeathSavingThrows {
         self.failures = 0;
     }
 
-    pub fn update(&mut self, check_result: D20CheckResult) {
+    pub fn update(&mut self, check_result: &D20CheckResult) {
         if check_result.is_crit {
             // Critical success
             self.record_success(2);
