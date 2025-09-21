@@ -76,9 +76,43 @@ pub fn render_event_description(ui: &imgui::Ui, event: &Event, world: &World) {
     TextSegments::new(event_description).render(ui);
 }
 
+pub fn events_match(event1: &Event, event2: &Event) -> bool {
+    match (&event1.kind, &event2.kind) {
+        (
+            EventKind::ActionRequested { action: a1 },
+            EventKind::ActionPerformed { action: a2, .. },
+        ) => a1.actor == a2.actor && a1.action_id == a2.action_id && a1.targets == a2.targets,
+
+        (EventKind::D20CheckPerformed(e1, _, _), EventKind::D20CheckResolved(e2, _, _)) => e1 == e2,
+
+        (EventKind::DamageRollPerformed(e1, _), EventKind::DamageRollResolved(e2, _)) => e1 == e2,
+
+        _ => false,
+    }
+}
+
 impl ImguiRenderableWithContext<&(&World, &LogLevel)> for EventLog {
     fn render_with_context(&self, ui: &imgui::Ui, context: &(&World, &LogLevel)) {
-        for entry in self.events.iter() {
+        let (_, log_level) = context;
+
+        let log_level_events = self
+            .events
+            .iter()
+            .filter(|event| event_log_level(event) <= **log_level)
+            .collect::<Vec<_>>();
+
+        for (i, entry) in log_level_events.iter().enumerate() {
+            // For visual clarity at 'Info' level, we don't need to see e.g. both
+            // the 'ActionRequested' and 'ActionPerformed' events, so if two
+            // consecutive events "match" then we only show the first one, e.g.
+            // for an action we would only show the 'ActionPerformed' event.
+            if **log_level == LogLevel::Info && i < log_level_events.len() - 1 {
+                let next_entry = &log_level_events[i + 1];
+                if events_match(entry, next_entry) {
+                    continue;
+                }
+            }
+
             entry.render_with_context(ui, context);
         }
     }
@@ -87,10 +121,6 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for EventLog {
 impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
     fn render_with_context(&self, ui: &imgui::Ui, context: &(&World, &LogLevel)) {
         let (world, log_level) = context;
-
-        if event_log_level(self) > **log_level {
-            return;
-        }
 
         let group_token = ui.begin_group();
 
@@ -141,7 +171,7 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                         ui.same_line();
                         TextSegment::new("as a response to".to_string(), TextKind::Normal)
                             .render(ui);
-
+                        ui.same_line();
                         render_event_description(ui, trigger_event, world);
                     }
 
