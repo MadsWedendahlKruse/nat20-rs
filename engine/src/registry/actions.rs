@@ -20,7 +20,7 @@ use crate::{
         items::equipment::loadout::Loadout,
         level::CharacterLevels,
         modifier::{ModifierSet, ModifierSource},
-        resource::{RechargeRule, ResourceAmount},
+        resource::{RechargeRule, ResourceAmount, ResourceAmountMap},
         saving_throw::SavingThrowSet,
     },
     engine::event::{ActionData, Event, EventKind},
@@ -97,24 +97,24 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
                         ),
                     );
 
-                    let _ = game_state.process_event(Event::new(EventKind::ActionPerformed {
-                        action: ActionData {
-                            actor: reactor,
-                            action_id: INDOMITABLE_ID.clone(),
-                            context: reaction_context.clone(),
-                            resource_cost: HashMap::from([(
-                                registry::resources::INDOMITABLE_ID.clone(),
-                                registry::resources::INDOMITABLE.build_amount(1),
-                            )]),
-                            targets: vec![reactor],
-                        },
-                        results: vec![ActionResult {
-                            performer: EntityIdentifier::from_world(&game_state.world, reactor),
-                            target: TargetTypeInstance::Entity(EntityIdentifier::from_world(
-                                &game_state.world,
-                                reactor,
-                            )),
-                            kind: ActionKindResult::Reaction {
+                    let _ = game_state.process_event(
+                        Event::action_performed_event(
+                            &game_state,
+                            reactor,
+                            &INDOMITABLE_ID.clone().into(),
+                            &reaction_context,
+                            &ResourceAmountMap::from([
+                                (
+                                    registry::resources::INDOMITABLE_ID.clone(),
+                                    registry::resources::INDOMITABLE.build_amount(1),
+                                ),
+                                (
+                                    registry::resources::REACTION_ID.clone(),
+                                    registry::resources::REACTION.build_amount(1),
+                                ),
+                            ]),
+                            reactor,
+                            ActionKindResult::Reaction {
                                 result: ReactionResult::ModifyEvent {
                                     modification: Arc::new({
                                         move |event: &mut Event| {
@@ -129,7 +129,7 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
                                                         *result = new_roll.clone();
                                                     }
                                                     _ => panic!("Indomitable modification applied to wrong result type"),
-                                                    
+
                                                 }
                                             } else {
                                                 panic!("Indomitable modification applied to wrong event type");
@@ -137,13 +137,13 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
                                         }
                                     }),
                                 },
-                            },
-                        }],
-                    }));
+                            }
+                        ),
+                    );
                 }),
             },
             targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
-            resource_cost: HashMap::from([
+            resource_cost: ResourceAmountMap::from([
                 (
                     registry::resources::INDOMITABLE_ID.clone(),
                     registry::resources::INDOMITABLE.build_amount(1),
@@ -151,7 +151,7 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
                 (
                     registry::resources::REACTION_ID.clone(),
                     registry::resources::REACTION.build_amount(1),
-                )
+                ),
             ]),
             cooldown: Some(RechargeRule::LongRest),
             reaction_trigger: Some(Arc::new(|reactor, event| match &event.kind {

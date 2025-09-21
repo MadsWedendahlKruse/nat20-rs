@@ -29,7 +29,7 @@ pub fn get_action(action_id: &ActionId) -> Option<&Action> {
         return Some(action);
     }
     // If not found, check the spell registry
-    let spell_id = action_id.to_spell_id();
+    let spell_id = action_id.into();
     if let Some(spell) = registry::spells::SPELL_REGISTRY.get(&spell_id) {
         return Some(spell.action());
     }

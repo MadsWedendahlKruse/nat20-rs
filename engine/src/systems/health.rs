@@ -270,31 +270,21 @@ pub fn damage(
                             )
                         } else {
                             // If the attack misses and there's no damage on miss, no damage is dealt
-                            return CallbackResult::Event(Event::new(EventKind::ActionPerformed {
-                                action: ActionData {
-                                    actor: *performer,
-                                    action_id: action_id.clone(),
-                                    context: context.clone(),
-                                    resource_cost: resource_cost.clone(),
-                                    targets: vec![target],
+                            return CallbackResult::Event(Event::action_performed_event(
+                                &game_state,
+                                *performer,
+                                &action_id,
+                                &context,
+                                &resource_cost,
+                                target,
+                                ActionKindResult::AttackRollDamage {
+                                    attack_roll: attack_roll.clone(),
+                                    armor_class: armor_class.clone(),
+                                    damage_roll: None,
+                                    damage_taken: None,
+                                    new_life_state: None,
                                 },
-                                results: vec![ActionResult {
-                                    performer: EntityIdentifier::from_world(
-                                        &game_state.world,
-                                        *performer,
-                                    ),
-                                    target: TargetTypeInstance::Entity(
-                                        EntityIdentifier::from_world(&game_state.world, target),
-                                    ),
-                                    kind: ActionKindResult::AttackRollDamage {
-                                        attack_roll: attack_roll.clone(),
-                                        armor_class: armor_class.clone(),
-                                        damage_roll: None,
-                                        damage_taken: None,
-                                        new_life_state: None,
-                                    },
-                                }],
-                            }));
+                            ));
                         };
 
                         // Create the damage roll event
@@ -328,38 +318,23 @@ pub fn damage(
                                             &resistances,
                                         );
 
-                                        return CallbackResult::Event(Event::new(
-                                            EventKind::ActionPerformed {
-                                                action: ActionData {
-                                                    actor: *performer,
-                                                    action_id: action_id.clone(),
-                                                    context: context.clone(),
-                                                    resource_cost: resource_cost.clone(),
-                                                    targets: vec![target],
+                                        return CallbackResult::Event(
+                                            Event::action_performed_event(
+                                                &game_state,
+                                                *performer,
+                                                &action_id,
+                                                &context,
+                                                &resource_cost,
+                                                target,
+                                                ActionKindResult::AttackRollDamage {
+                                                    attack_roll: attack_roll.clone(),
+                                                    armor_class: armor_class.clone(),
+                                                    damage_roll: Some(damage_roll.clone()),
+                                                    damage_taken,
+                                                    new_life_state,
                                                 },
-                                                results: vec![ActionResult {
-                                                    performer: EntityIdentifier::from_world(
-                                                        &game_state.world,
-                                                        *performer,
-                                                    ),
-                                                    target: TargetTypeInstance::Entity(
-                                                        EntityIdentifier::from_world(
-                                                            &game_state.world,
-                                                            target,
-                                                        ),
-                                                    ),
-                                                    kind: ActionKindResult::AttackRollDamage {
-                                                        attack_roll: attack_roll.clone(),
-                                                        armor_class: armor_class.clone(),
-                                                        damage_roll: Some(
-                                                            damage_roll_result.clone(),
-                                                        ),
-                                                        damage_taken,
-                                                        new_life_state,
-                                                    },
-                                                }],
-                                            },
-                                        ));
+                                            ),
+                                        );
                                     }
                                     _ => {
                                         panic!(
@@ -457,39 +432,26 @@ pub fn damage(
                                             &resistances,
                                         );
 
-                                        return CallbackResult::Event(Event::new(
-                                            EventKind::ActionPerformed {
-                                                action: ActionData {
-                                                    actor: *performer,
-                                                    action_id: action_id.clone(),
-                                                    context: context.clone(),
-                                                    resource_cost: resource_cost.clone(),
-                                                    targets: vec![target],
+                                        return CallbackResult::Event(
+                                            Event::action_performed_event(
+                                                &game_state,
+                                                *performer,
+                                                &action_id,
+                                                &context,
+                                                &resource_cost,
+                                                target,
+                                                ActionKindResult::SavingThrowDamage {
+                                                    saving_throw_dc: saving_throw_dc.clone(),
+                                                    saving_throw_result: result
+                                                        .d20_result()
+                                                        .clone(),
+                                                    half_damage_on_save,
+                                                    damage_roll: damage_roll_result.clone(),
+                                                    damage_taken,
+                                                    new_life_state,
                                                 },
-                                                results: vec![ActionResult {
-                                                    performer: EntityIdentifier::from_world(
-                                                        &game_state.world,
-                                                        *performer,
-                                                    ),
-                                                    target: TargetTypeInstance::Entity(
-                                                        EntityIdentifier::from_world(
-                                                            &game_state.world,
-                                                            target,
-                                                        ),
-                                                    ),
-                                                    kind: ActionKindResult::SavingThrowDamage {
-                                                        saving_throw_dc: saving_throw_dc.clone(),
-                                                        saving_throw_result: result
-                                                            .d20_result()
-                                                            .clone(),
-                                                        half_damage_on_save,
-                                                        damage_roll: damage_roll_result.clone(),
-                                                        damage_taken,
-                                                        new_life_state,
-                                                    },
-                                                }],
-                                            },
-                                        ));
+                                            ),
+                                        );
                                     }
                                     _ => {
                                         panic!(

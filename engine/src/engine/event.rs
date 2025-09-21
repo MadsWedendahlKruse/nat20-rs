@@ -8,10 +8,13 @@ use uuid::Uuid;
 
 use crate::{
     components::{
-        actions::action::{ActionContext, ActionResult},
+        actions::{
+            action::{ActionContext, ActionKindResult, ActionResult},
+            targeting::TargetTypeInstance,
+        },
         damage::DamageRollResult,
         health::life_state::LifeState,
-        id::ActionId,
+        id::{ActionId, EntityIdentifier},
         resource::ResourceAmountMap,
     },
     engine::{encounter::EncounterId, game_state::GameState},
@@ -58,6 +61,32 @@ impl Event {
             EventKind::DamageRollResolved(entity, _) => Some(*entity),
             _ => None,
         }
+    }
+
+    pub fn action_performed_event(
+        game_state: &GameState,
+        performer: Entity,
+        action_id: &ActionId,
+        context: &ActionContext,
+        resource_cost: &ResourceAmountMap,
+        target: Entity,
+        result: ActionKindResult,
+    ) -> Event {
+        Event::new(EventKind::ActionPerformed {
+            action: ActionData {
+                actor: performer,
+                action_id: action_id.clone(),
+                context: context.clone(),
+                resource_cost: resource_cost.clone(),
+                targets: vec![target],
+            },
+            results: vec![ActionResult::new(
+                &game_state.world,
+                performer,
+                target,
+                result,
+            )],
+        })
     }
 }
 

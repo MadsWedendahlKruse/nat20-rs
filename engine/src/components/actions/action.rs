@@ -543,6 +543,16 @@ impl PartialEq for Action {
     }
 }
 
+impl ActionResult {
+    pub fn new(world: &World, performer: Entity, target: Entity, kind: ActionKindResult) -> Self {
+        ActionResult {
+            performer: EntityIdentifier::from_world(world, performer),
+            target: TargetTypeInstance::Entity(EntityIdentifier::from_world(world, target)),
+            kind,
+        }
+    }
+}
+
 // TODO: Combine these two?
 pub type ActionMap = HashMap<ActionId, Vec<(ActionContext, ResourceAmountMap)>>;
 

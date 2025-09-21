@@ -44,7 +44,7 @@ impl Spell {
         targeting: Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
         reaction_trigger: Option<Arc<dyn Fn(Entity, &Event) -> bool + Send + Sync>>,
     ) -> Self {
-        let action_id = id.to_action_id();
+        let action_id = id.clone().into();
         let mut resource_cost = resource_cost;
         if base_level > 0 && !resource_cost.contains_key(&registry::resources::SPELL_SLOT_ID) {
             // Ensure the spell has a spell slot cost if it's not a cantrip

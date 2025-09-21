@@ -109,35 +109,17 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
                                             }
                                         };
 
-                                        CallbackResult::Event(Event::new(
-                                            EventKind::ActionPerformed {
-                                                action: ActionData {
-                                                    actor: reactor,
-                                                    action_id: COUNTERSPELL_ID
-                                                        .clone()
-                                                        .to_action_id(),
-                                                    context: reaction_context.clone(),
-                                                    resource_cost: ResourceAmountMap::from([(
-                                                        registry::resources::REACTION_ID.clone(),
-                                                        registry::resources::REACTION
-                                                            .build_amount(1),
-                                                    )]),
-                                                    targets: vec![*actor],
-                                                },
-                                                results: vec![ActionResult {
-                                                    performer: EntityIdentifier::from_world(
-                                                        &game_state.world,
-                                                        reactor,
-                                                    ),
-                                                    target: TargetTypeInstance::Entity(
-                                                        EntityIdentifier::from_world(
-                                                            &game_state.world,
-                                                            *actor,
-                                                        ),
-                                                    ),
-                                                    kind: ActionKindResult::Reaction { result },
-                                                }],
-                                            },
+                                        CallbackResult::Event(Event::action_performed_event(
+                                            &game_state,
+                                            reactor,
+                                            &COUNTERSPELL_ID.clone().into(),
+                                            &reaction_context,
+                                            &ResourceAmountMap::from([(
+                                                registry::resources::REACTION_ID.clone(),
+                                                registry::resources::REACTION.build_amount(1),
+                                            )]),
+                                            trigger_action.actor,
+                                            ActionKindResult::Reaction { result },
                                         ))
                                     }
                                     _ => panic!("Invalid result kind in Counterspell callback"),
