@@ -265,7 +265,7 @@ impl Loadout {
             return false;
         }
         attack_roll_result.roll_result.is_crit
-            || attack_roll_result.roll_result.total >= armor_class.total() as u32
+            || attack_roll_result.roll_result.total() >= armor_class.total() as u32
     }
 
     pub fn weapon_in_hand(&self, slot: &EquipmentSlot) -> Option<&Weapon> {

@@ -20,6 +20,15 @@ use crate::{
     systems,
 };
 
+pub fn class_level(world: &World, entity: Entity, class_name: &ClassName) -> u8 {
+    if let Ok(character_levels) = world.get::<&CharacterLevels>(entity) {
+        if let Some(class_level) = character_levels.class_level(class_name) {
+            return class_level.level();
+        }
+    }
+    0
+}
+
 pub fn increment_class_level(
     world: &mut World,
     entity: Entity,

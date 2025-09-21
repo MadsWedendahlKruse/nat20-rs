@@ -73,7 +73,6 @@ fn cost_builder_tiered(tier: u8, amount: u8) -> ResourceAmount {
     }
 }
 
-// --- DEFAULT RESOURCES ---
 macro_rules! flat_resource {
     ($name:ident, $id_name:ident, $id_str:expr, $recharge:expr) => {
         pub static $id_name: LazyLock<ResourceId> = LazyLock::new(|| ResourceId::from_str($id_str));
@@ -82,6 +81,20 @@ macro_rules! flat_resource {
             LazyLock::new(|| FlatResourceRegistryEntry {
                 resource_builer: |amount| resource_builder_flat(&$id_name, amount, $recharge),
                 cost_builder: |amount| cost_builder_flat(amount),
+            });
+    };
+}
+
+macro_rules! tiered_resource {
+    ($name:ident, $id_name:ident, $id_str:expr, $recharge:expr) => {
+        pub static $id_name: LazyLock<ResourceId> = LazyLock::new(|| ResourceId::from_str($id_str));
+
+        pub static $name: LazyLock<TieredResourceRegistryEntry> =
+            LazyLock::new(|| TieredResourceRegistryEntry {
+                resource_builer: |tier, amount| {
+                    resource_builder_tiered(&$id_name, tier, amount, $recharge)
+                },
+                cost_builder: |tier, amount| cost_builder_tiered(tier, amount),
             });
     };
 }
@@ -115,25 +128,17 @@ flat_resource!(
     RechargeRule::Never
 );
 flat_resource!(
+    INDOMITABLE,
+    INDOMITABLE_ID,
+    "resource.indomitable",
+    RechargeRule::LongRest
+);
+flat_resource!(
     SECOND_WIND,
     SECOND_WIND_ID,
     "resource.second_wind",
     RechargeRule::ShortRest
 );
-
-macro_rules! tiered_resource {
-    ($name:ident, $id_name:ident, $id_str:expr, $recharge:expr) => {
-        pub static $id_name: LazyLock<ResourceId> = LazyLock::new(|| ResourceId::from_str($id_str));
-
-        pub static $name: LazyLock<TieredResourceRegistryEntry> =
-            LazyLock::new(|| TieredResourceRegistryEntry {
-                resource_builer: |tier, amount| {
-                    resource_builder_tiered(&$id_name, tier, amount, $recharge)
-                },
-                cost_builder: |tier, amount| cost_builder_tiered(tier, amount),
-            });
-    };
-}
 
 tiered_resource!(
     SPELL_SLOT,

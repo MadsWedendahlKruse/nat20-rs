@@ -62,7 +62,7 @@ impl D20ResultKind {
             ) => {
                 let result = &result.roll_result;
                 !result.is_crit_fail
-                    && (result.is_crit || result.total >= armor_class.total() as u32)
+                    && (result.is_crit || result.total() >= armor_class.total() as u32)
             }
             _ => false,
         }

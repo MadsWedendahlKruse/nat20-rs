@@ -58,8 +58,11 @@ impl ModifierSet {
         Self { modifiers }
     }
 
-    pub fn add_modifier(&mut self, source: ModifierSource, value: i32) {
-        self.modifiers.insert(source.clone(), value);
+    pub fn add_modifier<T>(&mut self, source: ModifierSource, value: T)
+    where
+        T: Into<i32>,
+    {
+        self.modifiers.insert(source.clone(), value.into());
     }
 
     pub fn remove_modifier(&mut self, source: &ModifierSource) {

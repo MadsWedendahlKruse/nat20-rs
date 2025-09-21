@@ -73,7 +73,6 @@ pub mod creatures {
             );
         }
 
-        // TODO: Should spawn an Entity in a World instead of returning a Character
         pub fn fighter(world: &mut World) -> EntityIdentifier {
             let name = Name::new("Johnny Fighter");
             let character = Character::new(name.clone());
@@ -81,7 +80,7 @@ pub mod creatures {
             systems::level_up::apply_level_up_decision(
                 world,
                 entity,
-                5,
+                9,
                 vec![
                     // Level 1
                     // TODO: Everyone is dragonborn for now
@@ -149,6 +148,32 @@ pub mod creatures {
                         2,
                     )])),
                     // Level 5
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                    // Level 6
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                    LevelUpDecision::single_choice(ChoiceItem::Feat(
+                        registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
+                    )),
+                    LevelUpDecision::AbilityScoreImprovement(HashMap::from([
+                        (Ability::Strength, 1),
+                        (Ability::Dexterity, 1),
+                    ])),
+                    // Level 7
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                    LevelUpDecision::single_choice_with_id(
+                        "choice.fighting_style",
+                        ChoiceItem::Feat(registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone()),
+                    ),
+                    // Level 8
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                    LevelUpDecision::single_choice(ChoiceItem::Feat(
+                        registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
+                    )),
+                    LevelUpDecision::AbilityScoreImprovement(HashMap::from([(
+                        Ability::Dexterity,
+                        2,
+                    )])),
+                    // Level 9
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
                 ],
             );

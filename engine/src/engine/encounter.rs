@@ -107,7 +107,7 @@ impl Encounter {
             })
             .collect();
 
-        indexed_rolls.sort_by_key(|(_, roll)| -(roll.total as i32));
+        indexed_rolls.sort_by_key(|(_, roll)| -(roll.total() as i32));
         self.initiative_order = indexed_rolls
             .into_iter()
             .map(|(i, roll)| (i, roll))

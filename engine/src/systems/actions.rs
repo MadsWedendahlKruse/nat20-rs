@@ -203,17 +203,11 @@ pub fn available_reactions_to_event(
     let mut reactions = Vec::new();
 
     for (reaction_id, contexts_and_costs) in systems::actions::available_actions(world, reactor) {
-        // TODO: Would be nice if we didn't have to check two different registries
-        let reaction = if let Some((reaction, _)) =
-            registry::actions::ACTION_REGISTRY.get(&reaction_id)
-        {
-            reaction
-        } else if let Some(spell) = registry::spells::SPELL_REGISTRY.get(&reaction_id.to_spell_id())
-        {
-            spell.action()
-        } else {
-            continue; // Skip if no reaction found
-        };
+        let reaction = systems::actions::get_action(&reaction_id);
+        if reaction.is_none() {
+            continue;
+        }
+        let reaction = reaction.unwrap();
 
         if let Some(trigger) = &reaction.reaction_trigger {
             if trigger(reactor, event) {

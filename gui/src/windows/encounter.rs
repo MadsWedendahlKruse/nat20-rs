@@ -72,6 +72,27 @@ impl ActionDecisionProgress {
         }
     }
 
+    pub fn matches_prompt(&self, prompt: &ActionPrompt) -> bool {
+        match (self, prompt) {
+            (
+                ActionDecisionProgress::Action { actor, .. },
+                ActionPrompt::Action {
+                    actor: prompt_actor,
+                },
+            ) => actor == prompt_actor,
+
+            (
+                ActionDecisionProgress::Reactions { event, .. },
+                ActionPrompt::Reactions {
+                    event: prompt_event,
+                    ..
+                },
+            ) => event.id == prompt_event.id,
+
+            _ => false,
+        }
+    }
+
     pub fn action_with_actor(actor: Entity) -> Self {
         Self::Action {
             actor,
@@ -528,7 +549,7 @@ impl ImguiRenderableMutWithContext<(&mut GameState, &mut Option<ActionDecisionPr
                 if let Ok(_) = &game_state.world.query_one_mut::<&Name>(*entity) {
                     // Initiative column
                     ui.table_next_column();
-                    ui.text(initiative.total.to_string());
+                    ui.text(initiative.total().to_string());
                     if ui.is_item_hovered() {
                         ui.tooltip(|| {
                             ui.separator_with_text("Initiative");
@@ -560,7 +581,13 @@ impl ImguiRenderableMutWithContext<(&mut GameState, &mut Option<ActionDecisionPr
         }
         let next_prompt = next_prompt.unwrap();
 
-        if decision_progress.is_none() {
+        // TODO: Match check is a bit of a hacky workaround for now
+        if decision_progress.is_none()
+            || !decision_progress
+                .as_ref()
+                .unwrap()
+                .matches_prompt(&next_prompt)
+        {
             *decision_progress = Some(ActionDecisionProgress::from_prompt(&next_prompt));
         }
 
@@ -933,7 +960,7 @@ impl
                         if render_button_selectable(
                             ui,
                             format!("{}##{:?}", name.as_str(), entity),
-                            [100.0, 20.0],
+                            [200.0, 20.0],
                             targets.contains(&entity),
                         ) {
                             if targets.len() > 0 {

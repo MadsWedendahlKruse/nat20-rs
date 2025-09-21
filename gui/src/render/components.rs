@@ -489,6 +489,11 @@ fn render_spellbook_ui(
 ) -> Vec<SpellbookUiAction> {
     let mut actions = Vec::new();
 
+    if spellbook.is_empty() {
+        ui.text("No spells known.");
+        return actions;
+    }
+
     // --- Cantrips ---
     ui.separator_with_text("Cantrips");
     for spell_id in spellbook.all_spells() {
@@ -900,7 +905,7 @@ impl ImguiRenderable for D20CheckResult {
                 .render_with_context(ui, ModifierSetRenderMode::Line);
         }
         ui.same_line();
-        ui.text(format!("= {}", self.total));
+        ui.text(format!("= {}", self.total()));
     }
 }
 
@@ -1030,7 +1035,7 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
                             damage_taken.render(ui);
                         } else {
                             ui.text(format!("Attack did not hit. Attack roll ({}) was less than Armor Class ({})", 
-                                attack_roll.roll_result.total, armor_class.total()));
+                                attack_roll.roll_result.total(), armor_class.total()));
                         }
                     });
                 }
@@ -1091,8 +1096,9 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
             ActionKindResult::Custom {} => todo!(),
 
             ActionKindResult::Reaction { result } => match result {
-                ReactionResult::ModifyEvent { event } => {
-                    todo!()
+                ReactionResult::ModifyEvent { modification } => {
+                    // TODO: No idea how to render this yet
+                    return;
                 }
 
                 ReactionResult::CancelEvent {

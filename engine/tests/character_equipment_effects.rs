@@ -103,7 +103,7 @@ mod tests {
             &world,
             entity,
         );
-        assert_eq!(check.total_modifier, 2);
+        assert_eq!(check.total_modifier(), 2);
 
         let _ = systems::loadout::unequip(&mut world, entity, &EquipmentSlot::Armor)
             .expect("Failed to unequip armor");
@@ -113,7 +113,7 @@ mod tests {
             &world,
             entity,
         );
-        assert_eq!(check.total_modifier, 0);
+        assert_eq!(check.total_modifier(), 0);
     }
 
     #[test]

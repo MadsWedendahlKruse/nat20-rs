@@ -1,6 +1,6 @@
 // TODO: reformat imports
 
-use std::{collections::HashMap, fmt, hash::Hash};
+use std::{cmp::max, collections::HashMap, fmt, hash::Hash};
 
 use hecs::{Entity, World};
 use rand::Rng;
@@ -158,8 +158,6 @@ impl D20Check {
             rolls,
             selected_roll,
             modifier_breakdown: modifiers.clone(),
-            total_modifier,
-            total,
             is_crit,
             is_crit_fail: selected_roll == D20_CRITICAL_FAILURE,
             // We can already now say the check is a success if it's a crit
@@ -230,19 +228,25 @@ pub struct D20CheckResult {
     pub rolls: Vec<u8>,
     pub selected_roll: u8,
     pub modifier_breakdown: ModifierSet,
-    pub total_modifier: i32,
-    pub total: u32,
     pub is_crit: bool,
     pub is_crit_fail: bool,
     pub success: bool,
 }
 
 impl D20CheckResult {
+    pub fn total_modifier(&self) -> i32 {
+        self.modifier_breakdown.total()
+    }
+
+    pub fn total(&self) -> u32 {
+        max(self.selected_roll as i32 + self.total_modifier(), 0) as u32
+    }
+
     pub fn is_success<T>(&self, dc: &D20CheckDC<T>) -> bool
     where
         T: IntoEnumIterator + Copy + Eq + Hash,
     {
-        self.is_crit || (!self.is_crit_fail && self.total >= dc.dc.total() as u32)
+        self.is_crit || (!self.is_crit_fail && self.total() >= dc.dc.total() as u32)
     }
 }
 
@@ -267,7 +271,7 @@ impl fmt::Display for D20CheckResult {
         if !self.modifier_breakdown.is_empty() {
             write!(f, " {}", self.modifier_breakdown)?;
         }
-        write!(f, " = {}", self.total)?;
+        write!(f, " = {}", self.total())?;
         Ok(())
     }
 }
@@ -343,7 +347,7 @@ where
 
     pub fn check_dc(&self, dc: &D20CheckDC<K>, world: &World, entity: Entity) -> D20CheckResult {
         let mut result = self.check(dc.key, world, entity);
-        result.success |= result.total >= dc.dc.total() as u32;
+        result.success |= result.total() >= dc.dc.total() as u32;
         result.success &= !result.is_crit_fail; // Critical failure cannot be a success
 
         result
@@ -389,7 +393,7 @@ mod tests {
         // 1d20 + 2 + 2
         // Min: 1 + 2 + 2 = 5
         // Max: 20 + 2 + 2 = 24
-        assert!(result.total >= 5 && result.total <= 24);
+        assert!(result.total() >= 5 && result.total() <= 24);
         assert_eq!(result.rolls.len(), 1);
         assert_eq!(result.advantage_tracker.roll_mode(), RollMode::Normal);
         println!("Result: {}", result);
@@ -414,7 +418,7 @@ mod tests {
         // 1d20 + 2
         // Min: 1 + 2 = 3
         // Max: 20 + 2 = 22
-        assert!(result.total >= 3 && result.total <= 22);
+        assert!(result.total() >= 3 && result.total() <= 22);
         assert_eq!(result.rolls.len(), 2);
         assert_eq!(result.advantage_tracker.roll_mode(), RollMode::Advantage);
         // Check if the selected roll is the maximum
@@ -440,7 +444,7 @@ mod tests {
         // 1d20
         // Min: 1 + 8 = 9
         // Max: 20 + 8 = 28
-        assert!(result.total >= 9 && result.total <= 28);
+        assert!(result.total() >= 9 && result.total() <= 28);
         assert_eq!(result.rolls.len(), 2);
         assert_eq!(result.advantage_tracker.roll_mode(), RollMode::Disadvantage);
         // Check if the selected roll is the minimum
@@ -470,7 +474,7 @@ mod tests {
         // 1d20
         // Min: 1 + 8 = 9
         // Max: 20 + 8 = 28
-        assert!(result.total >= 9 && result.total <= 28);
+        assert!(result.total() >= 9 && result.total() <= 28);
         assert_eq!(result.rolls.len(), 1);
         assert_eq!(result.advantage_tracker.roll_mode(), RollMode::Normal);
         println!("Result: {}", result);

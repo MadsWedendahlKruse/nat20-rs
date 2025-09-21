@@ -225,8 +225,7 @@ impl GameState {
         }
     }
 
-    /// pub(crate) to avoid injecting arbitrary events from outside the engine
-    pub(crate) fn process_event(&mut self, event: Event) -> Result<(), ActionError> {
+    pub fn process_event(&mut self, event: Event) -> Result<(), ActionError> {
         self.log_event(event.clone());
 
         // 1. Check if the event is awaited (a response to a previous event)
@@ -342,7 +341,9 @@ impl GameState {
                                 }
 
                                 // TODO: How to handle this properly?
-                                ReactionResult::ModifyEvent { event } => {}
+                                ReactionResult::ModifyEvent { modification } => {
+                                    (modification)(&mut self.pending_events.front_mut().unwrap())
+                                }
 
                                 ReactionResult::NoEffect => { /* Do nothing */ }
                             }

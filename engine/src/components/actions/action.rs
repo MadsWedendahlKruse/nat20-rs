@@ -174,17 +174,47 @@ pub enum ActionKindResult {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub enum ReactionResult {
-    // TODO: Should Modify just contain the new event after modification?
     ModifyEvent {
-        event: Arc<Event>,
+        modification: Arc<dyn Fn(&mut Event) + Send + Sync>,
     },
     CancelEvent {
         event: Arc<Event>,
         resources_refunded: ResourceAmountMap,
     },
     NoEffect,
+}
+
+impl Debug for ReactionResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReactionResult::ModifyEvent { .. } => write!(f, "ModifyEvent"),
+            ReactionResult::CancelEvent {
+                event,
+                resources_refunded,
+            } => f
+                .debug_struct("CancelEvent")
+                .field("event", &event.id)
+                .field("resources_refunded", resources_refunded)
+                .finish(),
+            ReactionResult::NoEffect => write!(f, "NoEffect"),
+        }
+    }
+}
+
+impl PartialEq for ReactionResult {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ReactionResult::ModifyEvent { .. }, ReactionResult::ModifyEvent { .. }) => true,
+            (
+                ReactionResult::CancelEvent { event: e1, .. },
+                ReactionResult::CancelEvent { event: e2, .. },
+            ) => e1.id == e2.id,
+            (ReactionResult::NoEffect, ReactionResult::NoEffect) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone)]

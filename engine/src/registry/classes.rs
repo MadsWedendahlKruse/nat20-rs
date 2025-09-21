@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::LazyLock,
+    vec,
 };
 
 use crate::{
@@ -93,10 +94,15 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
             (1, vec![registry::resources::SECOND_WIND.build_resource(2)]),
             (2, vec![registry::resources::ACTION_SURGE.build_resource(1)]),
             (4, vec![registry::resources::SECOND_WIND.build_resource(3)]),
+            (9, vec![registry::resources::INDOMITABLE.build_resource(1)]),
             (10, vec![registry::resources::SECOND_WIND.build_resource(4)]),
+            (13, vec![registry::resources::INDOMITABLE.build_resource(2)]),
             (
                 17,
-                vec![registry::resources::ACTION_SURGE.build_resource(2)],
+                vec![
+                    registry::resources::ACTION_SURGE.build_resource(2),
+                    registry::resources::INDOMITABLE.build_resource(3),
+                ],
             ),
         ]),
         HashMap::from([(
@@ -153,6 +159,7 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         HashMap::from([
             (1, vec![registry::actions::SECOND_WIND_ID.clone()]),
             (2, vec![registry::actions::ACTION_SURGE_ID.clone()]),
+            (9, vec![registry::actions::INDOMITABLE_ID.clone()]),
         ]),
     )
 });

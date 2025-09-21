@@ -117,7 +117,8 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                             )]),
                             key: kind,
                         });
-                        systems::d20::check(game_state, self.creature, &dc);
+                        let event = systems::d20::check(game_state, self.creature, &dc);
+                        game_state.process_event(event);
                         ui.close_current_popup();
                     }
                 }
@@ -142,12 +143,13 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                         let skill = Skill::iter().nth(index).expect("Invalid skill index");
                         let dc = D20CheckDCKind::Skill(D20CheckDC {
                             dc: ModifierSet::from_iter([(
-                                ModifierSource::Custom("Saving Throw DC".to_string()),
+                                ModifierSource::Custom("Skill Check DC".to_string()),
                                 *dc_value,
                             )]),
                             key: skill,
                         });
-                        systems::d20::check(game_state, self.creature, &dc);
+                        let event = systems::d20::check(game_state, self.creature, &dc);
+                        game_state.process_event(event);
                         ui.close_current_popup();
                     }
                 }

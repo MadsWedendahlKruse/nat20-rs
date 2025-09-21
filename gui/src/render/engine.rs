@@ -48,8 +48,8 @@ pub fn event_log_level(event: &Event) -> LogLevel {
         EventKind::ActionPerformed { .. } => LogLevel::Info,
         EventKind::ReactionTriggered { .. } => LogLevel::Info,
         EventKind::LifeStateChanged { .. } => LogLevel::Info,
-        EventKind::D20CheckPerformed(_, _, _) => LogLevel::Debug,
-        EventKind::D20CheckResolved(_, result_kind, _) => match result_kind {
+        EventKind::D20CheckPerformed(_, result_kind, _)
+        | EventKind::D20CheckResolved(_, result_kind, _) => match result_kind {
             D20ResultKind::SavingThrow { .. } | D20ResultKind::Skill { .. } => LogLevel::Info,
             systems::d20::D20ResultKind::AttackRoll { .. } => LogLevel::Debug,
         },
