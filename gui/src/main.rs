@@ -122,13 +122,7 @@ fn main() {
                     built_dock_layout = true;
                 }
 
-                main_menu.render(ui, gl, &program);
-                match main_menu.state() {
-                    crate::windows::main_menu::MainMenuState::World { game_state, .. } => {
-                        camera.render_mut_with_context(ui, game_state);
-                    }
-                    _ => {}
-                }
+                main_menu.render(ui, gl, &program, &mut camera);
 
                 // ui.show_demo_window(&mut true);
 

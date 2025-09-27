@@ -118,6 +118,29 @@ impl OrbitCamera {
         Vector3::new(cy * cpv, sp, sy * cpv)
     }
 
+    pub fn world_to_screen(&self, world_pos: &Point3<f32>) -> Option<(f32, f32)> {
+        if self.last_viewport.is_none() || self.last_proj.is_none() {
+            return None;
+        }
+        let (viewport_w, viewport_h) = self.last_viewport.unwrap();
+
+        let proj = self.last_proj.as_ref().unwrap();
+        let view = self.view();
+        let vp_matrix = proj.as_matrix() * view.to_homogeneous();
+
+        let wp = world_pos.to_homogeneous();
+        let cp = vp_matrix * wp; // clip space
+        if cp.w <= 0.0 {
+            return None; // behind camera
+        }
+        let ndc = cp.xyz() / cp.w; // normalized device coords
+
+        // NDC to window coords
+        let x = (ndc.x + 1.0) * 0.5 * (viewport_w as f32);
+        let y = (1.0 - ndc.y) * 0.5 * (viewport_h as f32); // flip Y for pixels
+        Some((x, y))
+    }
+
     pub fn handle_event(&mut self, event: &WindowEvent, imgui_wants_mouse: bool) {
         match event {
             WindowEvent::MouseInput { state, button, .. } => {
@@ -225,7 +248,7 @@ impl ImguiRenderableMutWithContext<&GameState> for OrbitCamera {
                 ));
                 ui.text(format!(
                     "Hit: {:#?}",
-                    systems::geometry::raycast(&game_state, &ray, 1000.0)
+                    systems::geometry::raycast_with_toi(&game_state, &ray, 1000.0)
                 ));
             } else {
                 ui.text("(no cursor ray)");

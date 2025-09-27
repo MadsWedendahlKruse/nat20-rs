@@ -21,6 +21,7 @@ use crate::{
         spells::spellbook::Spellbook,
     },
     from_world,
+    systems::geometry::CreaturePose,
 };
 
 #[derive(Debug, Clone)]
@@ -33,6 +34,7 @@ from_world!(
         pub name: Name,
         // TODO: Can monsters be player controlled?
         pub brain: AIControllerId,
+        pub pose: CreaturePose,
         pub challenge_rating: ChallengeRating,
         pub hit_points: HitPoints,
         pub life_state: LifeState,
@@ -73,6 +75,7 @@ impl Monster {
             tag: MonsterTag,
             name,
             brain,
+            pose: CreaturePose::default(),
             challenge_rating,
             hit_points,
             life_state: LifeState::Normal,

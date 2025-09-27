@@ -5,7 +5,7 @@ use std::{
 };
 
 use hecs::{Entity, World};
-use imgui::{ChildFlags, TreeNodeFlags};
+use imgui::{ChildFlags, MouseButton, TreeNodeFlags};
 use nat20_rs::{
     components::{
         actions::{
@@ -23,20 +23,24 @@ use nat20_rs::{
         },
         game_state::{self, GameState},
     },
-    registry, systems,
+    registry,
+    systems::{self, geometry::RaycastResultKind},
 };
 use strum::IntoEnumIterator;
 
 use crate::{
-    render::ui::{
-        engine::LogLevel,
-        entities::CreatureRenderMode,
-        text::{TextKind, TextSegments},
-        utils::{
-            ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
-            SELECTED_BUTTON_COLOR, render_button_disabled_conditionally, render_button_selectable,
-            render_empty_button, render_window_at_cursor,
+    render::{
+        ui::{
+            engine::LogLevel,
+            entities::CreatureRenderMode,
+            text::{TextKind, TextSegments},
+            utils::{
+                ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
+                SELECTED_BUTTON_COLOR, render_button_disabled_conditionally,
+                render_button_selectable, render_empty_button, render_window_at_cursor,
+            },
         },
+        world::camera::OrbitCamera,
     },
     table_with_columns,
 };
@@ -298,8 +302,10 @@ impl EncounterWindow {
     }
 }
 
-impl ImguiRenderableMutWithContext<&mut GameState> for EncounterWindow {
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, game_state: &mut GameState) {
+impl ImguiRenderableMutWithContext<(&mut GameState, &OrbitCamera)> for EncounterWindow {
+    fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: (&mut GameState, &OrbitCamera)) {
+        let (game_state, camera) = context;
+
         match &mut self.state {
             EncounterWindowState::EncounterCreation { participants } => {
                 ui.separator_with_text("Encounter creation");
@@ -367,7 +373,10 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterWindow {
                                 | ChildFlags::AUTO_RESIZE_Y,
                         )
                         .build(|| {
-                            encounter.render_mut_with_context(ui, (game_state, decision_progress));
+                            encounter.render_mut_with_context(
+                                ui,
+                                (game_state, decision_progress, camera),
+                            );
                         });
 
                     ui.same_line();
@@ -527,16 +536,24 @@ impl ImguiRenderableMutWithContext<&mut GameState> for EncounterWindow {
     }
 }
 
-impl ImguiRenderableMutWithContext<(&mut GameState, &mut Option<ActionDecisionProgress>)>
-    for Encounter
+impl
+    ImguiRenderableMutWithContext<(
+        &mut GameState,
+        &mut Option<ActionDecisionProgress>,
+        &OrbitCamera,
+    )> for Encounter
 {
     fn render_mut_with_context(
         &mut self,
         ui: &imgui::Ui,
-        context: (&mut GameState, &mut Option<ActionDecisionProgress>),
+        context: (
+            &mut GameState,
+            &mut Option<ActionDecisionProgress>,
+            &OrbitCamera,
+        ),
     ) {
         ui.separator_with_text("Participants");
-        let (game_state, decision_progress) = context;
+        let (game_state, decision_progress, camera) = context;
 
         let initiative_order = self.initiative_order();
         let current_entity = self.current_entity();
@@ -655,19 +672,19 @@ impl ImguiRenderableMutWithContext<(&mut GameState, &mut Option<ActionDecisionPr
 
                     let disabled_token = if actions_disabled {
                         // Render whatever the actual decision progress is
-                        decision_progress.render_mut_with_context(ui, game_state);
+                        decision_progress.render_mut_with_context(ui, (game_state, camera));
 
                         // Render placeholder action selection UI
                         let token = Some(ui.begin_disabled(actions_disabled));
                         Some(ActionDecisionProgress::from_prompt(&ActionPrompt::Action {
                             actor: current_entity,
                         }))
-                        .render_mut_with_context(ui, game_state);
+                        .render_mut_with_context(ui, (game_state, camera));
 
                         token
                     } else {
                         // Render the actual action selection UI
-                        decision_progress.render_mut_with_context(ui, game_state);
+                        decision_progress.render_mut_with_context(ui, (game_state, camera));
                         None
                     };
 
@@ -688,8 +705,16 @@ impl ImguiRenderableMutWithContext<(&mut GameState, &mut Option<ActionDecisionPr
     }
 }
 
-impl ImguiRenderableMutWithContext<&mut GameState> for Option<ActionDecisionProgress> {
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, game_state: &mut GameState) {
+impl ImguiRenderableMutWithContext<(&mut GameState, &OrbitCamera)>
+    for Option<ActionDecisionProgress>
+{
+    fn render_mut_with_context(
+        &mut self,
+        ui: &imgui::Ui,
+        game_state: (&mut GameState, &OrbitCamera),
+    ) {
+        let (game_state, camera) = game_state;
+
         if self.is_none() {
             ui.text("No action decision in progress.");
             return;
@@ -777,7 +802,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for Option<ActionDecisionProg
                         let encounter_id = game_state.encounter_for_entity(actor).unwrap().clone();
                         targeting_context.render_with_context(
                             ui,
-                            (game_state, encounter_id, targets, targets_confirmed),
+                            (game_state, encounter_id, targets, targets_confirmed, camera),
                         );
 
                         ui.separator();
@@ -902,15 +927,27 @@ impl ImguiRenderableMutWithContext<&mut GameState> for Option<ActionDecisionProg
     }
 }
 
-impl ImguiRenderableWithContext<(&mut GameState, EncounterId, &mut Vec<Entity>, &mut bool)>
-    for TargetingContext
+impl
+    ImguiRenderableWithContext<(
+        &mut GameState,
+        EncounterId,
+        &mut Vec<Entity>,
+        &mut bool,
+        &OrbitCamera,
+    )> for TargetingContext
 {
     fn render_with_context(
         &self,
         ui: &imgui::Ui,
-        context: (&mut GameState, EncounterId, &mut Vec<Entity>, &mut bool),
+        context: (
+            &mut GameState,
+            EncounterId,
+            &mut Vec<Entity>,
+            &mut bool,
+            &OrbitCamera,
+        ),
     ) {
-        let (game_state, encounter, targets, confirm_targets) = context;
+        let (game_state, encounter, targets, confirm_targets, camera) = context;
 
         for target_type in &self.valid_target_types {
             match target_type {
@@ -918,7 +955,14 @@ impl ImguiRenderableWithContext<(&mut GameState, EncounterId, &mut Vec<Entity>, 
                     let filter = ParticipantsFilter::from(target_type.clone());
                     self.kind.render_with_context(
                         ui,
-                        (game_state, encounter, targets, confirm_targets, filter),
+                        (
+                            game_state,
+                            encounter,
+                            targets,
+                            confirm_targets,
+                            filter,
+                            camera,
+                        ),
                     );
                 }
             }
@@ -933,6 +977,7 @@ impl
         &mut Vec<Entity>,
         &mut bool,
         ParticipantsFilter,
+        &OrbitCamera,
     )> for TargetingKind
 {
     fn render_with_context(
@@ -944,9 +989,10 @@ impl
             &mut Vec<Entity>,
             &mut bool,
             ParticipantsFilter,
+            &OrbitCamera,
         ),
     ) {
-        let (game_state, encounter, targets, confirm_targets, filter) = context;
+        let (game_state, encounter, targets, confirm_targets, filter, camera) = context;
 
         let participants = game_state
             .encounter(&encounter)
@@ -955,6 +1001,16 @@ impl
         match &self {
             TargetingKind::Single => {
                 ui.text("Select a single target:");
+
+                if let Some(cursor_entity) =
+                    get_clicked_entity(ui, game_state, camera, MouseButton::Left)
+                {
+                    if participants.contains(&cursor_entity) && !targets.contains(&cursor_entity) {
+                        targets.clear();
+                        targets.push(cursor_entity);
+                    }
+                }
+
                 for entity in participants {
                     if let Ok(name) = game_state.world.query_one_mut::<&Name>(entity) {
                         if render_button_selectable(
@@ -974,22 +1030,20 @@ impl
 
             TargetingKind::Multiple { max_targets } => {
                 let max_targets = *max_targets as usize;
-                ui.text(format!(
-                    "Selected {}/{} targets:",
+
+                if let Some(cursor_entity) =
+                    get_clicked_entity(ui, game_state, camera, MouseButton::Left)
+                {
+                    if participants.contains(&cursor_entity) && targets.len() < max_targets {
+                        targets.push(cursor_entity);
+                    }
+                }
+
+                ui.separator_with_text(format!(
+                    "Selected targets ({}/{})",
                     targets.len(),
                     max_targets
                 ));
-                ui.separator_with_text("Possible targets");
-                for entity in participants {
-                    if let Ok(name) = game_state.world.query_one_mut::<&Name>(entity) {
-                        if ui.button(format!("{}##{:?}", name.as_str(), entity))
-                            && targets.len() < max_targets
-                        {
-                            targets.push(entity);
-                        }
-                    }
-                }
-                ui.separator_with_text("Selected targets");
                 let mut remove_target = None;
                 for (i, target) in (&mut *targets).iter().enumerate() {
                     if let Ok(name) = game_state.world.query_one_mut::<&Name>(*target) {
@@ -1015,5 +1069,33 @@ impl
                 ui.text(format!("Targeting kind {:?} is not implemented yet.", self));
             }
         }
+    }
+}
+
+fn get_cursor_entity(game_state: &GameState, camera: &OrbitCamera) -> Option<Entity> {
+    if let Some(ray) = camera.ray_from_cursor() {
+        if let Some(raycast) = systems::geometry::raycast(game_state, &ray) {
+            match raycast.kind {
+                RaycastResultKind::Creature(entity) => Some(entity),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+fn get_clicked_entity(
+    ui: &imgui::Ui,
+    game_state: &GameState,
+    camera: &OrbitCamera,
+    mouse_button: MouseButton,
+) -> Option<Entity> {
+    if ui.is_mouse_clicked(mouse_button) {
+        get_cursor_entity(game_state, camera)
+    } else {
+        None
     }
 }

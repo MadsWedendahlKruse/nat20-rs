@@ -20,7 +20,7 @@ use crate::{
 
 pub type CreaturePose = Isometry3<f32>;
 
-static CREATURE_HEIGHTS: LazyLock<HashMap<CreatureSize, f32>> = LazyLock::new(|| {
+pub static CREATURE_HEIGHTS: LazyLock<HashMap<CreatureSize, f32>> = LazyLock::new(|| {
     HashMap::from([
         (CreatureSize::Tiny, 0.5),
         (CreatureSize::Small, 1.0),
@@ -43,7 +43,9 @@ pub fn get_shape(world: &World, entity: Entity) -> Option<Capsule> {
     if let Some(height) = get_height(world, entity) {
         // Approximate radius as 1/4 of height
         let radius = height / 4.0;
-        Some(Capsule::new_y(height / 2.0, radius))
+        // Height is supposed to be the entire capsule height, so the half cylinder
+        // height is really just a quarter of the total height.
+        Some(Capsule::new_y(height / 4.0, radius))
     } else {
         None
     }
@@ -61,7 +63,13 @@ pub struct RaycastResult {
     pub toi: f32,
 }
 
-pub fn raycast(
+static DEFAULT_MAX_TOI: f32 = 10000.0;
+
+pub fn raycast(game_state: &GameState, ray: &Ray) -> Option<RaycastResult> {
+    raycast_with_toi(game_state, ray, DEFAULT_MAX_TOI)
+}
+
+pub fn raycast_with_toi(
     game_state: &GameState,
     ray: &Ray,
     max_time_of_impact: f32,

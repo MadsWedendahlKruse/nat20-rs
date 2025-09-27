@@ -113,7 +113,7 @@ impl ImguiRenderableWithContext<(&World, CreatureRenderMode)> for Entity {
     }
 }
 
-fn render_if_present<T>(ui: &imgui::Ui, world: &World, entity: Entity)
+pub fn render_if_present<T>(ui: &imgui::Ui, world: &World, entity: Entity)
 where
     T: hecs::Component + 'static + ImguiRenderable,
 {

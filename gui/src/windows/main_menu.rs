@@ -1,8 +1,12 @@
 use std::rc::Rc;
 
-use imgui::ChildFlags;
+use imgui::{ChildFlags, sys};
 use nat20_rs::{
-    components::{id::Name, race::CreatureSize},
+    components::{
+        health::{hit_points::HitPoints, life_state::LifeState},
+        id::Name,
+        race::CreatureSize,
+    },
     engine::{game_state::GameState, geometry::WorldGeometry},
     systems::{self, geometry::CreaturePose},
 };
@@ -12,15 +16,16 @@ use crate::{
     render::{
         ui::{
             engine::LogLevel,
+            entities::render_if_present,
             utils::{
-                ImguiRenderableMutWithContext, ImguiRenderableWithContext,
+                ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
                 render_button_disabled_conditionally, render_uniform_buttons,
                 render_window_at_cursor,
             },
         },
         world::{
-            frame::FrameUniforms, grid::GridRenderer, program::BasicProgram, shapes::CapsuleCache,
-            world_renderer::WorldRenderer,
+            camera::OrbitCamera, frame::FrameUniforms, grid::GridRenderer, program::BasicProgram,
+            shapes::CapsuleCache, world_renderer::WorldRenderer,
         },
     },
     windows::{
@@ -71,15 +76,12 @@ impl MainMenuWindow {
         }
     }
 
-    pub fn state(&self) -> &MainMenuState {
-        &self.state
-    }
-
     pub fn render(
         &mut self,
         ui: &imgui::Ui,
         gl_context: &Rc<glow::Context>,
         program: &BasicProgram,
+        camera: &mut OrbitCamera,
     ) {
         match &mut self.state {
             MainMenuState::World {
@@ -120,6 +122,10 @@ impl MainMenuWindow {
                     });
                 }
 
+                Self::render_creature_labels(ui, game_state, camera);
+
+                camera.render_mut_with_context(ui, game_state);
+
                 ui.window("World").always_auto_resize(true).build(|| {
                     Self::render_character_menu(
                         ui,
@@ -142,7 +148,7 @@ impl MainMenuWindow {
                         &format!("Encounter: {}", encounter.id()),
                         true,
                         || {
-                            encounter.render_mut_with_context(ui, game_state);
+                            encounter.render_mut_with_context(ui, (game_state, camera));
                         },
                     );
                     if encounter.finished() {
@@ -293,5 +299,41 @@ impl MainMenuWindow {
 
                 ui.checkbox("Auto-scroll", auto_scroll_event_log);
             });
+    }
+
+    fn render_creature_labels(ui: &imgui::Ui, game_state: &GameState, camera: &OrbitCamera) {
+        for (entity, name) in game_state.world.query::<&Name>().iter() {
+            if let Some(pose) = game_state.world.get::<&CreaturePose>(entity).ok() {
+                let translation = pose.translation.vector;
+                let pos = camera.world_to_screen(&Point3::new(
+                    translation.x,
+                    translation.y
+                        + systems::geometry::get_height(&game_state.world, entity).unwrap(),
+                    translation.z,
+                ));
+
+                if let Some((x, y)) = pos {
+                    let size = ui.calc_text_size(name.as_str());
+                    let window_pos = [x - size[0] / 2.0, y - size[1] / 2.0];
+                    ui.window(&format!("Label##{:?}", entity))
+                        .always_auto_resize(true)
+                        .position(window_pos, imgui::Condition::Always)
+                        .bg_alpha(0.5)
+                        .title_bar(false)
+                        .resizable(false)
+                        .movable(false)
+                        .scrollable(false)
+                        .focus_on_appearing(false)
+                        .collapsed(false, imgui::Condition::Always)
+                        .mouse_inputs(false)
+                        .build(|| {
+                            name.render(ui);
+                            // render_if_present::<HitPoints>(ui, &game_state.world, entity);
+                            // ui.same_line();
+                            // render_if_present::<LifeState>(ui, &game_state.world, entity);
+                        });
+                }
+            }
+        }
     }
 }
