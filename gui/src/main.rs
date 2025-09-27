@@ -9,8 +9,11 @@ use glutin::surface::GlSurface;
 use parry3d::na;
 
 use crate::{
-    render::world::{
-        camera::OrbitCamera, frame::FrameUniforms, grid::GridRenderer, program::BasicProgram,
+    render::{
+        ui::utils::{ImguiRenderableMut, ImguiRenderableMutWithContext},
+        world::{
+            camera::OrbitCamera, frame::FrameUniforms, grid::GridRenderer, program::BasicProgram,
+        },
     },
     windows::main_menu::MainMenuWindow,
 };
@@ -37,16 +40,9 @@ fn main() {
     );
     let mut camera = OrbitCamera::new();
 
-    let grid = GridRenderer::new(
-        ig_renderer.gl_context(),
-        20,  // extent: 20 → −20..+20
-        1.0, // step: 1 meter
-        10,  // major line every 10 units
-        include_str!("render/world/shaders/grid.vert"),
-        include_str!("render/world/shaders/grid.frag"),
-    );
+    let mut main_menu = MainMenuWindow::new(&ig_renderer.gl_context());
 
-    let mut main_menu = MainMenuWindow::new();
+    let mut built_dock_layout = false;
 
     #[allow(deprecated)]
     event_loop
@@ -84,19 +80,57 @@ fn main() {
                     gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
                 }
 
-                let aspect = (size.width.max(1) as f32) / (size.height.max(1) as f32);
                 let view = camera.view();
-                let proj = OrbitCamera::proj(aspect);
+                let proj = camera.proj(size.width, size.height);
                 let light_dir = na::Vector3::new(-0.5, -1.0, -0.8);
                 frame_uniforms.update(gl, view, proj, light_dir);
 
                 let ui = imgui_context.frame();
+                let dockspace_id = ui.dockspace_over_main_viewport();
 
-                grid.draw(gl);
+                // TODO: Little bit hacky
+                if !built_dock_layout {
+                    unsafe {
+                        let vp = imgui::sys::igGetMainViewport();
+                        imgui::sys::igDockBuilderRemoveNode(dockspace_id);
+                        imgui::sys::igDockBuilderAddNode(
+                            dockspace_id,
+                            imgui::sys::ImGuiDockNodeFlags_DockSpace, // | imgui::sys::ImGuiDockNodeFlags_AutoHideTabBar,
+                        );
+                        imgui::sys::igDockBuilderSetNodeSize(dockspace_id, (*vp).Size);
 
-                main_menu.render(&ui, &gl, &program);
+                        let mut right_id: u32 = 0;
+                        let mut center_id: u32 = 0;
 
-                ui.show_demo_window(&mut true);
+                        center_id = dockspace_id;
+                        right_id = imgui::sys::igDockBuilderSplitNode(
+                            center_id,
+                            imgui::sys::ImGuiDir_Right,
+                            0.3,
+                            std::ptr::null_mut(),
+                            &mut center_id,
+                        );
+
+                        // Dock your window(s)
+                        let name = std::ffi::CString::new("Camera").unwrap();
+                        imgui::sys::igDockBuilderDockWindow(name.as_ptr(), right_id);
+
+                        // Finish
+                        imgui::sys::igDockBuilderFinish(dockspace_id);
+                    }
+
+                    built_dock_layout = true;
+                }
+
+                main_menu.render(ui, gl, &program);
+                match main_menu.state() {
+                    crate::windows::main_menu::MainMenuState::World { game_state, .. } => {
+                        camera.render_mut_with_context(ui, game_state);
+                    }
+                    _ => {}
+                }
+
+                // ui.show_demo_window(&mut true);
 
                 winit_platform.prepare_render(ui, &window);
                 let draw_data = imgui_context.render();

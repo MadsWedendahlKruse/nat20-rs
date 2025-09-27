@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-imgui = { version = "0.12.0", git = "https://github.com/imgui-rs/imgui-rs", features = ["tables-api"]}
+imgui = { version = "0.12.0", git = "https://github.com/imgui-rs/imgui-rs", features = ["tables-api", "docking"]}
 glow = "0.14"
 memoffset = "0.9"
 imgui-glow-renderer = { version = "0.13.0", git = "https://github.com/imgui-rs/imgui-glow-renderer" }

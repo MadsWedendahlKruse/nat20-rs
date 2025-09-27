@@ -32,7 +32,7 @@ impl FrameUniforms {
         &self,
         gl: &glow::Context,
         view: na::Isometry3<f32>,
-        proj: na::Perspective3<f32>,
+        proj: &na::Perspective3<f32>,
         light_dir: na::Vector3<f32>,
     ) {
         let vp = proj.to_homogeneous() * view.to_homogeneous();

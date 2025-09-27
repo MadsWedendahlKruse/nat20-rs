@@ -52,7 +52,7 @@ impl GridRenderer {
 
         // --- build line list on XZ plane ---
         let e = extent.max(1);
-        let eps_y = 0.001f32; // lift a hair to avoid z-fighting
+        let eps_y = 0.005f32; // lift a hair to avoid z-fighting
         let mut verts: Vec<f32> = Vec::new(); // [px,py,pz, r,g,b] per vertex
 
         let mut push_line = |a: na::Vector3<f32>, b: na::Vector3<f32>, col: [f32; 3]| {
@@ -86,19 +86,19 @@ impl GridRenderer {
 
         // axis lines (X red, Z blue, Y green up-stem at origin)
         push_line(
-            na::Vector3::new(-e as f32 * step, eps_y, 0.0),
-            na::Vector3::new(e as f32 * step, eps_y, 0.0),
+            na::Vector3::new(0.0, 2.0 * eps_y, 0.0),
+            na::Vector3::new(1.0, 2.0 * eps_y, 0.0),
             [0.85, 0.2, 0.2],
         );
         push_line(
-            na::Vector3::new(0.0, eps_y, -e as f32 * step),
-            na::Vector3::new(0.0, eps_y, e as f32 * step),
+            na::Vector3::new(0.0, 2.0 * eps_y, 0.0),
+            na::Vector3::new(0.0, 2.0 * eps_y, 1.0),
             [0.2, 0.4, 0.9],
         );
         // a small Y axis stem at origin so you can see "up"
         push_line(
             na::Vector3::new(0.0, 0.0, 0.0),
-            na::Vector3::new(0.0, 0.5, 0.0),
+            na::Vector3::new(0.0, 1.0, 0.0),
             [0.2, 0.8, 0.2],
         );
 

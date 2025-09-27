@@ -19,7 +19,7 @@ use crate::{
             },
         },
         world::{
-            frame::FrameUniforms, program::BasicProgram, shapes::CapsuleCache,
+            frame::FrameUniforms, grid::GridRenderer, program::BasicProgram, shapes::CapsuleCache,
             world_renderer::WorldRenderer,
         },
     },
@@ -32,6 +32,7 @@ use crate::{
 pub enum MainMenuState {
     World {
         game_state: GameState,
+        grid_renderer: GridRenderer,
         world_renderer: Option<WorldRenderer>,
         capsule_cache: CapsuleCache,
         auto_scroll_event_log: bool,
@@ -47,11 +48,19 @@ pub struct MainMenuWindow {
 }
 
 impl MainMenuWindow {
-    pub fn new() -> Self {
+    pub fn new(gl_context: &Rc<glow::Context>) -> Self {
         Self {
             state: MainMenuState::World {
                 auto_scroll_event_log: true,
                 game_state: GameState::new(),
+                grid_renderer: GridRenderer::new(
+                    gl_context,
+                    100, // extent: 20 → −20..+20
+                    1.0, // step: 1 meter
+                    10,  // major line every 10 units
+                    include_str!("../render/world/shaders/grid.vert"),
+                    include_str!("../render/world/shaders/grid.frag"),
+                ),
                 world_renderer: None,
                 capsule_cache: CapsuleCache::new(8, 16),
                 encounters: Vec::new(),
@@ -60,6 +69,10 @@ impl MainMenuWindow {
                 character_debug: None,
             },
         }
+    }
+
+    pub fn state(&self) -> &MainMenuState {
+        &self.state
     }
 
     pub fn render(
@@ -72,6 +85,7 @@ impl MainMenuWindow {
             MainMenuState::World {
                 game_state,
                 world_renderer,
+                grid_renderer,
                 capsule_cache,
                 auto_scroll_event_log,
                 encounters,
@@ -95,6 +109,7 @@ impl MainMenuWindow {
                     ));
                 }
 
+                grid_renderer.draw(gl_context);
                 world_renderer.as_ref().unwrap().draw(gl_context, program);
 
                 for (entity, pose) in game_state.world.query::<&CreaturePose>().iter() {

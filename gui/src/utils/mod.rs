@@ -94,6 +94,7 @@ pub fn imgui_init(window: &Window) -> (WinitPlatform, imgui::Context) {
         .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
 
     imgui_context.io_mut().font_global_scale = (1.0 / winit_platform.hidpi_factor()) as f32;
+    imgui_context.io_mut().config_flags |= imgui::ConfigFlags::DOCKING_ENABLE;
 
     (winit_platform, imgui_context)
 }

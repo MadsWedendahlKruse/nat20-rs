@@ -9,8 +9,9 @@ use nat20_rs::{
         skill::Skill,
     },
     engine::game_state::GameState,
-    systems::{self, d20::D20CheckDCKind},
+    systems::{self, d20::D20CheckDCKind, geometry::CreaturePose},
 };
+use parry3d::na::UnitQuaternion;
 use strum::IntoEnumIterator;
 
 use crate::render::ui::utils::{ImguiRenderableMutWithContext, render_uniform_buttons};
@@ -22,9 +23,16 @@ pub enum CheckKind {
 
 pub enum CreatureDebugState {
     MainMenu,
-    Check { kind: CheckKind, dc_value: i32 },
+    Check {
+        kind: CheckKind,
+        dc_value: i32,
+    },
     PassTime,
     TogglePlayerControl,
+    MoveTo {
+        starting_pose: CreaturePose,
+        target_pose: CreaturePose,
+    },
 }
 
 pub struct CreatureDebugWindow {
@@ -54,6 +62,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                         "Toggle Player Control",
                         "Saving Throw",
                         "Skill Check",
+                        "Move To",
                     ],
                     [20.0, 5.0],
                 ) {
@@ -82,6 +91,17 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                             self.state = CreatureDebugState::Check {
                                 kind: CheckKind::SkillCheck,
                                 dc_value: 10,
+                            };
+                        }
+                        6 => {
+                            let starting_pose = game_state
+                                .world
+                                .get::<&CreaturePose>(self.creature)
+                                .map(|p| *p)
+                                .unwrap_or_else(|_| CreaturePose::identity());
+                            self.state = CreatureDebugState::MoveTo {
+                                starting_pose,
+                                target_pose: starting_pose,
                             };
                         }
                         _ => unreachable!(),
@@ -192,6 +212,61 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                         }
                         _ => unreachable!(),
                     }
+                    ui.close_current_popup();
+                }
+            }
+
+            CreatureDebugState::MoveTo {
+                starting_pose,
+                target_pose,
+            } => {
+                ui.separator_with_text("Current Position");
+                ui.text(format!(
+                    "X: {:.2}, Y: {:.2}, Z: {:.2}",
+                    starting_pose.translation.x,
+                    starting_pose.translation.y,
+                    starting_pose.translation.z
+                ));
+
+                ui.separator_with_text("Move To");
+
+                let width_token = ui.push_item_width(200.0);
+                let mut pos = [
+                    target_pose.translation.x,
+                    target_pose.translation.y,
+                    target_pose.translation.z,
+                ];
+                if ui.input_float3("Position", &mut pos).build() {
+                    target_pose.translation.x = pos[0];
+                    target_pose.translation.y = pos[1];
+                    target_pose.translation.z = pos[2];
+                }
+                let mut rot = [
+                    target_pose.rotation.euler_angles().0,
+                    target_pose.rotation.euler_angles().1,
+                    target_pose.rotation.euler_angles().2,
+                ];
+                if ui.input_float3("Rotation (radians)", &mut rot).build() {
+                    target_pose.rotation =
+                        UnitQuaternion::from_euler_angles(rot[0], rot[1], rot[2]);
+                }
+                width_token.end();
+
+                ui.separator();
+                if ui.button("Set Position") {
+                    game_state
+                        .world
+                        .insert_one(self.creature, *target_pose)
+                        .ok();
+                    ui.close_current_popup();
+                }
+                ui.same_line();
+                if ui.button("Cancel") {
+                    // Revert to starting pose
+                    game_state
+                        .world
+                        .insert_one(self.creature, *starting_pose)
+                        .ok();
                     ui.close_current_popup();
                 }
             }
