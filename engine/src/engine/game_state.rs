@@ -19,6 +19,7 @@ use crate::{
             ActionData, ActionDecision, ActionError, ActionPrompt, EncounterEvent, Event,
             EventCallback, EventId, EventKind, EventListener, EventLog, EventQueue,
         },
+        geometry::WorldGeometry,
     },
     systems::{self, actions::ActionUsability},
 };
@@ -26,6 +27,8 @@ use crate::{
 // TODO: WorldState instead?
 pub struct GameState {
     pub world: World,
+    pub geometry: Option<WorldGeometry>,
+
     pub encounters: HashMap<EncounterId, Encounter>,
     pub in_combat: HashMap<Entity, EncounterId>,
     /// Pending prompts for entities that aren't in combat.
@@ -47,6 +50,7 @@ impl GameState {
             event_log: EventLog::new(),
             pending_events: EventQueue::new(),
             event_listeners: HashMap::new(),
+            geometry: None,
         }
     }
 

@@ -28,7 +28,7 @@ use nat20_rs::{
 use strum::IntoEnumIterator;
 
 use crate::{
-    render::{
+    render::ui::{
         engine::LogLevel,
         entities::CreatureRenderMode,
         text::{TextKind, TextSegments},

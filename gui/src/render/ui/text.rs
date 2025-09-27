@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt::Display};
 
 use nat20_rs::components::{damage::DamageType, items::item::ItemRarity};
 
-use crate::render::utils::ImguiRenderable;
+use crate::render::ui::utils::ImguiRenderable;
 
 pub fn damage_type_color(damage_type: &DamageType) -> [f32; 4] {
     match damage_type {

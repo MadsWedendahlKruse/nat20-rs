@@ -10,7 +10,7 @@ use nat20_rs::{
 use strum::IntoEnumIterator;
 
 use crate::{
-    render::{
+    render::ui::{
         text::{TextKind, item_rarity_color},
         utils::{ImguiRenderable, ImguiRenderableWithContext},
     },

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use hecs::Bundle;
+use parry3d::na::Isometry3;
 
 use crate::{
     components::{
@@ -24,6 +25,7 @@ use crate::{
         spells::spellbook::Spellbook,
     },
     from_world, registry,
+    systems::geometry::CreaturePose,
 };
 
 #[derive(Debug, Clone)]
@@ -37,7 +39,9 @@ from_world!(
         /// possessed or mind controlled, this component can be removed from the
         /// entity to make it AI controlled.
         pub player_controlled: PlayerControlledTag,
+        /// AI controller for this character. Ignored if `player_controlled` is present.
         pub brain: AIControllerId,
+        pub pose: CreaturePose,
         pub name: Name,
         pub race: RaceId,
         pub subrace: Option<SubraceId>,
@@ -73,6 +77,7 @@ impl Character {
             player_controlled: PlayerControlledTag,
             // TODO: Update to an actual ID
             brain: registry::ai::RANDOM_CONTROLLER_ID.clone(),
+            pose: CreaturePose::identity(),
             name,
             race: RaceId::from_str(""),
             subrace: None,

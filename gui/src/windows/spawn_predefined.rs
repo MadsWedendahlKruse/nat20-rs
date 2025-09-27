@@ -9,7 +9,7 @@ use nat20_rs::{
     test_utils::fixtures,
 };
 
-use crate::render::{
+use crate::render::ui::{
     entities::CreatureRenderMode,
     utils::{ImguiRenderableMutWithContext, ImguiRenderableWithContext, render_window_at_cursor},
 };

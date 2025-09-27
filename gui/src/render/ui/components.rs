@@ -46,13 +46,12 @@ use std::collections::HashSet;
 use strum::IntoEnumIterator;
 
 use crate::{
-    render::{
+    render::ui::{
         engine::render_event_description,
         text::{TextKind, TextSegment, TextSegments, indent_text, item_rarity_color},
         utils::{
-            ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,
-            ImguiRenderableWithContext, SELECTED_BUTTON_COLOR, interpolate_color,
-            render_empty_button,
+            ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
+            SELECTED_BUTTON_COLOR, interpolate_color, render_empty_button,
         },
     },
     table_with_columns,

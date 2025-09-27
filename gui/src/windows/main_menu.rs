@@ -1,12 +1,26 @@
+use std::rc::Rc;
+
 use imgui::ChildFlags;
-use nat20_rs::{components::id::Name, engine::game_state::GameState};
+use nat20_rs::{
+    components::{id::Name, race::CreatureSize},
+    engine::{game_state::GameState, geometry::WorldGeometry},
+    systems::{self, geometry::CreaturePose},
+};
+use parry3d::na::Point3;
 
 use crate::{
     render::{
-        engine::LogLevel,
-        utils::{
-            ImguiRenderableMutWithContext, ImguiRenderableWithContext,
-            render_button_disabled_conditionally, render_uniform_buttons, render_window_at_cursor,
+        ui::{
+            engine::LogLevel,
+            utils::{
+                ImguiRenderableMutWithContext, ImguiRenderableWithContext,
+                render_button_disabled_conditionally, render_uniform_buttons,
+                render_window_at_cursor,
+            },
+        },
+        world::{
+            frame::FrameUniforms, program::BasicProgram, shapes::CapsuleCache,
+            world_renderer::WorldRenderer,
         },
     },
     windows::{
@@ -18,6 +32,8 @@ use crate::{
 pub enum MainMenuState {
     World {
         game_state: GameState,
+        world_renderer: Option<WorldRenderer>,
+        capsule_cache: CapsuleCache,
         auto_scroll_event_log: bool,
         encounters: Vec<EncounterWindow>,
         level_up: Option<LevelUpWindow>,
@@ -36,6 +52,8 @@ impl MainMenuWindow {
             state: MainMenuState::World {
                 auto_scroll_event_log: true,
                 game_state: GameState::new(),
+                world_renderer: None,
+                capsule_cache: CapsuleCache::new(8, 16),
                 encounters: Vec::new(),
                 level_up: None,
                 spawn_predefined: None,
@@ -44,16 +62,49 @@ impl MainMenuWindow {
         }
     }
 
-    pub fn render(&mut self, ui: &imgui::Ui) {
+    pub fn render(
+        &mut self,
+        ui: &imgui::Ui,
+        gl_context: &Rc<glow::Context>,
+        program: &BasicProgram,
+    ) {
         match &mut self.state {
             MainMenuState::World {
                 game_state,
+                world_renderer,
+                capsule_cache,
                 auto_scroll_event_log,
                 encounters,
                 level_up,
                 spawn_predefined,
                 character_debug,
             } => {
+                if world_renderer.is_none() {
+                    let positions = vec![
+                        Point3::new(-1.0, 0.0, -1.0),
+                        Point3::new(1.0, 0.0, -1.0),
+                        Point3::new(1.0, 0.0, 1.0),
+                        Point3::new(-1.0, 0.0, 1.0),
+                    ];
+                    let indices = vec![[0u32, 1, 2], [0, 2, 3]];
+                    game_state.geometry = Some(WorldGeometry::new(positions, indices));
+
+                    world_renderer.replace(WorldRenderer::new(
+                        gl_context,
+                        &game_state.geometry.as_ref().unwrap().mesh,
+                    ));
+                }
+
+                world_renderer.as_ref().unwrap().draw(gl_context, program);
+
+                for (entity, pose) in game_state.world.query::<&CreaturePose>().iter() {
+                    systems::geometry::get_shape(&game_state.world, entity).map(|shape| {
+                        capsule_cache
+                            .get_or_create(gl_context, shape.radius, shape.half_height())
+                            .draw(gl_context, program, pose.to_homogeneous())
+                    });
+                }
+
                 ui.window("World").always_auto_resize(true).build(|| {
                     Self::render_character_menu(
                         ui,

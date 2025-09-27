@@ -19,3 +19,4 @@ strum = { version = "0.27.1", features = ["derive"] }
 bytemuck = { version = "1", features = ["derive"] }
 hecs = { version = "0.10.5", features = ["std", "macros", "serde"] }
 glam = "0.25"
+parry3d = "0.24"

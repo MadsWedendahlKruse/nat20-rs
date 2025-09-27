@@ -19,7 +19,7 @@ use nat20_rs::{
 };
 use strum::{Display, EnumIter};
 
-use crate::render::{
+use crate::render::ui::{
     components::new_life_state_text,
     text::{TextKind, TextSegment, TextSegments, indent_text},
     utils::{ImguiRenderable, ImguiRenderableWithContext},

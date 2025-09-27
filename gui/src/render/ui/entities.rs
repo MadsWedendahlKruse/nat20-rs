@@ -16,7 +16,7 @@ use nat20_rs::{
 };
 
 use crate::{
-    render::{
+    render::ui::{
         inventory::{render_loadout, render_loadout_inventory},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext,

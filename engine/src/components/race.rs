@@ -22,7 +22,7 @@ pub enum CreatureType {
     Undead,
 }
 
-#[derive(Debug, Clone, Display)]
+#[derive(Debug, Clone, Display, PartialEq, Eq, Hash)]
 pub enum CreatureSize {
     Tiny,
     Small,

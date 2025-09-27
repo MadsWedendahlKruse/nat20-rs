@@ -6,8 +6,14 @@ mod windows;
 
 use glow::HasContext;
 use glutin::surface::GlSurface;
+use parry3d::na;
 
-use crate::windows::main_menu::MainMenuWindow;
+use crate::{
+    render::world::{
+        camera::OrbitCamera, frame::FrameUniforms, grid::GridRenderer, program::BasicProgram,
+    },
+    windows::main_menu::MainMenuWindow,
+};
 
 fn main() {
     let (event_loop, window, surface, context) = utils::create_window("Hello, triangle!", None);
@@ -23,7 +29,24 @@ fn main() {
 
     let mut last_frame = Instant::now();
 
-    let mut gui_state = MainMenuWindow::new();
+    let frame_uniforms = FrameUniforms::new(ig_renderer.gl_context(), 0);
+    let program = BasicProgram::new(
+        ig_renderer.gl_context(),
+        include_str!("render/world/shaders/basic.vert"),
+        include_str!("render/world/shaders/basic.frag"),
+    );
+    let mut camera = OrbitCamera::new();
+
+    let grid = GridRenderer::new(
+        ig_renderer.gl_context(),
+        20,  // extent: 20 → −20..+20
+        1.0, // step: 1 meter
+        10,  // major line every 10 units
+        include_str!("render/world/shaders/grid.vert"),
+        include_str!("render/world/shaders/grid.frag"),
+    );
+
+    let mut main_menu = MainMenuWindow::new();
 
     #[allow(deprecated)]
     event_loop
@@ -51,13 +74,29 @@ fn main() {
                 let gl = ig_renderer.gl_context();
                 unsafe {
                     gl.clear_color(0.05, 0.05, 0.1, 1.0);
-                    gl.clear(glow::COLOR_BUFFER_BIT);
+                    gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
                 }
 
-                let ui = imgui_context.frame();
-                ui.show_demo_window(&mut true);
+                let size = window.inner_size();
+                unsafe {
+                    gl.viewport(0, 0, size.width as i32, size.height as i32);
+                    gl.clear_color(0.05, 0.05, 0.1, 1.0);
+                    gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+                }
 
-                gui_state.render(&ui);
+                let aspect = (size.width.max(1) as f32) / (size.height.max(1) as f32);
+                let view = camera.view();
+                let proj = OrbitCamera::proj(aspect);
+                let light_dir = na::Vector3::new(-0.5, -1.0, -0.8);
+                frame_uniforms.update(gl, view, proj, light_dir);
+
+                let ui = imgui_context.frame();
+
+                grid.draw(gl);
+
+                main_menu.render(&ui, &gl, &program);
+
+                ui.show_demo_window(&mut true);
 
                 winit_platform.prepare_render(ui, &window);
                 let draw_data = imgui_context.render();
@@ -88,7 +127,42 @@ fn main() {
                         NonZeroU32::new(new_size.width).unwrap(),
                         NonZeroU32::new(new_size.height).unwrap(),
                     );
+                    unsafe {
+                        ig_renderer.gl_context().viewport(
+                            0,
+                            0,
+                            new_size.width as i32,
+                            new_size.height as i32,
+                        );
+                    }
                 }
+                winit_platform.handle_event(imgui_context.io_mut(), &window, &event);
+            }
+
+            // winit::event::Event::WindowEvent {
+            //     event: winit::event::WindowEvent::ScaleFactorChanged { new_inner_size, .. },
+            //     ..
+            // } => {
+            //     // new_inner_size is &mut; read and resize the surface + viewport
+            //     let (w, h) = (new_inner_size.width, new_inner_size.height);
+            //     if w > 0 && h > 0 {
+            //         surface.resize(
+            //             &context,
+            //             NonZeroU32::new(w).unwrap(),
+            //             NonZeroU32::new(h).unwrap(),
+            //         );
+            //         unsafe {
+            //             gl.viewport(0, 0, w as i32, h as i32);
+            //         }
+            //     }
+            //     winit_platform.handle_event(imgui_context.io_mut(), &window, &event);
+            // }
+            winit::event::Event::WindowEvent {
+                event: ref window_event,
+                ..
+            } => {
+                let wants_mouse = imgui_context.io().want_capture_mouse;
+                camera.handle_event(&window_event, wants_mouse);
                 winit_platform.handle_event(imgui_context.io_mut(), &window, &event);
             }
 

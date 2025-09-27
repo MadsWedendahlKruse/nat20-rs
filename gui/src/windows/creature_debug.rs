@@ -13,7 +13,7 @@ use nat20_rs::{
 };
 use strum::IntoEnumIterator;
 
-use crate::render::utils::{ImguiRenderableMutWithContext, render_uniform_buttons};
+use crate::render::ui::utils::{ImguiRenderableMutWithContext, render_uniform_buttons};
 
 pub enum CheckKind {
     SavingThrow,
