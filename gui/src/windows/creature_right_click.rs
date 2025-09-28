@@ -1,5 +1,6 @@
 use hecs::Entity;
 use nat20_rs::engine::game_state::GameState;
+use strum::IntoEnumIterator;
 
 use crate::{
     render::ui::{
@@ -13,7 +14,7 @@ use crate::{
 
 pub enum CreatureRightClickState {
     MainMenu,
-    InspectCreature,
+    InspectCreature(CreatureRenderMode),
     DebugCreature(CreatureDebugWindow),
 }
 
@@ -37,7 +38,9 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureRightClickWindow 
                 if let Some(index) = render_uniform_buttons(ui, &["Inspect", "Debug"]) {
                     match index {
                         0 => {
-                            self.state = CreatureRightClickState::InspectCreature;
+                            self.state = CreatureRightClickState::InspectCreature(
+                                CreatureRenderMode::Inspect,
+                            );
                         }
                         1 => {
                             self.state = CreatureRightClickState::DebugCreature(
@@ -48,9 +51,23 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureRightClickWindow 
                     }
                 }
             }
-            CreatureRightClickState::InspectCreature => {
+            CreatureRightClickState::InspectCreature(render_mode) => {
+                let mut current_render_mode = render_mode.clone() as usize;
+                let width_token = ui.push_item_width(100.0);
+                if ui.combo(
+                    "Render Mode",
+                    &mut current_render_mode,
+                    &CreatureRenderMode::iter().collect::<Vec<_>>()[..],
+                    |lvl| lvl.to_string().into(),
+                ) {
+                    *render_mode = current_render_mode.into();
+                }
+                width_token.end();
+
+                ui.separator();
+
                 self.entity
-                    .render_with_context(ui, (&game_state.world, CreatureRenderMode::Full));
+                    .render_with_context(ui, (&game_state.world, &render_mode));
             }
             CreatureRightClickState::DebugCreature(debug_gui) => {
                 debug_gui.render_mut_with_context(ui, game_state);

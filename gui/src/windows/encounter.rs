@@ -581,7 +581,7 @@ impl
                     // Participant column
                     ui.table_next_column();
                     entity
-                        .render_with_context(ui, (&game_state.world, CreatureRenderMode::Compact));
+                        .render_with_context(ui, (&game_state.world, &CreatureRenderMode::Compact));
                 }
             }
 

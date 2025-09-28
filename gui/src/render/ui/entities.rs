@@ -14,6 +14,7 @@ use nat20_rs::{
     },
     systems,
 };
+use strum::{Display, EnumIter};
 
 use crate::{
     render::ui::{
@@ -26,13 +27,26 @@ use crate::{
     table_with_columns,
 };
 
+#[derive(Clone, EnumIter, Display)]
 pub enum CreatureRenderMode {
     Full,
+    Inspect,
     Compact,
 }
 
-impl ImguiRenderableWithContext<(&World, CreatureRenderMode)> for Entity {
-    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, CreatureRenderMode)) {
+impl From<usize> for CreatureRenderMode {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => CreatureRenderMode::Full,
+            1 => CreatureRenderMode::Inspect,
+            2 => CreatureRenderMode::Compact,
+            _ => CreatureRenderMode::Full,
+        }
+    }
+}
+
+impl ImguiRenderableWithContext<(&World, &CreatureRenderMode)> for Entity {
+    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, &CreatureRenderMode)) {
         let (world, mode) = context;
 
         match mode {
@@ -91,6 +105,42 @@ impl ImguiRenderableWithContext<(&World, CreatureRenderMode)> for Entity {
 
                     if let Some(tab) = ui.tab_item("Resources") {
                         render_if_present::<ResourceMap>(ui, world, entity);
+                        tab.end();
+                    }
+
+                    tab_bar.end();
+                }
+            }
+
+            CreatureRenderMode::Inspect => {
+                let entity = *self;
+                render_if_present::<Name>(ui, world, *self);
+
+                if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
+                    if let Some(tab) = ui.tab_item("Overview") {
+                        render_race_if_present(ui, world, entity);
+
+                        render_if_present::<CreatureSize>(ui, world, entity);
+                        ui.same_line();
+                        render_if_present::<CreatureType>(ui, world, entity);
+
+                        render_if_present::<CharacterLevels>(ui, world, entity);
+                        render_if_present::<ChallengeRating>(ui, world, entity);
+                        render_if_present::<HitPoints>(ui, world, entity);
+                        ui.same_line();
+                        render_if_present::<LifeState>(ui, world, entity);
+                        ui.separator_with_text("Armor Class");
+                        systems::loadout::armor_class(world, entity).render(ui);
+                        systems::helpers::get_component::<AbilityScoreMap>(world, entity)
+                            .render_with_context(ui, (world, entity));
+                        render_if_present::<DamageResistances>(ui, world, entity);
+
+                        tab.end();
+                    }
+
+                    if let Some(tab) = ui.tab_item("Effects") {
+                        render_if_present::<Vec<Effect>>(ui, world, entity);
+                        render_if_present::<Vec<FeatId>>(ui, world, entity);
                         tab.end();
                     }
 

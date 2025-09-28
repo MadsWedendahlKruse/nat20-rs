@@ -88,7 +88,7 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<RaycastResult>)>
                             self.entity_to_spawn = Some(entity);
                         }
                         ui.separator();
-                        entity.render_with_context(ui, (&self.world, CreatureRenderMode::Full));
+                        entity.render_with_context(ui, (&self.world, &CreatureRenderMode::Full));
                     }
                 });
 
