@@ -413,8 +413,9 @@ impl MainMenuWindow {
                 ));
 
                 if let Some((x, y)) = pos {
-                    let size = ui.calc_text_size(name.as_str());
-                    let window_pos = [x - size[0] / 2.0, y - size[1] / 2.0];
+                    let height = ui.calc_text_size(name.as_str())[1] * 2.0;
+                    let width = ui.calc_text_size("HP:")[0] + 150.0; // rough estimate for width
+                    let window_pos = [x - width / 2.0, y - height];
                     ui.window(&format!("Label##{:?}", entity))
                         .always_auto_resize(true)
                         .position(window_pos, imgui::Condition::Always)
@@ -428,9 +429,9 @@ impl MainMenuWindow {
                         .mouse_inputs(false)
                         .build(|| {
                             name.render(ui);
-                            // render_if_present::<HitPoints>(ui, &game_state.world, entity);
-                            // ui.same_line();
-                            // render_if_present::<LifeState>(ui, &game_state.world, entity);
+                            render_if_present::<HitPoints>(ui, &game_state.world, entity);
+                            ui.same_line();
+                            render_if_present::<LifeState>(ui, &game_state.world, entity);
                         });
                 }
             }
