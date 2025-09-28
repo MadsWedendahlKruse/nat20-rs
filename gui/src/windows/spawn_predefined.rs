@@ -86,6 +86,10 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<RaycastResult>)>
                     ) {
                         if ui.button(format!("Spawn##{:?}", entity)) {
                             self.entity_to_spawn = Some(entity);
+                            if let Some(entity) = self.current_entity {
+                                main_world.despawn(entity).unwrap();
+                                self.current_entity = None;
+                            }
                         }
                         ui.separator();
                         entity.render_with_context(ui, (&self.world, &CreatureRenderMode::Full));

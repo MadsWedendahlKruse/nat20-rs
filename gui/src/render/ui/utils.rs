@@ -185,3 +185,22 @@ pub fn interpolate_color(color1: [f32; 4], color2: [f32; 4], factor: f32) -> [f3
         color2[3] + (color1[3] - color2[3]) * factor,
     ]
 }
+
+// pub enum HorizontalAlign {
+//     Left,
+//     Center,
+//     Right,
+// }
+
+// pub enum VerticalAlign {
+//     Top,
+//     Center,
+//     Bottom,
+// }
+
+// pub struct AnchoredWindow {
+//     pub name: String,
+//     pub horizontal_align: HorizontalAlign,
+//     pub vertical_align: VerticalAlign,
+//     pub last_size: [f32; 2],
+// }

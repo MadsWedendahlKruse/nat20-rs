@@ -379,145 +379,87 @@ impl ImguiRenderableMutWithContext<(&mut GameState, &OrbitCamera)> for Encounter
                             );
                         });
 
-                    ui.same_line();
-                    ui.child_window(format!("Combat Log: {}", self.id))
-                        .child_flags(
-                            ChildFlags::ALWAYS_AUTO_RESIZE
-                                | ChildFlags::AUTO_RESIZE_X
-                                | ChildFlags::AUTO_RESIZE_Y,
-                        )
-                        .build(|| {
-                            ui.separator_with_text("Combat Log");
+                    // TODO: Not sure if this is actually useful
+                    // ui.same_line();
+                    // ui.child_window(format!("Encounter Debug##{}", self.id))
+                    //     .child_flags(
+                    //         ChildFlags::ALWAYS_AUTO_RESIZE
+                    //             | ChildFlags::AUTO_RESIZE_X
+                    //             | ChildFlags::AUTO_RESIZE_Y,
+                    //     )
+                    //     .build(|| {
+                    //         ui.separator_with_text("Encounter Debug Info");
 
-                            ui.child_window("Combat Log Content")
-                                .child_flags(
-                                    ChildFlags::ALWAYS_AUTO_RESIZE
-                                        | ChildFlags::AUTO_RESIZE_X
-                                        | ChildFlags::BORDERS,
-                                )
-                                .size([0.0, 500.0])
-                                .build(|| {
-                                    encounter.combat_log().render_with_context(
-                                        ui,
-                                        &(&game_state.world, log_render_level),
-                                    );
+                    //         ui.child_window("Debug Info Content")
+                    //             .child_flags(
+                    //                 ChildFlags::ALWAYS_AUTO_RESIZE
+                    //                     | ChildFlags::AUTO_RESIZE_X
+                    //                     | ChildFlags::BORDERS,
+                    //             )
+                    //             .size([0.0, 500.0])
+                    //             .build(|| {
+                    //                 ui.text(self.id.to_string());
 
-                                    if *auto_scroll_combat_log
-                                        && ui.scroll_y() >= ui.scroll_max_y() - 5.0
-                                    {
-                                        ui.set_scroll_here_y_with_ratio(1.0);
-                                    }
-                                });
+                    //                 if ui.collapsing_header("Participants", TreeNodeFlags::FRAMED) {
+                    //                     for participant in encounter.participants(
+                    //                         &game_state.world,
+                    //                         ParticipantsFilter::All,
+                    //                     ) {
+                    //                         let name =
+                    //                             systems::helpers::get_component_clone::<Name>(
+                    //                                 &game_state.world,
+                    //                                 participant,
+                    //                             )
+                    //                             .to_string();
+                    //                         ui.text(format!("{} ({:?})", name, participant));
+                    //                     }
+                    //                 }
 
-                            ui.checkbox("Auto-scroll", auto_scroll_combat_log);
+                    //                 if ui
+                    //                     .collapsing_header("Pending Prompts", TreeNodeFlags::FRAMED)
+                    //                 {
+                    //                     for prompt in encounter.pending_prompts() {
+                    //                         ui.text(format!("{:#?}", prompt));
+                    //                     }
+                    //                 }
 
-                            // let mut current_log_level = log_render_level.clone() as i32;
-                            // let log_level_options = LogRenderLevel::iter()
-                            //     .map(|lvl| lvl.to_string())
-                            //     .collect::<Vec<String>>();
-                            // let log_level_options_str: Vec<&str> =
-                            //     log_level_options.iter().map(|s| s.as_str()).collect();
-                            // ui.list_box(
-                            //     "Log level",
-                            //     &mut current_log_level,
-                            //     &log_level_options_str[..],
-                            //     3,
-                            // );
-                            // *log_render_level = LogRenderLevel::from(current_log_level);
+                    //                 if ui.collapsing_header(
+                    //                     "Decision Progress",
+                    //                     TreeNodeFlags::FRAMED,
+                    //                 ) {
+                    //                     if let Some(progress) = decision_progress {
+                    //                         for actor in progress.actors() {
+                    //                             let name = systems::helpers::get_component_clone::<
+                    //                                 Name,
+                    //                             >(
+                    //                                 &game_state.world, actor
+                    //                             )
+                    //                             .to_string();
 
-                            let mut current_log_level = log_render_level.clone() as usize;
-                            let width_token = ui.push_item_width(60.0);
-                            if ui.combo(
-                                "Log level",
-                                &mut current_log_level,
-                                &LogLevel::iter().collect::<Vec<_>>()[..],
-                                |lvl| lvl.to_string().into(),
-                            ) {
-                                *log_render_level = LogLevel::from(current_log_level);
-                            }
-                            width_token.end();
-                        });
+                    //                             if let Some(decision) =
+                    //                                 progress.decision_from(actor)
+                    //                             {
+                    //                                 ui.text(format!(
+                    //                                     "{}'s decision: {:#?}",
+                    //                                     name, decision
+                    //                                 ));
+                    //                             } else {
+                    //                                 ui.text(format!(
+                    //                                     "{} has not decided yet",
+                    //                                     name
+                    //                                 ));
+                    //                             }
 
-                    ui.same_line();
-                    ui.child_window(format!("Encounter Debug##{}", self.id))
-                        .child_flags(
-                            ChildFlags::ALWAYS_AUTO_RESIZE
-                                | ChildFlags::AUTO_RESIZE_X
-                                | ChildFlags::AUTO_RESIZE_Y,
-                        )
-                        .build(|| {
-                            ui.separator_with_text("Encounter Debug Info");
+                    //                             ui.separator();
+                    //                         }
 
-                            ui.child_window("Debug Info Content")
-                                .child_flags(
-                                    ChildFlags::ALWAYS_AUTO_RESIZE
-                                        | ChildFlags::AUTO_RESIZE_X
-                                        | ChildFlags::BORDERS,
-                                )
-                                .size([0.0, 500.0])
-                                .build(|| {
-                                    ui.text(self.id.to_string());
-
-                                    if ui.collapsing_header("Participants", TreeNodeFlags::FRAMED) {
-                                        for participant in encounter.participants(
-                                            &game_state.world,
-                                            ParticipantsFilter::All,
-                                        ) {
-                                            let name =
-                                                systems::helpers::get_component_clone::<Name>(
-                                                    &game_state.world,
-                                                    participant,
-                                                )
-                                                .to_string();
-                                            ui.text(format!("{} ({:?})", name, participant));
-                                        }
-                                    }
-
-                                    if ui
-                                        .collapsing_header("Pending Prompts", TreeNodeFlags::FRAMED)
-                                    {
-                                        for prompt in encounter.pending_prompts() {
-                                            ui.text(format!("{:#?}", prompt));
-                                        }
-                                    }
-
-                                    if ui.collapsing_header(
-                                        "Decision Progress",
-                                        TreeNodeFlags::FRAMED,
-                                    ) {
-                                        if let Some(progress) = decision_progress {
-                                            for actor in progress.actors() {
-                                                let name = systems::helpers::get_component_clone::<
-                                                    Name,
-                                                >(
-                                                    &game_state.world, actor
-                                                )
-                                                .to_string();
-
-                                                if let Some(decision) =
-                                                    progress.decision_from(actor)
-                                                {
-                                                    ui.text(format!(
-                                                        "{}'s decision: {:#?}",
-                                                        name, decision
-                                                    ));
-                                                } else {
-                                                    ui.text(format!(
-                                                        "{} has not decided yet",
-                                                        name
-                                                    ));
-                                                }
-
-                                                ui.separator();
-                                            }
-
-                                            ui.text(format!("{:#?}", progress));
-                                        } else {
-                                            ui.text("No decision in progress");
-                                        }
-                                    }
-                                });
-                        });
+                    //                         ui.text(format!("{:#?}", progress));
+                    //                     } else {
+                    //                         ui.text("No decision in progress");
+                    //                     }
+                    //                 }
+                    //             });
+                    //     });
                 } else {
                     ui.text("Encounter not found!");
                 }

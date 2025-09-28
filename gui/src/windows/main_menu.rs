@@ -1,19 +1,20 @@
 use std::rc::Rc;
 
-use imgui::{ChildFlags, MouseButton, sys};
+use imgui::{ChildFlags, MouseButton, WindowFlags, sys};
 use nat20_rs::{
     components::{
         health::{hit_points::HitPoints, life_state::LifeState},
         id::Name,
         race::CreatureSize,
     },
-    engine::{game_state::GameState, geometry::WorldGeometry},
+    engine::{encounter::EncounterId, game_state::GameState, geometry::WorldGeometry},
     systems::{
         self,
         geometry::{CreaturePose, RaycastHitKind, RaycastResult},
     },
 };
 use parry3d::na::Point3;
+use strum::IntoEnumIterator;
 
 use crate::{
     render::{
@@ -45,6 +46,8 @@ pub enum MainMenuState {
         world_renderer: Option<WorldRenderer>,
         capsule_cache: CapsuleCache,
         auto_scroll_event_log: bool,
+        log_level: LogLevel,
+        log_source: usize,
         encounters: Vec<EncounterWindow>,
         level_up: Option<LevelUpWindow>,
         spawn_predefined: Option<SpawnPredefinedWindow>,
@@ -62,6 +65,8 @@ impl MainMenuWindow {
         Self {
             state: MainMenuState::World {
                 auto_scroll_event_log: true,
+                log_level: LogLevel::Info,
+                log_source: 0,
                 game_state: GameState::new(),
                 grid_renderer: GridRenderer::new(
                     gl_context,
@@ -96,6 +101,8 @@ impl MainMenuWindow {
                 grid_renderer,
                 capsule_cache,
                 auto_scroll_event_log,
+                log_level,
+                log_source,
                 encounters,
                 level_up,
                 spawn_predefined,
@@ -153,11 +160,19 @@ impl MainMenuWindow {
                         encounters,
                         creature_debug,
                         &mut raycast_result,
+                        log_source,
                     );
 
                     ui.same_line();
 
-                    Self::render_event_log(ui, game_state, auto_scroll_event_log);
+                    Self::render_event_log(
+                        ui,
+                        game_state,
+                        encounters,
+                        auto_scroll_event_log,
+                        log_level,
+                        log_source,
+                    );
                 });
 
                 let mut encounter_finished = None;
@@ -212,6 +227,7 @@ impl MainMenuWindow {
         encounters: &mut Vec<EncounterWindow>,
         debug_window: &mut Option<CreatureDebugWindow>,
         raycast_result: &mut Option<RaycastResult>,
+        log_source: &mut usize,
     ) {
         ui.child_window("Characters")
             .child_flags(
@@ -272,7 +288,9 @@ impl MainMenuWindow {
                     entitiy_count < 2,
                     "You must have at least two characters to create an encounter.",
                 ) {
-                    encounters.push(EncounterWindow::new());
+                    let window = EncounterWindow::new();
+                    encounters.push(window);
+                    *log_source = encounters.len(); // Select the new encounter as log source
                 }
             });
     }
@@ -318,16 +336,39 @@ impl MainMenuWindow {
     fn render_event_log(
         ui: &imgui::Ui,
         game_state: &mut GameState,
+        encounters: &mut Vec<EncounterWindow>,
         auto_scroll_event_log: &mut bool,
+        log_level: &mut LogLevel,
+        log_source: &mut usize,
     ) {
-        ui.child_window("Event Log")
-            .child_flags(
-                ChildFlags::ALWAYS_AUTO_RESIZE
-                    | ChildFlags::AUTO_RESIZE_X
-                    | ChildFlags::AUTO_RESIZE_Y,
-            )
+        ui.window("Event Log")
+            .flags(WindowFlags::ALWAYS_AUTO_RESIZE)
             .build(|| {
-                ui.separator_with_text("Event Log");
+                let mut log_sources = vec!["World".to_string()];
+                log_sources.extend(
+                    game_state
+                        .encounters
+                        .iter()
+                        .map(|e| format!("Encounter {}", e.0)),
+                );
+                *log_source = log_sources.len().min(*log_source);
+
+                let width_token = ui.push_item_width(150.0);
+                ui.combo("Log source", log_source, &log_sources[..], |s| {
+                    s.to_string().into()
+                });
+                width_token.end();
+
+                let event_log = if *log_source == 0 || encounters.len() < *log_source {
+                    &game_state.event_log
+                } else {
+                    let id = encounters.get(*log_source - 1).map(|e| e.id()).unwrap();
+                    game_state
+                        .encounters
+                        .get(&id)
+                        .map(|e| e.combat_log())
+                        .unwrap_or(&game_state.event_log)
+                };
 
                 ui.child_window("Event Log Content")
                     .child_flags(
@@ -335,11 +376,9 @@ impl MainMenuWindow {
                             | ChildFlags::AUTO_RESIZE_X
                             | ChildFlags::BORDERS,
                     )
-                    .size([0.0, 500.0])
+                    .size([0.0, 400.0])
                     .build(|| {
-                        game_state
-                            .event_log
-                            .render_with_context(ui, &(&game_state.world, &LogLevel::Info));
+                        event_log.render_with_context(ui, &(&game_state.world, log_level));
 
                         if *auto_scroll_event_log && ui.scroll_y() >= ui.scroll_max_y() - 5.0 {
                             ui.set_scroll_here_y_with_ratio(1.0);
@@ -347,6 +386,18 @@ impl MainMenuWindow {
                     });
 
                 ui.checkbox("Auto-scroll", auto_scroll_event_log);
+
+                let mut current_log_level = log_level.clone() as usize;
+                let width_token = ui.push_item_width(60.0);
+                if ui.combo(
+                    "Log level",
+                    &mut current_log_level,
+                    &LogLevel::iter().collect::<Vec<_>>()[..],
+                    |lvl| lvl.to_string().into(),
+                ) {
+                    *log_level = current_log_level.into();
+                }
+                width_token.end();
             });
     }
 
