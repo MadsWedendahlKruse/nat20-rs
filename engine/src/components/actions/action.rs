@@ -278,26 +278,18 @@ impl ActionKind {
 
             ActionKind::UnconditionalEffect { effect } => {
                 systems::effects::add_effect(&mut game_state.world, target, effect);
-                let _ = game_state.process_event(Event::new(EventKind::ActionPerformed {
-                    action: ActionData {
-                        actor: performer,
-                        action_id: action_id.clone(),
-                        context: context.clone(),
-                        resource_cost,
-                        targets: vec![target],
+                let _ = game_state.process_event(Event::action_performed_event(
+                    &game_state,
+                    performer,
+                    action_id,
+                    context,
+                    &resource_cost,
+                    target,
+                    ActionKindResult::UnconditionalEffect {
+                        effect: effect.clone(),
+                        applied: true, // TODO: Unconditional effects are always applied?
                     },
-                    results: vec![ActionResult {
-                        performer: EntityIdentifier::from_world(&game_state.world, performer),
-                        target: TargetTypeInstance::Entity(EntityIdentifier::from_world(
-                            &game_state.world,
-                            target,
-                        )),
-                        kind: ActionKindResult::UnconditionalEffect {
-                            effect: effect.clone(),
-                            applied: true, // TODO: Unconditional effects are always applied?
-                        },
-                    }],
-                }));
+                ));
             }
 
             ActionKind::SavingThrowEffect {
@@ -320,72 +312,48 @@ impl ActionKind {
 
             ActionKind::BeneficialEffect { effect } => {
                 systems::effects::add_effect(&mut game_state.world, target, effect);
-                let _ = game_state.process_event(Event::new(EventKind::ActionPerformed {
-                    action: ActionData {
-                        actor: performer,
-                        action_id: action_id.clone(),
-                        context: context.clone(),
-                        resource_cost,
-                        targets: vec![target],
+                let _ = game_state.process_event(Event::action_performed_event(
+                    &game_state,
+                    performer,
+                    action_id,
+                    context,
+                    &resource_cost,
+                    target,
+                    ActionKindResult::BeneficialEffect {
+                        effect: effect.clone(),
+                        applied: true, // TODO: Beneficial effects are always applied?
                     },
-                    results: vec![ActionResult {
-                        performer: EntityIdentifier::from_world(&game_state.world, performer),
-                        target: TargetTypeInstance::Entity(EntityIdentifier::from_world(
-                            &game_state.world,
-                            target,
-                        )),
-                        kind: ActionKindResult::BeneficialEffect {
-                            effect: effect.clone(),
-                            applied: true, // TODO: Beneficial effects are always applied?
-                        },
-                    }],
-                }));
+                ));
             }
 
             ActionKind::Healing { heal } => {
                 let healing = heal(&game_state.world, performer, context).roll();
                 let new_life_state =
                     systems::health::heal(&mut game_state.world, target, healing.subtotal as u32);
-                let _ = game_state.process_event(Event::new(EventKind::ActionPerformed {
-                    action: ActionData {
-                        actor: performer,
-                        action_id: action_id.clone(),
-                        context: context.clone(),
-                        resource_cost,
-                        targets: vec![target],
+                let _ = game_state.process_event(Event::action_performed_event(
+                    &game_state,
+                    performer,
+                    action_id,
+                    context,
+                    &resource_cost,
+                    target,
+                    ActionKindResult::Healing {
+                        healing,
+                        new_life_state,
                     },
-                    results: vec![ActionResult {
-                        performer: EntityIdentifier::from_world(&game_state.world, performer),
-                        target: TargetTypeInstance::Entity(EntityIdentifier::from_world(
-                            &game_state.world,
-                            target,
-                        )),
-                        kind: ActionKindResult::Healing {
-                            healing,
-                            new_life_state,
-                        },
-                    }],
-                }));
+                ));
             }
 
             ActionKind::Utility { .. } => {
-                let _ = game_state.process_event(Event::new(EventKind::ActionPerformed {
-                    action: ActionData {
-                        actor: performer,
-                        action_id: action_id.clone(),
-                        context: context.clone(),
-                        resource_cost,
-                        targets: vec![target],
-                    },
-                    results: vec![ActionResult {
-                        performer: EntityIdentifier::from_world(&game_state.world, performer),
-                        target: TargetTypeInstance::Entity(EntityIdentifier::from_world(
-                            &game_state.world,
-                            target,
-                        )),
-                        kind: ActionKindResult::Utility,
-                    }],
-                }));
+                let _ = game_state.process_event(Event::action_performed_event(
+                    &game_state,
+                    performer,
+                    &action_id,
+                    &context,
+                    &resource_cost,
+                    target,
+                    ActionKindResult::Utility,
+                ));
             }
 
             ActionKind::Composite { actions } => {

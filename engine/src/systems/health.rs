@@ -1,30 +1,25 @@
-use std::{f32::consts::E, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
 use hecs::{Entity, World};
 
 use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
-        actions::{
-            action::{ActionContext, ActionKind, ActionKindResult, ActionResult},
-            targeting::TargetTypeInstance,
-        },
+        actions::action::{ActionContext, ActionKind, ActionKindResult},
         damage::{
             AttackRollResult, DamageMitigationEffect, DamageMitigationResult, DamageResistances,
             DamageRollResult, MitigationOperation,
         },
         health::{hit_points::HitPoints, life_state::LifeState},
-        id::{ActionId, EntityIdentifier},
+        id::ActionId,
         level::CharacterLevels,
         modifier::ModifierSource,
-        resource::{self, ResourceAmountMap},
-        saving_throw::{self, SavingThrowKind, SavingThrowSet},
+        resource::ResourceAmountMap,
+        saving_throw::SavingThrowKind,
     },
     engine::{
-        event::{
-            ActionData, CallbackResult, Event, EventCallback, EventId, EventKind, EventListener,
-        },
-        game_state::{self, GameState},
+        event::{CallbackResult, Event, EventCallback, EventKind},
+        game_state::GameState,
     },
     entities::{character::CharacterTag, monster::MonsterTag},
     registry,
@@ -36,9 +31,10 @@ use crate::{
 
 pub fn heal(world: &mut World, target: Entity, amount: u32) -> Option<LifeState> {
     if let Ok(mut hit_points) = world.get::<&mut HitPoints>(target) {
+        let hit_points_before = hit_points.current();
         hit_points.heal(amount);
         if let Ok(mut life_state) = world.get::<&mut LifeState>(target) {
-            if hit_points.current() > 0 {
+            if hit_points.current() > 0 && hit_points_before == 0 {
                 *life_state = LifeState::Normal;
                 return Some(LifeState::Normal);
             }
