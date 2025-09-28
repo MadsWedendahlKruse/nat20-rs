@@ -24,7 +24,7 @@ use nat20_rs::{
         game_state::{self, GameState},
     },
     registry,
-    systems::{self, geometry::RaycastResultKind},
+    systems::{self, geometry::RaycastOutcomeKind},
 };
 use strum::IntoEnumIterator;
 
@@ -804,6 +804,9 @@ impl ImguiRenderableMutWithContext<(&mut GameState, &OrbitCamera)>
                             ui,
                             (game_state, encounter_id, targets, targets_confirmed, camera),
                         );
+                        ui.tooltip(|| {
+                            ui.text(chosen_action.as_ref().unwrap().to_string());
+                        });
 
                         ui.separator();
                         if ui.button("Confirm Targets") {
@@ -1075,8 +1078,8 @@ impl
 fn get_cursor_entity(game_state: &GameState, camera: &OrbitCamera) -> Option<Entity> {
     if let Some(ray) = camera.ray_from_cursor() {
         if let Some(raycast) = systems::geometry::raycast(game_state, &ray) {
-            match raycast.kind {
-                RaycastResultKind::Creature(entity) => Some(entity),
+            match raycast.closest().unwrap().kind {
+                RaycastOutcomeKind::Creature(entity) => Some(entity),
                 _ => None,
             }
         } else {

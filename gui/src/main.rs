@@ -6,15 +6,10 @@ mod windows;
 
 use glow::HasContext;
 use glutin::surface::GlSurface;
-use parry3d::na;
+use parry3d::na::Vector3;
 
 use crate::{
-    render::{
-        ui::utils::{ImguiRenderableMut, ImguiRenderableMutWithContext},
-        world::{
-            camera::OrbitCamera, frame::FrameUniforms, grid::GridRenderer, program::BasicProgram,
-        },
-    },
+    render::world::{camera::OrbitCamera, frame_uniforms::FrameUniforms, program::BasicProgram},
     windows::main_menu::MainMenuWindow,
 };
 
@@ -38,11 +33,10 @@ fn main() {
         include_str!("render/world/shaders/basic.vert"),
         include_str!("render/world/shaders/basic.frag"),
     );
+    // TODO: Where should the camera live?
     let mut camera = OrbitCamera::new();
 
     let mut main_menu = MainMenuWindow::new(&ig_renderer.gl_context());
-
-    let mut built_dock_layout = false;
 
     #[allow(deprecated)]
     event_loop
@@ -82,45 +76,10 @@ fn main() {
 
                 let view = camera.view();
                 let proj = camera.proj(size.width, size.height);
-                let light_dir = na::Vector3::new(-0.5, -1.0, -0.8);
+                let light_dir = Vector3::new(-0.5, -1.0, -0.8);
                 frame_uniforms.update(gl, view, proj, light_dir);
 
                 let ui = imgui_context.frame();
-                let dockspace_id = ui.dockspace_over_main_viewport();
-
-                // TODO: Little bit hacky
-                if !built_dock_layout {
-                    unsafe {
-                        let vp = imgui::sys::igGetMainViewport();
-                        imgui::sys::igDockBuilderRemoveNode(dockspace_id);
-                        imgui::sys::igDockBuilderAddNode(
-                            dockspace_id,
-                            imgui::sys::ImGuiDockNodeFlags_DockSpace, // | imgui::sys::ImGuiDockNodeFlags_AutoHideTabBar,
-                        );
-                        imgui::sys::igDockBuilderSetNodeSize(dockspace_id, (*vp).Size);
-
-                        let mut right_id: u32 = 0;
-                        let mut center_id: u32 = 0;
-
-                        center_id = dockspace_id;
-                        right_id = imgui::sys::igDockBuilderSplitNode(
-                            center_id,
-                            imgui::sys::ImGuiDir_Right,
-                            0.3,
-                            std::ptr::null_mut(),
-                            &mut center_id,
-                        );
-
-                        // Dock your window(s)
-                        let name = std::ffi::CString::new("Camera").unwrap();
-                        imgui::sys::igDockBuilderDockWindow(name.as_ptr(), right_id);
-
-                        // Finish
-                        imgui::sys::igDockBuilderFinish(dockspace_id);
-                    }
-
-                    built_dock_layout = true;
-                }
 
                 main_menu.render(ui, gl, &program, &mut camera);
 

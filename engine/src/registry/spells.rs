@@ -5,6 +5,7 @@ use std::{
 };
 
 use hecs::{Entity, World};
+use parry3d::{math::Point, na::Point3};
 
 use crate::{
     components::{
@@ -32,7 +33,6 @@ use crate::{
         },
     },
     engine::event::{ActionData, CallbackResult, Event, EventKind, EventListener, ReactionData},
-    math::point::Point,
     registry,
     systems::{
         self,
@@ -243,11 +243,7 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
             kind: TargetingKind::Area {
                 shape: AreaShape::Sphere { radius: 20 },
                 // TODO: What do we do here?
-                origin: Point {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
+                origin: Point3::origin(),
             },
             normal_range: 150,
             max_range: 150,

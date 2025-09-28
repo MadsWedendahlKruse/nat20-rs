@@ -1,9 +1,8 @@
 use std::collections::HashSet;
 
-use crate::{
-    components::{faction::Attitude, health::life_state::LifeState, id::EntityIdentifier},
-    math::point::Point,
-};
+use parry3d::na::Point3;
+
+use crate::components::{faction::Attitude, health::life_state::LifeState, id::EntityIdentifier};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TargetingKind {
@@ -17,7 +16,7 @@ pub enum TargetingKind {
     },
     Area {
         shape: AreaShape,
-        origin: Point,
+        origin: Point3<f32>,
     },
     // e.g. Knock
     // Object {
@@ -68,7 +67,7 @@ impl TargetType {
 pub enum TargetTypeInstance {
     // TODO: Do we need all of these?
     Entity(EntityIdentifier),
-    Point(Point),
+    Point(Point3<f32>),
     Area(AreaShape),
     None,
 }

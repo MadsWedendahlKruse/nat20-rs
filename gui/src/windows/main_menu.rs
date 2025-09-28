@@ -8,7 +8,10 @@ use nat20_rs::{
         race::CreatureSize,
     },
     engine::{game_state::GameState, geometry::WorldGeometry},
-    systems::{self, geometry::CreaturePose},
+    systems::{
+        self,
+        geometry::{CreaturePose, RaycastResult},
+    },
 };
 use parry3d::na::Point3;
 
@@ -24,8 +27,8 @@ use crate::{
             },
         },
         world::{
-            camera::OrbitCamera, frame::FrameUniforms, grid::GridRenderer, program::BasicProgram,
-            shapes::CapsuleCache, world_renderer::WorldRenderer,
+            camera::OrbitCamera, frame_uniforms::FrameUniforms, grid::GridRenderer,
+            program::BasicProgram, shapes::CapsuleCache, world_renderer::WorldRenderer,
         },
     },
     windows::{
@@ -97,10 +100,10 @@ impl MainMenuWindow {
             } => {
                 if world_renderer.is_none() {
                     let positions = vec![
-                        Point3::new(-1.0, 0.0, -1.0),
-                        Point3::new(1.0, 0.0, -1.0),
-                        Point3::new(1.0, 0.0, 1.0),
-                        Point3::new(-1.0, 0.0, 1.0),
+                        Point3::new(-5.0, 0.0, -5.0),
+                        Point3::new(5.0, 0.0, -5.0),
+                        Point3::new(5.0, 0.0, 5.0),
+                        Point3::new(-5.0, 0.0, 5.0),
                     ];
                     let indices = vec![[0u32, 1, 2], [0, 2, 3]];
                     game_state.geometry = Some(WorldGeometry::new(positions, indices));
@@ -126,6 +129,14 @@ impl MainMenuWindow {
 
                 camera.render_mut_with_context(ui, game_state);
 
+                let mut raycast_result = if ui.io().want_capture_mouse {
+                    None
+                } else if let Some(ray_from_cursor) = camera.ray_from_cursor() {
+                    systems::geometry::raycast(game_state, &ray_from_cursor)
+                } else {
+                    None
+                };
+
                 ui.window("World").always_auto_resize(true).build(|| {
                     Self::render_character_menu(
                         ui,
@@ -134,6 +145,7 @@ impl MainMenuWindow {
                         spawn_predefined,
                         encounters,
                         character_debug,
+                        &mut raycast_result,
                     );
 
                     ui.same_line();
@@ -169,6 +181,7 @@ impl MainMenuWindow {
         spawn_predefined_window: &mut Option<SpawnPredefinedWindow>,
         encounters: &mut Vec<EncounterWindow>,
         debug_window: &mut Option<CreatureDebugWindow>,
+        raycast_result: &mut Option<RaycastResult>,
     ) {
         ui.child_window("Characters")
             .child_flags(
@@ -216,6 +229,7 @@ impl MainMenuWindow {
                     game_state,
                     level_up_window,
                     spawn_predefined_window,
+                    raycast_result,
                 );
 
                 ui.separator();
@@ -236,6 +250,7 @@ impl MainMenuWindow {
         game_state: &mut GameState,
         level_up_window: &mut Option<LevelUpWindow>,
         spawn_predefined_window: &mut Option<SpawnPredefinedWindow>,
+        raycast_result: &mut Option<RaycastResult>,
     ) {
         ui.popup("Spawn Creature", || {
             if let Some(index) =
@@ -259,7 +274,7 @@ impl MainMenuWindow {
         }
 
         if let Some(spawn_predefined) = spawn_predefined_window {
-            spawn_predefined.render_mut_with_context(ui, &mut game_state.world);
+            spawn_predefined.render_mut_with_context(ui, (&mut game_state.world, raycast_result));
             if spawn_predefined.is_spawning_completed() {
                 spawn_predefined_window.take();
             }

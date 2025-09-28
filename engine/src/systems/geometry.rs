@@ -51,16 +51,44 @@ pub fn get_shape(world: &World, entity: Entity) -> Option<Capsule> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RaycastResultKind {
+// TODO: Not sure if 'Outcome' is the best name here.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RaycastOutcomeKind {
     World,
     Creature(Entity),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct RaycastResult {
-    pub kind: RaycastResultKind,
+pub struct RaycastOutcome {
+    pub kind: RaycastOutcomeKind,
+    /// Time of impact along the ray (distance from ray origin)
     pub toi: f32,
+    /// Point of impact in world space
+    pub poi: Point3<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RaycastResult {
+    pub outcomes: Vec<RaycastOutcome>,
+    pub closest_index: Option<usize>,
+}
+
+impl RaycastResult {
+    pub fn closest(&self) -> Option<&RaycastOutcome> {
+        self.closest_index.and_then(|i| self.outcomes.get(i))
+    }
+
+    pub fn world_hit(&self) -> Option<&RaycastOutcome> {
+        self.outcomes
+            .iter()
+            .find(|o| matches!(o.kind, RaycastOutcomeKind::World))
+    }
+
+    pub fn creature_hit(&self) -> Option<&RaycastOutcome> {
+        self.outcomes
+            .iter()
+            .find(|o| matches!(o.kind, RaycastOutcomeKind::Creature(_)))
+    }
 }
 
 static DEFAULT_MAX_TOI: f32 = 10000.0;
@@ -76,19 +104,18 @@ pub fn raycast_with_toi(
 ) -> Option<RaycastResult> {
     let world = &game_state.world;
 
-    let world_result = if let Some(geometry) = &game_state.geometry {
+    let mut outcomes = vec![];
+
+    if let Some(geometry) = &game_state.geometry {
         let mesh = &geometry.mesh;
         if let Some(toi) = mesh.cast_local_ray(ray, max_time_of_impact, true) {
-            Some(RaycastResult {
-                kind: RaycastResultKind::World,
+            outcomes.push(RaycastOutcome {
+                kind: RaycastOutcomeKind::World,
                 toi,
-            })
-        } else {
-            None
+                poi: ray.origin + ray.dir * toi,
+            });
         }
-    } else {
-        None
-    };
+    }
 
     let entity_result = world
         .query::<&CreaturePose>()
@@ -96,9 +123,10 @@ pub fn raycast_with_toi(
         .filter_map(|(entity, pose)| {
             if let Some(shape) = get_shape(world, entity) {
                 let toi = shape.cast_ray(pose, ray, max_time_of_impact, true);
-                toi.map(|toi| RaycastResult {
-                    kind: RaycastResultKind::Creature(entity),
+                toi.map(|toi| RaycastOutcome {
+                    kind: RaycastOutcomeKind::Creature(entity),
                     toi,
+                    poi: ray.origin + ray.dir * toi,
                 })
             } else {
                 None
@@ -106,16 +134,27 @@ pub fn raycast_with_toi(
         })
         .min_by(|a, b| a.toi.partial_cmp(&b.toi).unwrap());
 
-    match (world_result, entity_result) {
-        (Some(wr), Some(er)) => {
-            if wr.toi < er.toi {
-                Some(wr)
-            } else {
-                Some(er)
-            }
-        }
-        (Some(wr), None) => Some(wr),
-        (None, Some(er)) => Some(er),
-        (None, None) => None,
+    if let Some(entity_outcome) = entity_result {
+        outcomes.push(entity_outcome);
+    }
+
+    if outcomes.is_empty() {
+        None
+    } else {
+        let closest_index = outcomes
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| a.toi.partial_cmp(&b.toi).unwrap())
+            .map(|(i, _)| i);
+        Some(RaycastResult {
+            outcomes,
+            closest_index,
+        })
+    }
+}
+
+pub fn move_to(world: &mut World, entity: Entity, new_position: Point3<f32>) {
+    if let Ok(mut pose) = world.get::<&mut CreaturePose>(entity) {
+        pose.translation = new_position.into();
     }
 }

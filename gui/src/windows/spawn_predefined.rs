@@ -1,13 +1,20 @@
+use core::f32;
+
 use hecs::{Entity, World};
+use imgui::{MouseButton, sys};
 use nat20_rs::{
     components::{id::Name, resource::RechargeRule},
     entities::{
         character::{Character, CharacterTag},
         monster::{Monster, MonsterTag},
     },
-    systems,
+    systems::{
+        self,
+        geometry::{CreaturePose, RaycastResult},
+    },
     test_utils::fixtures,
 };
+use parry3d::na::Point3;
 
 use crate::render::ui::{
     entities::CreatureRenderMode,
@@ -18,6 +25,8 @@ pub struct SpawnPredefinedWindow {
     /// Dummy World used to store the predefined entities. Once an entity has been
     /// selected from this window, it will be spawned into the actual game world.
     world: World,
+    entity_to_spawn: Option<Entity>,
+    current_entity: Option<Entity>,
     spawning_completed: bool,
 }
 
@@ -41,6 +50,8 @@ impl SpawnPredefinedWindow {
 
         Self {
             world,
+            entity_to_spawn: None,
+            current_entity: None,
             spawning_completed: false,
         }
     }
@@ -50,15 +61,21 @@ impl SpawnPredefinedWindow {
     }
 }
 
-impl ImguiRenderableMutWithContext<&mut World> for SpawnPredefinedWindow {
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, main_world: &mut World) {
+impl ImguiRenderableMutWithContext<(&mut World, &mut Option<RaycastResult>)>
+    for SpawnPredefinedWindow
+{
+    fn render_mut_with_context(
+        &mut self,
+        ui: &imgui::Ui,
+        context: (&mut World, &mut Option<RaycastResult>),
+    ) {
         if self.spawning_completed {
             return;
         }
 
-        render_window_at_cursor(ui, "Spawn", true, || {
-            let mut entity_to_spawn = None;
+        let (main_world, raycast_result) = context;
 
+        render_window_at_cursor(ui, "Spawn", true, || {
             self.world
                 .query::<&Name>()
                 .into_iter()
@@ -68,32 +85,75 @@ impl ImguiRenderableMutWithContext<&mut World> for SpawnPredefinedWindow {
                         imgui::TreeNodeFlags::FRAMED,
                     ) {
                         if ui.button(format!("Spawn##{:?}", entity)) {
-                            println!("Spawning entity: {:?}", entity);
-                            entity_to_spawn = Some(entity);
+                            self.entity_to_spawn = Some(entity);
                         }
                         ui.separator();
                         entity.render_with_context(ui, (&self.world, CreatureRenderMode::Full));
                     }
                 });
 
-            if let Some(entity) = entity_to_spawn {
-                let spawned_entity = if let Ok(_) = self.world.get::<&CharacterTag>(entity) {
-                    main_world.spawn(Character::from_world(&self.world, entity))
-                } else if let Ok(_) = self.world.get::<&MonsterTag>(entity) {
-                    main_world.spawn(Monster::from_world(&self.world, entity))
-                } else {
-                    panic!("Entity to spawn is neither a Character nor a Monster");
-                };
+            if let Some(entity) = self.entity_to_spawn {
+                if self.current_entity.is_none() {
+                    let spawned_entity = if let Ok(_) = self.world.get::<&CharacterTag>(entity) {
+                        main_world.spawn(Character::from_world(&self.world, entity))
+                    } else if let Ok(_) = self.world.get::<&MonsterTag>(entity) {
+                        main_world.spawn(Monster::from_world(&self.world, entity))
+                    } else {
+                        panic!("Entity to spawn is neither a Character nor a Monster");
+                    };
 
-                // Ensure the spawned entity has a unique name in the main world
-                // (much easier to debug this way)
-                set_unique_name(main_world, spawned_entity);
+                    // Spawn it somewhere we can't see it, we'll move it later
+                    systems::geometry::move_to(
+                        main_world,
+                        spawned_entity,
+                        Point3::new(f32::MAX, f32::MAX, f32::MAX),
+                    );
 
-                entity_to_spawn.take();
+                    // Ensure the spawned entity has a unique name in the main world
+                    // (much easier to debug this way)
+                    set_unique_name(main_world, spawned_entity);
+
+                    self.current_entity = Some(spawned_entity);
+                }
+
+                if let Some(entity) = self.current_entity {
+                    ui.tooltip(|| {
+                        ui.text("LEFT-CLICK: Spawn here");
+                        ui.text("RIGHT-CLICK: Cancel");
+                    });
+
+                    if let Some(raycast) = raycast_result {
+                        if let Some(raycast_outcome) = raycast.world_hit() {
+                            let mut position = raycast_outcome.poi;
+                            let creature_height =
+                                systems::geometry::get_height(main_world, entity).unwrap();
+                            position.y += creature_height / 2.0;
+
+                            systems::geometry::move_to(main_world, entity, position);
+
+                            if ui.is_mouse_clicked(MouseButton::Left) {
+                                raycast_result.take();
+                                self.current_entity = None;
+                            }
+
+                            if ui.is_mouse_clicked(MouseButton::Right) {
+                                raycast_result.take();
+                                main_world.despawn(entity).unwrap();
+                                self.current_entity = None;
+                                self.entity_to_spawn = None;
+                            }
+                        }
+                    }
+                }
             }
 
             ui.separator();
             if ui.button_with_size("Done", [100.0, 30.0]) {
+                if let Some(entity) = self.current_entity {
+                    main_world.despawn(entity).unwrap();
+                    self.current_entity = None;
+                    self.entity_to_spawn = None;
+                }
                 self.spawning_completed = true;
             }
         });

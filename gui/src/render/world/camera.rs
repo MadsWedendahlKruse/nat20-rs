@@ -1,24 +1,25 @@
 use nat20_rs::{engine::game_state::GameState, systems};
 use parry3d::{
-    na::{self, Point3, Vector3},
+    na::{Isometry3, Perspective3, Point3, Vector3},
     query::Ray,
 };
-use winit::event::{MouseButton, MouseScrollDelta, WindowEvent};
-
-use crate::render::ui::utils::{
-    ImguiRenderableMut, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
+use winit::{
+    event::{MouseButton, MouseScrollDelta, WindowEvent},
+    keyboard::PhysicalKey,
 };
+
+use crate::render::ui::utils::ImguiRenderableMutWithContext;
 
 // Initial camera parameters
 static TARGET_X: f32 = 0.0;
 static TARGET_Y: f32 = 0.0;
 static TARGET_Z: f32 = 0.0;
 static DISTANCE: f32 = 30.0;
-static YAW: f32 = (45.0f32).to_radians();
+static YAW: f32 = (-135.0f32).to_radians();
 static PITCH: f32 = (-45.0f32).to_radians();
 
 pub struct OrbitCamera {
-    pub target: na::Point3<f32>,
+    pub target: Point3<f32>,
     pub radius: f32, // distance from target
     pub yaw: f32,    // radians, around Y
     pub pitch: f32,  // radians, up/down
@@ -27,26 +28,24 @@ pub struct OrbitCamera {
     pan_sens: f32,    // world units per pixel (scaled by radius)
     zoom_sens: f32,   // scalar per wheel tick
     // state
-    rmb_down: bool,
     mmb_down: bool,
     shift_down: bool,
 
     last_cursor: Option<(f32, f32)>,
     last_viewport: Option<(f32, f32)>,
-    last_proj: Option<na::Perspective3<f32>>,
+    last_proj: Option<Perspective3<f32>>,
 }
 
 impl OrbitCamera {
     pub fn new() -> Self {
         Self {
-            target: na::Point3::new(TARGET_X, TARGET_Y, TARGET_Z),
+            target: Point3::new(TARGET_X, TARGET_Y, TARGET_Z),
             radius: DISTANCE,
             yaw: YAW,
             pitch: PITCH,
             rotate_sens: 0.005,
             pan_sens: 0.0015,
             zoom_sens: 1.1,
-            rmb_down: false,
             mmb_down: false,
             shift_down: false,
             last_cursor: None,
@@ -55,17 +54,17 @@ impl OrbitCamera {
         }
     }
 
-    pub fn view(&self) -> na::Isometry3<f32> {
+    pub fn view(&self) -> Isometry3<f32> {
         let dir = Self::spherical_dir(self.yaw, self.pitch);
         let eye = self.target - dir * self.radius;
-        na::Isometry3::look_at_rh(&eye, &self.target, &na::Vector3::y())
+        Isometry3::look_at_rh(&eye, &self.target, &Vector3::y())
     }
 
-    pub fn proj(&mut self, width: u32, height: u32) -> &na::Perspective3<f32> {
+    pub fn proj(&mut self, width: u32, height: u32) -> &Perspective3<f32> {
         let (width, height) = (width as f32, height as f32);
         if self.last_viewport != Some((width, height)) {
             self.last_viewport = Some((width, height));
-            self.last_proj = Some(na::Perspective3::new(
+            self.last_proj = Some(Perspective3::new(
                 (width.max(1.0)) / (height.max(1.0)),
                 (45.0f32).to_radians(),
                 0.1,
@@ -98,7 +97,7 @@ impl OrbitCamera {
         let fovy = proj.fovy();
         let aspect = proj.aspect();
         let tan = (fovy * 0.5).tan();
-        let dir_cam = na::Vector3::new(x_ndc * tan * aspect, y_ndc * tan, -1.0).normalize();
+        let dir_cam = Vector3::new(x_ndc * tan * aspect, y_ndc * tan, -1.0).normalize();
 
         // World-space: rotate by camera orientation, origin at camera eye
         let cam_iso = self.view().inverse(); // camera (world) pose
@@ -108,7 +107,7 @@ impl OrbitCamera {
         Some(Ray::new(origin.into(), dir.normalize()))
     }
 
-    fn spherical_dir(yaw: f32, pitch: f32) -> na::Vector3<f32> {
+    fn spherical_dir(yaw: f32, pitch: f32) -> Vector3<f32> {
         let cp = pitch.clamp(-1.5533, 1.5533); // ~±89°
         let cy = yaw.cos();
         let sy = yaw.sin();
@@ -146,45 +145,47 @@ impl OrbitCamera {
             WindowEvent::MouseInput { state, button, .. } => {
                 let down = *state == winit::event::ElementState::Pressed;
                 match button {
-                    MouseButton::Right => self.rmb_down = down,
                     MouseButton::Middle => self.mmb_down = down,
                     _ => {}
                 }
             }
-            // WindowEvent::KeyboardInput { input, .. } => {
-            //     if let Some(vk) = input.virtual_keycode {
-            //         if vk == winit::event::VirtualKeyCode::LShift
-            //             || vk == winit::event::VirtualKeyCode::RShift
-            //         {
-            //             self.shift_down = input.state == winit::event::ElementState::Pressed;
-            //         }
-            //     }
-            // }
+            WindowEvent::KeyboardInput { event, .. } => match event.physical_key {
+                PhysicalKey::Code(key_code) => {
+                    if key_code == winit::keyboard::KeyCode::ShiftLeft
+                        || key_code == winit::keyboard::KeyCode::ShiftRight
+                    {
+                        self.shift_down = event.state == winit::event::ElementState::Pressed;
+                    }
+                }
+                PhysicalKey::Unidentified(_) => {}
+            },
             WindowEvent::CursorMoved { position, .. } => {
                 let (position_x, position_y) = (position.x as f32, position.y as f32);
                 if imgui_wants_mouse {
                     self.last_cursor = Some((position_x, position_y));
                     return;
                 }
+
                 if let Some((lx, ly)) = self.last_cursor {
                     let dx = position_x - lx;
                     let dy = position_y - ly;
 
-                    // PAN when MMB or Shift+RMB
-                    if self.mmb_down || (self.rmb_down && self.shift_down) {
-                        // pan along camera right/up
-                        let dir = Self::spherical_dir(self.yaw, self.pitch);
-                        let right = na::Vector3::new(dir.z, 0.0, -dir.x).normalize(); // Y-up right
-                        let up = na::Vector3::y();
-                        let scale = self.radius * self.pan_sens;
-                        self.target += right * dx * scale;
-                        self.target += up * dy * scale;
-                    }
-                    // ORBIT when RMB (without Shift)
-                    else if self.rmb_down {
-                        self.yaw += dx * self.rotate_sens;
-                        self.pitch -= dy * self.rotate_sens;
-                        self.pitch = self.pitch.clamp(-1.53, 1.53);
+                    if self.mmb_down {
+                        // PAN when MMB (and Shift)
+                        if self.shift_down {
+                            // pan along camera right/up
+                            let dir = Self::spherical_dir(self.yaw, self.pitch);
+                            let right = Vector3::new(dir.z, 0.0, -dir.x).normalize(); // Y-up right
+                            let up = Vector3::y();
+                            let scale = self.radius * self.pan_sens;
+                            self.target += right * dx * scale;
+                            self.target += up * dy * scale;
+                        } else {
+                            // ORBIT when MMB
+                            self.yaw += dx * self.rotate_sens;
+                            self.pitch -= dy * self.rotate_sens;
+                            self.pitch = self.pitch.clamp(-1.53, 1.53);
+                        }
                     }
                 }
                 self.last_cursor = Some((position_x, position_y));
@@ -204,7 +205,6 @@ impl OrbitCamera {
                 }
             }
             WindowEvent::Focused(false) => {
-                self.rmb_down = false;
                 self.mmb_down = false;
             }
             _ => {}
@@ -214,45 +214,58 @@ impl OrbitCamera {
 
 impl ImguiRenderableMutWithContext<&GameState> for OrbitCamera {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, game_state: &GameState) {
-        ui.window("Camera").always_auto_resize(true).build(|| {
-            if ui.button("Reset") {
-                *self = Self::new();
-            }
-            ui.slider("Target X", -100.0, 100.0, &mut self.target.x);
-            ui.slider("Target Y", -100.0, 100.0, &mut self.target.y);
-            ui.slider("Target Z", -100.0, 100.0, &mut self.target.z);
+        // Render in top-right corner
+        let viewport = ui.io().display_size;
+        let window_size = [320.0, 300.0];
+        let window_pos = [viewport[0] - window_size[0], 0.0];
 
-            ui.separator();
+        ui.window("Camera")
+            .position(window_pos, imgui::Condition::Always)
+            .size(window_size, imgui::Condition::FirstUseEver)
+            .always_auto_resize(true)
+            .movable(false)
+            .build(|| {
+                if ui.button("Reset") {
+                    *self = Self::new();
+                }
+                ui.slider("Target X", -100.0, 100.0, &mut self.target.x);
+                ui.slider("Target Y", -100.0, 100.0, &mut self.target.y);
+                ui.slider("Target Z", -100.0, 100.0, &mut self.target.z);
 
-            ui.slider("Distance", 0.5, 200.0, &mut self.radius);
-            ui.slider(
-                "Yaw",
-                -std::f32::consts::PI,
-                std::f32::consts::PI,
-                &mut self.yaw,
-            );
-            ui.slider("Pitch", -1.5533, 1.5533, &mut self.pitch);
+                ui.separator();
 
-            ui.separator();
+                ui.slider("Distance", 0.5, 200.0, &mut self.radius);
+                ui.slider(
+                    "Yaw",
+                    -std::f32::consts::PI,
+                    std::f32::consts::PI,
+                    &mut self.yaw,
+                );
+                ui.slider("Pitch", -1.5533, 1.5533, &mut self.pitch);
 
-            ui.text(format!(
-                "Eye: ({:.2}, {:.2}, {:.2})",
-                self.eye().x,
-                self.eye().y,
-                self.eye().z
-            ));
-            if let Some(ray) = self.ray_from_cursor() {
+                ui.separator();
+
                 ui.text(format!(
-                    "Cursor ray direction: ({:.2}, {:.2}, {:.2})",
-                    ray.dir.x, ray.dir.y, ray.dir.z
+                    "Eye: ({:.2}, {:.2}, {:.2})",
+                    self.eye().x,
+                    self.eye().y,
+                    self.eye().z
                 ));
-                ui.text(format!(
-                    "Hit: {:#?}",
-                    systems::geometry::raycast_with_toi(&game_state, &ray, 1000.0)
-                ));
-            } else {
-                ui.text("(no cursor ray)");
-            }
-        });
+
+                if ui.collapsing_header("Ray from cursor", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+                    if let Some(ray) = self.ray_from_cursor() {
+                        ui.text(format!(
+                            "Cursor ray direction: ({:.2}, {:.2}, {:.2})",
+                            ray.dir.x, ray.dir.y, ray.dir.z
+                        ));
+                        ui.text(format!(
+                            "Hit: {:#?}",
+                            systems::geometry::raycast_with_toi(&game_state, &ray, 1000.0)
+                        ));
+                    } else {
+                        ui.text("(no cursor ray)");
+                    }
+                }
+            });
     }
 }

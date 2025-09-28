@@ -1,5 +1,5 @@
 pub mod camera;
-pub mod frame;
+pub mod frame_uniforms;
 pub mod grid;
 pub mod program;
 pub mod shapes;

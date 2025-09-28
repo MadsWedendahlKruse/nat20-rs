@@ -6,7 +6,6 @@ extern crate uuid;
 pub mod components;
 pub mod engine;
 pub mod entities;
-pub mod math;
 pub mod registry;
 pub mod systems;
 pub mod test_utils;
