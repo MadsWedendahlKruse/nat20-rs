@@ -122,6 +122,13 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<RaycastResult>)>
                         ui.text("RIGHT-CLICK: Cancel");
                     });
 
+                    if ui.is_mouse_clicked(MouseButton::Right) {
+                        raycast_result.take();
+                        main_world.despawn(entity).unwrap();
+                        self.current_entity = None;
+                        self.entity_to_spawn = None;
+                    }
+
                     if let Some(raycast) = raycast_result {
                         if let Some(raycast_outcome) = raycast.world_hit() {
                             let mut position = raycast_outcome.poi;
@@ -134,13 +141,6 @@ impl ImguiRenderableMutWithContext<(&mut World, &mut Option<RaycastResult>)>
                             if ui.is_mouse_clicked(MouseButton::Left) {
                                 raycast_result.take();
                                 self.current_entity = None;
-                            }
-
-                            if ui.is_mouse_clicked(MouseButton::Right) {
-                                raycast_result.take();
-                                main_world.despawn(entity).unwrap();
-                                self.current_entity = None;
-                                self.entity_to_spawn = None;
                             }
                         }
                     }

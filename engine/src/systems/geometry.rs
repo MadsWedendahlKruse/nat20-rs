@@ -51,16 +51,15 @@ pub fn get_shape(world: &World, entity: Entity) -> Option<Capsule> {
     }
 }
 
-// TODO: Not sure if 'Outcome' is the best name here.
 #[derive(Debug, Clone, PartialEq)]
-pub enum RaycastOutcomeKind {
+pub enum RaycastHitKind {
     World,
     Creature(Entity),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct RaycastOutcome {
-    pub kind: RaycastOutcomeKind,
+pub struct RaycastHit {
+    pub kind: RaycastHitKind,
     /// Time of impact along the ray (distance from ray origin)
     pub toi: f32,
     /// Point of impact in world space
@@ -69,25 +68,25 @@ pub struct RaycastOutcome {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RaycastResult {
-    pub outcomes: Vec<RaycastOutcome>,
+    pub outcomes: Vec<RaycastHit>,
     pub closest_index: Option<usize>,
 }
 
 impl RaycastResult {
-    pub fn closest(&self) -> Option<&RaycastOutcome> {
+    pub fn closest(&self) -> Option<&RaycastHit> {
         self.closest_index.and_then(|i| self.outcomes.get(i))
     }
 
-    pub fn world_hit(&self) -> Option<&RaycastOutcome> {
+    pub fn world_hit(&self) -> Option<&RaycastHit> {
         self.outcomes
             .iter()
-            .find(|o| matches!(o.kind, RaycastOutcomeKind::World))
+            .find(|o| matches!(o.kind, RaycastHitKind::World))
     }
 
-    pub fn creature_hit(&self) -> Option<&RaycastOutcome> {
+    pub fn creature_hit(&self) -> Option<&RaycastHit> {
         self.outcomes
             .iter()
-            .find(|o| matches!(o.kind, RaycastOutcomeKind::Creature(_)))
+            .find(|o| matches!(o.kind, RaycastHitKind::Creature(_)))
     }
 }
 
@@ -109,8 +108,8 @@ pub fn raycast_with_toi(
     if let Some(geometry) = &game_state.geometry {
         let mesh = &geometry.mesh;
         if let Some(toi) = mesh.cast_local_ray(ray, max_time_of_impact, true) {
-            outcomes.push(RaycastOutcome {
-                kind: RaycastOutcomeKind::World,
+            outcomes.push(RaycastHit {
+                kind: RaycastHitKind::World,
                 toi,
                 poi: ray.origin + ray.dir * toi,
             });
@@ -123,8 +122,8 @@ pub fn raycast_with_toi(
         .filter_map(|(entity, pose)| {
             if let Some(shape) = get_shape(world, entity) {
                 let toi = shape.cast_ray(pose, ray, max_time_of_impact, true);
-                toi.map(|toi| RaycastOutcome {
-                    kind: RaycastOutcomeKind::Creature(entity),
+                toi.map(|toi| RaycastHit {
+                    kind: RaycastHitKind::Creature(entity),
                     toi,
                     poi: ray.origin + ray.dir * toi,
                 })

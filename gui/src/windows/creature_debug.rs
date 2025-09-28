@@ -14,7 +14,9 @@ use nat20_rs::{
 use parry3d::na::UnitQuaternion;
 use strum::IntoEnumIterator;
 
-use crate::render::ui::utils::{ImguiRenderableMutWithContext, render_uniform_buttons};
+use crate::render::ui::utils::{
+    ImguiRenderableMutWithContext, render_uniform_buttons_with_padding,
+};
 
 pub enum CheckKind {
     SavingThrow,
@@ -51,9 +53,9 @@ impl CreatureDebugWindow {
 
 impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, game_state: &mut GameState) {
-        ui.popup("Debug", || match &mut self.state {
+        match &mut self.state {
             CreatureDebugState::MainMenu => {
-                if let Some(index) = render_uniform_buttons(
+                if let Some(index) = render_uniform_buttons_with_padding(
                     ui,
                     [
                         "Despawn",
@@ -120,7 +122,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                         .build();
                     width_token.end();
                     ui.separator();
-                    let choice = render_uniform_buttons(
+                    let choice = render_uniform_buttons_with_padding(
                         ui,
                         SavingThrowKind::iter().map(|ability| ability.to_string()),
                         [20.0, 5.0],
@@ -153,7 +155,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                         .build();
                     width_token.end();
                     ui.separator();
-                    let choice = render_uniform_buttons(
+                    let choice = render_uniform_buttons_with_padding(
                         ui,
                         Skill::iter().map(|skill| skill.to_string()),
                         [20.0, 5.0],
@@ -176,9 +178,11 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
             },
 
             CreatureDebugState::PassTime => {
-                if let Some(index) =
-                    render_uniform_buttons(ui, ["New Turn", "Short Rest", "Long Rest"], [20.0, 5.0])
-                {
+                if let Some(index) = render_uniform_buttons_with_padding(
+                    ui,
+                    ["New Turn", "Short Rest", "Long Rest"],
+                    [20.0, 5.0],
+                ) {
                     let passed_time = match index {
                         0 => RechargeRule::Turn,
                         1 => RechargeRule::ShortRest,
@@ -192,7 +196,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
             }
 
             CreatureDebugState::TogglePlayerControl => {
-                if let Some(index) = render_uniform_buttons(
+                if let Some(index) = render_uniform_buttons_with_padding(
                     ui,
                     ["Set Player Controlled", "Set AI Controlled"],
                     [20.0, 5.0],
@@ -270,6 +274,6 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                     ui.close_current_popup();
                 }
             }
-        });
+        }
     }
 }

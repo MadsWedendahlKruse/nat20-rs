@@ -24,7 +24,7 @@ use nat20_rs::{
         game_state::{self, GameState},
     },
     registry,
-    systems::{self, geometry::RaycastOutcomeKind},
+    systems::{self, geometry::RaycastHitKind},
 };
 use strum::IntoEnumIterator;
 
@@ -1079,7 +1079,7 @@ fn get_cursor_entity(game_state: &GameState, camera: &OrbitCamera) -> Option<Ent
     if let Some(ray) = camera.ray_from_cursor() {
         if let Some(raycast) = systems::geometry::raycast(game_state, &ray) {
             match raycast.closest().unwrap().kind {
-                RaycastOutcomeKind::Creature(entity) => Some(entity),
+                RaycastHitKind::Creature(entity) => Some(entity),
                 _ => None,
             }
         } else {

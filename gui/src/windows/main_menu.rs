@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use imgui::{ChildFlags, sys};
+use imgui::{ChildFlags, MouseButton, sys};
 use nat20_rs::{
     components::{
         health::{hit_points::HitPoints, life_state::LifeState},
@@ -10,7 +10,7 @@ use nat20_rs::{
     engine::{game_state::GameState, geometry::WorldGeometry},
     systems::{
         self,
-        geometry::{CreaturePose, RaycastResult},
+        geometry::{CreaturePose, RaycastHitKind, RaycastResult},
     },
 };
 use parry3d::na::Point3;
@@ -22,7 +22,7 @@ use crate::{
             entities::render_if_present,
             utils::{
                 ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
-                render_button_disabled_conditionally, render_uniform_buttons,
+                render_button_disabled_conditionally, render_uniform_buttons_with_padding,
                 render_window_at_cursor,
             },
         },
@@ -32,7 +32,8 @@ use crate::{
         },
     },
     windows::{
-        creature_debug::CreatureDebugWindow, encounter::EncounterWindow, level_up::LevelUpWindow,
+        creature_debug::CreatureDebugWindow, creature_right_click::CreatureRightClickWindow,
+        encounter::EncounterWindow, level_up::LevelUpWindow,
         spawn_predefined::SpawnPredefinedWindow,
     },
 };
@@ -47,7 +48,8 @@ pub enum MainMenuState {
         encounters: Vec<EncounterWindow>,
         level_up: Option<LevelUpWindow>,
         spawn_predefined: Option<SpawnPredefinedWindow>,
-        character_debug: Option<CreatureDebugWindow>,
+        creature_debug: Option<CreatureDebugWindow>,
+        creature_right_click: Option<CreatureRightClickWindow>,
     },
 }
 
@@ -74,7 +76,8 @@ impl MainMenuWindow {
                 encounters: Vec::new(),
                 level_up: None,
                 spawn_predefined: None,
-                character_debug: None,
+                creature_debug: None,
+                creature_right_click: None,
             },
         }
     }
@@ -96,7 +99,8 @@ impl MainMenuWindow {
                 encounters,
                 level_up,
                 spawn_predefined,
-                character_debug,
+                creature_debug,
+                creature_right_click,
             } => {
                 if world_renderer.is_none() {
                     let positions = vec![
@@ -129,6 +133,9 @@ impl MainMenuWindow {
 
                 camera.render_mut_with_context(ui, game_state);
 
+                // Make the raycast result available to the other parts of the UI
+                // If anyone of them want to use a mouse click, e.g. spawning a
+                // creature at the cursor, they should .take() it
                 let mut raycast_result = if ui.io().want_capture_mouse {
                     None
                 } else if let Some(ray_from_cursor) = camera.ray_from_cursor() {
@@ -144,7 +151,7 @@ impl MainMenuWindow {
                         level_up,
                         spawn_predefined,
                         encounters,
-                        character_debug,
+                        creature_debug,
                         &mut raycast_result,
                     );
 
@@ -169,6 +176,29 @@ impl MainMenuWindow {
                 }
                 if let Some(id) = encounter_finished {
                     encounters.retain(|encounter| encounter.id() != &id);
+                }
+
+                // If the raycast result was not taken by anyone, we can fallback
+                // to using it for inspecting entities
+                if let Some(raycast) = &raycast_result {
+                    if let Some(closest) = raycast.closest() {
+                        match &closest.kind {
+                            RaycastHitKind::Creature(entity) => {
+                                if ui.is_mouse_clicked(MouseButton::Right) {
+                                    ui.open_popup("RightClick");
+                                    creature_right_click
+                                        .replace(CreatureRightClickWindow::new(*entity));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                if let Some(creature_right_click) = creature_right_click {
+                    ui.popup("RightClick", || {
+                        creature_right_click.render_mut_with_context(ui, game_state);
+                    });
                 }
             }
         }
@@ -217,7 +247,9 @@ impl MainMenuWindow {
                 });
 
                 if let Some(debug_gui) = debug_window {
-                    debug_gui.render_mut_with_context(ui, game_state);
+                    ui.popup("Debug", || {
+                        debug_gui.render_mut_with_context(ui, game_state);
+                    });
                 }
 
                 ui.separator();
@@ -253,9 +285,11 @@ impl MainMenuWindow {
         raycast_result: &mut Option<RaycastResult>,
     ) {
         ui.popup("Spawn Creature", || {
-            if let Some(index) =
-                render_uniform_buttons(ui, ["New Character", "Predefined Creature"], [20.0, 5.0])
-            {
+            if let Some(index) = render_uniform_buttons_with_padding(
+                ui,
+                ["New Character", "Predefined Creature"],
+                [20.0, 5.0],
+            ) {
                 match index {
                     0 => *level_up_window = Some(LevelUpWindow::new(&game_state.world, None)),
                     // TODO: Don't create the window from scratch every time

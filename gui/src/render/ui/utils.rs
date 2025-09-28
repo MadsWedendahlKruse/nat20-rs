@@ -82,9 +82,23 @@ where
         .fold(0.0, f32::max)
 }
 
+static DEFAULT_PADDING: [f32; 2] = [20.0, 5.0];
+
+pub fn render_uniform_buttons<I, S>(ui: &imgui::Ui, labels: I) -> Option<usize>
+where
+    I: Clone + IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    render_uniform_buttons_with_padding(ui, labels, DEFAULT_PADDING)
+}
+
 /// Renders a vertical list of same-width buttons with centered text.
 /// Returns the index of the clicked button, if any.
-pub fn render_uniform_buttons<I, S>(ui: &imgui::Ui, labels: I, padding: [f32; 2]) -> Option<usize>
+pub fn render_uniform_buttons_with_padding<I, S>(
+    ui: &imgui::Ui,
+    labels: I,
+    padding: [f32; 2],
+) -> Option<usize>
 where
     I: Clone + IntoIterator<Item = S>,
     S: AsRef<str>,
