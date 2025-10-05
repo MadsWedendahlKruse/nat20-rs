@@ -102,23 +102,12 @@ impl WorldGeometry {
             BuildContoursFlags::DEFAULT,
         );
 
+        // TODO: Allow more vertices per polygon?
         let max_vertices_per_polygon = 3;
 
         let poly_navmesh = contours
             .into_polygon_mesh(max_vertices_per_polygon)
             .unwrap();
-
-        // TEMP
-        let snapped_nav_aabb = poly_navmesh.aabb;
-        let dx = snapped_nav_aabb.min.x - aabb.min.x;
-        let dy = snapped_nav_aabb.min.y - aabb.min.y;
-        let dz = snapped_nav_aabb.min.z - aabb.min.z;
-        println!("grid snap delta = ({dx:.6}, {dy:.6}, {dz:.6})");
-        println!(
-            "cell_size = {}, cell_height = {}",
-            poly_navmesh.cell_size, poly_navmesh.cell_height
-        );
-        // ---
 
         let detail_sample_dist = 6.0;
         let detail_sample_max_error = 1.0;
