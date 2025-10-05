@@ -44,7 +44,7 @@ use crate::{
     windows::{
         creature_debug::CreatureDebugWindow, creature_right_click::CreatureRightClickWindow,
         encounter::EncounterWindow, level_up::LevelUpWindow,
-        spawn_predefined::SpawnPredefinedWindow,
+        navigation_debug::NavigationDebugWindow, spawn_predefined::SpawnPredefinedWindow,
     },
 };
 
@@ -62,6 +62,7 @@ pub enum MainMenuState {
         spawn_predefined: Option<SpawnPredefinedWindow>,
         creature_debug: Option<CreatureDebugWindow>,
         creature_right_click: Option<CreatureRightClickWindow>,
+        navigation_debug: NavigationDebugWindow,
     },
 }
 
@@ -71,12 +72,20 @@ pub struct MainMenuWindow {
 
 impl MainMenuWindow {
     pub fn new(gl_context: &Rc<glow::Context>) -> Self {
+        // TODO: I guess we should save/load this from/to a config file
+        let mut initial_config = rerecast::ConfigBuilder::default();
+        // TODO: Add support for non-triangular polygons
+        initial_config.max_vertices_per_polygon = 3;
+
         Self {
             state: MainMenuState::World {
                 auto_scroll_event_log: true,
                 log_level: LogLevel::Info,
                 log_source: 0,
-                game_state: GameState::new(),
+                game_state: GameState::new(
+                    "engine/assets/test_terrain.obj",
+                    &initial_config.clone().build(),
+                ),
                 grid_renderer: GridRenderer::new(
                     gl_context,
                     100, // extent: 20 → −20..+20
@@ -92,6 +101,7 @@ impl MainMenuWindow {
                 spawn_predefined: None,
                 creature_debug: None,
                 creature_right_click: None,
+                navigation_debug: NavigationDebugWindow::new(&initial_config),
             },
         }
     }
@@ -117,9 +127,13 @@ impl MainMenuWindow {
                 spawn_predefined,
                 creature_debug,
                 creature_right_click,
+                navigation_debug,
             } => {
                 grid_renderer.draw(gl_context);
 
+                navigation_debug.render_mut_with_context(ui, (game_state, mesh_cache));
+
+                // TODO: Do something less "hardcoded" with the mesh cache
                 if let Some(mesh) = mesh_cache.get("world") {
                     mesh.draw(
                         gl_context,
@@ -134,44 +148,46 @@ impl MainMenuWindow {
                 }
 
                 if let Some(mesh) = mesh_cache.get("navmesh") {
-                    mesh.draw(
-                        gl_context,
-                        program,
-                        &Matrix4::identity(),
-                        [0.2, 0.8, 0.2, 0.5],
-                        &Wireframe::Overlay {
-                            color: [0.0, 0.5, 0.0, 0.5],
-                            width: 2.0,
-                        },
-                    );
+                    if navigation_debug.render_navmesh {
+                        mesh.draw(
+                            gl_context,
+                            program,
+                            &Matrix4::identity(),
+                            [0.2, 0.8, 0.2, 0.5],
+                            &Wireframe::Overlay {
+                                color: [0.0, 0.5, 0.0, 0.5],
+                                width: 2.0,
+                            },
+                        );
+                    }
                 } else {
                     let mesh =
                         Mesh::from_poly_navmesh(gl_context, &game_state.geometry.poly_navmesh);
                     mesh_cache.insert("navmesh".to_string(), mesh);
                 }
 
-                let start = Vec3::new(3.0, 0.0, -8.0);
-                let end = Vec3::new(0.0, 2.0, 7.0);
-                // TEMP: Pathfinding test
-                let path = game_state
-                    .geometry
-                    .polyanya_mesh
-                    .path(start.xz(), end.xz())
-                    .expect("Pathfinding failed");
-                let path_with_height =
-                    path.path_with_height(start, end, &game_state.geometry.polyanya_mesh);
-                let line_vert_src = include_str!("../render/world/shaders/line.vert");
-                let line_frag_src = include_str!("../render/world/shaders/line.frag");
-                let mut line_renderer = LineRenderer::new(gl_context, line_vert_src, line_frag_src);
-                line_renderer.add_polyline(
-                    path_with_height
-                        .iter()
-                        .map(|p| [p.x, p.y, p.z])
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                    [1.0, 0.2, 0.2],
-                );
-                line_renderer.draw(&gl_context, &Matrix4::identity(), 1.0);
+                // let start = Vec3::new(3.0, 0.0, -8.0);
+                // let end = Vec3::new(0.0, 2.0, 7.0);
+                // // TEMP: Pathfinding test
+                // let path = game_state
+                //     .geometry
+                //     .polyanya_mesh
+                //     .path(start.xz(), end.xz())
+                //     .expect("Pathfinding failed");
+                // let path_with_height =
+                //     path.path_with_height(start, end, &game_state.geometry.polyanya_mesh);
+                // let line_vert_src = include_str!("../render/world/shaders/line.vert");
+                // let line_frag_src = include_str!("../render/world/shaders/line.frag");
+                // let mut line_renderer = LineRenderer::new(gl_context, line_vert_src, line_frag_src);
+                // line_renderer.add_polyline(
+                //     path_with_height
+                //         .iter()
+                //         .map(|p| [p.x, p.y, p.z])
+                //         .collect::<Vec<_>>()
+                //         .as_slice(),
+                //     [1.0, 0.2, 0.2],
+                // );
+                // line_renderer.draw(&gl_context, &Matrix4::identity(), 1.0);
 
                 for (entity, pose) in game_state.world.query::<&CreaturePose>().iter() {
                     systems::geometry::get_shape(&game_state.world, entity).map(|shape| {

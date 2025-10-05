@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     fs::File,
     io::BufReader,
+    path::Path,
     sync::Arc,
 };
 
@@ -44,11 +45,9 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new() -> Self {
-        let obj: Obj = obj::load_obj(BufReader::new(
-            File::open("engine/assets/test_terrain.obj").unwrap(),
-        ))
-        .expect("Failed to load test geometry");
+    pub fn new<P: AsRef<Path>>(world_geometry_path: P, navmesh_config: &rerecast::Config) -> Self {
+        let obj: Obj = obj::load_obj(BufReader::new(File::open(world_geometry_path).unwrap()))
+            .expect("Failed to load world geometry");
 
         Self {
             world: World::new(),
@@ -58,7 +57,7 @@ impl GameState {
             event_log: EventLog::new(),
             pending_events: EventQueue::new(),
             event_listeners: HashMap::new(),
-            geometry: WorldGeometry::from(obj),
+            geometry: WorldGeometry::from_obj(obj, navmesh_config),
         }
     }
 

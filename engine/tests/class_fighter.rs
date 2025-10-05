@@ -27,7 +27,7 @@ mod tests {
 
     #[test]
     fn fighter_action_surge() {
-        let mut game_state = GameState::new();
+        let mut game_state = fixtures::engine::test_game_state();
         let fighter = fixtures::creatures::heroes::fighter(&mut game_state.world).id();
 
         // Check that the fighter has the Action Surge action
@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn fighter_second_wind() {
-        let mut game_state = GameState::new();
+        let mut game_state = fixtures::engine::test_game_state();
         let fighter = fixtures::creatures::heroes::fighter(&mut game_state.world).id();
 
         // Check that the fighter has the Second Wind action
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn fighter_extra_attack() {
-        let mut game_state = GameState::new();
+        let mut game_state = fixtures::engine::test_game_state();
         let fighter = fixtures::creatures::heroes::fighter(&mut game_state.world).id();
 
         // Check that the fighter has the Extra Attack effect

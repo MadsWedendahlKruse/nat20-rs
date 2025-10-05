@@ -3,4 +3,5 @@ pub mod creature_right_click;
 pub mod encounter;
 pub mod level_up;
 pub mod main_menu;
+pub mod navigation_debug;
 pub mod spawn_predefined;

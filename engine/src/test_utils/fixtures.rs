@@ -418,3 +418,16 @@ pub mod creatures {
         }
     }
 }
+
+pub mod engine {
+    use rerecast::ConfigBuilder;
+
+    use crate::engine::game_state::GameState;
+
+    pub fn test_game_state() -> GameState {
+        GameState::new(
+            "engine/assets/test_terrain.obj",
+            &ConfigBuilder::default().build(),
+        )
+    }
+}
