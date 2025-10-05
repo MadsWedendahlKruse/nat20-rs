@@ -4,7 +4,10 @@ use glow::HasContext;
 pub struct BasicProgram {
     pub program: glow::Program,
     pub loc_model: Option<glow::UniformLocation>,
+    pub loc_color: Option<glow::UniformLocation>,
+    pub loc_mode: Option<glow::UniformLocation>, // 0=lit, 1=flat
 }
+
 impl BasicProgram {
     pub fn new(gl: &glow::Context, vert_src: &str, frag_src: &str) -> Self {
         unsafe {
@@ -16,6 +19,7 @@ impl BasicProgram {
                 "VS: {}",
                 gl.get_shader_info_log(vs)
             );
+
             let fs = gl.create_shader(glow::FRAGMENT_SHADER).unwrap();
             gl.shader_source(fs, frag_src);
             gl.compile_shader(fs);
@@ -24,6 +28,7 @@ impl BasicProgram {
                 "FS: {}",
                 gl.get_shader_info_log(fs)
             );
+
             let prog = gl.create_program().unwrap();
             gl.attach_shader(prog, vs);
             gl.attach_shader(prog, fs);
@@ -36,17 +41,25 @@ impl BasicProgram {
             gl.delete_shader(vs);
             gl.delete_shader(fs);
 
-            // (Optional) explicitly bind the "Frame" block to 0 if not using layout(binding=0)
-            // let block = gl.get_uniform_block_index(prog, "Frame");
-            // gl.uniform_block_binding(prog, block, 0);
+            // Make sure the uniform block "Frame" is bound to index 0 (matches binding=0 in shaders)
+            let block = gl
+                .get_uniform_block_index(prog, "Frame")
+                .expect("no 'Frame' uniform block");
+            gl.uniform_block_binding(prog, block, 0);
 
             let loc_model = gl.get_uniform_location(prog, "u_model");
+            let loc_color = gl.get_uniform_location(prog, "u_color");
+            let loc_mode = gl.get_uniform_location(prog, "u_mode");
+
             Self {
                 program: prog,
                 loc_model,
+                loc_color,
+                loc_mode,
             }
         }
     }
+
     pub fn destroy(&self, gl: &glow::Context) {
         unsafe { gl.delete_program(self.program) }
     }

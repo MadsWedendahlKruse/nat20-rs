@@ -105,15 +105,13 @@ pub fn raycast_with_toi(
 
     let mut outcomes = vec![];
 
-    if let Some(geometry) = &game_state.geometry {
-        let mesh = &geometry.mesh;
-        if let Some(toi) = mesh.cast_local_ray(ray, max_time_of_impact, true) {
-            outcomes.push(RaycastHit {
-                kind: RaycastHitKind::World,
-                toi,
-                poi: ray.origin + ray.dir * toi,
-            });
-        }
+    let mesh = &game_state.geometry.trimesh;
+    if let Some(toi) = mesh.cast_local_ray(ray, max_time_of_impact, true) {
+        outcomes.push(RaycastHit {
+            kind: RaycastHitKind::World,
+            toi,
+            poi: ray.origin + ray.dir * toi,
+        });
     }
 
     let entity_result = world

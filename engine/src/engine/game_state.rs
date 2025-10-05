@@ -1,9 +1,12 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    fs::File,
+    io::BufReader,
     sync::Arc,
 };
 
 use hecs::{Entity, World};
+use obj::Obj;
 
 use crate::{
     components::{
@@ -27,7 +30,7 @@ use crate::{
 // TODO: WorldState instead?
 pub struct GameState {
     pub world: World,
-    pub geometry: Option<WorldGeometry>,
+    pub geometry: WorldGeometry,
 
     pub encounters: HashMap<EncounterId, Encounter>,
     pub in_combat: HashMap<Entity, EncounterId>,
@@ -42,6 +45,11 @@ pub struct GameState {
 
 impl GameState {
     pub fn new() -> Self {
+        let obj: Obj = obj::load_obj(BufReader::new(
+            File::open("engine/assets/test_terrain.obj").unwrap(),
+        ))
+        .expect("Failed to load test geometry");
+
         Self {
             world: World::new(),
             encounters: HashMap::new(),
@@ -50,7 +58,7 @@ impl GameState {
             event_log: EventLog::new(),
             pending_events: EventQueue::new(),
             event_listeners: HashMap::new(),
-            geometry: None,
+            geometry: WorldGeometry::from(obj),
         }
     }
 

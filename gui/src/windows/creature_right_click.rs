@@ -31,6 +31,7 @@ impl CreatureRightClickWindow {
         }
     }
 }
+
 impl ImguiRenderableMutWithContext<&mut GameState> for CreatureRightClickWindow {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, game_state: &mut GameState) {
         match &mut self.state {

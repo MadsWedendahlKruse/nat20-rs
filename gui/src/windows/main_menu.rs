@@ -1,5 +1,9 @@
-use std::rc::Rc;
+use std::{
+    collections::{BTreeMap, HashMap},
+    rc::Rc,
+};
 
+use glam::{Vec3, Vec3Swizzles};
 use imgui::{ChildFlags, MouseButton, WindowFlags, sys};
 use nat20_rs::{
     components::{
@@ -13,7 +17,7 @@ use nat20_rs::{
         geometry::{CreaturePose, RaycastHitKind, RaycastResult},
     },
 };
-use parry3d::na::Point3;
+use parry3d::na::{self, Matrix4, Point3};
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -28,8 +32,13 @@ use crate::{
             },
         },
         world::{
-            camera::OrbitCamera, frame_uniforms::FrameUniforms, grid::GridRenderer,
-            program::BasicProgram, shapes::CapsuleCache, world_renderer::WorldRenderer,
+            camera::OrbitCamera,
+            frame_uniforms::FrameUniforms,
+            grid::GridRenderer,
+            line::LineRenderer,
+            mesh::{self, Mesh, Wireframe},
+            program::BasicProgram,
+            shapes::{self, CapsuleCache},
         },
     },
     windows::{
@@ -43,8 +52,8 @@ pub enum MainMenuState {
     World {
         game_state: GameState,
         grid_renderer: GridRenderer,
-        world_renderer: Option<WorldRenderer>,
-        capsule_cache: CapsuleCache,
+        // capsule_cache: CapsuleCache,
+        mesh_cache: BTreeMap<String, Mesh>,
         auto_scroll_event_log: bool,
         log_level: LogLevel,
         log_source: usize,
@@ -76,8 +85,8 @@ impl MainMenuWindow {
                     include_str!("../render/world/shaders/grid.vert"),
                     include_str!("../render/world/shaders/grid.frag"),
                 ),
-                world_renderer: None,
-                capsule_cache: CapsuleCache::new(8, 16),
+                // capsule_cache: CapsuleCache::new(8, 16),
+                mesh_cache: BTreeMap::new(),
                 encounters: Vec::new(),
                 level_up: None,
                 spawn_predefined: None,
@@ -97,9 +106,9 @@ impl MainMenuWindow {
         match &mut self.state {
             MainMenuState::World {
                 game_state,
-                world_renderer,
                 grid_renderer,
-                capsule_cache,
+                // capsule_cache,
+                mesh_cache,
                 auto_scroll_event_log,
                 log_level,
                 log_source,
@@ -109,30 +118,82 @@ impl MainMenuWindow {
                 creature_debug,
                 creature_right_click,
             } => {
-                if world_renderer.is_none() {
-                    let positions = vec![
-                        Point3::new(-5.0, 0.0, -5.0),
-                        Point3::new(5.0, 0.0, -5.0),
-                        Point3::new(5.0, 0.0, 5.0),
-                        Point3::new(-5.0, 0.0, 5.0),
-                    ];
-                    let indices = vec![[0u32, 1, 2], [0, 2, 3]];
-                    game_state.geometry = Some(WorldGeometry::new(positions, indices));
+                grid_renderer.draw(gl_context);
 
-                    world_renderer.replace(WorldRenderer::new(
+                if let Some(mesh) = mesh_cache.get("world") {
+                    mesh.draw(
                         gl_context,
-                        &game_state.geometry.as_ref().unwrap().mesh,
-                    ));
+                        program,
+                        &Matrix4::identity(),
+                        [0.75, 0.75, 0.75, 1.0],
+                        &Wireframe::None,
+                    );
+                } else {
+                    let mesh = Mesh::from_parry_trimesh(gl_context, &game_state.geometry.trimesh);
+                    mesh_cache.insert("world".to_string(), mesh);
                 }
 
-                grid_renderer.draw(gl_context);
-                world_renderer.as_ref().unwrap().draw(gl_context, program);
+                if let Some(mesh) = mesh_cache.get("navmesh") {
+                    mesh.draw(
+                        gl_context,
+                        program,
+                        &Matrix4::identity(),
+                        [0.2, 0.8, 0.2, 0.5],
+                        &Wireframe::Overlay {
+                            color: [0.0, 0.5, 0.0, 0.5],
+                            width: 2.0,
+                        },
+                    );
+                } else {
+                    let mesh =
+                        Mesh::from_poly_navmesh(gl_context, &game_state.geometry.poly_navmesh);
+                    mesh_cache.insert("navmesh".to_string(), mesh);
+                }
+
+                let start = Vec3::new(3.0, 0.0, -8.0);
+                let end = Vec3::new(0.0, 2.0, 7.0);
+                // TEMP: Pathfinding test
+                let path = game_state
+                    .geometry
+                    .polyanya_mesh
+                    .path(start.xz(), end.xz())
+                    .expect("Pathfinding failed");
+                let path_with_height =
+                    path.path_with_height(start, end, &game_state.geometry.polyanya_mesh);
+                let line_vert_src = include_str!("../render/world/shaders/line.vert");
+                let line_frag_src = include_str!("../render/world/shaders/line.frag");
+                let mut line_renderer = LineRenderer::new(gl_context, line_vert_src, line_frag_src);
+                line_renderer.add_polyline(
+                    path_with_height
+                        .iter()
+                        .map(|p| [p.x, p.y, p.z])
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                    [1.0, 0.2, 0.2],
+                );
+                line_renderer.draw(&gl_context, &Matrix4::identity(), 1.0);
 
                 for (entity, pose) in game_state.world.query::<&CreaturePose>().iter() {
                     systems::geometry::get_shape(&game_state.world, entity).map(|shape| {
-                        capsule_cache
-                            .get_or_create(gl_context, shape.radius, shape.half_height())
-                            .draw(gl_context, program, pose.to_homogeneous())
+                        let key = format!("{}-{}", shape.radius, shape.half_height());
+                        if let Some(mesh) = mesh_cache.get(&key) {
+                            mesh.draw(
+                                gl_context,
+                                program,
+                                &pose.to_homogeneous(),
+                                [0.8, 0.8, 0.8, 1.0],
+                                &Wireframe::None,
+                            );
+                        } else {
+                            let mesh = shapes::build_capsule_mesh(
+                                gl_context,
+                                8,
+                                16,
+                                shape.radius,
+                                shape.half_height(),
+                            );
+                            mesh_cache.insert(key, mesh);
+                        }
                     });
                 }
 

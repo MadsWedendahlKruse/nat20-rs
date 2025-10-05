@@ -20,6 +20,8 @@ fn main() {
 
     unsafe {
         gl.enable(glow::DEPTH_TEST);
+        gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+        gl.enable(glow::BLEND);
     }
 
     let mut ig_renderer = imgui_glow_renderer::AutoRenderer::new(gl, &mut imgui_context)
