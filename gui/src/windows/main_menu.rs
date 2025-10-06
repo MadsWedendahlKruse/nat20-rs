@@ -41,6 +41,10 @@ use crate::{
             shapes::{self, CapsuleCache},
         },
     },
+    state::{
+        self,
+        gui_state::{self, GuiState},
+    },
     windows::{
         creature_debug::CreatureDebugWindow, creature_right_click::CreatureRightClickWindow,
         encounter::EncounterWindow, level_up::LevelUpWindow,
@@ -52,8 +56,6 @@ pub enum MainMenuState {
     World {
         game_state: GameState,
         grid_renderer: GridRenderer,
-        // capsule_cache: CapsuleCache,
-        mesh_cache: BTreeMap<String, Mesh>,
         auto_scroll_event_log: bool,
         log_level: LogLevel,
         log_source: usize,
@@ -71,9 +73,11 @@ pub struct MainMenuWindow {
 }
 
 impl MainMenuWindow {
-    pub fn new(gl_context: &Rc<glow::Context>) -> Self {
+    pub fn new(gl_context: &glow::Context) -> Self {
         // TODO: I guess we should save/load this from/to a config file
         let mut initial_config = rerecast::ConfigBuilder::default();
+        initial_config.cell_size_fraction = 8.0;
+        initial_config.min_region_size = 4;
         // TODO: Add support for non-triangular polygons
         initial_config.max_vertices_per_polygon = 3;
 
@@ -94,8 +98,6 @@ impl MainMenuWindow {
                     include_str!("../render/world/shaders/grid.vert"),
                     include_str!("../render/world/shaders/grid.frag"),
                 ),
-                // capsule_cache: CapsuleCache::new(8, 16),
-                mesh_cache: BTreeMap::new(),
                 encounters: Vec::new(),
                 level_up: None,
                 spawn_predefined: None,
@@ -106,19 +108,11 @@ impl MainMenuWindow {
         }
     }
 
-    pub fn render(
-        &mut self,
-        ui: &imgui::Ui,
-        gl_context: &Rc<glow::Context>,
-        program: &BasicProgram,
-        camera: &mut OrbitCamera,
-    ) {
+    pub fn render(&mut self, ui: &mut imgui::Ui, gui_state: &mut GuiState) {
         match &mut self.state {
             MainMenuState::World {
                 game_state,
                 grid_renderer,
-                // capsule_cache,
-                mesh_cache,
                 auto_scroll_event_log,
                 log_level,
                 log_source,
@@ -129,9 +123,34 @@ impl MainMenuWindow {
                 creature_right_click,
                 navigation_debug,
             } => {
+                let gl_context = gui_state.ig_renderer.gl_context();
+                let program = &gui_state.program;
+                let camera = &mut gui_state.camera;
+                let mesh_cache = &mut gui_state.mesh_cache;
+
                 grid_renderer.draw(gl_context);
 
-                navigation_debug.render_mut_with_context(ui, (game_state, mesh_cache));
+                camera.render_mut_with_context(
+                    ui,
+                    (
+                        game_state,
+                        gui_state
+                            .settings
+                            .get_bool(state::parameters::RENDER_CAMERA_DEBUG),
+                    ),
+                );
+
+                navigation_debug.render_mut_with_context(
+                    ui,
+                    (
+                        gui_state.ig_renderer.gl_context(),
+                        game_state,
+                        mesh_cache,
+                        gui_state
+                            .settings
+                            .get_bool(state::parameters::RENDER_NAVIGATION_DEBUG),
+                    ),
+                );
 
                 // TODO: Do something less "hardcoded" with the mesh cache
                 if let Some(mesh) = mesh_cache.get("world") {
@@ -166,29 +185,6 @@ impl MainMenuWindow {
                     mesh_cache.insert("navmesh".to_string(), mesh);
                 }
 
-                // let start = Vec3::new(3.0, 0.0, -8.0);
-                // let end = Vec3::new(0.0, 2.0, 7.0);
-                // // TEMP: Pathfinding test
-                // let path = game_state
-                //     .geometry
-                //     .polyanya_mesh
-                //     .path(start.xz(), end.xz())
-                //     .expect("Pathfinding failed");
-                // let path_with_height =
-                //     path.path_with_height(start, end, &game_state.geometry.polyanya_mesh);
-                // let line_vert_src = include_str!("../render/world/shaders/line.vert");
-                // let line_frag_src = include_str!("../render/world/shaders/line.frag");
-                // let mut line_renderer = LineRenderer::new(gl_context, line_vert_src, line_frag_src);
-                // line_renderer.add_polyline(
-                //     path_with_height
-                //         .iter()
-                //         .map(|p| [p.x, p.y, p.z])
-                //         .collect::<Vec<_>>()
-                //         .as_slice(),
-                //     [1.0, 0.2, 0.2],
-                // );
-                // line_renderer.draw(&gl_context, &Matrix4::identity(), 1.0);
-
                 for (entity, pose) in game_state.world.query::<&CreaturePose>().iter() {
                     systems::geometry::get_shape(&game_state.world, entity).map(|shape| {
                         let key = format!("{}-{}", shape.radius, shape.half_height());
@@ -214,8 +210,6 @@ impl MainMenuWindow {
                 }
 
                 Self::render_creature_labels(ui, game_state, camera);
-
-                camera.render_mut_with_context(ui, game_state);
 
                 // Make the raycast result available to the other parts of the UI
                 // If anyone of them want to use a mouse click, e.g. spawning a

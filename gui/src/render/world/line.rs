@@ -186,6 +186,18 @@ impl LineRenderer {
         self.push_range(LineMode::LineLoop, first, points.len() as i32);
     }
 
+    pub fn add_circle(&mut self, center: [f32; 3], radius: f32, col: [f32; 3]) {
+        let segments = 32;
+        let mut points = Vec::with_capacity(segments);
+        for i in 0..segments {
+            let theta = (i as f32) / (segments as f32) * std::f32::consts::TAU;
+            let x = center[0] + radius * theta.cos();
+            let z = center[2] + radius * theta.sin();
+            points.push([x, center[1], z]);
+        }
+        self.add_loop(&points, col);
+    }
+
     pub fn add_ray(&mut self, origin: [f32; 3], dir: [f32; 3], t: f32, col: [f32; 3]) {
         let b = [
             origin[0] + dir[0] * t,

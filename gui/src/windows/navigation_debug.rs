@@ -1,50 +1,147 @@
 use std::{collections::BTreeMap, sync::LazyLock};
 
+use glam::{Vec3, Vec3Swizzles};
+use imgui::TreeNodeFlags;
 use nat20_rs::engine::{game_state::GameState, geometry::WorldGeometry};
+use parry3d::na::Matrix4;
 use rerecast::{Config, ConfigBuilder};
 
-use crate::render::{
-    ui::utils::{ImguiRenderableMut, ImguiRenderableMutWithContext},
-    world::mesh::Mesh,
+use crate::{
+    render::{
+        ui::utils::{ImguiRenderableMut, ImguiRenderableMutWithContext},
+        world::{line::LineRenderer, mesh::Mesh},
+    },
+    state::gui_state::GuiState,
 };
 
 pub struct NavigationDebugWindow {
     pub render_navmesh: bool,
+    // TODO: This could be useful later to show what changed
+    pub initial_config: ConfigBuilder,
     pub navmesh_config: ConfigBuilder,
+    pub path_start: [f32; 3],
+    pub path_end: [f32; 3],
+    pub path: Option<Vec<[f32; 3]>>,
+    pub render_start: bool,
+    pub render_end: bool,
+    pub render_path: bool,
 }
 
 impl NavigationDebugWindow {
     pub fn new(initial_config: &ConfigBuilder) -> Self {
         Self {
             render_navmesh: true,
+            initial_config: initial_config.clone(),
             navmesh_config: initial_config.clone(),
+            path_start: [3.0, 0.0, -8.0],
+            path_end: [0.0, 2.0, 7.0],
+            path: None,
+            render_start: true,
+            render_end: true,
+            render_path: true,
         }
     }
 }
 
-impl ImguiRenderableMutWithContext<(&mut GameState, &mut BTreeMap<String, Mesh>)>
-    for NavigationDebugWindow
+impl
+    ImguiRenderableMutWithContext<(
+        &glow::Context,
+        &mut GameState,
+        &mut BTreeMap<String, Mesh>,
+        &mut bool,
+    )> for NavigationDebugWindow
 {
     fn render_mut_with_context(
         &mut self,
         ui: &imgui::Ui,
-        context: (&mut GameState, &mut BTreeMap<String, Mesh>),
+        (gl_context, game_state, mesh_cache, opened): (
+            &glow::Context,
+            &mut GameState,
+            &mut BTreeMap<String, Mesh>,
+            &mut bool,
+        ),
     ) {
-        let (game_state, mesh_cache) = context;
-        ui.window("Navigation Debug")
-            .always_auto_resize(true)
-            .build(|| {
-                ui.checkbox("Render Navmesh", &mut self.render_navmesh);
+        if !*opened {
+            return;
+        }
 
-                if ui.button("Rebuild Navmesh") {
-                    let config = self.navmesh_config.clone().build();
-                    game_state.geometry.rebuild_navmesh(&config);
-                    mesh_cache.remove("navmesh");
+        ui.window("Navigation Debug")
+            .size([0.0, 500.0], imgui::Condition::Always)
+            .opened(opened)
+            .build(|| {
+                if ui.collapsing_header("Navmesh", TreeNodeFlags::DEFAULT_OPEN) {
+                    ui.checkbox("Render Navmesh", &mut self.render_navmesh);
+
+                    if ui.button("Rebuild Navmesh") {
+                        let config = self.navmesh_config.clone().build();
+                        game_state.geometry.rebuild_navmesh(&config);
+                        mesh_cache.remove("navmesh");
+                    }
+
+                    ui.separator_with_text("Configuration");
+                    self.navmesh_config.render_mut(ui);
                 }
 
-                ui.separator_with_text("Parameters");
+                if ui.collapsing_header("Pathfinding", TreeNodeFlags::DEFAULT_OPEN) {
+                    ui.checkbox("Render Start", &mut self.render_start);
+                    ui.checkbox("Render End", &mut self.render_end);
 
-                self.navmesh_config.render_mut(ui);
+                    let width_token = ui.push_item_width(200.0);
+                    ui.input_float3("Start", &mut self.path_start).build();
+                    ui.input_float3("End", &mut self.path_end).build();
+                    width_token.end();
+
+                    let line_vert_src = include_str!("../render/world/shaders/line.vert");
+                    let line_frag_src = include_str!("../render/world/shaders/line.frag");
+                    let mut line_renderer =
+                        LineRenderer::new(gl_context, line_vert_src, line_frag_src);
+
+                    // TODO: These are impossible to see lol
+                    if self.render_start {
+                        line_renderer.add_circle(self.path_start, 0.2, [0.2, 1.0, 0.2]);
+                    }
+                    if self.render_end {
+                        line_renderer.add_circle(self.path_end, 0.2, [1.0, 0.2, 0.2]);
+                    }
+
+                    let start = Vec3::from(self.path_start);
+                    let end = Vec3::from(self.path_end);
+
+                    ui.checkbox("Render Path", &mut self.render_path);
+
+                    if ui.button("Find Path") {
+                        if let Some(path) =
+                            game_state.geometry.polyanya_mesh.path(start.xz(), end.xz())
+                        {
+                            // Path found with pathfinding doesn't include start point
+                            let mut final_path = vec![self.path_start];
+                            let path_with_height: Vec<_> = path
+                                .path_with_height(start, end, &game_state.geometry.polyanya_mesh)
+                                .iter()
+                                .map(|p| [p.x, p.y, p.z])
+                                .collect();
+                            final_path.extend(path_with_height);
+
+                            self.path = Some(final_path);
+                        } else {
+                            self.path = None;
+                        }
+                    }
+
+                    if self.render_path {
+                        if let Some(path) = &self.path {
+                            line_renderer.add_polyline(&path, [1.0, 0.2, 0.2]);
+
+                            if ui.collapsing_header("Path Points", TreeNodeFlags::empty()) {
+                                ui.text(format!("{:#?}", path));
+                            }
+                        } else {
+                            ui.text("No path found");
+                        }
+                    }
+
+                    line_renderer.draw(gl_context, &Matrix4::identity(), 1.0);
+                }
             });
     }
 }
