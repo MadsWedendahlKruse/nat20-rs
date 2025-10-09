@@ -150,10 +150,28 @@ impl GuiSettings {
         self.settings.get_mut(key)
     }
 
-    pub fn get_bool(&mut self, key: &str) -> &mut bool {
+    pub fn get_mut_bool(&mut self, key: &str) -> &mut bool {
         match self.settings.entry(key.to_string()) {
             std::collections::btree_map::Entry::Occupied(o) => match o.into_mut() {
                 Setting::Bool(b) => b,
+                _ => panic!("Setting {} is not a bool", key),
+            },
+            _ => panic!("Setting {} not found", key),
+        }
+    }
+
+    pub fn get_bool(&self, key: &str) -> &bool {
+        match self.settings.get(key) {
+            Some(Setting::Bool(b)) => b,
+            Some(_) => panic!("Setting {} is not a bool", key),
+            None => panic!("Setting {} not found", key),
+        }
+    }
+
+    pub fn set_bool(&mut self, key: &str, value: bool) {
+        match self.settings.entry(key.to_string()) {
+            std::collections::btree_map::Entry::Occupied(mut o) => match o.get_mut() {
+                Setting::Bool(b) => *b = value,
                 _ => panic!("Setting {} is not a bool", key),
             },
             _ => panic!("Setting {} not found", key),
@@ -210,6 +228,10 @@ impl Default for GuiSettings {
             ),
             (
                 state::parameters::RENDER_NAVIGATION_DEBUG.to_string(),
+                Setting::Bool(false),
+            ),
+            (
+                state::parameters::RENDER_NAVIGATION_NAVMESH.to_string(),
                 Setting::Bool(false),
             ),
             (

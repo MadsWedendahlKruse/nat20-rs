@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use glow::HasContext;
 use imgui_glow_renderer::AutoRenderer;
-use parry3d::na::Vector3;
+use nat20_rs::systems::geometry::RaycastResult;
+use parry3d::{na::Vector3, query::Ray};
 use winit::window::Window;
 
 use crate::{
@@ -21,7 +22,21 @@ pub struct GuiState {
     pub program: BasicProgram,
     pub camera: OrbitCamera,
     pub settings: GuiSettings,
+
+    // TODO: Everything involving the mesh cache seems like a mess right now.
     pub mesh_cache: BTreeMap<String, Mesh>,
+
+    /// The result of a raycast from the cursor into the 3D world.
+    /// This is updated every frame, and can be used by various UI components
+    /// to determine what the cursor is pointing at.
+    ///
+    /// To avoid multiple UI components using the same raycast result, this is
+    /// an `Option`. UI components that use it should `.take()` it, so that other
+    /// components know it has already been used.
+    ///
+    /// Note that this will also be `None` if the cursor didn't hit anything in
+    /// the 3D world.
+    pub cursor_ray_result: Option<RaycastResult>,
 }
 
 impl GuiState {
@@ -48,6 +63,7 @@ impl GuiState {
             camera: OrbitCamera::new(),
             settings: GuiSettings::default(),
             mesh_cache: BTreeMap::new(),
+            cursor_ray_result: None,
         }
     }
 

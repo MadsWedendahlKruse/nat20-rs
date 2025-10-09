@@ -22,6 +22,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     render::{
+        common::utils::RenderableMutWithContext,
         ui::{
             engine::LogLevel,
             entities::render_if_present,
@@ -108,7 +109,7 @@ impl MainMenuWindow {
         }
     }
 
-    pub fn render(&mut self, ui: &mut imgui::Ui, gui_state: &mut GuiState) {
+    pub fn render(&mut self, ui: &imgui::Ui, gui_state: &mut GuiState) {
         match &mut self.state {
             MainMenuState::World {
                 game_state,
@@ -123,35 +124,45 @@ impl MainMenuWindow {
                 creature_right_click,
                 navigation_debug,
             } => {
+                // TODO: Kind of a mess with all these mutable borrows
+                // Borrowing the fields from the GuiState struct was supposed to
+                // make the code a bit more readable, but really it just makes
+                // it harder to follow with the seemingly arbitrary order of
+                // the borrows
+                navigation_debug.render_mut_with_context(ui, gui_state, game_state);
+
                 let gl_context = gui_state.ig_renderer.gl_context();
                 let program = &gui_state.program;
-                let camera = &mut gui_state.camera;
-                let mesh_cache = &mut gui_state.mesh_cache;
+
+                // Render mut before borrowing camera
+                gui_state.camera.render_mut_with_context(
+                    ui,
+                    (
+                        game_state,
+                        gui_state
+                            .settings
+                            .get_mut_bool(state::parameters::RENDER_CAMERA_DEBUG),
+                    ),
+                );
+
+                let camera = &gui_state.camera;
+
+                // TODO: Find some other place to set this value
+
+                // Make the raycast result available to the other parts of the UI
+                // If anyone of them want to use a mouse click, e.g. spawning a
+                // creature at the cursor, they should .take() it
+                gui_state.cursor_ray_result = if ui.io().want_capture_mouse {
+                    None
+                } else if let Some(ray_from_cursor) = camera.ray_from_cursor() {
+                    systems::geometry::raycast(game_state, &ray_from_cursor)
+                } else {
+                    None
+                };
 
                 grid_renderer.draw(gl_context);
 
-                camera.render_mut_with_context(
-                    ui,
-                    (
-                        game_state,
-                        gui_state
-                            .settings
-                            .get_bool(state::parameters::RENDER_CAMERA_DEBUG),
-                    ),
-                );
-
-                navigation_debug.render_mut_with_context(
-                    ui,
-                    (
-                        gui_state.ig_renderer.gl_context(),
-                        game_state,
-                        mesh_cache,
-                        gui_state
-                            .settings
-                            .get_bool(state::parameters::RENDER_NAVIGATION_DEBUG),
-                    ),
-                );
-
+                let mesh_cache = &mut gui_state.mesh_cache;
                 // TODO: Do something less "hardcoded" with the mesh cache
                 if let Some(mesh) = mesh_cache.get("world") {
                     mesh.draw(
@@ -167,7 +178,10 @@ impl MainMenuWindow {
                 }
 
                 if let Some(mesh) = mesh_cache.get("navmesh") {
-                    if navigation_debug.render_navmesh {
+                    if *gui_state
+                        .settings
+                        .get_mut_bool(state::parameters::RENDER_NAVIGATION_NAVMESH)
+                    {
                         mesh.draw(
                             gl_context,
                             program,
@@ -211,17 +225,6 @@ impl MainMenuWindow {
 
                 Self::render_creature_labels(ui, game_state, camera);
 
-                // Make the raycast result available to the other parts of the UI
-                // If anyone of them want to use a mouse click, e.g. spawning a
-                // creature at the cursor, they should .take() it
-                let mut raycast_result = if ui.io().want_capture_mouse {
-                    None
-                } else if let Some(ray_from_cursor) = camera.ray_from_cursor() {
-                    systems::geometry::raycast(game_state, &ray_from_cursor)
-                } else {
-                    None
-                };
-
                 ui.window("World").always_auto_resize(true).build(|| {
                     Self::render_character_menu(
                         ui,
@@ -230,7 +233,7 @@ impl MainMenuWindow {
                         spawn_predefined,
                         encounters,
                         creature_debug,
-                        &mut raycast_result,
+                        &mut gui_state.cursor_ray_result,
                         log_source,
                     );
 
@@ -266,7 +269,7 @@ impl MainMenuWindow {
 
                 // If the raycast result was not taken by anyone, we can fallback
                 // to using it for inspecting entities
-                if let Some(raycast) = &raycast_result {
+                if let Some(raycast) = &gui_state.cursor_ray_result {
                     if let Some(closest) = raycast.closest() {
                         match &closest.kind {
                             RaycastHitKind::Creature(entity) => {

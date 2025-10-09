@@ -1,9 +1,8 @@
-use glam::{UVec3, Vec3A};
+use glam::{UVec3, Vec2, Vec3A};
 use obj::Obj;
 use parry3d::na::Point3;
 use rerecast::{
-    AreaType, BuildContoursFlags, Config, ConfigBuilder, DetailNavmesh, HeightfieldBuilder,
-    PolygonNavmesh,
+    AreaType, BuildContoursFlags, Config, DetailNavmesh, HeightfieldBuilder, PolygonNavmesh,
 };
 
 pub struct WorldGeometry {
@@ -57,6 +56,27 @@ impl WorldGeometry {
         self.poly_navmesh = poly_navmesh;
         self.detail_navmesh = detail_navmesh;
         self.polyanya_mesh = polyanya_mesh;
+    }
+
+    pub fn path(&self, start: Point3<f32>, end: Point3<f32>) -> Option<Vec<Point3<f32>>> {
+        // Path found with pathfinding doesn't include start, so add it manually
+        let mut final_path = vec![start];
+
+        self.polyanya_mesh
+            .path(Vec2::new(start.x, start.z), Vec2::new(end.x, end.z))
+            .map(|path| {
+                final_path.extend(
+                    path.path_with_height(
+                        [start.x, start.y, start.z].into(),
+                        [end.x, end.y, end.z].into(),
+                        &self.polyanya_mesh,
+                    )
+                    .into_iter()
+                    .map(|p| Point3::new(p.x, p.y, p.z)),
+                );
+
+                final_path
+            })
     }
 }
 

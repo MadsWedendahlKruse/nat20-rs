@@ -8,14 +8,14 @@ use rerecast::{Config, ConfigBuilder};
 
 use crate::{
     render::{
+        common::utils::{RenderableMut, RenderableMutWithContext},
         ui::utils::{ImguiRenderableMut, ImguiRenderableMutWithContext},
         world::{line::LineRenderer, mesh::Mesh},
     },
-    state::gui_state::GuiState,
+    state::{self, gui_state::GuiState, settings},
 };
 
 pub struct NavigationDebugWindow {
-    pub render_navmesh: bool,
     // TODO: This could be useful later to show what changed
     pub initial_config: ConfigBuilder,
     pub navmesh_config: ConfigBuilder,
@@ -30,7 +30,6 @@ pub struct NavigationDebugWindow {
 impl NavigationDebugWindow {
     pub fn new(initial_config: &ConfigBuilder) -> Self {
         Self {
-            render_navmesh: true,
             initial_config: initial_config.clone(),
             navmesh_config: initial_config.clone(),
             path_start: [3.0, 0.0, -8.0],
@@ -43,39 +42,42 @@ impl NavigationDebugWindow {
     }
 }
 
-impl
-    ImguiRenderableMutWithContext<(
-        &glow::Context,
-        &mut GameState,
-        &mut BTreeMap<String, Mesh>,
-        &mut bool,
-    )> for NavigationDebugWindow
-{
+impl RenderableMutWithContext<&mut GameState> for NavigationDebugWindow {
     fn render_mut_with_context(
         &mut self,
         ui: &imgui::Ui,
-        (gl_context, game_state, mesh_cache, opened): (
-            &glow::Context,
-            &mut GameState,
-            &mut BTreeMap<String, Mesh>,
-            &mut bool,
-        ),
+        gui_state: &mut GuiState,
+        game_state: &mut GameState,
     ) {
-        if !*opened {
+        let mut nav_debug_open = *gui_state
+            .settings
+            .get_bool(state::parameters::RENDER_NAVIGATION_DEBUG);
+
+        if !nav_debug_open {
             return;
         }
 
         ui.window("Navigation Debug")
             .size([0.0, 500.0], imgui::Condition::Always)
-            .opened(opened)
+            .opened(&mut nav_debug_open)
             .build(|| {
                 if ui.collapsing_header("Navmesh", TreeNodeFlags::DEFAULT_OPEN) {
-                    ui.checkbox("Render Navmesh", &mut self.render_navmesh);
+                    let mut render_navmesh = *gui_state
+                        .settings
+                        .get_bool(state::parameters::RENDER_NAVIGATION_NAVMESH);
+
+                    if ui.checkbox("Render Navmesh", &mut render_navmesh) {
+                        // Clicking the checkbox updates the value, so no need to
+                        // invert it when setting it back
+                        gui_state
+                            .settings
+                            .set_bool(state::parameters::RENDER_NAVIGATION_NAVMESH, render_navmesh);
+                    }
 
                     if ui.button("Rebuild Navmesh") {
                         let config = self.navmesh_config.clone().build();
                         game_state.geometry.rebuild_navmesh(&config);
-                        mesh_cache.remove("navmesh");
+                        gui_state.mesh_cache.remove("navmesh");
                     }
 
                     ui.separator_with_text("Configuration");
@@ -93,8 +95,11 @@ impl
 
                     let line_vert_src = include_str!("../render/world/shaders/line.vert");
                     let line_frag_src = include_str!("../render/world/shaders/line.frag");
-                    let mut line_renderer =
-                        LineRenderer::new(gl_context, line_vert_src, line_frag_src);
+                    let mut line_renderer = LineRenderer::new(
+                        gui_state.ig_renderer.gl_context(),
+                        line_vert_src,
+                        line_frag_src,
+                    );
 
                     // TODO: These are impossible to see lol
                     if self.render_start {
@@ -104,28 +109,13 @@ impl
                         line_renderer.add_circle(self.path_end, 0.2, [1.0, 0.2, 0.2]);
                     }
 
-                    let start = Vec3::from(self.path_start);
-                    let end = Vec3::from(self.path_end);
-
                     ui.checkbox("Render Path", &mut self.render_path);
 
                     if ui.button("Find Path") {
-                        if let Some(path) =
-                            game_state.geometry.polyanya_mesh.path(start.xz(), end.xz())
-                        {
-                            // Path found with pathfinding doesn't include start point
-                            let mut final_path = vec![self.path_start];
-                            let path_with_height: Vec<_> = path
-                                .path_with_height(start, end, &game_state.geometry.polyanya_mesh)
-                                .iter()
-                                .map(|p| [p.x, p.y, p.z])
-                                .collect();
-                            final_path.extend(path_with_height);
-
-                            self.path = Some(final_path);
-                        } else {
-                            self.path = None;
-                        }
+                        self.path = game_state
+                            .geometry
+                            .path(self.path_start.into(), self.path_end.into())
+                            .map(|path| path.iter().map(|p| [p.x, p.y, p.z]).collect());
                     }
 
                     if self.render_path {
@@ -140,9 +130,17 @@ impl
                         }
                     }
 
-                    line_renderer.draw(gl_context, &Matrix4::identity(), 1.0);
+                    line_renderer.draw(
+                        gui_state.ig_renderer.gl_context(),
+                        &Matrix4::identity(),
+                        1.0,
+                    );
                 }
             });
+
+        gui_state
+            .settings
+            .set_bool(state::parameters::RENDER_NAVIGATION_DEBUG, nav_debug_open);
     }
 }
 

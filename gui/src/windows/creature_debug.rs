@@ -262,7 +262,6 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                         .world
                         .insert_one(self.creature, *target_pose)
                         .ok();
-                    ui.close_current_popup();
                 }
                 ui.same_line();
                 if ui.button("Cancel") {
