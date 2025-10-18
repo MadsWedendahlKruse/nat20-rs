@@ -19,6 +19,7 @@ use crate::{
         },
     },
     state::settings::GuiSettings,
+    windows::anchor::WindowManager,
 };
 
 pub struct GuiState {
@@ -34,6 +35,9 @@ pub struct GuiState {
 
     /// GUI settings, mostly used to configure various rendering options.
     pub settings: GuiSettings,
+
+    /// Manages the positioning of anchored windows.
+    pub window_manager: WindowManager,
 
     /// Store the latest computed path for each entity. This is mostly used for
     /// visualization/debugging purposes.
@@ -94,6 +98,7 @@ impl GuiState {
             grid_renderer,
             camera: OrbitCamera::new(),
             settings: GuiSettings::default(),
+            window_manager: WindowManager::new(),
             path_cache: HashMap::new(),
             mesh_cache: BTreeMap::new(),
             cursor_ray_result: None,

@@ -324,6 +324,7 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
             ui.open_popup(self.id.to_string());
         }
 
+        // TODO: Event debug doesn't work for EncounterEnded (it just renders everything)
         ui.popup(self.id.to_string(), || {
             let debug_text = format!("{:#?}", self);
             let size = ui.calc_text_size(&debug_text);

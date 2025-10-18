@@ -31,7 +31,7 @@ fn main() {
 
     let mut last_frame = Instant::now();
 
-    let mut main_menu = MainMenuWindow::new(gui_state.gl_context());
+    let mut main_menu = MainMenuWindow::new();
 
     #[allow(deprecated)]
     event_loop

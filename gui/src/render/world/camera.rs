@@ -8,7 +8,13 @@ use winit::{
     keyboard::PhysicalKey,
 };
 
-use crate::render::ui::utils::ImguiRenderableMutWithContext;
+use crate::{
+    render::{common::utils::RenderableMutWithContext, ui::utils::ImguiRenderableMutWithContext},
+    state::{gui_state::GuiState, parameters::RENDER_CAMERA_DEBUG},
+    windows::anchor::{
+        self, AUTO_RESIZE, HorizontalAnchor, VerticalAnchor, WindowAnchor, WindowManager,
+    },
+};
 
 // Initial camera parameters
 static TARGET_X: f32 = 0.0;
@@ -149,6 +155,7 @@ impl OrbitCamera {
                     _ => {}
                 }
             }
+
             WindowEvent::KeyboardInput { event, .. } => match event.physical_key {
                 PhysicalKey::Code(key_code) => {
                     if key_code == winit::keyboard::KeyCode::ShiftLeft
@@ -159,6 +166,7 @@ impl OrbitCamera {
                 }
                 PhysicalKey::Unidentified(_) => {}
             },
+
             WindowEvent::CursorMoved { position, .. } => {
                 let (position_x, position_y) = (position.x as f32, position.y as f32);
                 if imgui_wants_mouse {
@@ -190,6 +198,7 @@ impl OrbitCamera {
                 }
                 self.last_cursor = Some((position_x, position_y));
             }
+
             WindowEvent::MouseWheel { delta, .. } => {
                 if imgui_wants_mouse {
                     return;
@@ -204,6 +213,7 @@ impl OrbitCamera {
                     }
                 }
             }
+
             WindowEvent::Focused(false) => {
                 self.mmb_down = false;
             }
@@ -212,31 +222,23 @@ impl OrbitCamera {
     }
 }
 
-impl ImguiRenderableMutWithContext<(&GameState, &mut bool)> for OrbitCamera {
+impl ImguiRenderableMutWithContext<(&GameState, &mut bool, &mut WindowManager)> for OrbitCamera {
     fn render_mut_with_context(
         &mut self,
         ui: &imgui::Ui,
-        (game_state, opened): (&GameState, &mut bool),
+        (game_state, opened, window_manager): (&GameState, &mut bool, &mut WindowManager),
     ) {
-        // Render in top-right corner
-        let viewport = ui.io().display_size;
-        let window_size = [320.0, 300.0];
-        let window_pos = [viewport[0] - window_size[0], 0.0];
-
-        if !*opened {
-            return;
-        }
-
-        ui.window("Camera")
-            .position(window_pos, imgui::Condition::Always)
-            .size(window_size, imgui::Condition::FirstUseEver)
-            .always_auto_resize(true)
-            .movable(false)
-            .opened(opened)
-            .build(|| {
+        window_manager.render_window(
+            ui,
+            "Camera",
+            &anchor::TOP_RIGHT,
+            AUTO_RESIZE,
+            opened,
+            || {
                 if ui.button("Reset") {
                     *self = Self::new();
                 }
+
                 ui.slider("Target X", -100.0, 100.0, &mut self.target.x);
                 ui.slider("Target Y", -100.0, 100.0, &mut self.target.y);
                 ui.slider("Target Z", -100.0, 100.0, &mut self.target.z);
@@ -275,6 +277,7 @@ impl ImguiRenderableMutWithContext<(&GameState, &mut bool)> for OrbitCamera {
                         ui.text("(no cursor ray)");
                     }
                 }
-            });
+            },
+        );
     }
 }

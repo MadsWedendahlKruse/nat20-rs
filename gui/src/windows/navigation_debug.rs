@@ -14,6 +14,7 @@ use crate::{
         world::line::LineRenderer,
     },
     state::{self, gui_state::GuiState},
+    windows::anchor::{self, HorizontalAnchor, VerticalAnchor, WindowAnchor},
 };
 
 pub struct NavigationDebugWindow {
@@ -58,10 +59,13 @@ impl RenderableMutWithContext<&mut GameState> for NavigationDebugWindow {
             return;
         }
 
-        ui.window("Navigation Debug")
-            .size([0.0, 500.0], imgui::Condition::Always)
-            .opened(&mut nav_debug_open)
-            .build(|| {
+        gui_state.window_manager.render_window(
+            ui,
+            "Navigation Debug",
+            &&anchor::BOTTOM_RIGHT,
+            [0.0, 500.0],
+            &mut nav_debug_open,
+            || {
                 if ui.collapsing_header("Navmesh", TreeNodeFlags::DEFAULT_OPEN) {
                     let mut render_navmesh = *gui_state
                         .settings
@@ -136,7 +140,8 @@ impl RenderableMutWithContext<&mut GameState> for NavigationDebugWindow {
                         }
                     }
                 }
-            });
+            },
+        );
 
         gui_state
             .settings

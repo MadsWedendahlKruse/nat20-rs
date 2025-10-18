@@ -26,10 +26,12 @@ use nat20_rs::{
     registry,
     systems::{self, geometry::RaycastHitKind},
 };
+use parry3d::query::Ray;
 use strum::IntoEnumIterator;
 
 use crate::{
     render::{
+        common::utils::{RenderableMutWithContext, RenderableWithContext},
         ui::{
             engine::LogLevel,
             entities::CreatureRenderMode,
@@ -42,7 +44,11 @@ use crate::{
         },
         world::camera::OrbitCamera,
     },
+    state::gui_state::{self, GuiState},
     table_with_columns,
+    windows::anchor::{
+        self, AUTO_RESIZE, HorizontalAnchor, VerticalAnchor, WindowAnchor, WindowManager,
+    },
 };
 
 #[derive(Debug)]
@@ -272,8 +278,6 @@ enum EncounterWindowState {
     },
     EncounterRunning {
         decision_progress: Option<ActionDecisionProgress>,
-        auto_scroll_combat_log: bool,
-        log_render_level: LogLevel,
     },
     EncounterFinished,
 }
@@ -302,200 +306,110 @@ impl EncounterWindow {
     }
 }
 
-impl ImguiRenderableMutWithContext<(&mut GameState, &OrbitCamera)> for EncounterWindow {
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, context: (&mut GameState, &OrbitCamera)) {
-        let (game_state, camera) = context;
-
-        match &mut self.state {
-            EncounterWindowState::EncounterCreation { participants } => {
-                ui.separator_with_text("Encounter creation");
-                ui.text("Select participants:");
-
-                game_state
-                    .world
-                    .query::<&Name>()
-                    .into_iter()
-                    .for_each(|(entity, name)| {
-                        let is_selected = participants.contains(&entity);
-                        if render_button_selectable(
-                            ui,
-                            format!("{}##{:?}", name.as_str(), entity),
-                            [100.0, 20.0],
-                            is_selected,
-                        ) {
-                            if is_selected {
-                                participants.remove(&entity);
-                            } else {
-                                participants.insert(entity);
-                            }
-                        }
-                    });
-
-                ui.separator();
-                if render_button_disabled_conditionally(
-                    ui,
-                    "Start Encounter",
-                    [0.0, 0.0],
-                    participants.len() < 2,
-                    "You must have at least two participants to start an encounter.",
-                ) {
-                    game_state.start_encounter_with_id(participants.clone(), self.id);
-                    self.state = EncounterWindowState::EncounterRunning {
-                        decision_progress: None,
-                        auto_scroll_combat_log: true,
-                        log_render_level: LogLevel::Info,
-                    };
-                }
-            }
-
-            EncounterWindowState::EncounterRunning {
-                decision_progress,
-                auto_scroll_combat_log,
-                log_render_level,
-            } => {
-                // First borrow: get the encounter
-                let encounter_ptr = game_state
-                    .encounters
-                    .get_mut(&self.id)
-                    .map(|enc| enc as *mut Encounter); // raw pointer sidesteps borrow checker temporarily
-
-                if let Some(encounter_ptr) = encounter_ptr {
-                    // Now safe to mutably borrow world
-                    // let world = &mut game_state.world;
-
-                    // SAFETY: we know no other mutable borrow of the encounter exists at this point
-                    let encounter = unsafe { &mut *encounter_ptr };
-
-                    ui.child_window(format!("Encounter: {}", self.id))
-                        .child_flags(
-                            ChildFlags::ALWAYS_AUTO_RESIZE
-                                | ChildFlags::AUTO_RESIZE_X
-                                | ChildFlags::AUTO_RESIZE_Y,
-                        )
-                        .build(|| {
-                            encounter.render_mut_with_context(
-                                ui,
-                                (game_state, decision_progress, camera),
-                            );
-                        });
-
-                    // TODO: Not sure if this is actually useful
-                    // ui.same_line();
-                    // ui.child_window(format!("Encounter Debug##{}", self.id))
-                    //     .child_flags(
-                    //         ChildFlags::ALWAYS_AUTO_RESIZE
-                    //             | ChildFlags::AUTO_RESIZE_X
-                    //             | ChildFlags::AUTO_RESIZE_Y,
-                    //     )
-                    //     .build(|| {
-                    //         ui.separator_with_text("Encounter Debug Info");
-
-                    //         ui.child_window("Debug Info Content")
-                    //             .child_flags(
-                    //                 ChildFlags::ALWAYS_AUTO_RESIZE
-                    //                     | ChildFlags::AUTO_RESIZE_X
-                    //                     | ChildFlags::BORDERS,
-                    //             )
-                    //             .size([0.0, 500.0])
-                    //             .build(|| {
-                    //                 ui.text(self.id.to_string());
-
-                    //                 if ui.collapsing_header("Participants", TreeNodeFlags::FRAMED) {
-                    //                     for participant in encounter.participants(
-                    //                         &game_state.world,
-                    //                         ParticipantsFilter::All,
-                    //                     ) {
-                    //                         let name =
-                    //                             systems::helpers::get_component_clone::<Name>(
-                    //                                 &game_state.world,
-                    //                                 participant,
-                    //                             )
-                    //                             .to_string();
-                    //                         ui.text(format!("{} ({:?})", name, participant));
-                    //                     }
-                    //                 }
-
-                    //                 if ui
-                    //                     .collapsing_header("Pending Prompts", TreeNodeFlags::FRAMED)
-                    //                 {
-                    //                     for prompt in encounter.pending_prompts() {
-                    //                         ui.text(format!("{:#?}", prompt));
-                    //                     }
-                    //                 }
-
-                    //                 if ui.collapsing_header(
-                    //                     "Decision Progress",
-                    //                     TreeNodeFlags::FRAMED,
-                    //                 ) {
-                    //                     if let Some(progress) = decision_progress {
-                    //                         for actor in progress.actors() {
-                    //                             let name = systems::helpers::get_component_clone::<
-                    //                                 Name,
-                    //                             >(
-                    //                                 &game_state.world, actor
-                    //                             )
-                    //                             .to_string();
-
-                    //                             if let Some(decision) =
-                    //                                 progress.decision_from(actor)
-                    //                             {
-                    //                                 ui.text(format!(
-                    //                                     "{}'s decision: {:#?}",
-                    //                                     name, decision
-                    //                                 ));
-                    //                             } else {
-                    //                                 ui.text(format!(
-                    //                                     "{} has not decided yet",
-                    //                                     name
-                    //                                 ));
-                    //                             }
-
-                    //                             ui.separator();
-                    //                         }
-
-                    //                         ui.text(format!("{:#?}", progress));
-                    //                     } else {
-                    //                         ui.text("No decision in progress");
-                    //                     }
-                    //                 }
-                    //             });
-                    //     });
-                } else {
-                    ui.text("Encounter not found!");
-                }
-
-                ui.separator();
-                if ui.button("End Encounter") {
-                    self.state = EncounterWindowState::EncounterFinished;
-                    game_state.end_encounter(&self.id);
-                }
-            }
-
-            EncounterWindowState::EncounterFinished => {
-                ui.text("Encounter finished!");
-            }
-        }
-    }
-}
-
-impl
-    ImguiRenderableMutWithContext<(
-        &mut GameState,
-        &mut Option<ActionDecisionProgress>,
-        &OrbitCamera,
-    )> for Encounter
-{
+impl RenderableMutWithContext<&mut GameState> for EncounterWindow {
     fn render_mut_with_context(
         &mut self,
         ui: &imgui::Ui,
-        context: (
-            &mut GameState,
-            &mut Option<ActionDecisionProgress>,
-            &OrbitCamera,
-        ),
+        gui_state: &mut GuiState,
+        game_state: &mut GameState,
+    ) {
+        let label = format!("Encounter##{:?}", self.id);
+
+        // raw pointer sidesteps borrow checker temporarily
+        let window_manager_ptr =
+            unsafe { &mut *(&mut gui_state.window_manager as *mut WindowManager) };
+
+        window_manager_ptr.render_window(
+            ui,
+            &label,
+            &anchor::CENTER_LEFT,
+            AUTO_RESIZE,
+            &mut true,
+            || {
+                match &mut self.state {
+                    EncounterWindowState::EncounterCreation { participants } => {
+                        ui.separator_with_text("Encounter creation");
+                        ui.text("Select participants:");
+
+                        game_state
+                            .world
+                            .query::<&Name>()
+                            .into_iter()
+                            .for_each(|(entity, name)| {
+                                let is_selected = participants.contains(&entity);
+                                if render_button_selectable(
+                                    ui,
+                                    format!("{}##{:?}", name.as_str(), entity),
+                                    [100.0, 20.0],
+                                    is_selected,
+                                ) {
+                                    if is_selected {
+                                        participants.remove(&entity);
+                                    } else {
+                                        participants.insert(entity);
+                                    }
+                                }
+                            });
+
+                        ui.separator();
+                        if render_button_disabled_conditionally(
+                            ui,
+                            "Start Encounter",
+                            [0.0, 0.0],
+                            participants.len() < 2,
+                            "You must have at least two participants to start an encounter.",
+                        ) {
+                            game_state.start_encounter_with_id(participants.clone(), self.id);
+                            self.state = EncounterWindowState::EncounterRunning {
+                                decision_progress: None,
+                            };
+                        }
+                    }
+
+                    EncounterWindowState::EncounterRunning { decision_progress } => {
+                        // First borrow: get the encounter
+                        let encounter_ptr = game_state
+                            .encounters
+                            .get_mut(&self.id)
+                            .map(|enc| enc as *mut Encounter); // raw pointer sidesteps borrow checker temporarily
+
+                        if let Some(encounter_ptr) = encounter_ptr {
+                            // SAFETY: we know no other mutable borrow of the encounter exists at this point
+                            let encounter = unsafe { &mut *encounter_ptr };
+
+                            encounter.render_mut_with_context(
+                                ui,
+                                gui_state,
+                                (game_state, decision_progress),
+                            );
+                        } else {
+                            ui.text("Encounter not found!");
+                        }
+
+                        ui.separator();
+                        if ui.button("End Encounter") {
+                            self.state = EncounterWindowState::EncounterFinished;
+                            game_state.end_encounter(&self.id);
+                        }
+                    }
+
+                    EncounterWindowState::EncounterFinished => {
+                        ui.text("Encounter finished!");
+                    }
+                }
+            },
+        );
+    }
+}
+
+impl RenderableMutWithContext<(&mut GameState, &mut Option<ActionDecisionProgress>)> for Encounter {
+    fn render_mut_with_context(
+        &mut self,
+        ui: &imgui::Ui,
+        gui_state: &mut GuiState,
+        (game_state, decision_progress): (&mut GameState, &mut Option<ActionDecisionProgress>),
     ) {
         ui.separator_with_text("Participants");
-        let (game_state, decision_progress, camera) = context;
 
         let initiative_order = self.initiative_order();
         let current_entity = self.current_entity();
@@ -614,19 +528,19 @@ impl
 
                     let disabled_token = if actions_disabled {
                         // Render whatever the actual decision progress is
-                        decision_progress.render_mut_with_context(ui, (game_state, camera));
+                        decision_progress.render_mut_with_context(ui, gui_state, game_state);
 
                         // Render placeholder action selection UI
                         let token = Some(ui.begin_disabled(actions_disabled));
                         Some(ActionDecisionProgress::from_prompt(&ActionPrompt::Action {
                             actor: current_entity,
                         }))
-                        .render_mut_with_context(ui, (game_state, camera));
+                        .render_mut_with_context(ui, gui_state, game_state);
 
                         token
                     } else {
                         // Render the actual action selection UI
-                        decision_progress.render_mut_with_context(ui, (game_state, camera));
+                        decision_progress.render_mut_with_context(ui, gui_state, game_state);
                         None
                     };
 
@@ -647,16 +561,13 @@ impl
     }
 }
 
-impl ImguiRenderableMutWithContext<(&mut GameState, &OrbitCamera)>
-    for Option<ActionDecisionProgress>
-{
+impl RenderableMutWithContext<&mut GameState> for Option<ActionDecisionProgress> {
     fn render_mut_with_context(
         &mut self,
         ui: &imgui::Ui,
-        game_state: (&mut GameState, &OrbitCamera),
+        gui_state: &mut GuiState,
+        game_state: &mut GameState,
     ) {
-        let (game_state, camera) = game_state;
-
         if self.is_none() {
             ui.text("No action decision in progress.");
             return;
@@ -672,110 +583,159 @@ impl ImguiRenderableMutWithContext<(&mut GameState, &OrbitCamera)>
                 targets,
                 targets_confirmed,
             } => {
-                ui.separator_with_text("Resources");
-                systems::helpers::get_component::<ResourceMap>(&game_state.world, *actor)
-                    .render(ui);
-
-                ui.separator_with_text("Actions");
-                if action_options.is_empty() {
-                    *action_options =
-                        systems::actions::available_actions(&game_state.world, *actor);
-                }
-                for (action_id, contexts_and_costs) in action_options {
-                    // Don't render reactions
-                    if contexts_and_costs
-                        .iter()
-                        .all(|(_, cost)| cost.contains_key(&registry::resources::REACTION_ID))
-                    {
-                        continue;
-                    }
-
-                    if ui.button(&action_id.to_string()) && chosen_action.is_none() {
-                        *chosen_action = Some(action_id.clone());
-                        if contexts_and_costs.len() == 1 {
-                            *chosen_context_and_cost = Some(contexts_and_costs[0].clone());
-                        } else {
-                            *context_and_cost_options = contexts_and_costs.clone();
-                        }
-                    }
-
-                    if ui.is_item_hovered() {
-                        ui.tooltip(|| {
-                            (action_id, contexts_and_costs)
-                                .render_with_context(ui, (&game_state.world, *actor));
-                        });
-                    }
-                }
-
-                if chosen_action.is_some() && chosen_context_and_cost.is_none() {
-                    render_window_at_cursor(ui, "Action Contexts", true, || {
-                        for (context, cost) in context_and_cost_options {
-                            if ui.button(format!("{:#?}\n{:#?}", context, cost)) {
-                                *chosen_context_and_cost = Some((context.clone(), cost.clone()));
-                            }
-                        }
-                    });
-                }
+                let window_manager_ptr =
+                    unsafe { &mut *(&mut gui_state.window_manager as *mut WindowManager) };
 
                 let mut cancel_action = false;
-                if chosen_action.is_some() && chosen_context_and_cost.is_some() {
-                    render_window_at_cursor(ui, "Target Selection", true, || {
-                        TextSegments::new(vec![
-                            (
-                                systems::helpers::get_component::<Name>(&game_state.world, *actor)
-                                    .to_string(),
-                                TextKind::Actor,
-                            ),
-                            ("is using".to_string(), TextKind::Normal),
-                            (
-                                chosen_action.as_ref().unwrap().to_string(),
-                                TextKind::Action,
-                            ),
-                        ])
-                        .render(ui);
 
-                        let targeting_context = systems::actions::targeting_context(
-                            &game_state.world,
-                            *actor,
-                            chosen_action.as_ref().unwrap(),
-                            &chosen_context_and_cost.as_ref().unwrap().0,
-                        );
+                window_manager_ptr.render_window(
+                    ui,
+                    format!(
+                        "Actions - {}",
+                        systems::helpers::get_component::<Name>(&game_state.world, *actor).as_str()
+                    )
+                    .as_str(),
+                    &anchor::BOTTOM_CENTER,
+                    AUTO_RESIZE,
+                    &mut true,
+                    || {
+                        ui.child_window("Actions")
+                            .child_flags(
+                                ChildFlags::ALWAYS_AUTO_RESIZE
+                                    | ChildFlags::AUTO_RESIZE_X
+                                    | ChildFlags::AUTO_RESIZE_Y,
+                            )
+                            .build(|| {
+                                ui.separator_with_text("Actions");
+                                if action_options.is_empty() {
+                                    *action_options = systems::actions::available_actions(
+                                        &game_state.world,
+                                        *actor,
+                                    );
+                                }
+                                for (action_id, contexts_and_costs) in action_options {
+                                    // Don't render reactions
+                                    if contexts_and_costs.iter().all(|(_, cost)| {
+                                        cost.contains_key(&registry::resources::REACTION_ID)
+                                    }) {
+                                        continue;
+                                    }
 
-                        let encounter_id = game_state.encounter_for_entity(actor).unwrap().clone();
-                        targeting_context.render_with_context(
-                            ui,
-                            (game_state, encounter_id, targets, targets_confirmed, camera),
-                        );
-                        ui.tooltip(|| {
-                            ui.text(chosen_action.as_ref().unwrap().to_string());
-                        });
+                                    if ui.button(&action_id.to_string()) && chosen_action.is_none()
+                                    {
+                                        *chosen_action = Some(action_id.clone());
+                                        if contexts_and_costs.len() == 1 {
+                                            *chosen_context_and_cost =
+                                                Some(contexts_and_costs[0].clone());
+                                        } else {
+                                            *context_and_cost_options = contexts_and_costs.clone();
+                                        }
+                                    }
 
-                        ui.separator();
-                        if ui.button("Confirm Targets") {
-                            *targets_confirmed = true;
+                                    if ui.is_item_hovered() {
+                                        ui.tooltip(|| {
+                                            (action_id, contexts_and_costs).render_with_context(
+                                                ui,
+                                                (&game_state.world, *actor),
+                                            );
+                                        });
+                                    }
+                                }
+
+                                if chosen_action.is_some() && chosen_context_and_cost.is_none() {
+                                    render_window_at_cursor(ui, "Action Contexts", true, || {
+                                        for (context, cost) in context_and_cost_options {
+                                            if ui.button(format!("{:#?}\n{:#?}", context, cost)) {
+                                                *chosen_context_and_cost =
+                                                    Some((context.clone(), cost.clone()));
+                                            }
+                                        }
+                                    });
+                                }
+
+                                if chosen_action.is_some() && chosen_context_and_cost.is_some() {
+                                    render_window_at_cursor(ui, "Target Selection", true, || {
+                                        TextSegments::new(vec![
+                                            (
+                                                systems::helpers::get_component::<Name>(
+                                                    &game_state.world,
+                                                    *actor,
+                                                )
+                                                .to_string(),
+                                                TextKind::Actor,
+                                            ),
+                                            ("is using".to_string(), TextKind::Normal),
+                                            (
+                                                chosen_action.as_ref().unwrap().to_string(),
+                                                TextKind::Action,
+                                            ),
+                                        ])
+                                        .render(ui);
+
+                                        let targeting_context = systems::actions::targeting_context(
+                                            &game_state.world,
+                                            *actor,
+                                            chosen_action.as_ref().unwrap(),
+                                            &chosen_context_and_cost.as_ref().unwrap().0,
+                                        );
+
+                                        let encounter_id =
+                                            game_state.encounter_for_entity(actor).unwrap().clone();
+                                        targeting_context.render_with_context(
+                                            ui,
+                                            gui_state,
+                                            (game_state, encounter_id, targets, targets_confirmed),
+                                        );
+                                        ui.tooltip(|| {
+                                            ui.text(chosen_action.as_ref().unwrap().to_string());
+                                        });
+
+                                        ui.separator();
+                                        if ui.button("Confirm Targets") {
+                                            *targets_confirmed = true;
+                                        }
+                                        ui.separator();
+                                        if ui.button("Cancel Action") {
+                                            cancel_action = true;
+                                        }
+                                    });
+                                }
+                            });
+
+                        ui.same_line();
+
+                        ui.child_window("Resources")
+                            .child_flags(
+                                ChildFlags::ALWAYS_AUTO_RESIZE
+                                    | ChildFlags::AUTO_RESIZE_X
+                                    | ChildFlags::AUTO_RESIZE_Y,
+                            )
+                            .build(|| {
+                                ui.separator_with_text("Resources");
+                                systems::helpers::get_component::<ResourceMap>(
+                                    &game_state.world,
+                                    *actor,
+                                )
+                                .render(ui);
+                            });
+                    },
+                );
+
+                if *targets_confirmed {
+                    let decision = self.take().unwrap().finalize();
+                    let result = game_state.submit_decision(decision);
+                    match result {
+                        Ok(event) => {
+                            println!("Action processed successfully: {:?}", event);
                         }
-                        ui.separator();
-                        if ui.button("Cancel Action") {
-                            cancel_action = true;
-                        }
-                    });
-
-                    if *targets_confirmed {
-                        let decision = self.take().unwrap().finalize();
-                        let result = game_state.submit_decision(decision);
-                        match result {
-                            Ok(event) => {
-                                println!("Action processed successfully: {:?}", event);
-                            }
-                            Err(err) => {
-                                println!("Error processing action: {:?}", err);
-                            }
+                        Err(err) => {
+                            println!("Error processing action: {:?}", err);
                         }
                     }
+                }
 
-                    if cancel_action {
-                        self.take().unwrap();
-                    }
+                if cancel_action {
+                    self.take().unwrap();
                 }
             }
 
@@ -872,42 +832,28 @@ impl ImguiRenderableMutWithContext<(&mut GameState, &OrbitCamera)>
     }
 }
 
-impl
-    ImguiRenderableWithContext<(
-        &mut GameState,
-        EncounterId,
-        &mut Vec<Entity>,
-        &mut bool,
-        &OrbitCamera,
-    )> for TargetingContext
+impl RenderableWithContext<(&mut GameState, EncounterId, &mut Vec<Entity>, &mut bool)>
+    for TargetingContext
 {
     fn render_with_context(
         &self,
         ui: &imgui::Ui,
-        context: (
+        gui_state: &mut GuiState,
+        (game_state, encounter, targets, confirm_targets): (
             &mut GameState,
             EncounterId,
             &mut Vec<Entity>,
             &mut bool,
-            &OrbitCamera,
         ),
     ) {
-        let (game_state, encounter, targets, confirm_targets, camera) = context;
-
         for target_type in &self.valid_target_types {
             match target_type {
                 TargetType::Entity { .. } => {
                     let filter = ParticipantsFilter::from(target_type.clone());
                     self.kind.render_with_context(
                         ui,
-                        (
-                            game_state,
-                            encounter,
-                            targets,
-                            confirm_targets,
-                            filter,
-                            camera,
-                        ),
+                        gui_state,
+                        (game_state, encounter, targets, confirm_targets, filter),
                     );
                 }
             }
@@ -916,29 +862,26 @@ impl
 }
 
 impl
-    ImguiRenderableWithContext<(
+    RenderableWithContext<(
         &mut GameState,
         EncounterId,
         &mut Vec<Entity>,
         &mut bool,
         ParticipantsFilter,
-        &OrbitCamera,
     )> for TargetingKind
 {
     fn render_with_context(
         &self,
         ui: &imgui::Ui,
-        context: (
+        gui_state: &mut GuiState,
+        (game_state, encounter, targets, confirm_targets, filter): (
             &mut GameState,
             EncounterId,
             &mut Vec<Entity>,
             &mut bool,
             ParticipantsFilter,
-            &OrbitCamera,
         ),
     ) {
-        let (game_state, encounter, targets, confirm_targets, filter, camera) = context;
-
         let participants = game_state
             .encounter(&encounter)
             .unwrap()
@@ -947,13 +890,14 @@ impl
             TargetingKind::Single => {
                 ui.text("Select a single target:");
 
-                if let Some(cursor_entity) =
-                    get_clicked_entity(ui, game_state, camera, MouseButton::Left)
+                if let Some(raycast) = &gui_state.cursor_ray_result
+                    && let Some(closest) = raycast.closest()
+                    && let RaycastHitKind::Creature(entity) = &closest.kind
+                    && ui.is_mouse_clicked(MouseButton::Left)
                 {
-                    if participants.contains(&cursor_entity) && !targets.contains(&cursor_entity) {
-                        targets.clear();
-                        targets.push(cursor_entity);
-                    }
+                    targets.clear();
+                    targets.push(*entity);
+                    gui_state.cursor_ray_result.take();
                 }
 
                 for entity in participants {
@@ -976,12 +920,21 @@ impl
             TargetingKind::Multiple { max_targets } => {
                 let max_targets = *max_targets as usize;
 
-                if let Some(cursor_entity) =
-                    get_clicked_entity(ui, game_state, camera, MouseButton::Left)
+                if let Some(raycast) = &gui_state.cursor_ray_result
+                    && let Some(closest) = raycast.closest()
                 {
-                    if participants.contains(&cursor_entity) && targets.len() < max_targets {
-                        targets.push(cursor_entity);
+                    if let RaycastHitKind::Creature(entity) = &closest.kind
+                        && ui.is_mouse_clicked(MouseButton::Left)
+                        && targets.len() < max_targets
+                    {
+                        targets.push(*entity);
+                        gui_state.cursor_ray_result.take();
                     }
+                }
+
+                if ui.is_mouse_clicked(MouseButton::Right) {
+                    targets.pop();
+                    gui_state.cursor_ray_result.take();
                 }
 
                 ui.separator_with_text(format!(

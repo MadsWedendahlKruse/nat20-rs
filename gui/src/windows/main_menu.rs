@@ -35,9 +35,15 @@ use crate::{
     },
     state::{self, gui_state::GuiState},
     windows::{
-        creature_debug::CreatureDebugWindow, creature_right_click::CreatureRightClickWindow,
-        encounter::EncounterWindow, level_up::LevelUpWindow,
-        navigation_debug::NavigationDebugWindow, spawn_predefined::SpawnPredefinedWindow,
+        anchor::{
+            self, AUTO_RESIZE, HorizontalAnchor, VerticalAnchor, WindowAnchor, WindowManager,
+        },
+        creature_debug::CreatureDebugWindow,
+        creature_right_click::CreatureRightClickWindow,
+        encounter::EncounterWindow,
+        level_up::LevelUpWindow,
+        navigation_debug::NavigationDebugWindow,
+        spawn_predefined::SpawnPredefinedWindow,
     },
 };
 
@@ -63,7 +69,7 @@ pub struct MainMenuWindow {
 }
 
 impl MainMenuWindow {
-    pub fn new(gl_context: &glow::Context) -> Self {
+    pub fn new() -> Self {
         // TODO: I guess we should save/load this from/to a config file
         let mut initial_config = rerecast::ConfigBuilder::default();
         initial_config.agent_radius = 0.5;
@@ -109,17 +115,8 @@ impl MainMenuWindow {
 
                 current_entity,
             } => {
-                // TODO: Kind of a mess with all these mutable borrows
-                // Borrowing the fields from the GuiState struct was supposed to
-                // make the code a bit more readable, but really it just makes
-                // it harder to follow with the seemingly arbitrary order of
-                // the borrows
                 navigation_debug.render_mut_with_context(ui, gui_state, game_state);
 
-                let gl_context = gui_state.ig_renderer.gl_context();
-                let program = &gui_state.program;
-
-                // Render mut before borrowing camera
                 gui_state.camera.render_mut_with_context(
                     ui,
                     (
@@ -127,19 +124,16 @@ impl MainMenuWindow {
                         gui_state
                             .settings
                             .get_mut::<bool>(state::parameters::RENDER_CAMERA_DEBUG),
+                        &mut gui_state.window_manager,
                     ),
                 );
-
-                let camera = &gui_state.camera;
-
-                // TODO: Find some other place to set this value
 
                 // Make the raycast result available to the other parts of the UI
                 // If anyone of them want to use a mouse click, e.g. spawning a
                 // creature at the cursor, they should .take() it
                 gui_state.cursor_ray_result = if ui.io().want_capture_mouse {
                     None
-                } else if let Some(ray_from_cursor) = camera.ray_from_cursor() {
+                } else if let Some(ray_from_cursor) = gui_state.camera.ray_from_cursor() {
                     systems::geometry::raycast(game_state, &ray_from_cursor)
                 } else {
                     None
@@ -149,21 +143,26 @@ impl MainMenuWindow {
                     .settings
                     .get::<bool>(state::parameters::RENDER_GRID)
                 {
-                    gui_state.grid_renderer.draw(gl_context);
+                    gui_state
+                        .grid_renderer
+                        .draw(gui_state.ig_renderer.gl_context());
                 }
 
                 let mesh_cache = &mut gui_state.mesh_cache;
                 // TODO: Do something less "hardcoded" with the mesh cache
                 if let Some(mesh) = mesh_cache.get("world") {
                     mesh.draw(
-                        gl_context,
-                        program,
+                        gui_state.ig_renderer.gl_context(),
+                        &gui_state.program,
                         &Matrix4::identity(),
                         [0.75, 0.75, 0.75, 1.0],
                         &Wireframe::None,
                     );
                 } else {
-                    let mesh = Mesh::from_parry_trimesh(gl_context, &game_state.geometry.trimesh);
+                    let mesh = Mesh::from_parry_trimesh(
+                        gui_state.ig_renderer.gl_context(),
+                        &game_state.geometry.trimesh,
+                    );
                     mesh_cache.insert("world".to_string(), mesh);
                 }
 
@@ -173,8 +172,8 @@ impl MainMenuWindow {
                         .get_mut::<bool>(state::parameters::RENDER_NAVIGATION_NAVMESH)
                     {
                         mesh.draw(
-                            gl_context,
-                            program,
+                            gui_state.ig_renderer.gl_context(),
+                            &gui_state.program,
                             &Matrix4::identity(),
                             [0.2, 0.8, 0.2, 0.5],
                             &Wireframe::Overlay {
@@ -184,17 +183,45 @@ impl MainMenuWindow {
                         );
                     }
                 } else {
-                    let mesh =
-                        Mesh::from_poly_navmesh(gl_context, &game_state.geometry.poly_navmesh);
+                    let mesh = Mesh::from_poly_navmesh(
+                        gui_state.ig_renderer.gl_context(),
+                        &game_state.geometry.poly_navmesh,
+                    );
                     mesh_cache.insert("navmesh".to_string(), mesh);
                 }
 
+                // TODO: I feel like this should be somewhere else
                 for (entity, pose) in game_state.world.query::<&CreaturePose>().iter() {
                     systems::geometry::get_shape(&game_state.world, entity).map(|shape| {
                         let key = format!("{}-{}", shape.radius, shape.half_height());
                         if let Some(mesh) = mesh_cache.get(&key) {
-                            let mode = if let Some(current_entity) = current_entity
+                            if let Some(current_entity) = current_entity
                                 && *current_entity == entity
+                            {
+                                // Render a ring around the feet of the currently selected entity
+                                gui_state.line_renderer.add_circle(
+                                    [
+                                        pose.translation.vector.x,
+                                        pose.translation.vector.y
+                                            - systems::geometry::get_height(
+                                                &game_state.world,
+                                                entity,
+                                            )
+                                            .unwrap()
+                                                / 2.0
+                                            + 0.1,
+                                        pose.translation.vector.z,
+                                    ],
+                                    shape.radius + 0.1,
+                                    [1.0, 1.0, 1.0],
+                                );
+                            }
+
+                            // Highlight if mouse is over the creature
+                            let mode = if let Some(raycast) = &gui_state.cursor_ray_result
+                                && let Some(closest) = raycast.closest()
+                                && let RaycastHitKind::Creature(e) = &closest.kind
+                                && *e == entity
                             {
                                 Wireframe::Overlay {
                                     color: [1.0, 1.0, 1.0, 1.0],
@@ -205,8 +232,8 @@ impl MainMenuWindow {
                             };
 
                             mesh.draw(
-                                gl_context,
-                                program,
+                                gui_state.ig_renderer.gl_context(),
+                                &gui_state.program,
                                 &pose.to_homogeneous(),
                                 [0.8, 0.8, 0.8, 1.0],
                                 &mode,
@@ -224,7 +251,7 @@ impl MainMenuWindow {
                             });
                         } else {
                             let mesh = shapes::build_capsule_mesh(
-                                gl_context,
+                                gui_state.ig_renderer.gl_context(),
                                 8,
                                 16,
                                 shape.radius,
@@ -235,42 +262,41 @@ impl MainMenuWindow {
                     });
                 }
 
-                Self::render_creature_labels(ui, game_state, camera);
+                Self::render_creature_labels(ui, game_state, &gui_state.camera);
 
-                ui.window("World").always_auto_resize(true).build(|| {
-                    Self::render_character_menu(
-                        ui,
-                        game_state,
-                        level_up,
-                        spawn_predefined,
-                        encounters,
-                        creature_debug,
-                        &mut gui_state.cursor_ray_result,
-                        log_source,
-                    );
+                gui_state.window_manager.render_window(
+                    ui,
+                    "World",
+                    &anchor::TOP_LEFT,
+                    AUTO_RESIZE,
+                    &mut true,
+                    || {
+                        Self::render_character_menu(
+                            ui,
+                            game_state,
+                            level_up,
+                            spawn_predefined,
+                            encounters,
+                            creature_debug,
+                            &mut gui_state.cursor_ray_result,
+                            log_source,
+                        );
+                    },
+                );
 
-                    ui.same_line();
-
-                    Self::render_event_log(
-                        ui,
-                        game_state,
-                        encounters,
-                        auto_scroll_event_log,
-                        log_level,
-                        log_source,
-                    );
-                });
+                Self::render_event_log(
+                    ui,
+                    &mut gui_state.window_manager,
+                    game_state,
+                    encounters,
+                    auto_scroll_event_log,
+                    log_level,
+                    log_source,
+                );
 
                 let mut encounter_finished = None;
                 for encounter in &mut *encounters {
-                    render_window_at_cursor(
-                        ui,
-                        &format!("Encounter: {}", encounter.id()),
-                        true,
-                        || {
-                            encounter.render_mut_with_context(ui, (game_state, camera));
-                        },
-                    );
+                    encounter.render_mut_with_context(ui, gui_state, game_state);
                     if encounter.finished() {
                         encounter_finished = Some(encounter.id().clone());
                     }
@@ -295,7 +321,11 @@ impl MainMenuWindow {
                             if ui.is_mouse_clicked(MouseButton::Left)
                                 && systems::ai::is_player_controlled(&game_state.world, *entity)
                             {
-                                current_entity.replace(*entity);
+                                if current_entity.is_some() && current_entity.unwrap() == *entity {
+                                    current_entity.take();
+                                } else {
+                                    current_entity.replace(*entity);
+                                }
                             }
                         }
 
@@ -328,9 +358,11 @@ impl MainMenuWindow {
                 }
 
                 // TODO: Not sure where to put this?
-                gui_state
-                    .line_renderer
-                    .draw(gl_context, &Matrix4::identity(), 2.0);
+                gui_state.line_renderer.draw(
+                    gui_state.ig_renderer.gl_context(),
+                    &Matrix4::identity(),
+                    2.0,
+                );
             }
         }
     }
@@ -451,15 +483,20 @@ impl MainMenuWindow {
 
     fn render_event_log(
         ui: &imgui::Ui,
+        window_manager: &mut WindowManager,
         game_state: &mut GameState,
         encounters: &mut Vec<EncounterWindow>,
         auto_scroll_event_log: &mut bool,
         log_level: &mut LogLevel,
         log_source: &mut usize,
     ) {
-        ui.window("Event Log")
-            .flags(WindowFlags::ALWAYS_AUTO_RESIZE)
-            .build(|| {
+        window_manager.render_window(
+            ui,
+            "Event Log",
+            &anchor::BOTTOM_RIGHT,
+            AUTO_RESIZE,
+            &mut true,
+            || {
                 let mut log_sources = vec!["World".to_string()];
                 log_sources.extend(
                     game_state
@@ -514,7 +551,8 @@ impl MainMenuWindow {
                     *log_level = current_log_level.into();
                 }
                 width_token.end();
-            });
+            },
+        );
     }
 
     fn render_creature_labels(ui: &imgui::Ui, game_state: &GameState, camera: &OrbitCamera) {
