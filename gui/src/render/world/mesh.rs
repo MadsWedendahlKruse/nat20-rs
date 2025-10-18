@@ -1,7 +1,4 @@
-use std::collections::HashMap;
-
 use glam::Vec3;
-// render/mesh.rs
 use glow::HasContext;
 use parry3d::{na, shape::TriMesh};
 use rerecast::PolygonNavmesh;
@@ -228,6 +225,7 @@ impl Mesh {
                     }
                     gl.draw_elements(glow::TRIANGLES, self.index_count, glow::UNSIGNED_INT, 0);
                 }
+
                 Wireframe::Only { color, width } => {
                     // flat, polygon lines
                     if let Some(loc) = &prog.loc_mode {
@@ -241,6 +239,7 @@ impl Mesh {
                     gl.draw_elements(glow::TRIANGLES, self.index_count, glow::UNSIGNED_INT, 0);
                     gl.polygon_mode(glow::FRONT_AND_BACK, glow::FILL);
                 }
+
                 Wireframe::Overlay { color, width } => {
                     // pass 1: filled (lit)
                     if let Some(loc) = &prog.loc_mode {

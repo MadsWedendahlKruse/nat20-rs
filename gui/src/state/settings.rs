@@ -16,6 +16,47 @@ pub enum Setting {
     // add more as needed (String, Color, Keybind, etc.)
 }
 
+/// Sealed trait to map a Rust type `T` <-> a `Setting` variant.
+/// Implement once per supported type.
+pub trait SettingAccess: Sized {
+    fn as_ref(s: &Setting) -> Option<&Self>;
+    fn as_mut(s: &mut Setting) -> Option<&mut Self>;
+    fn into_setting(self) -> Setting;
+}
+
+// One-liner macro to implement the mapping.
+macro_rules! impl_setting_access {
+    ($t:ty, $variant:ident) => {
+        impl SettingAccess for $t {
+            #[inline]
+            fn as_ref(s: &Setting) -> Option<&Self> {
+                if let Setting::$variant(v) = s {
+                    Some(v)
+                } else {
+                    None
+                }
+            }
+            #[inline]
+            fn as_mut(s: &mut Setting) -> Option<&mut Self> {
+                if let Setting::$variant(v) = s {
+                    Some(v)
+                } else {
+                    None
+                }
+            }
+            #[inline]
+            fn into_setting(self) -> Setting {
+                Setting::$variant(self)
+            }
+        }
+    };
+}
+
+impl_setting_access!(bool, Bool);
+impl_setting_access!(i32, I32);
+impl_setting_access!(f32, F32);
+impl_setting_access!(u16, U16);
+
 impl ImguiRenderableMutWithContext<&str> for Setting {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, label: &str) {
         match self {
@@ -136,46 +177,33 @@ impl GuiSettings {
         }
     }
 
-    pub fn insert(&mut self, key: &str, setting: Setting) {
-        self.settings.insert(key.to_string(), setting);
-        // Rebuild view tree to include new key
-        self.view_tree = ViewNode::new(self.settings.keys().map(String::as_str));
-    }
-
-    pub fn get(&self, key: &str) -> Option<&Setting> {
-        self.settings.get(key)
-    }
-
-    pub fn get_mut(&mut self, key: &str) -> Option<&mut Setting> {
-        self.settings.get_mut(key)
-    }
-
-    pub fn get_mut_bool(&mut self, key: &str) -> &mut bool {
-        match self.settings.entry(key.to_string()) {
-            std::collections::btree_map::Entry::Occupied(o) => match o.into_mut() {
-                Setting::Bool(b) => b,
-                _ => panic!("Setting {} is not a bool", key),
-            },
-            _ => panic!("Setting {} not found", key),
+    /// Borrow as the requested type, if the variant matches.
+    pub fn get<T: SettingAccess>(&self, key: &str) -> &T {
+        if !self.settings.contains_key(key) {
+            panic!("setting '{}' does not exist", key);
         }
+        self.settings
+            .get(key)
+            .and_then(T::as_ref)
+            .expect(format!("setting '{}' is not of expected type", key).as_str())
     }
 
-    pub fn get_bool(&self, key: &str) -> &bool {
-        match self.settings.get(key) {
-            Some(Setting::Bool(b)) => b,
-            Some(_) => panic!("Setting {} is not a bool", key),
-            None => panic!("Setting {} not found", key),
+    /// Mutably borrow as the requested type, if the variant matches.
+    pub fn get_mut<T: SettingAccess>(&mut self, key: &str) -> &mut T {
+        if !self.settings.contains_key(key) {
+            panic!("setting '{}' does not exist", key);
         }
+        self.settings
+            .get_mut(key)
+            .and_then(T::as_mut)
+            .expect(format!("setting '{}' is not of expected type", key).as_str())
     }
 
-    pub fn set_bool(&mut self, key: &str, value: bool) {
-        match self.settings.entry(key.to_string()) {
-            std::collections::btree_map::Entry::Occupied(mut o) => match o.get_mut() {
-                Setting::Bool(b) => *b = value,
-                _ => panic!("Setting {} is not a bool", key),
-            },
-            _ => panic!("Setting {} not found", key),
-        }
+    /// Set/overwrite the value with the appropriate enum variant.
+    pub fn set<T: SettingAccess>(&mut self, key: &str, value: T) {
+        self.settings.insert(key.to_string(), value.into_setting());
+        // (Optional) if you allow inserting new keys here, rebuild the tree:
+        // self.view_tree = ViewNode::new(self.settings.keys().map(String::as_str));
     }
 }
 
@@ -237,6 +265,10 @@ impl Default for GuiSettings {
             (
                 state::parameters::RENDER_CAMERA_DEBUG.to_string(),
                 Setting::Bool(false),
+            ),
+            (
+                state::parameters::RENDER_GRID.to_string(),
+                Setting::Bool(true),
             ),
         ]))
     }

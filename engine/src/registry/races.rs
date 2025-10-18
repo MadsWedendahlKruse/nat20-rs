@@ -1,10 +1,16 @@
 use std::{collections::HashMap, sync::LazyLock};
 
+use uom::si::{
+    f32::Length,
+    length::{self, foot},
+};
+
 use crate::{
     components::{
         id::{EffectId, RaceId, SubraceId},
         level_up::LevelUpPrompt,
-        race::{CreatureSize, CreatureType, Race, RaceBase, Speed, Subrace},
+        race::{CreatureSize, CreatureType, Race, RaceBase, Subrace},
+        speed::Speed,
     },
     registry,
 };
@@ -36,7 +42,7 @@ static DRAGONBORN: LazyLock<Race> = LazyLock::new(|| Race {
     ]),
     creature_type: CreatureType::Humanoid,
     size: CreatureSize::Medium,
-    speed: Speed(30),
+    speed: Speed::new(Length::new::<foot>(30.0)),
 });
 
 macro_rules! dragonborn_subraces {

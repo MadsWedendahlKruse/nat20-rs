@@ -264,7 +264,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                         .ok();
                 }
                 ui.same_line();
-                if ui.button("Cancel") {
+                if ui.button("Reset Position") {
                     // Revert to starting pose
                     game_state
                         .world

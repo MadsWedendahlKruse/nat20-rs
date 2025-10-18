@@ -4,6 +4,7 @@ use parry3d::na::Point3;
 use rerecast::{
     AreaType, BuildContoursFlags, Config, DetailNavmesh, HeightfieldBuilder, PolygonNavmesh,
 };
+use uom::si::{f32::Length, length::meter};
 
 pub struct WorldGeometry {
     points: Vec<[f32; 3]>,
@@ -58,7 +59,7 @@ impl WorldGeometry {
         self.polyanya_mesh = polyanya_mesh;
     }
 
-    pub fn path(&self, start: Point3<f32>, end: Point3<f32>) -> Option<Vec<Point3<f32>>> {
+    pub(crate) fn path(&self, start: Point3<f32>, end: Point3<f32>) -> Option<WorldPath> {
         // Path found with pathfinding doesn't include start, so add it manually
         let mut final_path = vec![start];
 
@@ -75,7 +76,7 @@ impl WorldGeometry {
                     .map(|p| Point3::new(p.x, p.y, p.z)),
                 );
 
-                final_path
+                WorldPath::new(final_path)
             })
     }
 }
@@ -105,9 +106,6 @@ fn build_navmesh(
 
     let aabb = nav_trimesh.compute_aabb().unwrap();
 
-    // let cell_size = 0.1;
-    // let cell_height = 0.15;
-
     let mut heightfield = HeightfieldBuilder {
         aabb,
         cell_size: config.cell_size,
@@ -115,10 +113,6 @@ fn build_navmesh(
     }
     .build()
     .unwrap();
-
-    // let walkable_height = (1.8 / cell_height).ceil() as u16;
-    // let walkable_climb = (0.6 / cell_height).ceil() as u16;
-    // let walkable_radius = (0.6 / cell_size).ceil() as u16;
 
     heightfield
         .rasterize_triangles(&nav_trimesh, config.walkable_climb)
@@ -156,10 +150,6 @@ fn build_navmesh(
 
     compact_heightfield.build_distance_field();
 
-    // let border_size = 0;
-    // let min_region_area = 8;
-    // let merge_region_area = 20;
-
     compact_heightfield
         .build_regions(
             config.border_size,
@@ -167,9 +157,6 @@ fn build_navmesh(
             config.merge_region_area,
         )
         .unwrap();
-
-    // let max_simplification_error = 1.3;
-    // let max_edge_len = walkable_radius * 8;
 
     let contours = compact_heightfield.build_contours(
         config.max_simplification_error,
@@ -184,9 +171,6 @@ fn build_navmesh(
         .into_polygon_mesh(config.max_vertices_per_polygon)
         .unwrap();
 
-    // let detail_sample_dist = 6.0;
-    // let detail_sample_max_error = 1.0;
-
     let detail_navmesh = DetailNavmesh::new(
         &poly_navmesh,
         &compact_heightfield,
@@ -195,8 +179,33 @@ fn build_navmesh(
     )
     .unwrap();
 
-    let polyanya_mesh =
+    let mut polyanya_mesh: polyanya::Mesh =
         polyanya::RecastFullMesh::new(poly_navmesh.clone(), detail_navmesh.clone()).into();
+    // Increase search steps to allow snapping points to navmesh from further away
+    polyanya_mesh.search_steps *= 10;
 
     (poly_navmesh, detail_navmesh, polyanya_mesh)
+}
+
+#[derive(Debug, Clone)]
+pub struct WorldPath {
+    pub points: Vec<Point3<f32>>,
+    pub length: Length,
+}
+
+impl WorldPath {
+    pub fn new(points: Vec<Point3<f32>>) -> Self {
+        let length = if points.len() < 2 {
+            Length::new::<meter>(0.0)
+        } else {
+            let mut total_length = 0.0;
+            for i in 0..(points.len() - 1) {
+                total_length += (points[i + 1] - points[i]).magnitude();
+            }
+
+            Length::new::<meter>(total_length)
+        };
+
+        Self { points, length }
+    }
 }

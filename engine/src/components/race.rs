@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use strum::Display;
 
-use crate::components::id::{ActionId, EffectId, RaceId, SubraceId};
+use crate::components::{
+    id::{ActionId, EffectId, RaceId, SubraceId},
+    speed::Speed,
+};
 
 #[derive(Debug, Clone, Display)]
 pub enum CreatureType {
@@ -40,9 +43,6 @@ pub enum CreatureSize {
 //     pub fly: Option<u8>,
 //     pub swim: Option<u8>,
 // }
-
-#[derive(Debug, Clone)]
-pub struct Speed(pub u8);
 
 #[derive(Debug, Clone)]
 pub struct RaceBase {

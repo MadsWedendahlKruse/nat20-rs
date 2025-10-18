@@ -1,23 +1,17 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    rc::Rc,
-};
-
-use glam::{Vec3, Vec3Swizzles};
-use imgui::{ChildFlags, MouseButton, WindowFlags, sys};
+use hecs::Entity;
+use imgui::{ChildFlags, MouseButton, WindowFlags};
 use nat20_rs::{
     components::{
         health::{hit_points::HitPoints, life_state::LifeState},
         id::Name,
-        race::CreatureSize,
     },
-    engine::{encounter::EncounterId, game_state::GameState, geometry::WorldGeometry},
+    engine::game_state::GameState,
     systems::{
         self,
         geometry::{CreaturePose, RaycastHitKind, RaycastResult},
     },
 };
-use parry3d::na::{self, Matrix4, Point3};
+use parry3d::na::{Matrix4, Point3};
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -34,18 +28,12 @@ use crate::{
         },
         world::{
             camera::OrbitCamera,
-            frame_uniforms::FrameUniforms,
             grid::GridRenderer,
-            line::LineRenderer,
-            mesh::{self, Mesh, Wireframe},
-            program::BasicProgram,
-            shapes::{self, CapsuleCache},
+            mesh::{Mesh, Wireframe},
+            shapes::{self},
         },
     },
-    state::{
-        self,
-        gui_state::{self, GuiState},
-    },
+    state::{self, gui_state::GuiState},
     windows::{
         creature_debug::CreatureDebugWindow, creature_right_click::CreatureRightClickWindow,
         encounter::EncounterWindow, level_up::LevelUpWindow,
@@ -56,7 +44,6 @@ use crate::{
 pub enum MainMenuState {
     World {
         game_state: GameState,
-        grid_renderer: GridRenderer,
         auto_scroll_event_log: bool,
         log_level: LogLevel,
         log_source: usize,
@@ -66,6 +53,8 @@ pub enum MainMenuState {
         creature_debug: Option<CreatureDebugWindow>,
         creature_right_click: Option<CreatureRightClickWindow>,
         navigation_debug: NavigationDebugWindow,
+
+        current_entity: Option<Entity>,
     },
 }
 
@@ -77,6 +66,7 @@ impl MainMenuWindow {
     pub fn new(gl_context: &glow::Context) -> Self {
         // TODO: I guess we should save/load this from/to a config file
         let mut initial_config = rerecast::ConfigBuilder::default();
+        initial_config.agent_radius = 0.5;
         initial_config.cell_size_fraction = 8.0;
         initial_config.min_region_size = 4;
         // TODO: Add support for non-triangular polygons
@@ -91,20 +81,14 @@ impl MainMenuWindow {
                     "engine/assets/test_terrain.obj",
                     &initial_config.clone().build(),
                 ),
-                grid_renderer: GridRenderer::new(
-                    gl_context,
-                    100, // extent: 20 → −20..+20
-                    1.0, // step: 1 meter
-                    10,  // major line every 10 units
-                    include_str!("../render/world/shaders/grid.vert"),
-                    include_str!("../render/world/shaders/grid.frag"),
-                ),
                 encounters: Vec::new(),
                 level_up: None,
                 spawn_predefined: None,
                 creature_debug: None,
                 creature_right_click: None,
                 navigation_debug: NavigationDebugWindow::new(&initial_config),
+
+                current_entity: None,
             },
         }
     }
@@ -113,7 +97,6 @@ impl MainMenuWindow {
         match &mut self.state {
             MainMenuState::World {
                 game_state,
-                grid_renderer,
                 auto_scroll_event_log,
                 log_level,
                 log_source,
@@ -123,6 +106,8 @@ impl MainMenuWindow {
                 creature_debug,
                 creature_right_click,
                 navigation_debug,
+
+                current_entity,
             } => {
                 // TODO: Kind of a mess with all these mutable borrows
                 // Borrowing the fields from the GuiState struct was supposed to
@@ -141,7 +126,7 @@ impl MainMenuWindow {
                         game_state,
                         gui_state
                             .settings
-                            .get_mut_bool(state::parameters::RENDER_CAMERA_DEBUG),
+                            .get_mut::<bool>(state::parameters::RENDER_CAMERA_DEBUG),
                     ),
                 );
 
@@ -160,7 +145,12 @@ impl MainMenuWindow {
                     None
                 };
 
-                grid_renderer.draw(gl_context);
+                if *gui_state
+                    .settings
+                    .get::<bool>(state::parameters::RENDER_GRID)
+                {
+                    gui_state.grid_renderer.draw(gl_context);
+                }
 
                 let mesh_cache = &mut gui_state.mesh_cache;
                 // TODO: Do something less "hardcoded" with the mesh cache
@@ -180,7 +170,7 @@ impl MainMenuWindow {
                 if let Some(mesh) = mesh_cache.get("navmesh") {
                     if *gui_state
                         .settings
-                        .get_mut_bool(state::parameters::RENDER_NAVIGATION_NAVMESH)
+                        .get_mut::<bool>(state::parameters::RENDER_NAVIGATION_NAVMESH)
                     {
                         mesh.draw(
                             gl_context,
@@ -203,12 +193,23 @@ impl MainMenuWindow {
                     systems::geometry::get_shape(&game_state.world, entity).map(|shape| {
                         let key = format!("{}-{}", shape.radius, shape.half_height());
                         if let Some(mesh) = mesh_cache.get(&key) {
+                            let mode = if let Some(current_entity) = current_entity
+                                && *current_entity == entity
+                            {
+                                Wireframe::Overlay {
+                                    color: [1.0, 1.0, 1.0, 1.0],
+                                    width: 2.0,
+                                }
+                            } else {
+                                Wireframe::None
+                            };
+
                             mesh.draw(
                                 gl_context,
                                 program,
                                 &pose.to_homogeneous(),
                                 [0.8, 0.8, 0.8, 1.0],
-                                &Wireframe::None,
+                                &mode,
                             );
                         } else {
                             let mesh = shapes::build_capsule_mesh(
@@ -268,18 +269,38 @@ impl MainMenuWindow {
                 }
 
                 // If the raycast result was not taken by anyone, we can fallback
-                // to using it for inspecting entities
-                if let Some(raycast) = &gui_state.cursor_ray_result {
-                    if let Some(closest) = raycast.closest() {
-                        match &closest.kind {
-                            RaycastHitKind::Creature(entity) => {
-                                if ui.is_mouse_clicked(MouseButton::Right) {
-                                    ui.open_popup("RightClick");
-                                    creature_right_click
-                                        .replace(CreatureRightClickWindow::new(*entity));
+                // to using it for inspecting entities or for movement
+                if let Some(raycast) = &gui_state.cursor_ray_result
+                    && let Some(closest) = raycast.closest()
+                {
+                    match &closest.kind {
+                        RaycastHitKind::Creature(entity) => {
+                            if ui.is_mouse_clicked(MouseButton::Right) {
+                                ui.open_popup("RightClick");
+                                creature_right_click
+                                    .replace(CreatureRightClickWindow::new(*entity));
+                            }
+
+                            if ui.is_mouse_clicked(MouseButton::Left) {
+                                current_entity.replace(*entity);
+                            }
+                        }
+
+                        RaycastHitKind::World => {
+                            if ui.is_mouse_clicked(MouseButton::Left) {
+                                if let Some(entity) = current_entity
+                                    && let Some(path) =
+                                        systems::geometry::path(game_state, *entity, closest.poi)
+                                {
+                                    systems::geometry::move_to(
+                                        game_state,
+                                        *entity,
+                                        path.points.last().as_ref().unwrap(),
+                                    );
+                                    gui_state.path_cache.insert(*entity, path.points);
+                                    println!("Path length {:#?}", path.length);
                                 }
                             }
-                            _ => {}
                         }
                     }
                 }
@@ -289,6 +310,11 @@ impl MainMenuWindow {
                         creature_right_click.render_mut_with_context(ui, game_state);
                     });
                 }
+
+                // TODO: Not sure where to put this?
+                gui_state
+                    .line_renderer
+                    .draw(gl_context, &Matrix4::identity(), 2.0);
             }
         }
     }
@@ -400,7 +426,7 @@ impl MainMenuWindow {
         }
 
         if let Some(spawn_predefined) = spawn_predefined_window {
-            spawn_predefined.render_mut_with_context(ui, (&mut game_state.world, raycast_result));
+            spawn_predefined.render_mut_with_context(ui, (game_state, raycast_result));
             if spawn_predefined.is_spawning_completed() {
                 spawn_predefined_window.take();
             }

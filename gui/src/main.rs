@@ -84,7 +84,7 @@ fn main() {
 
                 let show_demo = gui_state
                     .settings
-                    .get_mut_bool(state::parameters::RENDER_IMGUI_DEMO);
+                    .get_mut::<bool>(state::parameters::RENDER_IMGUI_DEMO);
                 if *show_demo {
                     ui.show_demo_window(show_demo);
                 }

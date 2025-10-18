@@ -20,4 +20,5 @@ pub mod race;
 pub mod resource;
 pub mod saving_throw;
 pub mod skill;
+pub mod speed;
 pub mod spells;

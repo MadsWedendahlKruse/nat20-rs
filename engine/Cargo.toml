@@ -18,6 +18,7 @@ rerecast = "0.1.1"
 # glam = "0.30.8"
 glam = "0.29.3"
 polyanya = "0.14.0"
+uom = "0.37.0"
 
 [lib]
 name = "nat20_rs"

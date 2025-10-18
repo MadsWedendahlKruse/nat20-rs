@@ -5,7 +5,8 @@ use crate::{
         actions::action::ActionMap,
         id::{RaceId, SubraceId},
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
-        race::{CreatureSize, CreatureType, RaceBase, Speed},
+        race::{CreatureSize, CreatureType, RaceBase},
+        speed::Speed,
     },
     registry, systems,
 };

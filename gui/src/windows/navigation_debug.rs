@@ -1,18 +1,19 @@
 use std::{collections::BTreeMap, sync::LazyLock};
 
-use glam::{Vec3, Vec3Swizzles};
 use imgui::TreeNodeFlags;
-use nat20_rs::engine::{game_state::GameState, geometry::WorldGeometry};
+use nat20_rs::{
+    engine::{game_state::GameState, geometry::WorldPath},
+    systems,
+};
 use parry3d::na::Matrix4;
-use rerecast::{Config, ConfigBuilder};
+use rerecast::ConfigBuilder;
 
 use crate::{
     render::{
-        common::utils::{RenderableMut, RenderableMutWithContext},
-        ui::utils::{ImguiRenderableMut, ImguiRenderableMutWithContext},
-        world::{line::LineRenderer, mesh::Mesh},
+        common::utils::RenderableMutWithContext, ui::utils::ImguiRenderableMut,
+        world::line::LineRenderer,
     },
-    state::{self, gui_state::GuiState, settings},
+    state::{self, gui_state::GuiState},
 };
 
 pub struct NavigationDebugWindow {
@@ -21,7 +22,7 @@ pub struct NavigationDebugWindow {
     pub navmesh_config: ConfigBuilder,
     pub path_start: [f32; 3],
     pub path_end: [f32; 3],
-    pub path: Option<Vec<[f32; 3]>>,
+    pub path: Option<WorldPath>,
     pub render_start: bool,
     pub render_end: bool,
     pub render_path: bool,
@@ -51,7 +52,7 @@ impl RenderableMutWithContext<&mut GameState> for NavigationDebugWindow {
     ) {
         let mut nav_debug_open = *gui_state
             .settings
-            .get_bool(state::parameters::RENDER_NAVIGATION_DEBUG);
+            .get::<bool>(state::parameters::RENDER_NAVIGATION_DEBUG);
 
         if !nav_debug_open {
             return;
@@ -64,14 +65,15 @@ impl RenderableMutWithContext<&mut GameState> for NavigationDebugWindow {
                 if ui.collapsing_header("Navmesh", TreeNodeFlags::DEFAULT_OPEN) {
                     let mut render_navmesh = *gui_state
                         .settings
-                        .get_bool(state::parameters::RENDER_NAVIGATION_NAVMESH);
+                        .get::<bool>(state::parameters::RENDER_NAVIGATION_NAVMESH);
 
                     if ui.checkbox("Render Navmesh", &mut render_navmesh) {
                         // Clicking the checkbox updates the value, so no need to
                         // invert it when setting it back
-                        gui_state
-                            .settings
-                            .set_bool(state::parameters::RENDER_NAVIGATION_NAVMESH, render_navmesh);
+                        gui_state.settings.set::<bool>(
+                            state::parameters::RENDER_NAVIGATION_NAVMESH,
+                            render_navmesh,
+                        );
                     }
 
                     if ui.button("Rebuild Navmesh") {
@@ -93,34 +95,38 @@ impl RenderableMutWithContext<&mut GameState> for NavigationDebugWindow {
                     ui.input_float3("End", &mut self.path_end).build();
                     width_token.end();
 
-                    let line_vert_src = include_str!("../render/world/shaders/line.vert");
-                    let line_frag_src = include_str!("../render/world/shaders/line.frag");
-                    let mut line_renderer = LineRenderer::new(
-                        gui_state.ig_renderer.gl_context(),
-                        line_vert_src,
-                        line_frag_src,
-                    );
-
                     // TODO: These are impossible to see lol
                     if self.render_start {
-                        line_renderer.add_circle(self.path_start, 0.2, [0.2, 1.0, 0.2]);
+                        gui_state
+                            .line_renderer
+                            .add_circle(self.path_start, 0.2, [0.2, 1.0, 0.2]);
                     }
                     if self.render_end {
-                        line_renderer.add_circle(self.path_end, 0.2, [1.0, 0.2, 0.2]);
+                        gui_state
+                            .line_renderer
+                            .add_circle(self.path_end, 0.2, [1.0, 0.2, 0.2]);
                     }
 
                     ui.checkbox("Render Path", &mut self.render_path);
 
                     if ui.button("Find Path") {
-                        self.path = game_state
-                            .geometry
-                            .path(self.path_start.into(), self.path_end.into())
-                            .map(|path| path.iter().map(|p| [p.x, p.y, p.z]).collect());
+                        self.path = systems::geometry::path_point_point(
+                            game_state,
+                            self.path_start.into(),
+                            self.path_end.into(),
+                        )
                     }
 
                     if self.render_path {
                         if let Some(path) = &self.path {
-                            line_renderer.add_polyline(&path, [1.0, 0.2, 0.2]);
+                            let points = path
+                                .points
+                                .iter()
+                                .map(|p| [p.x, p.y, p.z])
+                                .collect::<Vec<[f32; 3]>>();
+                            gui_state
+                                .line_renderer
+                                .add_polyline(&points, [1.0, 1.0, 1.0]);
 
                             if ui.collapsing_header("Path Points", TreeNodeFlags::empty()) {
                                 ui.text(format!("{:#?}", path));
@@ -128,19 +134,24 @@ impl RenderableMutWithContext<&mut GameState> for NavigationDebugWindow {
                         } else {
                             ui.text("No path found");
                         }
-                    }
 
-                    line_renderer.draw(
-                        gui_state.ig_renderer.gl_context(),
-                        &Matrix4::identity(),
-                        1.0,
-                    );
+                        // TEMP
+                        gui_state.path_cache.iter().for_each(|(_entity, path)| {
+                            gui_state.line_renderer.add_polyline(
+                                &path
+                                    .iter()
+                                    .map(|p| [p.x, p.y, p.z])
+                                    .collect::<Vec<[f32; 3]>>(),
+                                [0.2, 0.2, 1.0],
+                            );
+                        });
+                    }
                 }
             });
 
         gui_state
             .settings
-            .set_bool(state::parameters::RENDER_NAVIGATION_DEBUG, nav_debug_open);
+            .set::<bool>(state::parameters::RENDER_NAVIGATION_DEBUG, nav_debug_open);
     }
 }
 

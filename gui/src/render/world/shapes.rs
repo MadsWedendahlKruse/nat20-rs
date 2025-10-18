@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-
-// render/capsule_renderer.rs
 use parry3d::na;
 
 use crate::render::world::mesh::Mesh;
@@ -26,7 +23,7 @@ pub fn build_capsule_interleaved(
         for y in 0..=rings {
             let v = y as f32 / rings as f32; // 0..1
             // polar angle from 0..pi/2
-            let theta = (v * 0.5 * std::f32::consts::PI);
+            let theta = v * 0.5 * std::f32::consts::PI;
             let sy = theta.sin();
             let cy = theta.cos();
             for x in 0..=segments {
@@ -91,46 +88,4 @@ pub fn build_capsule_mesh(
 ) -> Mesh {
     let (verts, idx) = build_capsule_interleaved(rings, segments, radius, half_height);
     Mesh::from_interleaved(gl, &verts, &idx)
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct Key {
-    r_mm: u32,
-    h_mm: u32,
-}
-
-fn key(radius: f32, half_height: f32) -> Key {
-    Key {
-        r_mm: (radius * 1000.0) as u32,
-        h_mm: (half_height * 1000.0) as u32,
-    }
-}
-
-pub struct CapsuleCache {
-    meshes: HashMap<Key, Mesh>,
-    rings: usize,
-    segments: usize,
-}
-
-impl CapsuleCache {
-    pub fn new(rings: usize, segments: usize) -> Self {
-        Self {
-            meshes: HashMap::new(),
-            rings,
-            segments,
-        }
-    }
-
-    pub fn get_or_create(&mut self, gl: &glow::Context, radius: f32, half_height: f32) -> &Mesh {
-        let k = key(radius, half_height);
-        self.meshes.entry(k).or_insert_with(|| {
-            build_capsule_mesh(gl, self.rings, self.segments, radius, half_height)
-        })
-    }
-
-    pub fn destroy(&self, gl: &glow::Context) {
-        for m in self.meshes.values() {
-            m.destroy(gl);
-        }
-    }
 }

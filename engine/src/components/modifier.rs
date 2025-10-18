@@ -7,6 +7,7 @@ use super::{ability::Ability, proficiency::ProficiencyLevel};
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum ModifierSource {
+    Base, // The base value, no specific source
     Background(BackgroundId),
     Spell(SpellId),       // e.g. "Bless"
     Item(ItemId),         // e.g. "Belt of Strength"
@@ -23,6 +24,7 @@ pub enum ModifierSource {
 impl fmt::Display for ModifierSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ModifierSource::Base => write!(f, "Base"),
             ModifierSource::Background(id) => write!(f, "Background: {}", id),
             ModifierSource::Spell(id) => write!(f, "Spell: {}", id),
             ModifierSource::Item(name) => write!(f, "Item: {}", name),

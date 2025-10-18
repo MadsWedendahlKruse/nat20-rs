@@ -326,6 +326,8 @@ pub mod creatures {
 
     pub mod monsters {
 
+        use uom::si::{f32::Length, length::foot};
+
         use crate::{
             components::{
                 ability::AbilityScoreMap,
@@ -341,7 +343,8 @@ pub mod creatures {
                 },
                 level::ChallengeRating,
                 proficiency::{Proficiency, ProficiencyLevel},
-                race::{CreatureSize, CreatureType, Speed},
+                race::{CreatureSize, CreatureType},
+                speed::Speed,
             },
             entities::monster::Monster,
             registry,
@@ -358,7 +361,7 @@ pub mod creatures {
                 HitPoints::new(10),
                 CreatureSize::Small,
                 CreatureType::Fey,
-                Speed(30),
+                Speed::new(Length::new::<foot>(30.0)),
                 AbilityScoreMap::from([
                     (Ability::Strength, 10),
                     (Ability::Dexterity, 14),

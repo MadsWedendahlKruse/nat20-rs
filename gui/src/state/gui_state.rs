@@ -1,16 +1,21 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use glow::HasContext;
+use hecs::Entity;
 use imgui_glow_renderer::AutoRenderer;
 use nat20_rs::systems::geometry::RaycastResult;
-use parry3d::{na::Vector3, query::Ray};
+use parry3d::{
+    na::{Point3, Vector3},
+    query::Ray,
+};
 use winit::window::Window;
 
 use crate::{
     render::{
         ui::utils::ImguiRenderableMut,
         world::{
-            camera::OrbitCamera, frame_uniforms::FrameUniforms, mesh::Mesh, program::BasicProgram,
+            camera::OrbitCamera, frame_uniforms::FrameUniforms, grid::GridRenderer,
+            line::LineRenderer, mesh::Mesh, program::BasicProgram,
         },
     },
     state::settings::GuiSettings,
@@ -21,7 +26,18 @@ pub struct GuiState {
     pub frame_uniforms: FrameUniforms,
     pub program: BasicProgram,
     pub camera: OrbitCamera,
+
+    /// I'm not entirely sure where the best place to put these two, so for now
+    /// they can live in here :^)
+    pub line_renderer: LineRenderer,
+    pub grid_renderer: GridRenderer,
+
+    /// GUI settings, mostly used to configure various rendering options.
     pub settings: GuiSettings,
+
+    /// Store the latest computed path for each entity. This is mostly used for
+    /// visualization/debugging purposes.
+    pub path_cache: HashMap<Entity, Vec<Point3<f32>>>,
 
     // TODO: Everything involving the mesh cache seems like a mess right now.
     pub mesh_cache: BTreeMap<String, Mesh>,
@@ -56,12 +72,29 @@ impl GuiState {
             include_str!("../render/world/shaders/basic.frag"),
         );
 
+        let line_renderer = LineRenderer::new(
+            ig_renderer.gl_context(),
+            include_str!("../render/world/shaders/line.vert"),
+            include_str!("../render/world/shaders/line.frag"),
+        );
+        let grid_renderer = GridRenderer::new(
+            ig_renderer.gl_context(),
+            50,
+            1.0,
+            10,
+            include_str!("../render/world/shaders/grid.vert"),
+            include_str!("../render/world/shaders/grid.frag"),
+        );
+
         Self {
             ig_renderer,
             frame_uniforms,
             program,
+            line_renderer,
+            grid_renderer,
             camera: OrbitCamera::new(),
             settings: GuiSettings::default(),
+            path_cache: HashMap::new(),
             mesh_cache: BTreeMap::new(),
             cursor_ray_result: None,
         }
