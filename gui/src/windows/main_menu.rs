@@ -211,6 +211,17 @@ impl MainMenuWindow {
                                 [0.8, 0.8, 0.8, 1.0],
                                 &mode,
                             );
+
+                            // TEMP
+                            gui_state.path_cache.get(&entity).map(|path| {
+                                gui_state.line_renderer.add_polyline(
+                                    &path
+                                        .iter()
+                                        .map(|p| [p.x, p.y, p.z])
+                                        .collect::<Vec<[f32; 3]>>(),
+                                    [1.0, 1.0, 1.0],
+                                );
+                            });
                         } else {
                             let mesh = shapes::build_capsule_mesh(
                                 gl_context,
@@ -281,13 +292,18 @@ impl MainMenuWindow {
                                     .replace(CreatureRightClickWindow::new(*entity));
                             }
 
-                            if ui.is_mouse_clicked(MouseButton::Left) {
+                            if ui.is_mouse_clicked(MouseButton::Left)
+                                && systems::ai::is_player_controlled(&game_state.world, *entity)
+                            {
                                 current_entity.replace(*entity);
                             }
                         }
 
                         RaycastHitKind::World => {
                             if ui.is_mouse_clicked(MouseButton::Left) {
+                                // TODO: This should be handled in the game logic,
+                                // so we can take into account stuff like not being
+                                // able to move if it's not your turn, movement speed, etc.
                                 if let Some(entity) = current_entity
                                     && let Some(path) =
                                         systems::geometry::path(game_state, *entity, closest.poi)

@@ -134,17 +134,6 @@ impl RenderableMutWithContext<&mut GameState> for NavigationDebugWindow {
                         } else {
                             ui.text("No path found");
                         }
-
-                        // TEMP
-                        gui_state.path_cache.iter().for_each(|(_entity, path)| {
-                            gui_state.line_renderer.add_polyline(
-                                &path
-                                    .iter()
-                                    .map(|p| [p.x, p.y, p.z])
-                                    .collect::<Vec<[f32; 3]>>(),
-                                [0.2, 0.2, 1.0],
-                            );
-                        });
                     }
                 }
             });
