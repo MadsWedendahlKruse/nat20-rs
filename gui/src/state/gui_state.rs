@@ -57,6 +57,10 @@ pub struct GuiState {
     /// Note that this will also be `None` if the cursor didn't hit anything in
     /// the 3D world.
     pub cursor_ray_result: Option<RaycastResult>,
+
+    /// The entity currently selected. This can be used for various purposes, so
+    /// it lives here in the GUI state :^)
+    pub selected_entity: Option<Entity>,
 }
 
 impl GuiState {
@@ -102,6 +106,7 @@ impl GuiState {
             path_cache: HashMap::new(),
             mesh_cache: BTreeMap::new(),
             cursor_ray_result: None,
+            selected_entity: None,
         }
     }
 
@@ -127,5 +132,7 @@ impl GuiState {
         let proj = self.camera.proj(size.width, size.height);
         let light_dir = Vector3::new(-0.5, -1.0, -0.8);
         self.frame_uniforms.update(gl, view, proj, light_dir);
+
+        self.window_manager.new_frame();
     }
 }

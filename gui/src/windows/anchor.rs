@@ -80,7 +80,8 @@ pub static BOTTOM_RIGHT: WindowAnchor = WindowAnchor {
 pub struct AnchoredWindow {
     pub label: String,
     pub anchor: WindowAnchor,
-    pub last_size: [f32; 2],
+    pub prev_size: [f32; 2],
+    pub rendered_prev_frame: bool,
 }
 
 impl AnchoredWindow {
@@ -88,12 +89,13 @@ impl AnchoredWindow {
         Self {
             label,
             anchor,
-            last_size: [0.0, 0.0],
+            prev_size: [0.0, 0.0],
+            rendered_prev_frame: false,
         }
     }
 
     pub fn update_size(&mut self, size: [f32; 2]) {
-        self.last_size = size;
+        self.prev_size = size;
     }
 }
 
@@ -101,6 +103,7 @@ impl AnchoredWindow {
 pub struct WindowManager {
     pub windows_by_label: BTreeMap<String, AnchoredWindow>,
     pub windos_by_anchor: HashMap<WindowAnchor, Vec<String>>,
+    rendered_this_frame: BTreeMap<String, bool>,
 }
 
 impl WindowManager {
@@ -108,6 +111,7 @@ impl WindowManager {
         Self {
             windows_by_label: BTreeMap::new(),
             windos_by_anchor: HashMap::new(),
+            rendered_this_frame: BTreeMap::new(),
         }
     }
 
@@ -131,20 +135,59 @@ impl WindowManager {
         let window = self.windows_by_label.get(label)?;
 
         let viewport = ui.io().display_size;
-        let size = window.last_size;
+        let size = window.prev_size;
 
-        // TODO: Take into account that there can be multiple windows with the same anchor
-        let x = match window.anchor.horizontal {
-            HorizontalAnchor::Left => 0.0,
-            HorizontalAnchor::Center => (viewport[0] - size[0]) / 2.0,
-            HorizontalAnchor::Right => viewport[0] - size[0],
-        };
+        // Take into account that there can be multiple windows with the same anchor
+        let anchor_windows = self.windos_by_anchor.get(&window.anchor)?;
+        // Initial anchor position
+        let (mut x, mut y) = (
+            match window.anchor.horizontal {
+                HorizontalAnchor::Left => 0.0,
+                HorizontalAnchor::Center => (viewport[0] - size[0]) / 2.0,
+                HorizontalAnchor::Right => viewport[0] - size[0],
+            },
+            match window.anchor.vertical {
+                VerticalAnchor::Top => 0.0,
+                VerticalAnchor::Center => (viewport[1] - size[1]) / 2.0,
+                VerticalAnchor::Bottom => viewport[1] - size[1],
+            },
+        );
+        // Offset by previous windows with the same anchor
+        for window_label in anchor_windows {
+            if window_label == label {
+                break;
+            }
 
-        let y = match window.anchor.vertical {
-            VerticalAnchor::Top => 0.0,
-            VerticalAnchor::Center => (viewport[1] - size[1]) / 2.0,
-            VerticalAnchor::Bottom => viewport[1] - size[1],
-        };
+            if let Some(prev_window) = self.windows_by_label.get(window_label)
+                && prev_window.rendered_prev_frame
+            {
+                // Windows on the sides offset horizontally towards center
+                // Windows on top/bottom offset vertically towards center
+                match window.anchor.horizontal {
+                    HorizontalAnchor::Left => {
+                        x += prev_window.prev_size[0];
+                        continue;
+                    }
+                    HorizontalAnchor::Right => {
+                        x -= prev_window.prev_size[0];
+                        continue;
+                    }
+                    HorizontalAnchor::Center => {}
+                }
+
+                match window.anchor.vertical {
+                    VerticalAnchor::Top => {
+                        y += prev_window.prev_size[1];
+                        continue;
+                    }
+                    VerticalAnchor::Bottom => {
+                        y -= prev_window.prev_size[1];
+                        continue;
+                    }
+                    VerticalAnchor::Center => {}
+                }
+            }
+        }
 
         Some([x, y])
     }
@@ -182,6 +225,18 @@ impl WindowManager {
             && let Some(size) = actual_size
         {
             window.update_size(size);
+            self.rendered_this_frame.insert(label.to_string(), true);
         }
+    }
+
+    pub fn new_frame(&mut self) {
+        for window in self.windows_by_label.values_mut() {
+            window.rendered_prev_frame = self
+                .rendered_this_frame
+                .get(&window.label)
+                .cloned()
+                .unwrap_or(false);
+        }
+        self.rendered_this_frame.clear();
     }
 }

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use hecs::{Entity, World};
 use nat20_rs::components::id::Name;
 
@@ -184,4 +186,75 @@ pub fn interpolate_color(color1: [f32; 4], color2: [f32; 4], factor: f32) -> [f3
         color2[2] + (color1[2] - color2[2]) * factor,
         color2[3] + (color1[3] - color2[3]) * factor,
     ]
+}
+
+pub struct ProgressBarColor {
+    pub color_full: [f32; 4],
+    pub color_empty: [f32; 4],
+    pub color_full_bg: [f32; 4],
+    pub color_empty_bg: [f32; 4],
+}
+
+pub fn render_progress_bar<T: Display>(
+    ui: &imgui::Ui,
+    current: T,
+    max: T,
+    fraction: f32,
+    width: f32,
+    label: &str,
+    units: Option<&str>,
+    progress_bar_color: Option<ProgressBarColor>,
+) {
+    let hp_text = if let Some(units) = units {
+        format!("{} / {} {}", current, max, units)
+    } else {
+        format!("{} / {}", current, max)
+    };
+
+    // Reserve vertical space for the taller widget (the progress bar)
+    let line_height = ui.text_line_height_with_spacing();
+    let bar_height = line_height;
+    let y_offset = (bar_height - line_height) * 0.5;
+    ui.dummy([0.0, y_offset.max(0.0)]); // move down a little if needed
+
+    // "HP" label
+    ui.text(label);
+    ui.same_line();
+
+    // Style colors (interpolated based on health fraction)
+    let (foreground, background) = if let Some(progress_bar_color) = progress_bar_color {
+        let (color, color_bg) = {
+            (
+                interpolate_color(
+                    progress_bar_color.color_full,
+                    progress_bar_color.color_empty,
+                    fraction,
+                ),
+                interpolate_color(
+                    progress_bar_color.color_full_bg,
+                    progress_bar_color.color_empty_bg,
+                    fraction,
+                ),
+            )
+        };
+        let foreground = ui.push_style_color(imgui::StyleColor::PlotHistogram, color);
+        let background = ui.push_style_color(imgui::StyleColor::FrameBg, color_bg);
+
+        (Some(foreground), Some(background))
+    } else {
+        (None, None)
+    };
+
+    imgui::ProgressBar::new(fraction)
+        .size([width, bar_height])
+        .overlay_text(&hp_text)
+        .build(ui);
+
+    // Pop the style colors
+    if let Some(background) = background
+        && let Some(foreground) = foreground
+    {
+        background.pop();
+        foreground.pop();
+    }
 }

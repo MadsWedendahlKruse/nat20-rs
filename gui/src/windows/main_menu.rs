@@ -33,7 +33,10 @@ use crate::{
             shapes::{self},
         },
     },
-    state::{self, gui_state::GuiState},
+    state::{
+        self,
+        gui_state::{self, GuiState},
+    },
     windows::{
         anchor::{
             self, AUTO_RESIZE, HorizontalAnchor, VerticalAnchor, WindowAnchor, WindowManager,
@@ -59,8 +62,6 @@ pub enum MainMenuState {
         creature_debug: Option<CreatureDebugWindow>,
         creature_right_click: Option<CreatureRightClickWindow>,
         navigation_debug: NavigationDebugWindow,
-
-        current_entity: Option<Entity>,
     },
 }
 
@@ -93,8 +94,6 @@ impl MainMenuWindow {
                 creature_debug: None,
                 creature_right_click: None,
                 navigation_debug: NavigationDebugWindow::new(&initial_config),
-
-                current_entity: None,
             },
         }
     }
@@ -112,8 +111,6 @@ impl MainMenuWindow {
                 creature_debug,
                 creature_right_click,
                 navigation_debug,
-
-                current_entity,
             } => {
                 navigation_debug.render_mut_with_context(ui, gui_state, game_state);
 
@@ -139,132 +136,12 @@ impl MainMenuWindow {
                     None
                 };
 
-                if *gui_state
-                    .settings
-                    .get::<bool>(state::parameters::RENDER_GRID)
-                {
-                    gui_state
-                        .grid_renderer
-                        .draw(gui_state.ig_renderer.gl_context());
-                }
+                Self::render_world(ui, gui_state, game_state);
 
-                let mesh_cache = &mut gui_state.mesh_cache;
-                // TODO: Do something less "hardcoded" with the mesh cache
-                if let Some(mesh) = mesh_cache.get("world") {
-                    mesh.draw(
-                        gui_state.ig_renderer.gl_context(),
-                        &gui_state.program,
-                        &Matrix4::identity(),
-                        [0.75, 0.75, 0.75, 1.0],
-                        &Wireframe::None,
-                    );
-                } else {
-                    let mesh = Mesh::from_parry_trimesh(
-                        gui_state.ig_renderer.gl_context(),
-                        &game_state.geometry.trimesh,
-                    );
-                    mesh_cache.insert("world".to_string(), mesh);
-                }
+                let window_manager_ptr =
+                    unsafe { &mut *(&mut gui_state.window_manager as *mut WindowManager) };
 
-                if let Some(mesh) = mesh_cache.get("navmesh") {
-                    if *gui_state
-                        .settings
-                        .get_mut::<bool>(state::parameters::RENDER_NAVIGATION_NAVMESH)
-                    {
-                        mesh.draw(
-                            gui_state.ig_renderer.gl_context(),
-                            &gui_state.program,
-                            &Matrix4::identity(),
-                            [0.2, 0.8, 0.2, 0.5],
-                            &Wireframe::Overlay {
-                                color: [0.0, 0.5, 0.0, 0.5],
-                                width: 2.0,
-                            },
-                        );
-                    }
-                } else {
-                    let mesh = Mesh::from_poly_navmesh(
-                        gui_state.ig_renderer.gl_context(),
-                        &game_state.geometry.poly_navmesh,
-                    );
-                    mesh_cache.insert("navmesh".to_string(), mesh);
-                }
-
-                // TODO: I feel like this should be somewhere else
-                for (entity, pose) in game_state.world.query::<&CreaturePose>().iter() {
-                    systems::geometry::get_shape(&game_state.world, entity).map(|shape| {
-                        let key = format!("{}-{}", shape.radius, shape.half_height());
-                        if let Some(mesh) = mesh_cache.get(&key) {
-                            if let Some(current_entity) = current_entity
-                                && *current_entity == entity
-                            {
-                                // Render a ring around the feet of the currently selected entity
-                                gui_state.line_renderer.add_circle(
-                                    [
-                                        pose.translation.vector.x,
-                                        pose.translation.vector.y
-                                            - systems::geometry::get_height(
-                                                &game_state.world,
-                                                entity,
-                                            )
-                                            .unwrap()
-                                                / 2.0
-                                            + 0.1,
-                                        pose.translation.vector.z,
-                                    ],
-                                    shape.radius + 0.1,
-                                    [1.0, 1.0, 1.0],
-                                );
-                            }
-
-                            // Highlight if mouse is over the creature
-                            let mode = if let Some(raycast) = &gui_state.cursor_ray_result
-                                && let Some(closest) = raycast.closest()
-                                && let RaycastHitKind::Creature(e) = &closest.kind
-                                && *e == entity
-                            {
-                                Wireframe::Overlay {
-                                    color: [1.0, 1.0, 1.0, 1.0],
-                                    width: 2.0,
-                                }
-                            } else {
-                                Wireframe::None
-                            };
-
-                            mesh.draw(
-                                gui_state.ig_renderer.gl_context(),
-                                &gui_state.program,
-                                &pose.to_homogeneous(),
-                                [0.8, 0.8, 0.8, 1.0],
-                                &mode,
-                            );
-
-                            // TEMP
-                            gui_state.path_cache.get(&entity).map(|path| {
-                                gui_state.line_renderer.add_polyline(
-                                    &path
-                                        .iter()
-                                        .map(|p| [p.x, p.y, p.z])
-                                        .collect::<Vec<[f32; 3]>>(),
-                                    [1.0, 1.0, 1.0],
-                                );
-                            });
-                        } else {
-                            let mesh = shapes::build_capsule_mesh(
-                                gui_state.ig_renderer.gl_context(),
-                                8,
-                                16,
-                                shape.radius,
-                                shape.half_height(),
-                            );
-                            mesh_cache.insert(key, mesh);
-                        }
-                    });
-                }
-
-                Self::render_creature_labels(ui, game_state, &gui_state.camera);
-
-                gui_state.window_manager.render_window(
+                window_manager_ptr.render_window(
                     ui,
                     "World",
                     &anchor::TOP_LEFT,
@@ -273,12 +150,12 @@ impl MainMenuWindow {
                     || {
                         Self::render_character_menu(
                             ui,
+                            gui_state,
                             game_state,
                             level_up,
                             spawn_predefined,
                             encounters,
                             creature_debug,
-                            &mut gui_state.cursor_ray_result,
                             log_source,
                         );
                     },
@@ -321,10 +198,12 @@ impl MainMenuWindow {
                             if ui.is_mouse_clicked(MouseButton::Left)
                                 && systems::ai::is_player_controlled(&game_state.world, *entity)
                             {
-                                if current_entity.is_some() && current_entity.unwrap() == *entity {
-                                    current_entity.take();
+                                if gui_state.selected_entity.is_some()
+                                    && gui_state.selected_entity.unwrap() == *entity
+                                {
+                                    gui_state.selected_entity.take();
                                 } else {
-                                    current_entity.replace(*entity);
+                                    gui_state.selected_entity.replace(*entity);
                                 }
                             }
                         }
@@ -334,16 +213,16 @@ impl MainMenuWindow {
                                 // TODO: This should be handled in the game logic,
                                 // so we can take into account stuff like not being
                                 // able to move if it's not your turn, movement speed, etc.
-                                if let Some(entity) = current_entity
+                                if let Some(entity) = gui_state.selected_entity
                                     && let Some(path) =
-                                        systems::geometry::path(game_state, *entity, closest.poi)
+                                        systems::geometry::path(game_state, entity, closest.poi)
                                 {
                                     systems::geometry::move_to(
                                         game_state,
-                                        *entity,
+                                        entity,
                                         path.points.last().as_ref().unwrap(),
                                     );
-                                    gui_state.path_cache.insert(*entity, path.points);
+                                    gui_state.path_cache.insert(entity, path.points);
                                     println!("Path length {:#?}", path.length);
                                 }
                             }
@@ -356,25 +235,18 @@ impl MainMenuWindow {
                         creature_right_click.render_mut_with_context(ui, game_state);
                     });
                 }
-
-                // TODO: Not sure where to put this?
-                gui_state.line_renderer.draw(
-                    gui_state.ig_renderer.gl_context(),
-                    &Matrix4::identity(),
-                    2.0,
-                );
             }
         }
     }
 
     fn render_character_menu(
         ui: &imgui::Ui,
+        gui_state: &mut GuiState,
         game_state: &mut GameState,
         level_up_window: &mut Option<LevelUpWindow>,
         spawn_predefined_window: &mut Option<SpawnPredefinedWindow>,
         encounters: &mut Vec<EncounterWindow>,
         debug_window: &mut Option<CreatureDebugWindow>,
-        raycast_result: &mut Option<RaycastResult>,
         log_source: &mut usize,
     ) {
         ui.child_window("Characters")
@@ -422,10 +294,10 @@ impl MainMenuWindow {
                 }
                 Self::render_spawn_creature(
                     ui,
+                    gui_state,
                     game_state,
                     level_up_window,
                     spawn_predefined_window,
-                    raycast_result,
                 );
 
                 ui.separator();
@@ -445,10 +317,10 @@ impl MainMenuWindow {
 
     fn render_spawn_creature(
         ui: &imgui::Ui,
+        gui_state: &mut GuiState,
         game_state: &mut GameState,
         level_up_window: &mut Option<LevelUpWindow>,
         spawn_predefined_window: &mut Option<SpawnPredefinedWindow>,
-        raycast_result: &mut Option<RaycastResult>,
     ) {
         ui.popup("Spawn Creature", || {
             if let Some(index) = render_uniform_buttons_with_padding(
@@ -474,7 +346,7 @@ impl MainMenuWindow {
         }
 
         if let Some(spawn_predefined) = spawn_predefined_window {
-            spawn_predefined.render_mut_with_context(ui, (game_state, raycast_result));
+            spawn_predefined.render_mut_with_context(ui, gui_state, game_state);
             if spawn_predefined.is_spawning_completed() {
                 spawn_predefined_window.take();
             }
@@ -552,6 +424,137 @@ impl MainMenuWindow {
                 }
                 width_token.end();
             },
+        );
+    }
+
+    fn render_world(ui: &imgui::Ui, gui_state: &mut GuiState, game_state: &mut GameState) {
+        if *gui_state
+            .settings
+            .get::<bool>(state::parameters::RENDER_GRID)
+        {
+            gui_state
+                .grid_renderer
+                .draw(gui_state.ig_renderer.gl_context());
+        }
+
+        let mesh_cache = &mut gui_state.mesh_cache;
+        // TODO: Do something less "hardcoded" with the mesh cache
+        if let Some(mesh) = mesh_cache.get("world") {
+            mesh.draw(
+                gui_state.ig_renderer.gl_context(),
+                &gui_state.program,
+                &Matrix4::identity(),
+                [0.75, 0.75, 0.75, 1.0],
+                &Wireframe::None,
+            );
+        } else {
+            let mesh = Mesh::from_parry_trimesh(
+                gui_state.ig_renderer.gl_context(),
+                &game_state.geometry.trimesh,
+            );
+            mesh_cache.insert("world".to_string(), mesh);
+        }
+
+        if let Some(mesh) = mesh_cache.get("navmesh") {
+            if *gui_state
+                .settings
+                .get_mut::<bool>(state::parameters::RENDER_NAVIGATION_NAVMESH)
+            {
+                mesh.draw(
+                    gui_state.ig_renderer.gl_context(),
+                    &gui_state.program,
+                    &Matrix4::identity(),
+                    [0.2, 0.8, 0.2, 0.5],
+                    &Wireframe::Overlay {
+                        color: [0.0, 0.5, 0.0, 0.5],
+                        width: 2.0,
+                    },
+                );
+            }
+        } else {
+            let mesh = Mesh::from_poly_navmesh(
+                gui_state.ig_renderer.gl_context(),
+                &game_state.geometry.poly_navmesh,
+            );
+            mesh_cache.insert("navmesh".to_string(), mesh);
+        }
+
+        // TODO: I feel like this should be somewhere else
+        for (entity, pose) in game_state.world.query::<&CreaturePose>().iter() {
+            systems::geometry::get_shape(&game_state.world, entity).map(|shape| {
+                let key = format!("{:#?}", shape);
+                if let Some(mesh) = mesh_cache.get(&key) {
+                    if let Some(current_entity) = gui_state.selected_entity
+                        && current_entity == entity
+                    {
+                        // Render a ring around the feet of the currently selected entity
+                        gui_state.line_renderer.add_circle(
+                            [
+                                pose.translation.vector.x,
+                                pose.translation.vector.y
+                                    - systems::geometry::get_height(&game_state.world, entity)
+                                        .unwrap()
+                                        / 2.0
+                                    + 0.1,
+                                pose.translation.vector.z,
+                            ],
+                            shape.radius + 0.1,
+                            [1.0, 1.0, 1.0],
+                        );
+                    }
+
+                    // Highlight if mouse is over the creature
+                    let mode = if let Some(raycast) = &gui_state.cursor_ray_result
+                        && let Some(closest) = raycast.closest()
+                        && let RaycastHitKind::Creature(e) = &closest.kind
+                        && *e == entity
+                    {
+                        Wireframe::Overlay {
+                            color: [1.0, 1.0, 1.0, 1.0],
+                            width: 2.0,
+                        }
+                    } else {
+                        Wireframe::None
+                    };
+
+                    mesh.draw(
+                        gui_state.ig_renderer.gl_context(),
+                        &gui_state.program,
+                        &pose.to_homogeneous(),
+                        [0.8, 0.8, 0.8, 1.0],
+                        &mode,
+                    );
+
+                    // TEMP
+                    gui_state.path_cache.get(&entity).map(|path| {
+                        gui_state.line_renderer.add_polyline(
+                            &path
+                                .iter()
+                                .map(|p| [p.x, p.y, p.z])
+                                .collect::<Vec<[f32; 3]>>(),
+                            [1.0, 1.0, 1.0],
+                        );
+                    });
+                } else {
+                    let mesh = shapes::build_capsule_mesh(
+                        gui_state.ig_renderer.gl_context(),
+                        8,
+                        16,
+                        shape.radius,
+                        shape.half_height(),
+                    );
+                    mesh_cache.insert(key, mesh);
+                }
+            });
+        }
+
+        Self::render_creature_labels(ui, game_state, &gui_state.camera);
+
+        // TODO: Not sure where to put this?
+        gui_state.line_renderer.draw(
+            gui_state.ig_renderer.gl_context(),
+            &Matrix4::identity(),
+            2.0,
         );
     }
 

@@ -34,6 +34,7 @@ use nat20_rs::{
         resource::{self, Resource, ResourceAmount, ResourceAmountMap, ResourceKind, ResourceMap},
         saving_throw::{SavingThrowKind, SavingThrowSet},
         skill::{Skill, SkillSet, skill_ability},
+        speed::Speed,
         spells::spellbook::Spellbook,
     },
     registry,
@@ -51,7 +52,8 @@ use crate::{
         text::{TextKind, TextSegment, TextSegments, indent_text, item_rarity_color},
         utils::{
             ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
-            SELECTED_BUTTON_COLOR, interpolate_color, render_empty_button,
+            ProgressBarColor, SELECTED_BUTTON_COLOR, interpolate_color, render_empty_button,
+            render_progress_bar,
         },
     },
     table_with_columns,
@@ -150,56 +152,36 @@ impl ImguiRenderable for ChallengeRating {
     }
 }
 
-static FULL_HEALTH_COLOR: [f32; 4] = [0.0, 0.7, 0.0, 1.0];
-static FULL_HEALTH_BG_COLOR: [f32; 4] = [0.0, 0.2, 0.0, 1.0];
-static LOW_HEALTH_COLOR: [f32; 4] = [0.7, 0.0, 0.0, 1.0];
-static LOW_HEALTH_BG_COLOR: [f32; 4] = [0.2, 0.0, 0.0, 1.0];
+// TODO: Store all colors in one place?
+pub static FULL_HEALTH_COLOR: [f32; 4] = [0.0, 0.7, 0.0, 1.0];
+pub static FULL_HEALTH_BG_COLOR: [f32; 4] = [0.0, 0.2, 0.0, 1.0];
+pub static LOW_HEALTH_COLOR: [f32; 4] = [0.7, 0.0, 0.0, 1.0];
+pub static LOW_HEALTH_BG_COLOR: [f32; 4] = [0.2, 0.0, 0.0, 1.0];
 
 impl ImguiRenderable for HitPoints {
     fn render(&self, ui: &imgui::Ui) {
-        let current = self.current();
-        let max = self.max();
-        let hp_fraction = current as f32 / max as f32;
-        let hp_text = format!("{} / {}", current, max);
-
-        // Reserve vertical space for the taller widget (the progress bar)
-        let line_height = ui.text_line_height_with_spacing();
-        let bar_height = line_height;
-        let y_offset = (bar_height - line_height) * 0.5;
-        ui.dummy([0.0, y_offset.max(0.0)]); // move down a little if needed
-
-        // "HP" label
-        ui.text("HP:");
-        ui.same_line();
-
-        // Style colors (interpolated based on health fraction)
-        let (health_color, health_bg_color) = {
-            (
-                interpolate_color(FULL_HEALTH_COLOR, LOW_HEALTH_COLOR, hp_fraction),
-                interpolate_color(FULL_HEALTH_BG_COLOR, LOW_HEALTH_BG_COLOR, hp_fraction),
-            )
-        };
-        let foreground = ui.push_style_color(imgui::StyleColor::PlotHistogram, health_color);
-        let background = ui.push_style_color(imgui::StyleColor::FrameBg, health_bg_color);
-
-        imgui::ProgressBar::new(hp_fraction)
-            .size([150.0, bar_height])
-            .overlay_text(&hp_text)
-            .build(ui);
-
-        // Pop the style colors
-        foreground.pop();
-        background.pop();
+        render_progress_bar(
+            ui,
+            self.current(),
+            self.max(),
+            self.current() as f32 / self.max() as f32,
+            150.0,
+            "HP",
+            None,
+            Some(ProgressBarColor {
+                color_full: FULL_HEALTH_COLOR,
+                color_empty: LOW_HEALTH_COLOR,
+                color_full_bg: FULL_HEALTH_BG_COLOR,
+                color_empty_bg: LOW_HEALTH_BG_COLOR,
+            }),
+        );
     }
 }
 
 impl ImguiRenderable for LifeState {
     fn render(&self, ui: &imgui::Ui) {
         match self {
-            LifeState::Normal => {
-                // Render *something* to fit with UI line logic
-                ui.text("");
-            }
+            LifeState::Normal => {}
             LifeState::Unconscious(death_saving_throws) => {
                 // Render something like [++|-] where + is a success and - is a failure
                 let mut segments = Vec::new();
@@ -1554,5 +1536,24 @@ impl ImguiRenderableWithContext<(&World, Entity)>
         ui.separator();
 
         context_and_cost.1.render(ui);
+    }
+}
+
+pub static SPEED_COLOR: [f32; 4] = [0.3, 0.7, 0.8, 1.0];
+pub static SPEED_COLOR_BG: [f32; 4] = [0.15, 0.35, 0.4, 1.0];
+
+impl ImguiRenderable for Speed {
+    fn render(&self, ui: &imgui::Ui) {
+        let total_speed = self.get_total_speed();
+        let text = if self.moved_this_turn().value == 0.0 {
+            format!("Speed: {} meters", total_speed.value)
+        } else {
+            format!(
+                "Speed: {} / {} meters",
+                total_speed.value - self.moved_this_turn().value,
+                total_speed.value
+            )
+        };
+        TextSegment::new(text, TextKind::Details).render(ui);
     }
 }

@@ -14,6 +14,7 @@ use nat20_rs::{
         },
         id::{ActionId, Name},
         resource::{ResourceAmountMap, ResourceMap},
+        speed::Speed,
         spells::spellbook::Spellbook,
     },
     engine::{
@@ -33,13 +34,15 @@ use crate::{
     render::{
         common::utils::{RenderableMutWithContext, RenderableWithContext},
         ui::{
+            components::{LOW_HEALTH_BG_COLOR, LOW_HEALTH_COLOR, SPEED_COLOR, SPEED_COLOR_BG},
             engine::LogLevel,
             entities::CreatureRenderMode,
             text::{TextKind, TextSegments},
             utils::{
                 ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
-                SELECTED_BUTTON_COLOR, render_button_disabled_conditionally,
-                render_button_selectable, render_empty_button, render_window_at_cursor,
+                ProgressBarColor, SELECTED_BUTTON_COLOR, render_button_disabled_conditionally,
+                render_button_selectable, render_empty_button, render_progress_bar,
+                render_window_at_cursor,
             },
         },
         world::camera::OrbitCamera,
@@ -47,7 +50,8 @@ use crate::{
     state::gui_state::{self, GuiState},
     table_with_columns,
     windows::anchor::{
-        self, AUTO_RESIZE, HorizontalAnchor, VerticalAnchor, WindowAnchor, WindowManager,
+        self, AUTO_RESIZE, BOTTOM_CENTER, BOTTOM_RIGHT, CENTER, HorizontalAnchor, VerticalAnchor,
+        WindowAnchor, WindowManager,
     },
 };
 
@@ -526,27 +530,41 @@ impl RenderableMutWithContext<(&mut GameState, &mut Option<ActionDecisionProgres
 
                     ui.separator_with_text(format!("Current turn: {}", current_name));
 
+                    let mut end_turn = false;
+
                     let disabled_token = if actions_disabled {
                         // Render whatever the actual decision progress is
-                        decision_progress.render_mut_with_context(ui, gui_state, game_state);
+                        decision_progress.render_mut_with_context(
+                            ui,
+                            gui_state,
+                            (game_state, &mut end_turn),
+                        );
 
                         // Render placeholder action selection UI
                         let token = Some(ui.begin_disabled(actions_disabled));
                         Some(ActionDecisionProgress::from_prompt(&ActionPrompt::Action {
                             actor: current_entity,
                         }))
-                        .render_mut_with_context(ui, gui_state, game_state);
+                        .render_mut_with_context(
+                            ui,
+                            gui_state,
+                            (game_state, &mut end_turn),
+                        );
 
                         token
                     } else {
                         // Render the actual action selection UI
-                        decision_progress.render_mut_with_context(ui, gui_state, game_state);
+                        decision_progress.render_mut_with_context(
+                            ui,
+                            gui_state,
+                            (game_state, &mut end_turn),
+                        );
                         None
                     };
 
                     ui.separator();
 
-                    if ui.button("End Turn") {
+                    if end_turn {
                         decision_progress.take(); // Clear decision progress
                         self.end_turn(game_state, current_entity);
                         break;
@@ -561,12 +579,12 @@ impl RenderableMutWithContext<(&mut GameState, &mut Option<ActionDecisionProgres
     }
 }
 
-impl RenderableMutWithContext<&mut GameState> for Option<ActionDecisionProgress> {
+impl RenderableMutWithContext<(&mut GameState, &mut bool)> for Option<ActionDecisionProgress> {
     fn render_mut_with_context(
         &mut self,
         ui: &imgui::Ui,
         gui_state: &mut GuiState,
-        game_state: &mut GameState,
+        (game_state, end_turn): (&mut GameState, &mut bool),
     ) {
         if self.is_none() {
             ui.text("No action decision in progress.");
@@ -642,63 +660,100 @@ impl RenderableMutWithContext<&mut GameState> for Option<ActionDecisionProgress>
                                     }
                                 }
 
+                                ui.separator();
+
+                                if ui.button("End Turn") {
+                                    *end_turn = true;
+                                }
+
                                 if chosen_action.is_some() && chosen_context_and_cost.is_none() {
-                                    render_window_at_cursor(ui, "Action Contexts", true, || {
-                                        for (context, cost) in context_and_cost_options {
-                                            if ui.button(format!("{:#?}\n{:#?}", context, cost)) {
-                                                *chosen_context_and_cost =
-                                                    Some((context.clone(), cost.clone()));
+                                    gui_state.window_manager.render_window(
+                                        ui,
+                                        "Action Contexts",
+                                        &BOTTOM_CENTER,
+                                        AUTO_RESIZE,
+                                        &mut true,
+                                        || {
+                                            for (context, cost) in context_and_cost_options {
+                                                ui.same_line();
+
+                                                if ui.button(format!("{:#?}\n{:#?}", context, cost))
+                                                {
+                                                    *chosen_context_and_cost =
+                                                        Some((context.clone(), cost.clone()));
+                                                }
                                             }
-                                        }
-                                    });
+                                        },
+                                    );
                                 }
 
                                 if chosen_action.is_some() && chosen_context_and_cost.is_some() {
-                                    render_window_at_cursor(ui, "Target Selection", true, || {
-                                        TextSegments::new(vec![
-                                            (
-                                                systems::helpers::get_component::<Name>(
+                                    let window_manager_ptr = unsafe {
+                                        &mut *(&mut gui_state.window_manager as *mut WindowManager)
+                                    };
+
+                                    window_manager_ptr.render_window(
+                                        ui,
+                                        "Target Selection",
+                                        &BOTTOM_RIGHT,
+                                        AUTO_RESIZE,
+                                        &mut true,
+                                        || {
+                                            TextSegments::new(vec![
+                                                (
+                                                    systems::helpers::get_component::<Name>(
+                                                        &game_state.world,
+                                                        *actor,
+                                                    )
+                                                    .to_string(),
+                                                    TextKind::Actor,
+                                                ),
+                                                ("is using".to_string(), TextKind::Normal),
+                                                (
+                                                    chosen_action.as_ref().unwrap().to_string(),
+                                                    TextKind::Action,
+                                                ),
+                                            ])
+                                            .render(ui);
+
+                                            let targeting_context =
+                                                systems::actions::targeting_context(
                                                     &game_state.world,
                                                     *actor,
-                                                )
-                                                .to_string(),
-                                                TextKind::Actor,
-                                            ),
-                                            ("is using".to_string(), TextKind::Normal),
-                                            (
-                                                chosen_action.as_ref().unwrap().to_string(),
-                                                TextKind::Action,
-                                            ),
-                                        ])
-                                        .render(ui);
+                                                    chosen_action.as_ref().unwrap(),
+                                                    &chosen_context_and_cost.as_ref().unwrap().0,
+                                                );
 
-                                        let targeting_context = systems::actions::targeting_context(
-                                            &game_state.world,
-                                            *actor,
-                                            chosen_action.as_ref().unwrap(),
-                                            &chosen_context_and_cost.as_ref().unwrap().0,
-                                        );
+                                            let encounter_id = game_state
+                                                .encounter_for_entity(actor)
+                                                .unwrap()
+                                                .clone();
+                                            targeting_context.render_with_context(
+                                                ui,
+                                                gui_state,
+                                                (
+                                                    game_state,
+                                                    encounter_id,
+                                                    targets,
+                                                    targets_confirmed,
+                                                ),
+                                            );
+                                            ui.tooltip(|| {
+                                                ui.text(
+                                                    chosen_action.as_ref().unwrap().to_string(),
+                                                );
+                                            });
 
-                                        let encounter_id =
-                                            game_state.encounter_for_entity(actor).unwrap().clone();
-                                        targeting_context.render_with_context(
-                                            ui,
-                                            gui_state,
-                                            (game_state, encounter_id, targets, targets_confirmed),
-                                        );
-                                        ui.tooltip(|| {
-                                            ui.text(chosen_action.as_ref().unwrap().to_string());
-                                        });
-
-                                        ui.separator();
-                                        if ui.button("Confirm Targets") {
-                                            *targets_confirmed = true;
-                                        }
-                                        ui.separator();
-                                        if ui.button("Cancel Action") {
-                                            cancel_action = true;
-                                        }
-                                    });
+                                            ui.separator();
+                                            if ui.button("Confirm Targets") {
+                                                *targets_confirmed = true;
+                                            }
+                                            ui.separator();
+                                            if ui.button("Cancel Action") {
+                                                cancel_action = true;
+                                            }
+                                        },
+                                    );
                                 }
                             });
 
@@ -717,6 +772,30 @@ impl RenderableMutWithContext<&mut GameState> for Option<ActionDecisionProgress>
                                     *actor,
                                 )
                                 .render(ui);
+
+                                ui.separator_with_text("Speed");
+                                let speed = systems::helpers::get_component::<Speed>(
+                                    &game_state.world,
+                                    *actor,
+                                );
+
+                                let total_speed = speed.get_total_speed();
+                                let remaining_speed = speed.remaining_movement();
+                                render_progress_bar(
+                                    ui,
+                                    remaining_speed.value,
+                                    total_speed.value,
+                                    remaining_speed.value / total_speed.value,
+                                    150.0,
+                                    "Speed",
+                                    Some("m"),
+                                    Some(ProgressBarColor {
+                                        color_full: SPEED_COLOR,
+                                        color_empty: LOW_HEALTH_COLOR,
+                                        color_full_bg: SPEED_COLOR_BG,
+                                        color_empty_bg: LOW_HEALTH_BG_COLOR,
+                                    }),
+                                );
                             });
                     },
                 );
@@ -744,79 +823,64 @@ impl RenderableMutWithContext<&mut GameState> for Option<ActionDecisionProgress>
                 options,
                 choices,
             } => {
-                render_window_at_cursor(ui, "Reactions", true, || {
-                    // TODO: Render the event that triggered the reaction
-                    event.render_with_context(ui, &(&game_state.world, &LogLevel::Info));
+                let window_manager_ptr =
+                    unsafe { &mut *(&mut gui_state.window_manager as *mut WindowManager) };
 
-                    // TextSegments::new(vec![
-                    //     (
-                    //         systems::helpers::get_component_clone::<Name>(world, action.actor)
-                    //             .to_string(),
-                    //         TextKind::Actor,
-                    //     ),
-                    //     ("used".to_string(), TextKind::Normal),
-                    //     (action.action_id.to_string(), TextKind::Action),
-                    //     ("on".to_string(), TextKind::Normal),
-                    //     (
-                    //         action
-                    //             .targets
-                    //             .iter()
-                    //             .map(|t| {
-                    //                 systems::helpers::get_component_clone::<Name>(world, *t)
-                    //                     .to_string()
-                    //             })
-                    //             .collect::<Vec<_>>()
-                    //             .join(", "),
-                    //         TextKind::Target,
-                    //     ),
-                    // ])
-                    // .render(ui);
+                window_manager_ptr.render_window(
+                    ui,
+                    "Reactions",
+                    &CENTER,
+                    AUTO_RESIZE,
+                    &mut true,
+                    || {
+                        event.render_with_context(ui, &(&game_state.world, &LogLevel::Info));
 
-                    ui.text("Choose how to react:");
+                        ui.text("Choose how to react:");
 
-                    for (reactor, options) in options {
-                        ui.separator_with_text(
-                            systems::helpers::get_component_clone::<Name>(
-                                &game_state.world,
-                                *reactor,
-                            )
-                            .as_str(),
-                        );
+                        for (reactor, options) in options {
+                            ui.separator_with_text(
+                                systems::helpers::get_component_clone::<Name>(
+                                    &game_state.world,
+                                    *reactor,
+                                )
+                                .as_str(),
+                            );
 
-                        for option in options {
-                            let option_selected = if let Some(choice) = choices.get(reactor) {
-                                choice.as_ref() == Some(option)
-                            } else {
-                                false
-                            };
+                            for option in options {
+                                let option_selected = if let Some(choice) = choices.get(reactor) {
+                                    choice.as_ref() == Some(option)
+                                } else {
+                                    false
+                                };
 
-                            if render_button_selectable(
-                                ui,
-                                // format!(
-                                //     "{}: {:#?}\nCost: {:#?}##{:?}",
-                                //     option.reaction_id,
-                                //     option.context,
-                                //     option.resource_cost,
-                                //     reactor
-                                // ),
-                                format!(
-                                    "{}:\nCost: {:#?}##{:?}",
-                                    option.reaction_id, option.resource_cost, reactor
-                                ),
-                                [0., 0.],
-                                option_selected,
-                            ) {
-                                choices.insert(*reactor, Some(option.clone()));
-                            }
+                                if render_button_selectable(
+                                    ui,
+                                    // format!(
+                                    //     "{}: {:#?}\nCost: {:#?}##{:?}",
+                                    //     option.reaction_id,
+                                    //     option.context,
+                                    //     option.resource_cost,
+                                    //     reactor
+                                    // ),
+                                    format!(
+                                        "{}:\nCost: {:#?}##{:?}",
+                                        option.reaction_id, option.resource_cost, reactor
+                                    ),
+                                    [0., 0.],
+                                    option_selected,
+                                ) {
+                                    choices.insert(*reactor, Some(option.clone()));
+                                }
 
-                            if ui.button(format!("Don't react##{:?}", reactor)) {
-                                choices.insert(*reactor, None);
+                                if ui.button(format!("Don't react##{:?}", reactor)) {
+                                    choices.insert(*reactor, None);
+                                }
                             }
                         }
-                    }
 
-                    ui.separator();
-                });
+                        ui.separator();
+                    },
+                );
 
                 if self.as_ref().unwrap().is_complete() {
                     let decision = self.take().unwrap().finalize();
