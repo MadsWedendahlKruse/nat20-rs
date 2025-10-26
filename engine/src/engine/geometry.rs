@@ -208,4 +208,39 @@ impl WorldPath {
 
         Self { points, length }
     }
+
+    pub fn trim_to_length(&self, max_length: Length) -> Self {
+        if self.length <= max_length {
+            return self.clone();
+        }
+
+        let mut trimmed_points = Vec::new();
+        let mut accumulated_length = Length::new::<meter>(0.0);
+
+        for i in 0..(self.points.len() - 1) {
+            let segment_start = self.points[i];
+            let segment_end = self.points[i + 1];
+            let segment_vector = segment_end - segment_start;
+            let segment_length = Length::new::<meter>(segment_vector.magnitude());
+
+            trimmed_points.push(segment_start);
+            if accumulated_length + segment_length <= max_length {
+                accumulated_length += segment_length;
+            } else {
+                let remaining_length = max_length - accumulated_length;
+                let t = remaining_length.get::<meter>() / segment_length.get::<meter>();
+                let new_point = segment_start + segment_vector * t;
+                trimmed_points.push(new_point);
+                accumulated_length = max_length;
+                break;
+            }
+        }
+
+        // If we didn't reach max_length, include the last point
+        if accumulated_length < max_length && !self.points.is_empty() {
+            trimmed_points.push(*self.points.last().unwrap());
+        }
+
+        Self::new(trimmed_points)
+    }
 }

@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, num::NonZeroU32, time::Instant};
+use std::{num::NonZeroU32, time::Instant};
 
 mod render;
 mod state;
@@ -7,17 +7,9 @@ mod windows;
 
 use glow::HasContext;
 use glutin::surface::GlSurface;
-use parry3d::na::Vector3;
 
 use crate::{
-    render::{
-        ui::utils::ImguiRenderableMut,
-        world::{camera::OrbitCamera, frame_uniforms::FrameUniforms, program::BasicProgram},
-    },
-    state::{
-        gui_state::GuiState,
-        settings::{GuiSettings, Setting},
-    },
+    render::ui::utils::ImguiRenderableMut, state::gui_state::GuiState,
     windows::main_menu::MainMenuWindow,
 };
 

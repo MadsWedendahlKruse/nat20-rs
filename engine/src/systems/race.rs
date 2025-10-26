@@ -1,4 +1,5 @@
 use hecs::{Entity, World};
+use uom::si::length::meter;
 
 use crate::{
     components::{
@@ -6,6 +7,7 @@ use crate::{
         id::{RaceId, SubraceId},
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         race::{CreatureSize, CreatureType, RaceBase},
+        resource::ResourceMap,
         speed::Speed,
     },
     registry, systems,

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use hecs::Bundle;
-use parry3d::na::Isometry3;
 
 use crate::{
     components::{

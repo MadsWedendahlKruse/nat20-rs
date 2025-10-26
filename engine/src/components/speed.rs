@@ -6,11 +6,6 @@ use uom::si::{f32::Length, length::meter};
 
 use crate::components::modifier::ModifierSource;
 
-#[derive(Debug, Clone)]
-pub enum MovementError {
-    InsufficientSpeed,
-}
-
 // Internally, speed is stored in meters (per turn).
 #[derive(Debug, Clone)]
 pub struct Speed {
@@ -69,15 +64,13 @@ impl Speed {
         Length::new::<meter>(self.moved_this_turn)
     }
 
-    pub fn record_movement<T>(&mut self, distance: T) -> Result<(), MovementError>
-    where
-        T: Into<f32>,
-    {
-        let distance = distance.into();
+    pub fn record_movement(&mut self, distance: Length) {
+        let distance = distance.get::<meter>();
         if distance > self.remaining_movement().get::<meter>() {
-            return Err(MovementError::InsufficientSpeed);
+            self.moved_this_turn = self.get_total_speed().get::<meter>();
+        } else {
+            self.moved_this_turn += distance;
         }
-        Ok(self.moved_this_turn += distance)
     }
 
     /// Should be called at the start (or end?) of each turn
@@ -162,7 +155,7 @@ mod tests {
     #[test]
     fn test_record_movement_and_remaining() {
         let mut speed = Speed::default();
-        speed.record_movement(3.0).unwrap();
+        speed.record_movement(Length::new::<meter>(3.0));
         assert_eq!(speed.moved_this_turn().get::<meter>(), 3.0);
         assert_eq!(speed.remaining_movement().get::<meter>(), 7.0);
     }
@@ -170,7 +163,7 @@ mod tests {
     #[test]
     fn test_reset() {
         let mut speed = Speed::default();
-        speed.record_movement(5.0).unwrap();
+        speed.record_movement(Length::new::<meter>(5.0));
         speed.reset();
         assert_eq!(speed.moved_this_turn().get::<meter>(), 0.0);
     }
@@ -179,7 +172,7 @@ mod tests {
     fn test_can_move() {
         let mut speed = Speed::default();
         assert!(speed.can_move());
-        speed.record_movement(10.0).unwrap();
+        speed.record_movement(Length::new::<meter>(10.0));
         assert!(!speed.can_move());
     }
 
@@ -188,13 +181,6 @@ mod tests {
         let mut speed = Speed::default();
         speed.add_multiplier(ModifierSource::Spell(SpellId::from_str("Fear!")), 0.0);
         assert_eq!(speed.get_total_speed().get::<meter>(), 0.0);
-    }
-
-    #[test]
-    fn test_record_movement_insufficient_speed() {
-        let mut speed = Speed::default();
-        let result = speed.record_movement(15.0);
-        assert!(matches!(result, Err(MovementError::InsufficientSpeed)));
     }
 
     #[test]

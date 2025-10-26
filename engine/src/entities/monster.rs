@@ -4,10 +4,9 @@ use crate::{
     components::{
         ability::AbilityScoreMap,
         actions::action::{ActionCooldownMap, ActionMap},
-        ai,
         damage::DamageResistances,
         effects::effects::Effect,
-        faction::{self, FactionSet},
+        faction::FactionSet,
         health::{hit_points::HitPoints, life_state::LifeState},
         id::{AIControllerId, Name},
         items::equipment::{

@@ -9,7 +9,7 @@ use crate::{
                 Action, ActionContext, ActionCooldownMap, ActionMap, ActionProvider, ActionResult,
                 ReactionResult, ReactionSet,
             },
-            targeting::TargetingContext,
+            targeting::{TargetSelection, TargetTypeInstance, TargetingContext, TargetingError},
         },
         id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
@@ -17,7 +17,7 @@ use crate::{
         spells::spellbook::Spellbook,
     },
     engine::{
-        event::{self, ActionData, Event, EventId, EventKind, ReactionData},
+        event::{self, ActionData, ActionError, Event, EventId, EventKind, ReactionData},
         game_state::GameState,
     },
     registry, systems,
@@ -80,12 +80,12 @@ pub fn all_actions(world: &World, entity: Entity) -> ActionMap {
     actions
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum ActionUsability {
-    Usable,
+#[derive(Debug, PartialEq)]
+pub enum ActionUsabilityError {
     OnCooldown(RechargeRule),
     NotEnoughResources(ResourceAmountMap),
     ResourceNotFound(ResourceId),
+    TargetingError(TargetingError),
 }
 
 pub fn action_usable(
@@ -95,23 +95,44 @@ pub fn action_usable(
     // TODO: Is context really not needed here?
     action_context: &ActionContext,
     resource_cost: &ResourceAmountMap,
-) -> ActionUsability {
+) -> Result<(), ActionUsabilityError> {
     if let Some(cooldown) = on_cooldown(world, entity, action_id) {
-        return ActionUsability::OnCooldown(cooldown);
+        return Err(ActionUsabilityError::OnCooldown(cooldown));
     }
 
     let resources = systems::helpers::get_component::<ResourceMap>(world, entity);
-    for (resource_id, amount) in &*resource_cost {
+    for (resource_id, amount) in resource_cost {
         if let Some(resource) = resources.get(resource_id) {
             if !resource.can_afford(amount) {
-                return ActionUsability::NotEnoughResources(resource_cost.clone());
+                return Err(ActionUsabilityError::NotEnoughResources(
+                    resource_cost.clone(),
+                ));
             }
         } else {
-            return ActionUsability::ResourceNotFound(resource_id.clone());
+            return Err(ActionUsabilityError::ResourceNotFound(resource_id.clone()));
         }
     }
 
-    ActionUsability::Usable
+    Ok(())
+}
+
+pub fn action_usable_on_targets(
+    world: &World,
+    actor: Entity,
+    action_id: &ActionId,
+    context: &ActionContext,
+    resource_cost: &ResourceAmountMap,
+    targets: &[Entity],
+) -> Result<(), ActionUsabilityError> {
+    action_usable(world, actor, action_id, context, resource_cost)?;
+
+    let targeting_context = targeting_context(world, actor, action_id, context);
+
+    if let Err(targeting_error) = targeting_context.validate_targets(world, actor, targets) {
+        return Err(ActionUsabilityError::TargetingError(targeting_error));
+    }
+
+    Ok(())
 }
 
 pub fn available_actions(world: &World, entity: Entity) -> ActionMap {
@@ -127,10 +148,7 @@ pub fn available_actions(world: &World, entity: Entity) -> ActionMap {
                 (effect.on_resource_cost)(world, entity, action_context, resource_cost);
             }
 
-            if !matches!(
-                action_usable(world, entity, action_id, &action_context, resource_cost),
-                ActionUsability::Usable,
-            ) {
+            if action_usable(world, entity, action_id, &action_context, resource_cost).is_err() {
                 return false;
             }
             true

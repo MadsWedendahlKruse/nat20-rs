@@ -8,14 +8,13 @@ mod tests {
         components::{
             ability::{Ability, AbilityScore, AbilityScoreMap},
             damage::DamageType,
-            dice::{DiceSet, DieSize},
+            dice::DieSize,
             id::ItemId,
             items::{
                 equipment::{
-                    equipment::{EquipmentItem, EquipmentKind},
                     loadout::Loadout,
                     slots::EquipmentSlot,
-                    weapon::{self, Weapon, WeaponCategory, WeaponKind, WeaponProperties},
+                    weapon::{Weapon, WeaponCategory, WeaponKind, WeaponProperties},
                 },
                 inventory::ItemInstance,
                 item::{Item, ItemRarity},
@@ -27,8 +26,8 @@ mod tests {
         entities::character::Character,
         registry,
         systems::{self, helpers},
-        test_utils::fixtures,
     };
+    use uom::si::{f32::Mass, mass::pound};
 
     #[test]
     fn character_weapon_finesse_modifier() {
@@ -116,7 +115,7 @@ mod tests {
         assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D8);
 
         // Unequip dagger
-        let unequipped =
+        let _ =
             systems::loadout::unequip(&mut world, entity, &EquipmentSlot::MeleeOffHand).unwrap();
 
         // Longsword used with two hands again
@@ -185,7 +184,7 @@ mod tests {
                 id: ItemId::from_str("item.longsword"),
                 name: "Longsword".to_string(),
                 description: "A longsword.".to_string(),
-                weight: 3.0,
+                weight: Mass::new::<pound>(3.0),
                 value: MonetaryValue::from("15 GP"),
                 rarity: ItemRarity::Common,
             },

@@ -3,7 +3,14 @@ use std::{
     sync::LazyLock,
 };
 
+use uom::si::{
+    f32::{Length, Mass},
+    length::foot,
+    mass::pound,
+};
+
 use crate::components::{
+    actions::targeting::TargetingRange,
     damage::DamageType,
     dice::{DiceSet, DieSize},
     id::ItemId,
@@ -50,7 +57,7 @@ static CHAINMAIL: LazyLock<ItemInstance> = LazyLock::new(|| {
             id: CHAINMAIL_ID.clone(),
             name: "Chainmail".to_string(),
             description: "A suit of chainmail armor, providing good protection.".to_string(),
-            weight: 55.0,
+            weight: Mass::new::<pound>(55.0),
             value: MonetaryValue::from("75 GP"),
             rarity: ItemRarity::Uncommon,
         },
@@ -67,7 +74,7 @@ static DAGGER: LazyLock<ItemInstance> = LazyLock::new(|| {
             id: DAGGER_ID.clone(),
             name: "Dagger".to_string(),
             description: "A simple dagger.".to_string(),
-            weight: 1.0,
+            weight: Mass::new::<pound>(1.0),
             value: MonetaryValue::from("2 GP"),
             rarity: ItemRarity::Common,
         },
@@ -77,7 +84,7 @@ static DAGGER: LazyLock<ItemInstance> = LazyLock::new(|| {
             WeaponProperties::Finesse,
             WeaponProperties::Light,
             WeaponProperties::Thrown,
-            WeaponProperties::Range(20, 60),
+            WeaponProperties::Range(TargetingRange::with_max::<foot>(20.0, 60.0)),
         ]),
         vec![(1, DieSize::D4, DamageType::Piercing)],
         // TODO: 'Nick' mastery action
@@ -94,7 +101,7 @@ static FLAIL: LazyLock<ItemInstance> = LazyLock::new(|| {
             id: FLAIL_ID.clone(),
             name: "Flail".to_string(),
             description: "A flail with a spiked head, effective against armored foes.".to_string(),
-            weight: 2.0,
+            weight: Mass::new::<pound>(2.0),
             value: MonetaryValue::from("10 GP"),
             rarity: ItemRarity::Common,
         },
@@ -116,7 +123,7 @@ static GREATSWORD: LazyLock<ItemInstance> = LazyLock::new(|| {
             id: GREATSWORD_ID.clone(),
             name: "Greatsword".to_string(),
             description: "A large two-handed sword, capable of dealing heavy damage.".to_string(),
-            weight: 6.0,
+            weight: Mass::new::<pound>(6.0),
             value: MonetaryValue::from("50 GP"),
             rarity: ItemRarity::Common,
         },
@@ -139,13 +146,16 @@ static JAVELIN: LazyLock<ItemInstance> = LazyLock::new(|| {
             name: "Javelin".to_string(),
             description: "A versatile javelin, effective in both melee and ranged combat."
                 .to_string(),
-            weight: 2.0,
+            weight: Mass::new::<pound>(2.0),
             value: MonetaryValue::from("5 SP"),
             rarity: ItemRarity::Common,
         },
         WeaponKind::Melee,
         WeaponCategory::Simple,
-        HashSet::from([WeaponProperties::Thrown, WeaponProperties::Range(30, 120)]),
+        HashSet::from([
+            WeaponProperties::Thrown,
+            WeaponProperties::Range(TargetingRange::with_max::<foot>(30.0, 120.0)),
+        ]),
         vec![(1, DieSize::D6, DamageType::Piercing)],
         // TODO: 'Slow' mastery action
         Vec::new(),
@@ -161,14 +171,14 @@ static LONGBOW: LazyLock<ItemInstance> = LazyLock::new(|| {
             id: LONGBOW_ID.clone(),
             name: "Longbow".to_string(),
             description: "A powerful longbow, effective for ranged combat.".to_string(),
-            weight: 2.0,
+            weight: Mass::new::<pound>(2.0),
             value: MonetaryValue::from("50 GP"),
             rarity: ItemRarity::Common,
         },
         WeaponKind::Ranged,
         WeaponCategory::Martial,
         HashSet::from([
-            WeaponProperties::Range(150, 600),
+            WeaponProperties::Range(TargetingRange::with_max::<foot>(150.0, 600.0)),
             WeaponProperties::TwoHanded,
             WeaponProperties::Heavy,
         ]),
@@ -188,7 +198,7 @@ static LONGSWORD: LazyLock<ItemInstance> = LazyLock::new(|| {
             description:
                 "A versatile longsword, effective in both one-handed and two-handed combat."
                     .to_string(),
-            weight: 3.0,
+            weight: Mass::new::<pound>(3.0),
             value: MonetaryValue::from("15 GP"),
             rarity: ItemRarity::Common,
         },
@@ -209,7 +219,7 @@ static ROBE: LazyLock<ItemInstance> = LazyLock::new(|| {
             id: ROBE_ID.clone(),
             name: "Robe".to_string(),
             description: "A simple robe, providing minimal protection.".to_string(),
-            weight: 4.0,
+            weight: Mass::new::<pound>(4.0),
             value: MonetaryValue::from("1 GP"),
             rarity: ItemRarity::Common,
         },
@@ -226,7 +236,7 @@ static QUARTERSTAFF: LazyLock<ItemInstance> = LazyLock::new(|| {
             id: QUARTERSTAFF_ID.clone(),
             name: "Quarterstaff".to_string(),
             description: "A sturdy quarterstaff, useful for both combat and support.".to_string(),
-            weight: 4.0,
+            weight: Mass::new::<pound>(4.0),
             value: MonetaryValue::from("2 SP"),
             rarity: ItemRarity::Common,
         },
@@ -250,7 +260,7 @@ static SCALE_MAIL: LazyLock<ItemInstance> = LazyLock::new(|| {
             description:
                 "A suit of scale mail armor, providing good protection with moderate weight."
                     .to_string(),
-            weight: 45.0,
+            weight: Mass::new::<pound>(45.0),
             value: MonetaryValue::from("50 GP"),
             rarity: ItemRarity::Uncommon,
         },
@@ -268,7 +278,7 @@ static SCIMITAR: LazyLock<ItemInstance> = LazyLock::new(|| {
             id: SCIMITAR_ID.clone(),
             name: "Scimitar".to_string(),
             description: "A curved sword, favored for its speed and agility.".to_string(),
-            weight: 3.0,
+            weight: Mass::new::<pound>(3.0),
             value: MonetaryValue::from("25 GP"),
             rarity: ItemRarity::Common,
         },
@@ -288,15 +298,16 @@ static SHORTBOW: LazyLock<ItemInstance> = LazyLock::new(|| {
         Item {
             id: SHORTBOW_ID.clone(),
             name: "Shortbow".to_string(),
-            description: "A lightweight bow, ideal for quick shots.".to_string(),
-            weight: 2.0,
+            description: "A lightweight bMass::new::<pound>(ow,) ideal for quick shots."
+                .to_string(),
+            weight: Mass::new::<pound>(2.0),
             value: MonetaryValue::from("25 GP"),
             rarity: ItemRarity::Common,
         },
         WeaponKind::Ranged,
         WeaponCategory::Simple,
         HashSet::from([
-            WeaponProperties::Range(80, 320),
+            WeaponProperties::Range(TargetingRange::with_max::<foot>(80.0, 320.0)),
             WeaponProperties::TwoHanded,
         ]),
         vec![(1, DieSize::D6, DamageType::Piercing)],
@@ -314,7 +325,7 @@ static SHORTSWORD: LazyLock<ItemInstance> = LazyLock::new(|| {
             id: SHORTSWORD_ID.clone(),
             name: "Shortsword".to_string(),
             description: "A versatile shortsword, effective in close combat.".to_string(),
-            weight: 2.0,
+            weight: Mass::new::<pound>(2.0),
             value: MonetaryValue::from("10 GP"),
             rarity: ItemRarity::Common,
         },
@@ -336,7 +347,7 @@ static SPEAR: LazyLock<ItemInstance> = LazyLock::new(|| {
             name: "Spear".to_string(),
             description: "A versatile spear, effective in both melee and ranged combat."
                 .to_string(),
-            weight: 3.0,
+            weight: Mass::new::<pound>(3.0),
             value: MonetaryValue::from("1 GP"),
             rarity: ItemRarity::Common,
         },
@@ -345,7 +356,7 @@ static SPEAR: LazyLock<ItemInstance> = LazyLock::new(|| {
         HashSet::from([
             WeaponProperties::Versatile(DiceSet::from("1d8")),
             WeaponProperties::Thrown,
-            WeaponProperties::Range(20, 60),
+            WeaponProperties::Range(TargetingRange::with_max::<foot>(20.0, 60.0)),
         ]),
         vec![(1, DieSize::D6, DamageType::Piercing)],
         Vec::new(),
@@ -364,7 +375,7 @@ static STUDDED_LEATHER_ARMOR: LazyLock<ItemInstance> = LazyLock::new(|| {
             description:
                 "A suit of studded leather armor, providing good protection with minimal weight."
                     .to_string(),
-            weight: 13.0,
+            weight: Mass::new::<pound>(13.0),
             value: MonetaryValue::from("45 GP"),
             rarity: ItemRarity::Uncommon,
         },
@@ -383,7 +394,7 @@ static TRAVELERS_CLOTHES: LazyLock<ItemInstance> = LazyLock::new(|| {
             name: "Traveler's Clothes".to_string(),
             description: "Resilient garments designed for travel in various environments."
                 .to_string(),
-            weight: 4.0,
+            weight: Mass::new::<pound>(4.0),
             value: MonetaryValue::from("2 GP"),
             rarity: ItemRarity::Common,
         },

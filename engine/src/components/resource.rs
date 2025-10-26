@@ -1,10 +1,10 @@
-// TODO: Is a spell slot a resource? What about actions, bonus actions, reactions? Movement?
-
 use std::{
     collections::{BTreeMap, HashMap},
-    fmt::Display,
+    fmt::{Debug, Display},
     hash::Hash,
 };
+
+use num_traits::NumAssign;
 
 use crate::{components::id::ResourceId, registry};
 
@@ -19,8 +19,13 @@ pub enum RechargeRule {
 
 impl RechargeRule {
     /// Checks if this recharge rule is recharged by another rule.
-    /// For example, `OnShortRest` is also recharged by `OnLongRest`.
+    /// For example, `ShortRest` is also recharged by `LongRest`.
+    ///
+    /// `Never` is (as the name suggests) never recharged.
     pub fn is_recharged_by(&self, other: &RechargeRule) -> bool {
+        if self == &RechargeRule::Never {
+            return false;
+        }
         *other >= *self
     }
 }
@@ -31,19 +36,27 @@ impl Display for RechargeRule {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ResourceBudget {
     pub current_uses: u8,
     pub max_uses: u8,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResourceBudgetError {
+    InsufficientResources { needed: u8, available: u8 },
+    ZeroMaxUses,
+    NegativeMaxUses { reduction: u8, max_uses: u8 },
+    CurrentUsesAboveMax { current_uses: u8, max_uses: u8 },
+}
+
 impl ResourceBudget {
-    pub fn new(current_uses: u8, max_uses: u8) -> Result<Self, ResourceError> {
+    pub fn new(current_uses: u8, max_uses: u8) -> Result<Self, ResourceBudgetError> {
         if max_uses == 0 {
-            return Err(ResourceError::ZeroMaxUses);
+            return Err(ResourceBudgetError::ZeroMaxUses);
         }
         if current_uses > max_uses {
-            return Err(ResourceError::CurrentUsesAboveMax {
+            return Err(ResourceBudgetError::CurrentUsesAboveMax {
                 current_uses,
                 max_uses,
             });
@@ -54,7 +67,7 @@ impl ResourceBudget {
         })
     }
 
-    pub fn with_max_uses(max_uses: u8) -> Result<Self, ResourceError> {
+    pub fn with_max_uses(max_uses: u8) -> Result<Self, ResourceBudgetError> {
         Self::new(max_uses, max_uses)
     }
 
@@ -62,9 +75,9 @@ impl ResourceBudget {
         self.current_uses >= amount
     }
 
-    pub fn spend(&mut self, amount: u8) -> Result<(), ResourceError> {
+    pub fn spend(&mut self, amount: u8) -> Result<(), ResourceBudgetError> {
         if self.current_uses < amount {
-            return Err(ResourceError::InsufficientResources {
+            return Err(ResourceBudgetError::InsufficientResources {
                 needed: amount,
                 available: self.current_uses,
             });
@@ -77,15 +90,15 @@ impl ResourceBudget {
         self.current_uses == 0
     }
 
-    pub fn add_uses(&mut self, amount: u8) -> Result<(), ResourceError> {
+    pub fn add_uses(&mut self, amount: u8) -> Result<(), ResourceBudgetError> {
         self.max_uses += amount;
         self.current_uses += amount;
         Ok(())
     }
 
-    pub fn remove_uses(&mut self, amount: u8) -> Result<(), ResourceError> {
+    pub fn remove_uses(&mut self, amount: u8) -> Result<(), ResourceBudgetError> {
         if amount > self.max_uses {
-            return Err(ResourceError::NegativeMaxUses {
+            return Err(ResourceBudgetError::NegativeMaxUses {
                 reduction: amount,
                 max_uses: self.max_uses,
             });
@@ -97,9 +110,9 @@ impl ResourceBudget {
         Ok(())
     }
 
-    pub fn set_current_uses(&mut self, current_uses: u8) -> Result<(), ResourceError> {
+    pub fn set_current_uses(&mut self, current_uses: u8) -> Result<(), ResourceBudgetError> {
         if current_uses > self.max_uses {
-            return Err(ResourceError::CurrentUsesAboveMax {
+            return Err(ResourceBudgetError::CurrentUsesAboveMax {
                 current_uses,
                 max_uses: self.max_uses,
             });
@@ -108,9 +121,9 @@ impl ResourceBudget {
         Ok(())
     }
 
-    pub fn set_max_uses(&mut self, max_uses: u8) -> Result<(), ResourceError> {
+    pub fn set_max_uses(&mut self, max_uses: u8) -> Result<(), ResourceBudgetError> {
         if max_uses == 0 {
-            return Err(ResourceError::ZeroMaxUses);
+            return Err(ResourceBudgetError::ZeroMaxUses);
         }
         if max_uses < self.current_uses {
             self.current_uses = max_uses;
@@ -124,17 +137,40 @@ impl ResourceBudget {
     }
 
     // TODO: return type is just for the macro impl_resource_amount_router
-    pub fn restore(&mut self, amount: u8) -> Result<(), ResourceError> {
-        self.current_uses = (self.current_uses + amount).min(self.max_uses);
+    pub fn restore(&mut self, amount: u8) -> Result<(), ResourceBudgetError> {
+        self.current_uses += amount;
+        if self.current_uses > self.max_uses {
+            self.current_uses = self.max_uses;
+        }
         Ok(())
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ResourceKind {
     Flat(ResourceBudget),
     // Key is tier level
     Tiered(BTreeMap<u8, ResourceBudget>),
+}
+
+// TODO: Seems like some of these apply at the ResourceBudget level, and some
+// at the Resource level
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResourceError {
+    BudgetError(ResourceBudgetError),
+    MistmatchCostAndKind {
+        cost: ResourceAmount,
+        kind: ResourceKind,
+    },
+    InvalidResourceKind(String),
+    InvalidTier {
+        tier: u8,
+    },
+    InsufficientResource {
+        id: ResourceId,
+        needed: ResourceAmount,
+        available: ResourceAmount,
+    },
 }
 
 macro_rules! impl_resource_amount_router {
@@ -143,11 +179,17 @@ macro_rules! impl_resource_amount_router {
             pub fn $fn_name(&mut self, __arg: &ResourceAmount) -> Result<(), ResourceError> {
                 match (&mut *self, __arg) {
                     (ResourceKind::Flat(budget), ResourceAmount::Flat(amt)) => {
-                        budget.$inner(*amt)
+                        match budget.$inner(*amt) {
+                            Ok(()) => Ok(()),
+                            Err(e) => Err(ResourceError::BudgetError(e)),
+                        }
                     }
                     (ResourceKind::Tiered(budgets), ResourceAmount::Tiered { tier, amount }) => {
                         if let Some(budget) = budgets.get_mut(tier) {
-                            budget.$inner(*amount)
+                            match budget.$inner(*amount) {
+                                Ok(()) => Ok(()),
+                                Err(e) => Err(ResourceError::BudgetError(e)),
+                            }
                         } else {
                             Err(ResourceError::InvalidTier {
                                 tier: *tier,
@@ -233,17 +275,27 @@ impl ResourceKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ResourceAmount {
     Flat(u8),
     Tiered { tier: u8, amount: u8 },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Resource {
     id: ResourceId,
     kind: ResourceKind,
     recharge: RechargeRule,
+}
+
+macro_rules! impl_resource_kind_router {
+    ($( $fn_name:ident => $inner:ident ),+ $(,)?) => {
+        $(
+            pub fn $fn_name(&mut self, __arg: &ResourceAmount) -> Result<(), ResourceError> {
+                self.kind.$inner(__arg)
+            }
+        )+
+    };
 }
 
 impl Resource {
@@ -255,8 +307,13 @@ impl Resource {
         }
     }
 
-    pub fn spend(&mut self, cost: &ResourceAmount) -> Result<(), ResourceError> {
-        self.kind.spend(cost)
+    impl_resource_kind_router! {
+        spend => spend,
+        restore => restore,
+        add_uses => add_uses,
+        remove_uses => remove_uses,
+        set_current_uses => set_current_uses,
+        set_max_uses => set_max_uses,
     }
 
     pub fn recharge_full(&mut self, rest_type: &RechargeRule) {
@@ -265,26 +322,6 @@ impl Resource {
         if self.recharge.is_recharged_by(rest_type) {
             self.kind.recharge_full();
         }
-    }
-
-    pub fn restore(&mut self, amount: &ResourceAmount) -> Result<(), ResourceError> {
-        self.kind.restore(amount)
-    }
-
-    pub fn add_uses(&mut self, amount: &ResourceAmount) {
-        self.kind.add_uses(amount).unwrap();
-    }
-
-    pub fn remove_uses(&mut self, amount: &ResourceAmount) -> Result<(), ResourceError> {
-        self.kind.remove_uses(amount)
-    }
-
-    pub fn set_max_uses(&mut self, max_uses: &ResourceAmount) -> Result<(), ResourceError> {
-        self.kind.set_max_uses(max_uses)
-    }
-
-    pub fn set_current_uses(&mut self, current_uses: &ResourceAmount) -> Result<(), ResourceError> {
-        self.kind.set_current_uses(current_uses)
     }
 
     pub fn max_uses(&self) -> Vec<ResourceAmount> {
@@ -310,31 +347,6 @@ impl Resource {
     pub fn kind(&self) -> &ResourceKind {
         &self.kind
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ResourceError {
-    InsufficientResources {
-        needed: u8,
-        available: u8,
-    },
-    InvalidTier {
-        tier: u8,
-    },
-    MistmatchCostAndKind {
-        cost: ResourceAmount,
-        kind: ResourceKind,
-    },
-    InvalidResourceKind(String),
-    ZeroMaxUses,
-    NegativeMaxUses {
-        reduction: u8,
-        max_uses: u8,
-    },
-    CurrentUsesAboveMax {
-        current_uses: u8,
-        max_uses: u8,
-    },
 }
 
 pub type ResourceAmountMap = HashMap<ResourceId, ResourceAmount>;
@@ -417,14 +429,14 @@ impl ResourceMap {
         }
     }
 
-    pub fn can_afford_all(&self, cost: &ResourceAmountMap) -> bool {
+    pub fn can_afford_all(&self, cost: &ResourceAmountMap) -> (bool, Option<ResourceId>) {
         for (res_id, res_cost) in cost {
             if !self.can_afford(res_id, res_cost) {
-                return false;
+                return (false, Some(res_id.clone()));
             }
         }
 
-        true
+        (true, None)
     }
 
     pub fn spend(&mut self, id: &ResourceId, cost: &ResourceAmount) -> Result<(), ResourceError> {
@@ -439,10 +451,19 @@ impl ResourceMap {
     }
 
     pub fn spend_all(&mut self, cost: &ResourceAmountMap) -> Result<(), ResourceError> {
-        if !self.can_afford_all(cost) {
-            return Err(ResourceError::InsufficientResources {
-                needed: 0,
-                available: 0,
+        let (can_afford, lacking_id) = self.can_afford_all(cost);
+        if !can_afford {
+            let resource_id = lacking_id.unwrap();
+            return Err(ResourceError::InsufficientResource {
+                id: resource_id.clone(),
+                needed: cost.get(&resource_id).unwrap().clone(),
+                available: self
+                    .get(&resource_id)
+                    .unwrap()
+                    .current_uses()
+                    .first()
+                    .unwrap()
+                    .clone(),
             });
         }
 
@@ -534,7 +555,10 @@ mod tests {
         let mut res = flat_resource("Rage", 1, 2, RechargeRule::LongRest);
         let err = res.spend(&ResourceAmount::Flat(2)).unwrap_err();
         match err {
-            ResourceError::InsufficientResources { needed, available } => {
+            ResourceError::BudgetError(ResourceBudgetError::InsufficientResources {
+                needed,
+                available,
+            }) => {
                 assert_eq!(needed, 2);
                 assert_eq!(available, 1);
             }
@@ -576,10 +600,10 @@ mod tests {
         let mut res = flat_resource("Lay On Hands", 1, 1, RechargeRule::LongRest);
         let err = res.remove_uses(&ResourceAmount::Flat(2)).unwrap_err();
         match err {
-            ResourceError::NegativeMaxUses {
+            ResourceError::BudgetError(ResourceBudgetError::NegativeMaxUses {
                 reduction,
                 max_uses,
-            } => {
+            }) => {
                 assert_eq!(reduction, 2);
                 assert_eq!(max_uses, 1);
             }
@@ -718,10 +742,10 @@ mod tests {
             .remove_uses(&ResourceAmount::Tiered { tier: 1, amount: 3 })
             .unwrap_err();
         match err {
-            ResourceError::NegativeMaxUses {
+            ResourceError::BudgetError(ResourceBudgetError::NegativeMaxUses {
                 reduction,
                 max_uses,
-            } => {
+            }) => {
                 assert_eq!(reduction, 3);
                 assert_eq!(max_uses, 2);
             }
@@ -790,7 +814,7 @@ mod tests {
         let mut cost = ResourceAmountMap::new();
         cost.insert(ResourceId::from_str("Ki Point"), ResourceAmount::Flat(2));
 
-        assert!(map.can_afford_all(&cost));
+        assert!(map.can_afford_all(&cost).0);
     }
 
     #[test]
@@ -804,7 +828,7 @@ mod tests {
         let mut cost = ResourceAmountMap::new();
         cost.insert(ResourceId::from_str("Ki Point"), ResourceAmount::Flat(2));
 
-        assert!(!map.can_afford_all(&cost));
+        assert!(!map.can_afford_all(&cost).0);
     }
 
     #[test]
@@ -825,7 +849,7 @@ mod tests {
             ResourceAmount::Tiered { tier: 1, amount: 2 },
         );
 
-        assert!(map.can_afford_all(&cost));
+        assert!(map.can_afford_all(&cost).0);
     }
 
     #[test]
@@ -846,7 +870,7 @@ mod tests {
             ResourceAmount::Tiered { tier: 1, amount: 2 },
         );
 
-        assert!(!map.can_afford_all(&cost));
+        assert!(!map.can_afford_all(&cost).0);
     }
 
     #[test]
@@ -878,7 +902,15 @@ mod tests {
 
         let err = map.spend_all(&cost).unwrap_err();
         match err {
-            ResourceError::InsufficientResources { .. } => {}
+            ResourceError::InsufficientResource {
+                id,
+                needed,
+                available,
+            } => {
+                assert_eq!(id, ResourceId::from_str("Ki Point"));
+                assert_eq!(needed, ResourceAmount::Flat(2));
+                assert_eq!(available, ResourceAmount::Flat(1));
+            }
             _ => panic!("Unexpected error variant"),
         }
     }
@@ -914,6 +946,32 @@ mod tests {
     }
 
     #[test]
+    fn test_resource_map_can_afford_mixed_resources() {
+        let mut map = ResourceMap::new();
+        map.add(
+            flat_resource("Ki Point", 3, 3, RechargeRule::ShortRest),
+            false,
+        );
+        map.add(
+            tiered_resource(
+                "Spell Slot",
+                &[(1, 2, 2), (2, 1, 1)],
+                RechargeRule::LongRest,
+            ),
+            false,
+        );
+
+        let mut cost = ResourceAmountMap::new();
+        cost.insert(ResourceId::from_str("Ki Point"), ResourceAmount::Flat(2));
+        cost.insert(
+            ResourceId::from_str("Spell Slot"),
+            ResourceAmount::Tiered { tier: 1, amount: 2 },
+        );
+
+        assert!(map.can_afford_all(&cost).0);
+    }
+
+    #[test]
     fn test_resource_map_spend_multiple_resources() {
         let mut map = ResourceMap::new();
         map.add(
@@ -931,5 +989,41 @@ mod tests {
         let rage = map.get(&ResourceId::from_str("Rage")).unwrap();
         assert_eq!(ki.current_uses()[0], ResourceAmount::Flat(1));
         assert_eq!(rage.current_uses()[0], ResourceAmount::Flat(1));
+    }
+
+    #[test]
+    fn test_resource_map_spend_mixed_resources() {
+        let mut map = ResourceMap::new();
+        map.add(
+            flat_resource("Ki Point", 3, 3, RechargeRule::ShortRest),
+            false,
+        );
+        map.add(
+            tiered_resource(
+                "Spell Slot",
+                &[(1, 2, 2), (2, 1, 1)],
+                RechargeRule::LongRest,
+            ),
+            false,
+        );
+
+        let mut cost = ResourceAmountMap::new();
+        cost.insert(ResourceId::from_str("Ki Point"), ResourceAmount::Flat(2));
+        cost.insert(
+            ResourceId::from_str("Spell Slot"),
+            ResourceAmount::Tiered { tier: 1, amount: 2 },
+        );
+
+        assert!(map.spend_all(&cost).is_ok());
+        let ki = map.get(&ResourceId::from_str("Ki Point")).unwrap();
+        let spell_slot = map.get(&ResourceId::from_str("Spell Slot")).unwrap();
+        assert_eq!(ki.current_uses()[0], ResourceAmount::Flat(1));
+        assert_eq!(
+            spell_slot.current_uses(),
+            vec![
+                ResourceAmount::Tiered { tier: 1, amount: 0 },
+                ResourceAmount::Tiered { tier: 2, amount: 1 }
+            ]
+        );
     }
 }

@@ -52,11 +52,13 @@ pub trait SlotProvider {
     /// where the item *can* be equipped. Rings can be equipped in either of the
     /// `Ring1` or `Ring2` slots, but it makes no difference which one is used.
     fn valid_slots(&self) -> &'static [EquipmentSlot];
+
     /// Returns the required slots for this equipment item. Required slots are the
     /// slots that the item *must* be equipped in to function properly.
+    ///
     /// This is usually empty, indication no specific requirements, but in some
     /// cases (probably only two-handed weapons) it can differ. For a two-handed
-    /// weapon, it *must* occupy both the main hand and off hand slots by definition.
+    /// weapon, it *must* by definition occupy both the main hand and off hand slots.
     fn required_slots(&self) -> &'static [EquipmentSlot] {
         &[]
     }

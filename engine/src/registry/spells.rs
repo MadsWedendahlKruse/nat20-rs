@@ -1,38 +1,33 @@
 use std::{
     collections::HashMap,
-    f32::consts::E,
     sync::{Arc, LazyLock},
 };
 
 use hecs::{Entity, World};
-use parry3d::{math::Point, na::Point3};
+use parry3d::na::Point3;
+use uom::si::length::foot;
 
 use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
         actions::{
-            action::{
-                self, ActionContext, ActionKind, ActionKindResult, ActionResult, ReactionResult,
-            },
-            targeting::{
-                AreaShape, TargetType, TargetTypeInstance, TargetingContext, TargetingKind,
-            },
+            action::{ActionContext, ActionKind, ActionKindResult, ReactionResult},
+            targeting::{AreaShape, TargetType, TargetingContext, TargetingKind, TargetingRange},
         },
         d20::{D20Check, D20CheckDC},
         damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
         dice::DieSize,
-        faction::Attitude,
-        id::{EntityIdentifier, SpellId},
+        id::SpellId,
         modifier::{ModifierSet, ModifierSource},
         proficiency::{Proficiency, ProficiencyLevel},
         resource::ResourceAmountMap,
-        saving_throw::{self, SavingThrowKind},
+        saving_throw::SavingThrowKind,
         spells::{
             spell::{MagicSchool, Spell},
             spellbook::Spellbook,
         },
     },
-    engine::event::{ActionData, CallbackResult, Event, EventKind, EventListener, ReactionData},
+    engine::event::{CallbackResult, Event, EventKind},
     registry,
     systems::{
         self,
@@ -137,9 +132,8 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
         )]),
         Arc::new(|_, _, _| TargetingContext {
             kind: TargetingKind::Single,
-            normal_range: 60,
-            max_range: 60,
-            valid_target_types: vec![TargetType::entity_not_dead()],
+            range: TargetingRange::new::<foot>(60.0),
+            valid_target: TargetType::entity_not_dead(),
         }),
         Some(Arc::new(|reactor, trigger_event| {
             match &trigger_event.kind {
@@ -203,9 +197,8 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
                         _ => 4, // Level 17+ can hit up to 4 targets
                     },
                 },
-                normal_range: 120,
-                max_range: 120,
-                valid_target_types: vec![TargetType::entity_not_dead()],
+                range: TargetingRange::new::<foot>(120.0),
+                valid_target: TargetType::entity_not_dead(),
             }
         }),
         None,
@@ -245,10 +238,9 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
                 // TODO: What do we do here?
                 origin: Point3::origin(),
             },
-            normal_range: 150,
-            max_range: 150,
+            range: TargetingRange::new::<foot>(150.0),
             // TODO: Can also hit objects
-            valid_target_types: vec![TargetType::entity_not_dead()],
+            valid_target: TargetType::entity_not_dead(),
         }),
         None,
     )
@@ -276,7 +268,7 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
                     .primary
                     .dice_roll
                     .modifiers
-                    .add_modifier(ModifierSource::Spell(SpellId::from_str("MAGIC_MISSILE")), 1);
+                    .add_modifier(ModifierSource::Base, 1);
 
                 damage_roll
             }),
@@ -292,9 +284,8 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
                 kind: TargetingKind::Multiple {
                     max_targets: 3 + (spell_level - 1),
                 },
-                normal_range: 120,
-                max_range: 120,
-                valid_target_types: vec![TargetType::entity_not_dead()],
+                range: TargetingRange::new::<foot>(120.0),
+                valid_target: TargetType::entity_not_dead(),
             }
         }),
         None,

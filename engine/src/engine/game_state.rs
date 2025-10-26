@@ -8,12 +8,13 @@ use std::{
 
 use hecs::{Entity, World};
 use obj::Obj;
+use parry3d::na::Point3;
 
 use crate::{
     components::{
         actions::{
             action::{ActionKindResult, ReactionResult},
-            targeting::TargetType,
+            targeting::{TargetType, TargetTypeInstance, TargetingError},
         },
         resource,
     },
@@ -23,9 +24,13 @@ use crate::{
             ActionData, ActionDecision, ActionError, ActionPrompt, EncounterEvent, Event,
             EventCallback, EventId, EventKind, EventListener, EventLog, EventQueue,
         },
-        geometry::WorldGeometry,
+        geometry::{WorldGeometry, WorldPath},
     },
-    systems::{self, actions::ActionUsability},
+    systems::{
+        self,
+        actions::ActionUsabilityError,
+        movement::{MovementError, PathResult},
+    },
 };
 
 // TODO: WorldState instead?
@@ -110,22 +115,49 @@ impl GameState {
         }
     }
 
+    pub fn submit_movement(
+        &mut self,
+        entity: Entity,
+        goal: Point3<f32>,
+    ) -> Result<PathResult, MovementError> {
+        if let Some(encounter_id) = self.in_combat.get(&entity) {
+            if let Some(encounter) = self.encounters.get_mut(encounter_id) {
+                if encounter.current_entity() != entity {
+                    return Err(MovementError::NotYourTurn);
+                }
+            } else {
+                panic!("Inconsistent state: entity is in combat but encounter not found");
+            }
+        }
+        systems::movement::path(
+            self,
+            entity,
+            &goal,
+            true,
+            true,
+            self.in_combat.get(&entity).is_some(),
+        )
+    }
+
     pub fn next_prompt(&self) -> Option<&ActionPrompt> {
         self.pending_prompts.front()
     }
 
     pub fn submit_decision(&mut self, decision: ActionDecision) -> Result<(), ActionError> {
-        // Check that all of the actors involved in the decision have are all
-        // either in combat or all out of combat
+        // Check that all of the actors involved in the decision are either:
+        // 1. All in combat
+        // 2. All out of combat
         let mut encounter_id = None;
         for actor in decision.actors() {
             let actor_encounter_id = self.in_combat.get(&actor);
             if let Some(id) = encounter_id {
                 if actor_encounter_id != Some(id) {
-                    // TODO: If this ever triggers then it'd be nice with a bit
-                    // more context
                     panic!(
-                        "All actors in a decision must be either in combat or out of combat together"
+                        "All actors in a decision must be either in combat or out of combat together.\n
+                        Decision actors: {:#?}\n
+                        Actor encounter IDs: {:#?}",
+                        decision.actors(),
+                        decision.actors().iter().map(|a| self.in_combat.get(a)).collect::<Vec<_>>()
                     );
                 }
             } else {
@@ -202,7 +234,7 @@ impl GameState {
         }
     }
 
-    fn validate_action(
+    pub fn validate_action(
         &mut self,
         action: &ActionData,
         spend_resources: bool,
@@ -212,28 +244,74 @@ impl GameState {
             action_id,
             context: action_context,
             resource_cost,
-            ..
+            targets,
         } = action;
-        let usability = systems::actions::action_usable(
+
+        systems::actions::action_usable_on_targets(
             &self.world,
             *actor,
             action_id,
             action_context,
             resource_cost,
-        );
-        match usability {
-            ActionUsability::Usable => {
-                if spend_resources {
-                    systems::resources::spend(&mut self.world, *actor, resource_cost);
-                }
-                Ok(())
-            }
-            // TODO: Proper error handling
-            _ => panic!(
-                "Action {:?} is not usable by entity {:?}: {:?}",
-                action_id, actor, usability
-            ),
+            targets,
+        )
+        .map_err(|error| ActionError::Usability(error))?;
+
+        if spend_resources {
+            systems::resources::spend(&mut self.world, *actor, resource_cost)
+                .map_err(|error| ActionError::Resource(error))?;
         }
+
+        Ok(())
+
+        // ActionUsability::TargetingError(ref targeting_error) => match targeting_error {
+        //     TargetingError::OutOfRange {
+        //         target,
+        //         distance,
+        //         max_range,
+        //     } => {
+        //         // TODO: If out of range, attempt to find a path to get in range
+        //         println!(
+        //             "Target {:?} is out of range: distance {:?}, max range {:?}",
+        //             target, distance, max_range
+        //         );
+
+        //         let target_position = match target {
+        //             TargetTypeInstance::Entity(entity) => {
+        //                 systems::geometry::get_position(&self.world, *entity).unwrap()
+        //             }
+        //             TargetTypeInstance::Point(point) => *point,
+        //         };
+
+        //         match systems::movement::path_in_range_of_point(
+        //             self,
+        //             *actor,
+        //             target_position,
+        //             *max_range,
+        //             true,
+        //             true,
+        //             true,
+        //             true,
+        //         ) {
+        //             Ok(path_result) => {
+        //                 println!("Found path to get in range: {:?}", path_result.full_path);
+        //                 // Validate the action again now that we're (potentially) in range
+        //                 self.validate_action(action, spend_resources)
+        //             }
+        //             Err(movement_error) => {
+        //                 println!("Failed to find path to get in range: {:?}", movement_error);
+        //                 Err(ActionError::TargetingError(targeting_error.clone()))
+        //             }
+        //         }
+        //     }
+
+        //     // TODO: Proper error handling
+        //     _ => panic!(
+        //         "Action {:?} is not usable by entity {:?}: {:?}",
+        //         action_id, actor, targeting_error
+        //     ),
+        // },
+        // }
     }
 
     pub fn process_event(&mut self, event: Event) -> Result<(), ActionError> {
@@ -322,7 +400,7 @@ impl GameState {
     }
 
     // TODO: I guess this is where the event actually "does" something? New name?
-    pub fn advance_event(&mut self, event: Event) {
+    fn advance_event(&mut self, event: Event) {
         match &event.kind {
             EventKind::ActionRequested { action } => {
                 // TODO: Where do we validate the action can be performed?

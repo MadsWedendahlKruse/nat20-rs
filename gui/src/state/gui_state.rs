@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use glow::HasContext;
 use hecs::Entity;
 use imgui_glow_renderer::AutoRenderer;
-use nat20_rs::systems::geometry::RaycastResult;
+use nat20_rs::systems::{geometry::RaycastResult, movement::PathResult};
 use parry3d::{
     na::{Point3, Vector3},
     query::Ray,
@@ -41,7 +41,7 @@ pub struct GuiState {
 
     /// Store the latest computed path for each entity. This is mostly used for
     /// visualization/debugging purposes.
-    pub path_cache: HashMap<Entity, Vec<Point3<f32>>>,
+    pub path_cache: HashMap<Entity, PathResult>,
 
     // TODO: Everything involving the mesh cache seems like a mess right now.
     pub mesh_cache: BTreeMap<String, Mesh>,

@@ -22,8 +22,8 @@ mod tests {
         },
         entities::character::Character,
         registry, systems,
-        test_utils::fixtures,
     };
+    use uom::si::{f32::Mass, mass::pound};
 
     #[test]
     fn character_pre_attack_roll_effect() {
@@ -35,7 +35,7 @@ mod tests {
                 id: ItemId::from_str("item.ring_of_attacking"),
                 name: "Ring of Attacking".to_string(),
                 description: "A magical ring that grants advantage on attack rolls.".to_string(),
-                weight: 0.1,
+                weight: Mass::new::<pound>(0.1),
                 value: MonetaryValue::from("1000 GP"),
                 rarity: ItemRarity::Rare,
             },
@@ -89,7 +89,7 @@ mod tests {
                 id: ItemId::from_str("item.armor_of_sneaking"),
                 name: "Armor of Sneaking".to_string(),
                 description: "A magical armor that grants a bonus to Stealth.".to_string(),
-                weight: 0.5,
+                weight: Mass::new::<pound>(0.5),
                 value: MonetaryValue::from("500 GP"),
                 rarity: ItemRarity::Rare,
             },
@@ -127,7 +127,7 @@ mod tests {
                 name: "Armor of Constitution Saving Throws".to_string(),
                 description: "A magical armor that grants advantage on Constitution saving throws."
                     .to_string(),
-                weight: 10.0,
+                weight: Mass::new::<pound>(10.0),
                 value: MonetaryValue::from("1500 GP"),
                 rarity: ItemRarity::VeryRare,
             },

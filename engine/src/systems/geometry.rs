@@ -44,8 +44,13 @@ pub fn get_height(world: &World, entity: Entity) -> Option<f32> {
     }
 }
 
+pub fn get_position(world: &World, entity: Entity) -> Option<Point3<f32>> {
+    let pose = world.get::<&CreaturePose>(entity).ok()?;
+    Some(Point3::from(pose.translation.vector))
+}
+
 pub fn get_eye_height(world: &World, entity: Entity) -> Option<f32> {
-    get_height(world, entity).map(|h| h * 0.9)
+    get_height(world, entity).map(|h| h * 0.9 / 2.0)
 }
 
 pub fn get_eye_position(world: &World, entity: Entity) -> Option<Point3<f32>> {
@@ -54,6 +59,8 @@ pub fn get_eye_position(world: &World, entity: Entity) -> Option<Point3<f32>> {
     Some((pose.translation.vector + Vector3::y() * eye_height).into())
 }
 
+// TODO: Should this really return a *new* shape each time? I guess that makes it
+// work nicely if the creature changes size, e.g. Enlarge/Reduce spells.
 pub fn get_shape(world: &World, entity: Entity) -> Option<Capsule> {
     if let Some(height) = get_height(world, entity) {
         // Approximate radius as 1/4 of height
@@ -82,24 +89,33 @@ pub struct RaycastHit {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum RaycastFilter {
+    All,
+    WorldOnly,
+    CreaturesOnly,
+    ExcludeCreatures(Vec<Entity>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct RaycastResult {
-    pub outcomes: Vec<RaycastHit>,
+    pub hits: Vec<RaycastHit>,
     pub closest_index: Option<usize>,
+    pub filter: RaycastFilter,
 }
 
 impl RaycastResult {
     pub fn closest(&self) -> Option<&RaycastHit> {
-        self.closest_index.and_then(|i| self.outcomes.get(i))
+        self.closest_index.and_then(|i| self.hits.get(i))
     }
 
     pub fn world_hit(&self) -> Option<&RaycastHit> {
-        self.outcomes
+        self.hits
             .iter()
             .find(|o| matches!(o.kind, RaycastHitKind::World))
     }
 
     pub fn creature_hit(&self) -> Option<&RaycastHit> {
-        self.outcomes
+        self.hits
             .iter()
             .find(|o| matches!(o.kind, RaycastHitKind::Creature(_)))
     }
@@ -107,50 +123,81 @@ impl RaycastResult {
 
 static DEFAULT_MAX_TOI: f32 = 10000.0;
 
-pub fn raycast(game_state: &GameState, ray: &Ray) -> Option<RaycastResult> {
-    raycast_with_toi(game_state, ray, DEFAULT_MAX_TOI)
+pub fn raycast(game_state: &GameState, ray: &Ray, filter: RaycastFilter) -> Option<RaycastResult> {
+    raycast_with_toi(game_state, ray, DEFAULT_MAX_TOI, filter)
 }
 
 pub fn raycast_with_toi(
     game_state: &GameState,
     ray: &Ray,
     max_time_of_impact: f32,
+    filter: RaycastFilter,
 ) -> Option<RaycastResult> {
     let world = &game_state.world;
 
     let mut outcomes = vec![];
 
-    if let Some(toi) = game_state
-        .geometry
-        .trimesh
-        .cast_local_ray(ray, max_time_of_impact, true)
-    {
-        outcomes.push(RaycastHit {
-            kind: RaycastHitKind::World,
-            toi,
-            poi: ray.origin + ray.dir * toi,
-        });
-    }
+    let add_world_hit = |game_state: &GameState,
+                         ray: &Ray,
+                         max_time_of_impact: f32,
+                         outcomes: &mut Vec<RaycastHit>| {
+        if let Some(toi) = game_state
+            .geometry
+            .trimesh
+            .cast_local_ray(ray, max_time_of_impact, true)
+        {
+            outcomes.push(RaycastHit {
+                kind: RaycastHitKind::World,
+                toi,
+                poi: ray.origin + ray.dir * toi,
+            });
+        }
+    };
 
-    let entity_result = world
-        .query::<&CreaturePose>()
-        .iter()
-        .filter_map(|(entity, pose)| {
-            if let Some(shape) = get_shape(world, entity) {
-                let toi = shape.cast_ray(pose, ray, max_time_of_impact, true);
-                toi.map(|toi| RaycastHit {
-                    kind: RaycastHitKind::Creature(entity),
-                    toi,
-                    poi: ray.origin + ray.dir * toi,
-                })
-            } else {
-                None
-            }
-        })
-        .min_by(|a, b| a.toi.partial_cmp(&b.toi).unwrap());
+    let add_entity_hits = |world: &World,
+                           ray: &Ray,
+                           max_time_of_impact: f32,
+                           excluded_creatures: &Vec<Entity>,
+                           outcomes: &mut Vec<RaycastHit>| {
+        let entity_result = world
+            .query::<&CreaturePose>()
+            .iter()
+            .filter_map(|(entity, pose)| {
+                if let Some(shape) = get_shape(world, entity)
+                    && !excluded_creatures.contains(&entity)
+                {
+                    let toi = shape.cast_ray(pose, ray, max_time_of_impact, true);
+                    toi.map(|toi| RaycastHit {
+                        kind: RaycastHitKind::Creature(entity),
+                        toi,
+                        poi: ray.origin + ray.dir * toi,
+                    })
+                } else {
+                    None
+                }
+            })
+            .min_by(|a, b| a.toi.partial_cmp(&b.toi).unwrap());
 
-    if let Some(entity_outcome) = entity_result {
-        outcomes.push(entity_outcome);
+        if let Some(entity_outcome) = entity_result {
+            outcomes.push(entity_outcome);
+        }
+    };
+
+    match &filter {
+        RaycastFilter::All => {
+            add_world_hit(game_state, ray, max_time_of_impact, &mut outcomes);
+            add_entity_hits(world, ray, max_time_of_impact, &vec![], &mut outcomes);
+        }
+        RaycastFilter::WorldOnly => {
+            add_world_hit(game_state, ray, max_time_of_impact, &mut outcomes);
+        }
+        RaycastFilter::CreaturesOnly => {
+            add_entity_hits(world, ray, max_time_of_impact, &vec![], &mut outcomes);
+        }
+        RaycastFilter::ExcludeCreatures(excluded) => {
+            add_world_hit(game_state, ray, max_time_of_impact, &mut outcomes);
+            add_entity_hits(world, ray, max_time_of_impact, excluded, &mut outcomes);
+        }
     }
 
     if outcomes.is_empty() {
@@ -162,8 +209,9 @@ pub fn raycast_with_toi(
             .min_by(|(_, a), (_, b)| a.toi.partial_cmp(&b.toi).unwrap())
             .map(|(i, _)| i);
         Some(RaycastResult {
-            outcomes,
+            hits: outcomes,
             closest_index,
+            filter,
         })
     }
 }
@@ -172,61 +220,99 @@ pub fn raycast_entity_point(
     game_state: &GameState,
     entity: Entity,
     point: Point3<f32>,
+    filter: RaycastFilter,
 ) -> Option<RaycastResult> {
     let world = &game_state.world;
     let start = get_eye_position(world, entity)?;
-    raycast_point_point(game_state, start, point)
+    raycast_point_point(game_state, start, point, filter)
 }
 
 pub fn raycast_entity_direction(
     game_state: &GameState,
     entity: Entity,
     direction: Vector3<f32>,
+    filter: RaycastFilter,
 ) -> Option<RaycastResult> {
     let world = &game_state.world;
     let start = get_eye_position(world, entity)?;
-    raycast_point_direction(game_state, start, direction)
+    raycast_point_direction(game_state, start, direction, filter)
 }
 
 pub fn raycast_point_point(
     game_state: &GameState,
     start: Point3<f32>,
     end: Point3<f32>,
+    filter: RaycastFilter,
 ) -> Option<RaycastResult> {
     let dir = Vector3::normalize(&(end - start));
     let ray = Ray::new(start, dir);
-    raycast(game_state, &ray)
+    raycast(game_state, &ray, filter)
 }
 
 pub fn raycast_point_direction(
     game_state: &GameState,
     start: Point3<f32>,
     direction: Vector3<f32>,
+    filter: RaycastFilter,
 ) -> Option<RaycastResult> {
     let dir = Vector3::normalize(&direction);
     let ray = Ray::new(start, dir);
-    raycast(game_state, &ray)
+    raycast(game_state, &ray, filter)
+}
+
+pub fn line_of_sight_point_point(
+    game_state: &GameState,
+    from: Point3<f32>,
+    to: Point3<f32>,
+    filter: RaycastFilter,
+) -> bool {
+    if let Some(result) = raycast_point_point(game_state, from, to, filter)
+        && let Some(closest) = result.closest()
+    {
+        let distance = (to - from).magnitude();
+        closest.toi >= distance - EPSILON
+    } else {
+        false
+    }
+}
+
+pub fn line_of_sight_entity_point(
+    game_state: &GameState,
+    entity: Entity,
+    point: Point3<f32>,
+) -> bool {
+    if let Some(eye_pos) = get_eye_position(&game_state.world, entity) {
+        line_of_sight_point_point(
+            game_state,
+            eye_pos,
+            point,
+            RaycastFilter::ExcludeCreatures(vec![entity]),
+        )
+    } else {
+        false
+    }
 }
 
 // TODO: How to do this properly? Just because you can't see their eyes doesn't
 // mean you can't see them at all.
-pub fn entity_line_of_sight(game_state: &GameState, from: Entity, to: Entity) -> Option<bool> {
-    let world = &game_state.world;
-    let from_pos = get_eye_position(world, from)?;
-    let to_pos = get_eye_position(world, to)?;
-    let result = raycast_point_point(game_state, from_pos, to_pos)?;
-    if let Some(closest) = result.closest()
-        && closest.toi < (to_pos - from_pos).norm()
+pub fn line_of_sight_entity_entity(
+    game_state: &GameState,
+    from_entity: Entity,
+    to_entity: Entity,
+) -> bool {
+    if let Some(from_eye_pos) = get_eye_position(&game_state.world, from_entity)
+        && let Some(to_eye_pos) = get_eye_position(&game_state.world, to_entity)
+        && let Some(result) = raycast_point_point(
+            game_state,
+            from_eye_pos,
+            to_eye_pos,
+            RaycastFilter::ExcludeCreatures(vec![from_entity]),
+        )
+        && let Some(closest) = result.closest()
     {
-        match &closest.kind {
-            RaycastHitKind::World => Some(false),
-            RaycastHitKind::Creature(e) if *e == to => Some(true),
-            RaycastHitKind::Creature(_) => Some(false),
-            _ => Some(false),
-        }
+        closest.kind == RaycastHitKind::Creature(to_entity)
     } else {
-        // Closest hit is beyond the target
-        Some(true)
+        false
     }
 }
 
@@ -236,7 +322,7 @@ pub fn teleport_to(world: &mut World, entity: Entity, new_position: &Point3<f32>
     }
 }
 
-pub fn move_to(game_state: &mut GameState, entity: Entity, new_position: &Point3<f32>) {
+pub fn teleport_to_ground(game_state: &mut GameState, entity: Entity, new_position: &Point3<f32>) {
     let entity_height = get_height(&game_state.world, entity).unwrap_or(0.0);
     // TODO: Can't seem to find an easy way to check for intersection between
     // the creature and the world geometry?

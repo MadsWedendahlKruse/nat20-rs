@@ -8,7 +8,7 @@ use nat20_rs::{
     engine::game_state::GameState,
     systems::{
         self,
-        geometry::{CreaturePose, RaycastHitKind, RaycastResult},
+        geometry::{CreaturePose, RaycastFilter, RaycastHitKind, RaycastResult},
     },
 };
 use parry3d::na::{Matrix4, Point3};
@@ -131,7 +131,7 @@ impl MainMenuWindow {
                 gui_state.cursor_ray_result = if ui.io().want_capture_mouse {
                     None
                 } else if let Some(ray_from_cursor) = gui_state.camera.ray_from_cursor() {
-                    systems::geometry::raycast(game_state, &ray_from_cursor)
+                    systems::geometry::raycast(game_state, &ray_from_cursor, RaycastFilter::All)
                 } else {
                     None
                 };
@@ -209,21 +209,18 @@ impl MainMenuWindow {
                         }
 
                         RaycastHitKind::World => {
-                            if ui.is_mouse_clicked(MouseButton::Left) {
-                                // TODO: This should be handled in the game logic,
-                                // so we can take into account stuff like not being
-                                // able to move if it's not your turn, movement speed, etc.
-                                if let Some(entity) = gui_state.selected_entity
-                                    && let Some(path) =
-                                        systems::geometry::path(game_state, entity, closest.poi)
-                                {
-                                    systems::geometry::move_to(
-                                        game_state,
-                                        entity,
-                                        path.points.last().as_ref().unwrap(),
-                                    );
-                                    gui_state.path_cache.insert(entity, path.points);
-                                    println!("Path length {:#?}", path.length);
+                            if ui.is_mouse_clicked(MouseButton::Left)
+                                && let Some(entity) = gui_state.selected_entity
+                            {
+                                let result = game_state.submit_movement(entity, closest.poi);
+
+                                match result {
+                                    Ok(path_result) => {
+                                        gui_state.path_cache.insert(entity, path_result);
+                                    }
+                                    Err(err) => {
+                                        println!("Failed to submit movement: {:?}", err);
+                                    }
                                 }
                             }
                         }
@@ -527,13 +524,21 @@ impl MainMenuWindow {
 
                     // TEMP
                     gui_state.path_cache.get(&entity).map(|path| {
-                        gui_state.line_renderer.add_polyline(
-                            &path
-                                .iter()
-                                .map(|p| [p.x, p.y, p.z])
-                                .collect::<Vec<[f32; 3]>>(),
-                            [1.0, 1.0, 1.0],
-                        );
+                        [
+                            (&path.taken_path, [1.0, 1.0, 1.0]),
+                            (&path.full_path, [1.0, 0.0, 0.0]),
+                        ]
+                        .iter()
+                        .for_each(|(path, color)| {
+                            gui_state.line_renderer.add_polyline(
+                                &path
+                                    .points
+                                    .iter()
+                                    .map(|p| [p.x, p.y, p.z])
+                                    .collect::<Vec<[f32; 3]>>(),
+                                *color,
+                            );
+                        });
                     });
                 } else {
                     let mesh = shapes::build_capsule_mesh(

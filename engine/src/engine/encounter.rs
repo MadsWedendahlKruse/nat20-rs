@@ -55,6 +55,8 @@ impl From<TargetType> for ParticipantsFilter {
                     ParticipantsFilter::LifeStates(allowed_states)
                 }
             }
+
+            TargetType::Point => todo!(),
         }
     }
 }

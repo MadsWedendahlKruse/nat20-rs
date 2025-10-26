@@ -1,13 +1,19 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
+    sync::LazyLock,
 };
 
 use strum::{Display, EnumIter};
+use uom::si::{
+    f32::Length,
+    length::{foot, meter},
+};
 
 use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
+        actions::targeting::TargetingRange,
         d20::D20Check,
         damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
         dice::{DiceSet, DieSize},
@@ -47,11 +53,7 @@ pub enum WeaponProperties {
     Heavy,
     Light,
     // TODO: Loading,
-    /// (normal range, long range).
-    /// Disadvantage on attack rolls beyond normal range.
-    /// Can't attack beyond long range
-    /// TODO: Units? The rules use feet, but metric is (obviously ;)) superior.
-    Range(u32, u32),
+    Range(TargetingRange),
     Reach,
     Thrown,
     TwoHanded,
@@ -107,8 +109,10 @@ impl WeaponProficiencyMap {
     }
 }
 
-const MELEE_RANGE_DEFAULT: u32 = 5;
-const MELEE_RANGE_REACH: u32 = 10;
+pub static MELEE_RANGE_DEFAULT: LazyLock<TargetingRange> =
+    LazyLock::new(|| TargetingRange::new::<foot>(5.0));
+pub static MELEE_RANGE_REACH: LazyLock<TargetingRange> =
+    LazyLock::new(|| TargetingRange::new::<foot>(10.0));
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Weapon {
@@ -135,7 +139,7 @@ impl Weapon {
         if matches!(kind, WeaponKind::Ranged)
             && !properties
                 .iter()
-                .any(|p| matches!(p, WeaponProperties::Range(_, _)))
+                .any(|p| matches!(p, WeaponProperties::Range(_)))
         {
             panic!("Ranged weapons must have a range property");
         }
@@ -291,19 +295,19 @@ impl Weapon {
     /// When attacking a target beyond normal range, you have Disadvantage on the
     /// attack roll. You can’t attack a target beyond the long range.
     /// Note that for melee weapons the normal and long range is the same.
-    pub fn range(&self) -> (u32, u32) {
+    pub fn range(&self) -> &TargetingRange {
         for property in &self.properties {
             match property {
-                WeaponProperties::Range(normal_range, long_range) => {
-                    return (*normal_range, *long_range);
+                WeaponProperties::Range(range) => {
+                    return range;
                 }
                 WeaponProperties::Reach => {
-                    return (MELEE_RANGE_REACH, MELEE_RANGE_REACH);
+                    return &MELEE_RANGE_REACH;
                 }
                 _ => {}
             }
         }
-        return (MELEE_RANGE_DEFAULT, MELEE_RANGE_DEFAULT);
+        return &MELEE_RANGE_DEFAULT;
     }
 
     pub fn effects(&self) -> &Vec<EffectId> {
@@ -339,6 +343,10 @@ impl SlotProvider for Weapon {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use uom::si::{f32::Mass, mass::pound};
+
     use crate::components::{
         ability::AbilityScore,
         id::ItemId,
@@ -353,7 +361,7 @@ mod tests {
             id: ItemId::from_str("item.longsword"),
             name: "Longsword".to_string(),
             description: "A longsword".to_string(),
-            weight: 5.0,
+            weight: Mass::new::<pound>(5.0),
             value: MonetaryValue::from("1 GP"),
             rarity: ItemRarity::Common,
         };
@@ -386,7 +394,7 @@ mod tests {
             id: ItemId::from_str("Shortbow"),
             name: "Shortbow".to_string(),
             description: "A ranged weapon".to_string(),
-            weight: 2.0,
+            weight: Mass::new::<pound>(2.0),
             value: MonetaryValue::from("1 GP"),
             rarity: ItemRarity::Common,
         };
@@ -407,7 +415,7 @@ mod tests {
             id: ItemId::from_str("Dagger"),
             name: "Dagger".to_string(),
             description: "A small dagger".to_string(),
-            weight: 1.0,
+            weight: Mass::new::<pound>(1.0),
             value: MonetaryValue::from("1 GP"),
             rarity: ItemRarity::Common,
         };
@@ -431,7 +439,7 @@ mod tests {
             ItemId::from_str("item.magic_sword"),
             "Magic Sword".to_string(),
             "A sword with enchantment".to_string(),
-            3.0,
+            Mass::new::<pound>(3.0),
             MonetaryValue::from("1 GP"),
             ItemRarity::Uncommon,
         );
@@ -453,7 +461,7 @@ mod tests {
             ItemId::from_str("item.rapier"),
             "Rapier".to_string(),
             "A finesse weapon".to_string(),
-            2.5,
+            Mass::new::<pound>(2.5),
             MonetaryValue::from("1 GP"),
             ItemRarity::Common,
         );
@@ -484,7 +492,7 @@ mod tests {
             ItemId::from_str("item.warhammer"),
             "Warhammer".to_string(),
             "A heavy warhammer".to_string(),
-            8.0,
+            Mass::new::<pound>(8.0),
             MonetaryValue::from("1 GP"),
             ItemRarity::Rare,
         );
@@ -507,7 +515,7 @@ mod tests {
             ItemId::from_str("item.shortbow"),
             "Shortbow".to_string(),
             "A ranged weapon".to_string(),
-            2.0,
+            Mass::new::<pound>(2.0),
             MonetaryValue::from("1 GP"),
             ItemRarity::Common,
         );
@@ -515,7 +523,9 @@ mod tests {
             item,
             WeaponKind::Ranged,
             WeaponCategory::Simple,
-            HashSet::from([WeaponProperties::Range(80, 320)]),
+            HashSet::from([WeaponProperties::Range(TargetingRange::with_max::<foot>(
+                80.0, 320.0,
+            ))]),
             vec![(1, DieSize::D6, DamageType::Piercing)],
             vec![],
             vec![],
@@ -529,7 +539,7 @@ mod tests {
             ItemId::from_str("item.club"),
             "Club".to_string(),
             "A simple club".to_string(),
-            2.0,
+            Mass::new::<pound>(2.0),
             MonetaryValue::from("1 GP"),
             ItemRarity::Common,
         );
@@ -542,7 +552,7 @@ mod tests {
             vec![],
             vec![],
         );
-        assert_eq!(weapon.range(), (5, 5));
+        assert_eq!(weapon.range(), &TargetingRange::new::<foot>(5.0));
     }
 
     #[test]
@@ -551,7 +561,7 @@ mod tests {
             ItemId::from_str("item.whip"),
             "Whip".to_string(),
             "A whip with reach".to_string(),
-            3.0,
+            Mass::new::<pound>(3.0),
             MonetaryValue::from("1 GP"),
             ItemRarity::Uncommon,
         );
@@ -564,7 +574,7 @@ mod tests {
             vec![],
             vec![],
         );
-        assert_eq!(weapon.range(), (10, 10));
+        assert_eq!(weapon.range(), &TargetingRange::new::<foot>(10.0));
     }
 
     #[test]
@@ -573,7 +583,7 @@ mod tests {
             ItemId::from_str("item.longbow"),
             "Longbow".to_string(),
             "A long ranged bow".to_string(),
-            2.0,
+            Mass::new::<pound>(2.0),
             MonetaryValue::from("1 GP"),
             ItemRarity::Rare,
         );
@@ -581,12 +591,17 @@ mod tests {
             item,
             WeaponKind::Ranged,
             WeaponCategory::Martial,
-            HashSet::from([WeaponProperties::Range(150, 600)]),
+            HashSet::from([WeaponProperties::Range(TargetingRange::with_max::<foot>(
+                150.0, 600.0,
+            ))]),
             vec![(1, DieSize::D8, DamageType::Piercing)],
             vec![],
             vec![],
         );
-        assert_eq!(weapon.range(), (150, 600));
+        assert_eq!(
+            weapon.range(),
+            &TargetingRange::with_max::<foot>(150.0, 600.0)
+        );
     }
 
     #[test]
@@ -595,7 +610,7 @@ mod tests {
             ItemId::from_str("item.axe"),
             "Axe".to_string(),
             "A hand axe".to_string(),
-            2.0,
+            Mass::new::<pound>(2.0),
             MonetaryValue::from("1 GP"),
             ItemRarity::Common,
         );
@@ -619,7 +634,7 @@ mod tests {
             ItemId::from_str("item.crossbow"),
             "Crossbow".to_string(),
             "A light crossbow".to_string(),
-            3.0,
+            Mass::new::<pound>(3.0),
             MonetaryValue::from("1 GP"),
             ItemRarity::Uncommon,
         );
@@ -627,7 +642,9 @@ mod tests {
             item,
             WeaponKind::Ranged,
             WeaponCategory::Simple,
-            HashSet::from([WeaponProperties::Range(80, 320)]),
+            HashSet::from([WeaponProperties::Range(TargetingRange::with_max::<foot>(
+                80.0, 320.0,
+            ))]),
             vec![(1, DieSize::D8, DamageType::Piercing)],
             vec![],
             vec![],

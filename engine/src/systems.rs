@@ -13,6 +13,7 @@ pub mod helpers;
 pub mod inventory;
 pub mod level_up;
 pub mod loadout;
+pub mod movement;
 pub mod race;
 pub mod resources;
 pub mod spells;

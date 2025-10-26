@@ -8,6 +8,11 @@ use crate::{
 pub fn pass_time(world: &mut World, entity: Entity, passed_time: &RechargeRule) {
     systems::resources::recharge(world, entity, passed_time);
 
+    // TODO: Technically this is always true?
+    if RechargeRule::Turn.is_recharged_by(passed_time) {
+        systems::movement::recharge_movement(world, entity);
+    }
+
     let expired_effects: Vec<_> = {
         let mut effects = systems::effects::effects_mut(world, entity);
 

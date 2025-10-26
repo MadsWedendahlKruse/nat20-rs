@@ -67,10 +67,7 @@ fn cost_builder_flat(amount: u8) -> ResourceAmount {
 }
 
 fn cost_builder_tiered(tier: u8, amount: u8) -> ResourceAmount {
-    ResourceAmount::Tiered {
-        tier: tier,
-        amount: amount,
-    }
+    ResourceAmount::Tiered { tier, amount }
 }
 
 macro_rules! flat_resource {

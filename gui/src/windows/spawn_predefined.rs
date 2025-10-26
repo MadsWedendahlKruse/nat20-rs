@@ -158,7 +158,11 @@ impl RenderableMutWithContext<&mut GameState> for SpawnPredefinedWindow {
                                 raycast_world.poi,
                             )
                         {
-                            systems::geometry::move_to(game_state, entity, &navmesh_point);
+                            systems::geometry::teleport_to_ground(
+                                game_state,
+                                entity,
+                                &navmesh_point,
+                            );
 
                             if ui.is_mouse_clicked(MouseButton::Left) {
                                 gui_state.cursor_ray_result.take();

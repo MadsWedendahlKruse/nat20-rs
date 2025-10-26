@@ -95,6 +95,7 @@ impl Name {
     }
 }
 
+// TODO: Not sure if this just causes more problems than it solves
 /// Identifier for an entity in the game world.
 /// This is used to uniquely identify entities, such as characters or creatures.
 /// In most cases the id (`Entity`) is meaningless outside the context of the

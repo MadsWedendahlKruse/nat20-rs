@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 
 use strum::Display;
+use uom::si::f32::Length;
 
 use crate::components::{
     id::{ActionId, EffectId, RaceId, SubraceId},
     speed::Speed,
 };
 
+// TODO: Mutliple creature types? e.g. Undead Dragon
 #[derive(Debug, Clone, Display)]
 pub enum CreatureType {
     Aberration,

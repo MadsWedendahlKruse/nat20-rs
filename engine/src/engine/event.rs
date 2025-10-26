@@ -3,22 +3,25 @@ use std::{
     sync::Arc,
 };
 
-use hecs::Entity;
+use hecs::{Entity, World};
 use uuid::Uuid;
 
 use crate::{
     components::{
         actions::{
             action::{ActionContext, ActionKindResult, ActionResult},
-            targeting::TargetTypeInstance,
+            targeting::{TargetSelection, TargetTypeInstance, TargetingError},
         },
         damage::DamageRollResult,
         health::life_state::LifeState,
         id::{ActionId, EntityIdentifier},
-        resource::ResourceAmountMap,
+        resource::{ResourceAmountMap, ResourceError},
     },
     engine::{encounter::EncounterId, game_state::GameState},
-    systems::d20::{D20CheckDCKind, D20ResultKind},
+    systems::{
+        actions::ActionUsabilityError,
+        d20::{D20CheckDCKind, D20ResultKind},
+    },
 };
 
 pub type EventId = Uuid;
@@ -341,6 +344,8 @@ pub enum ActionError {
     NotYourTurn {
         decision: ActionDecision,
     },
+    Usability(ActionUsabilityError),
+    Resource(ResourceError),
 }
 
 macro_rules! ensure_equal {

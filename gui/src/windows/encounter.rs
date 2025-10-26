@@ -1,11 +1,7 @@
-use std::{
-    collections::{HashMap, HashSet},
-    thread::{sleep, sleep_ms},
-    time::Duration,
-};
+use std::collections::{HashMap, HashSet};
 
-use hecs::{Entity, World};
-use imgui::{ChildFlags, MouseButton, TreeNodeFlags};
+use hecs::Entity;
+use imgui::{ChildFlags, MouseButton};
 use nat20_rs::{
     components::{
         actions::{
@@ -15,20 +11,20 @@ use nat20_rs::{
         id::{ActionId, Name},
         resource::{ResourceAmountMap, ResourceMap},
         speed::Speed,
-        spells::spellbook::Spellbook,
     },
     engine::{
-        encounter::{self, Encounter, EncounterId, ParticipantsFilter},
+        encounter::{Encounter, EncounterId, ParticipantsFilter},
         event::{
             ActionData, ActionDecision, ActionDecisionPartial, ActionPrompt, Event, ReactionData,
         },
-        game_state::{self, GameState},
+        game_state::GameState,
     },
     registry,
-    systems::{self, geometry::RaycastHitKind},
+    systems::{
+        self,
+        geometry::{RaycastFilter, RaycastHitKind},
+    },
 };
-use parry3d::query::Ray;
-use strum::IntoEnumIterator;
 
 use crate::{
     render::{
@@ -39,20 +35,16 @@ use crate::{
             entities::CreatureRenderMode,
             text::{TextKind, TextSegments},
             utils::{
-                ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
-                ProgressBarColor, SELECTED_BUTTON_COLOR, render_button_disabled_conditionally,
+                ImguiRenderable, ImguiRenderableWithContext, ProgressBarColor,
+                SELECTED_BUTTON_COLOR, render_button_disabled_conditionally,
                 render_button_selectable, render_empty_button, render_progress_bar,
-                render_window_at_cursor,
             },
         },
         world::camera::OrbitCamera,
     },
-    state::gui_state::{self, GuiState},
+    state::gui_state::GuiState,
     table_with_columns,
-    windows::anchor::{
-        self, AUTO_RESIZE, BOTTOM_CENTER, BOTTOM_RIGHT, CENTER, HorizontalAnchor, VerticalAnchor,
-        WindowAnchor, WindowManager,
-    },
+    windows::anchor::{self, AUTO_RESIZE, BOTTOM_CENTER, BOTTOM_RIGHT, CENTER, WindowManager},
 };
 
 #[derive(Debug)]
@@ -317,15 +309,13 @@ impl RenderableMutWithContext<&mut GameState> for EncounterWindow {
         gui_state: &mut GuiState,
         game_state: &mut GameState,
     ) {
-        let label = format!("Encounter##{:?}", self.id);
-
         // raw pointer sidesteps borrow checker temporarily
         let window_manager_ptr =
             unsafe { &mut *(&mut gui_state.window_manager as *mut WindowManager) };
 
         window_manager_ptr.render_window(
             ui,
-            &label,
+            &format!("Encounter##{:?}", self.id),
             &anchor::CENTER_LEFT,
             AUTO_RESIZE,
             &mut true,
@@ -450,6 +440,8 @@ impl RenderableMutWithContext<(&mut GameState, &mut Option<ActionDecisionProgres
 
         ui.separator();
         ui.text(format!("Round: {}", self.round()));
+
+        // TODO: Pretty much everything below this line is completely spaghetti
 
         let next_prompt = self.next_pending_prompt();
         if next_prompt.is_none() {
@@ -910,17 +902,16 @@ impl RenderableWithContext<(&mut GameState, EncounterId, &mut Vec<Entity>, &mut 
             &mut bool,
         ),
     ) {
-        for target_type in &self.valid_target_types {
-            match target_type {
-                TargetType::Entity { .. } => {
-                    let filter = ParticipantsFilter::from(target_type.clone());
-                    self.kind.render_with_context(
-                        ui,
-                        gui_state,
-                        (game_state, encounter, targets, confirm_targets, filter),
-                    );
-                }
+        match &self.valid_target {
+            TargetType::Entity { .. } => {
+                let filter = ParticipantsFilter::from(self.valid_target.clone());
+                self.kind.render_with_context(
+                    ui,
+                    gui_state,
+                    (game_state, encounter, targets, confirm_targets, filter),
+                );
             }
+            TargetType::Point => todo!(),
         }
     }
 }
@@ -1031,33 +1022,5 @@ impl
                 ui.text(format!("Targeting kind {:?} is not implemented yet.", self));
             }
         }
-    }
-}
-
-fn get_cursor_entity(game_state: &GameState, camera: &OrbitCamera) -> Option<Entity> {
-    if let Some(ray) = camera.ray_from_cursor() {
-        if let Some(raycast) = systems::geometry::raycast(game_state, &ray) {
-            match raycast.closest().unwrap().kind {
-                RaycastHitKind::Creature(entity) => Some(entity),
-                _ => None,
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
-fn get_clicked_entity(
-    ui: &imgui::Ui,
-    game_state: &GameState,
-    camera: &OrbitCamera,
-    mouse_button: MouseButton,
-) -> Option<Entity> {
-    if ui.is_mouse_clicked(mouse_button) {
-        get_cursor_entity(game_state, camera)
-    } else {
-        None
     }
 }

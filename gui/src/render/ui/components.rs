@@ -45,6 +45,7 @@ use nat20_rs::{
 };
 use std::collections::HashSet;
 use strum::IntoEnumIterator;
+use uom::si::mass::kilogram;
 
 use crate::{
     render::ui::{
@@ -665,7 +666,7 @@ impl ImguiRenderable for MonetaryValue {
 fn render_item_misc(ui: &imgui::Ui, item: &Item) {
     ui.text_colored([0.7, 0.7, 0.7, 1.0], &item.description);
     // Fake right-aligned text for weight and value
-    let text = format!("{} kg, {}", item.weight, item.value);
+    let text = format!("{} kg, {}", item.weight.get::<kilogram>(), item.value);
     let text_width = ui.calc_text_size(&text)[0];
     let available_width = ui.content_region_avail()[0];
     ui.set_cursor_pos([available_width - text_width, ui.cursor_pos()[1] + 10.0]);
@@ -930,16 +931,17 @@ impl ImguiRenderable for DamageComponentMitigation {
 }
 
 impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
-    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, u8)) {
-        let (world, indent_level) = context;
-
+    fn render_with_context(&self, ui: &imgui::Ui, (world, indent_level): (&World, u8)) {
         let target_name = match &self.target {
-            TargetTypeInstance::Entity(entity) => entity.name().as_str(),
-            TargetTypeInstance::Point(point) => todo!(),
-            TargetTypeInstance::Area(area_shape) => {
-                todo!()
+            TargetTypeInstance::Entity(entity) => {
+                let character_name = systems::helpers::get_component::<Name>(world, *entity);
+                character_name.as_str().to_string()
             }
-            TargetTypeInstance::None => todo!(),
+            TargetTypeInstance::Point(point) => todo!(),
+            // TargetTypeInstance::Area(area_shape) => {
+            //     todo!()
+            // }
+            // TargetTypeInstance::None => todo!(),
         };
 
         match &self.kind {
@@ -1041,7 +1043,7 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
 
             ActionKindResult::BeneficialEffect { effect, applied } => {
                 TextSegments::new(vec![
-                    (target_name, TextKind::Target),
+                    (target_name.as_str(), TextKind::Target),
                     ("gained effect", TextKind::Normal),
                     (&effect.to_string(), TextKind::Effect),
                 ])
@@ -1054,7 +1056,7 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
                 new_life_state,
             } => ui.group(|| {
                 TextSegments::new(vec![
-                    (target_name, TextKind::Target),
+                    (target_name.as_str(), TextKind::Target),
                     ("was healed for", TextKind::Normal),
                     (&format!("{} HP", healing.subtotal), TextKind::Healing),
                 ])

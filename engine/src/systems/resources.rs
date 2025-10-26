@@ -3,6 +3,7 @@ use hecs::{Entity, World};
 use crate::{
     components::{
         actions::action::ActionCooldownMap,
+        id::ResourceId,
         resource::{RechargeRule, ResourceAmountMap, ResourceError, ResourceMap},
     },
     systems,
@@ -20,7 +21,11 @@ pub fn recharge(world: &mut World, entity: Entity, rest_type: &RechargeRule) {
         .retain(|_, recharge_rule| !recharge_rule.is_recharged_by(rest_type));
 }
 
-pub fn can_afford(world: &World, entity: Entity, cost: &ResourceAmountMap) -> bool {
+pub fn can_afford(
+    world: &World,
+    entity: Entity,
+    cost: &ResourceAmountMap,
+) -> (bool, Option<ResourceId>) {
     systems::helpers::get_component::<ResourceMap>(world, entity).can_afford_all(cost)
 }
 

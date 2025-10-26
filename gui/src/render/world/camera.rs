@@ -1,4 +1,7 @@
-use nat20_rs::{engine::game_state::GameState, systems};
+use nat20_rs::{
+    engine::game_state::GameState,
+    systems::{self, geometry::RaycastFilter},
+};
 use parry3d::{
     na::{Isometry3, Perspective3, Point3, Vector3},
     query::Ray,
@@ -271,7 +274,12 @@ impl ImguiRenderableMutWithContext<(&GameState, &mut bool, &mut WindowManager)> 
                         ));
                         ui.text(format!(
                             "Hit: {:#?}",
-                            systems::geometry::raycast_with_toi(&game_state, &ray, 1000.0)
+                            systems::geometry::raycast_with_toi(
+                                &game_state,
+                                &ray,
+                                1000.0,
+                                RaycastFilter::All
+                            )
                         ));
                     } else {
                         ui.text("(no cursor ray)");

@@ -1,4 +1,6 @@
 pub mod equipment {
+    use uom::si::{f32::Mass, mass::pound};
+
     use crate::components::{
         id::ItemId,
         items::{
@@ -14,7 +16,7 @@ pub mod equipment {
                 id: ItemId::from_str("item.boots"),
                 name: "Boots".to_string(),
                 description: "A test pair of boots.".to_string(),
-                weight: 1.8,
+                weight: Mass::new::<pound>(1.8),
                 value: MonetaryValue::from("10 GP"),
                 rarity: ItemRarity::Common,
             },
@@ -29,7 +31,7 @@ pub mod equipment {
                 id: ItemId::from_str("item.gloves"),
                 name: "Gloves".to_string(),
                 description: "A test pair of gloves.".to_string(),
-                weight: 0.5,
+                weight: Mass::new::<pound>(0.5),
                 value: MonetaryValue::from("5 GP"),
                 rarity: ItemRarity::Common,
             },
@@ -428,9 +430,6 @@ pub mod engine {
     use crate::engine::game_state::GameState;
 
     pub fn test_game_state() -> GameState {
-        GameState::new(
-            "engine/assets/test_terrain.obj",
-            &ConfigBuilder::default().build(),
-        )
+        GameState::new("assets/test_terrain.obj", &ConfigBuilder::default().build())
     }
 }

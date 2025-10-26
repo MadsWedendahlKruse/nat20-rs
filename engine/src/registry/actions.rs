@@ -255,16 +255,14 @@ static WEAPON_TARGETING: LazyLock<
     Arc::new(
         |world: &World, entity: Entity, action_context: &ActionContext| {
             if let ActionContext::Weapon { slot } = action_context {
-                let (normal_range, max_range) =
-                    systems::helpers::get_component::<Loadout>(world, entity)
-                        .weapon_in_hand(slot)
-                        .unwrap()
-                        .range();
                 TargetingContext {
                     kind: TargetingKind::Single,
-                    normal_range,
-                    max_range,
-                    valid_target_types: vec![TargetType::entity_not_dead()],
+                    range: systems::helpers::get_component::<Loadout>(world, entity)
+                        .weapon_in_hand(slot)
+                        .unwrap()
+                        .range()
+                        .clone(),
+                    valid_target: TargetType::entity_not_dead(),
                 }
             } else {
                 panic!("Action context must be Weapon");

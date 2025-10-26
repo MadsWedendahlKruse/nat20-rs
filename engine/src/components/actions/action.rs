@@ -15,16 +15,12 @@ use crate::{
         },
         dice::{DiceSetRoll, DiceSetRollResult},
         health::life_state::LifeState,
-        id::{ActionId, EffectId, EntityIdentifier, ResourceId},
+        id::{ActionId, EffectId, EntityIdentifier},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
-        resource::{self, RechargeRule, ResourceAmountMap, ResourceError, ResourceMap},
+        resource::{RechargeRule, ResourceAmountMap, ResourceError},
         saving_throw::SavingThrowDC,
-        spells::spellbook::Spellbook,
     },
-    engine::{
-        event::{ActionData, Event, EventId, EventKind},
-        game_state::GameState,
-    },
+    engine::{event::Event, game_state::GameState},
     systems::{self},
 };
 
@@ -515,7 +511,7 @@ impl ActionResult {
     pub fn new(world: &World, performer: Entity, target: Entity, kind: ActionKindResult) -> Self {
         ActionResult {
             performer: EntityIdentifier::from_world(world, performer),
-            target: TargetTypeInstance::Entity(EntityIdentifier::from_world(world, target)),
+            target: TargetTypeInstance::Entity(target),
             kind,
         }
     }

@@ -79,9 +79,11 @@ impl Spell {
         for (resource, cost) in self.action.resource_cost() {
             if *resource == *registry::resources::SPELL_SLOT_ID {
                 match cost {
-                    ResourceAmount::Flat(_) => panic!("Spell slot cost cannot be flat"),
                     ResourceAmount::Tiered { tier, .. } => {
                         return *tier;
+                    }
+                    _ => {
+                        panic!("Spell slot resource cost must be tiered");
                     }
                 }
             }

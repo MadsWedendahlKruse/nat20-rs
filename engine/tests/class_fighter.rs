@@ -3,24 +3,19 @@ extern crate nat20_rs;
 mod tests {
     use std::sync::Arc;
 
-    use hecs::World;
     use nat20_rs::{
         components::{
-            actions::action::{ActionContext, ActionKind},
-            damage::{
-                DamageComponentResult, DamageRoll, DamageRollResult, DamageSource, DamageType,
+            actions::{
+                action::{ActionContext, ActionKind},
+                targeting::TargetTypeInstance,
             },
-            dice::{DiceSetRollResult, DieSize},
+            damage::{DamageRoll, DamageSource, DamageType},
+            dice::DieSize,
             health::hit_points::HitPoints,
             id::ActionId,
-            items::equipment::slots::EquipmentSlot,
-            modifier::ModifierSet,
-            resource::{self, RechargeRule, ResourceAmountMap, ResourceMap},
+            resource::{RechargeRule, ResourceAmountMap, ResourceMap},
         },
-        engine::{
-            event::{ActionData, ActionDecision},
-            game_state::{self, GameState},
-        },
+        engine::event::{ActionData, ActionDecision},
         registry, systems,
         test_utils::fixtures,
     };
