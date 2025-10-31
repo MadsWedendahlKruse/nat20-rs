@@ -5,10 +5,7 @@ mod tests {
 
     use nat20_rs::{
         components::{
-            actions::{
-                action::{ActionContext, ActionKind},
-                targeting::TargetInstance,
-            },
+            actions::action::{ActionContext, ActionKind},
             damage::{DamageRoll, DamageSource, DamageType},
             dice::DieSize,
             health::hit_points::HitPoints,

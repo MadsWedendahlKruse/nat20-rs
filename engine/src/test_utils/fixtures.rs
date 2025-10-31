@@ -62,7 +62,7 @@ pub mod creatures {
                 spells::spellbook::Spellbook,
             },
             entities::character::Character,
-            registry::{self, items},
+            registry::{self},
         };
 
         use super::*;
@@ -180,7 +180,7 @@ pub mod creatures {
                 ],
             );
 
-            systems::loadout::equip(world, entity, &registry::items::SHORTBOW_ID);
+            let _ = systems::loadout::equip(world, entity, &registry::items::SHORTBOW_ID);
 
             EntityIdentifier::new(entity, name)
         }

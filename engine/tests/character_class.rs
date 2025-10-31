@@ -2,12 +2,12 @@ extern crate nat20_rs;
 
 mod tests {
 
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
     use hecs::World;
     use nat20_rs::{
         components::{
-            ability::{Ability, AbilityScoreDistribution},
+            ability::Ability,
             class::{ClassName, SubclassName},
             level::CharacterLevels,
             level_up::ChoiceItem,

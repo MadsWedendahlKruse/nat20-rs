@@ -13,7 +13,7 @@ use crate::components::{
         ActionHook, ArmorClassHook, AttackRollHook, AttackRollResultHook, D20CheckHooks,
         DamageRollHook, DamageRollResultHook, ResourceCostHook,
     },
-    id::{EffectId, ResourceId},
+    id::EffectId,
     items::equipment::armor::ArmorClass,
     modifier::ModifierSource,
     resource::ResourceAmountMap,

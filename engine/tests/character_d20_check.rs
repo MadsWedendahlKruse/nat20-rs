@@ -8,13 +8,6 @@ mod tests {
             ability::{Ability, AbilityScore, AbilityScoreMap},
             d20::RollMode,
             id::ItemId,
-            items::{
-                equipment::{
-                    armor::Armor,
-                    equipment::{EquipmentItem, EquipmentKind},
-                },
-                item::ItemRarity,
-            },
             modifier::ModifierSource,
             proficiency::{Proficiency, ProficiencyLevel},
             saving_throw::{SavingThrowKind, SavingThrowSet},

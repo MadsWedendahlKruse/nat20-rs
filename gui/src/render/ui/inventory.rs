@@ -1,9 +1,9 @@
 use hecs::{Entity, World};
 use nat20_rs::{
     components::items::{
-        equipment::{slots::EquipmentSlot, weapon::WeaponKind},
+        equipment::slots::EquipmentSlot,
         inventory::{Inventory, ItemContainer, ItemInstance},
-        item::{Item, ItemRarity},
+        item::Item,
     },
     systems,
 };
@@ -11,7 +11,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     render::ui::{
-        text::{TextKind, item_rarity_color},
+        text::item_rarity_color,
         utils::{ImguiRenderable, ImguiRenderableWithContext},
     },
     table_with_columns,

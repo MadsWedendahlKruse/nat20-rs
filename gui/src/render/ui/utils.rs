@@ -1,8 +1,5 @@
 use std::fmt::Display;
 
-use hecs::{Entity, World};
-use nat20_rs::components::id::Name;
-
 pub trait ImguiRenderable {
     fn render(&self, ui: &imgui::Ui);
 }

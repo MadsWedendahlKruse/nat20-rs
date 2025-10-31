@@ -11,7 +11,6 @@ mod tests {
         },
         entities::character::Character,
         registry, systems,
-        test_utils::fixtures,
     };
 
     #[test]

@@ -9,7 +9,7 @@ use nat20_rs::{
         character::{Character, CharacterTag},
         monster::{Monster, MonsterTag},
     },
-    systems::{self, geometry::RaycastResult},
+    systems::{self},
     test_utils::fixtures,
 };
 use parry3d::na::Point3;
@@ -17,14 +17,9 @@ use parry3d::na::Point3;
 use crate::{
     render::{
         common::utils::RenderableMutWithContext,
-        ui::{
-            entities::CreatureRenderMode,
-            utils::{
-                ImguiRenderableMutWithContext, ImguiRenderableWithContext, render_window_at_cursor,
-            },
-        },
+        ui::{entities::CreatureRenderMode, utils::ImguiRenderableWithContext},
     },
-    state::gui_state::{self, GuiState},
+    state::gui_state::GuiState,
     windows::anchor::{AUTO_RESIZE, TOP_LEFT},
 };
 

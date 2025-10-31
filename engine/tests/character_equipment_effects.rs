@@ -96,7 +96,7 @@ mod tests {
             12,
             vec![registry::effects::ARMOR_OF_SNEAKING_ID.clone()],
         );
-        systems::loadout::equip(&mut world, entity, armor);
+        let _ = systems::loadout::equip(&mut world, entity, armor);
 
         let check = systems::helpers::get_component::<SkillSet>(&world, entity).check(
             Skill::Stealth,
@@ -134,7 +134,7 @@ mod tests {
             18,
             vec![registry::effects::ARMOR_OF_CONSTITUTION_SAVING_THROWS_ID.clone()],
         );
-        systems::loadout::equip(&mut world, entity, armor);
+        let _ = systems::loadout::equip(&mut world, entity, armor);
 
         let throw = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
             SavingThrowKind::Ability(Ability::Constitution),

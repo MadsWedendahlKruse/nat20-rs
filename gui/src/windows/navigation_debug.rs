@@ -5,16 +5,12 @@ use nat20_rs::{
     engine::{game_state::GameState, geometry::WorldPath},
     systems,
 };
-use parry3d::na::Matrix4;
 use rerecast::ConfigBuilder;
 
 use crate::{
-    render::{
-        common::utils::RenderableMutWithContext, ui::utils::ImguiRenderableMut,
-        world::line::LineRenderer,
-    },
+    render::{common::utils::RenderableMutWithContext, ui::utils::ImguiRenderableMut},
     state::{self, gui_state::GuiState},
-    windows::anchor::{self, HorizontalAnchor, VerticalAnchor, WindowAnchor},
+    windows::anchor::{self},
 };
 
 pub struct NavigationDebugWindow {

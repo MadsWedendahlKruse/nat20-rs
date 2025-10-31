@@ -1,23 +1,22 @@
 // TODO: For now let's just hardcode a heigh for each size and assume all creatures
 // have a "capsule" collision shape. Later we can make this more complex if needed.
 
-use std::{collections::HashMap, path, sync::LazyLock};
+use std::{collections::HashMap, sync::LazyLock};
 
-use glam::{Vec2, Vec3};
+use glam::Vec2;
 use hecs::{Entity, World};
 use parry3d::{
     na::{Isometry3, Point3, Translation3, Vector3},
-    query::{self, PointQuery, Ray, RayCast},
-    shape::{Capsule, Shape, SharedShape},
+    query::{PointQuery, Ray, RayCast},
+    shape::Capsule,
 };
 use polyanya::Coords;
-use uom::si::{f32::Length, length::meter};
 
 use crate::{
     components::race::CreatureSize,
     engine::{
-        game_state::{self, GameState},
-        geometry::{self, WorldPath},
+        game_state::GameState,
+        geometry::WorldPath,
     },
 };
 

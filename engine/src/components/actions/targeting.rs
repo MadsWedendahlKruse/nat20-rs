@@ -12,7 +12,7 @@ use uom::{
 
 use crate::{
     components::health::life_state::LifeState,
-    engine::game_state::{self, GameState},
+    engine::game_state::GameState,
     entities::{character::CharacterTag, monster::MonsterTag},
     systems,
 };

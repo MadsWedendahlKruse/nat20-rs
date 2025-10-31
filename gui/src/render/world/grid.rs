@@ -23,15 +23,17 @@ impl GridRenderer {
     ) -> Self {
         // --- compile program ---
         unsafe fn compile(gl: &glow::Context, ty: u32, src: &str) -> glow::Shader {
-            let sh = gl.create_shader(ty).unwrap();
-            gl.shader_source(sh, src);
-            gl.compile_shader(sh);
-            assert!(
-                gl.get_shader_compile_status(sh),
-                "shader: {}",
-                gl.get_shader_info_log(sh)
-            );
-            sh
+            unsafe {
+                let sh = gl.create_shader(ty).unwrap();
+                gl.shader_source(sh, src);
+                gl.compile_shader(sh);
+                assert!(
+                    gl.get_shader_compile_status(sh),
+                    "shader: {}",
+                    gl.get_shader_info_log(sh)
+                );
+                sh
+            }
         }
         let program = unsafe {
             let vs = compile(gl, glow::VERTEX_SHADER, vert_src);

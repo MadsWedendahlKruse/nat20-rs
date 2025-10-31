@@ -1,17 +1,8 @@
-use std::cmp::min;
-
 use hecs::World;
 use imgui::TreeNodeFlags;
 use nat20_rs::{
-    components::{
-        actions::action::{Action, ActionContext},
-        health::life_state::LifeState,
-        id::Name,
-    },
-    engine::{
-        encounter,
-        event::{EncounterEvent, Event, EventKind, EventLog},
-    },
+    components::{actions::action::ActionContext, id::Name},
+    engine::event::{EncounterEvent, Event, EventKind, EventLog},
     systems::{
         self,
         d20::{D20CheckDCKind, D20ResultKind},
@@ -21,7 +12,7 @@ use strum::{Display, EnumIter};
 
 use crate::render::ui::{
     components::new_life_state_text,
-    text::{TextKind, TextSegment, TextSegments, indent_text},
+    text::{TextKind, TextSegment, TextSegments},
     utils::{ImguiRenderable, ImguiRenderableWithContext},
 };
 

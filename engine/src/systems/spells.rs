@@ -1,18 +1,9 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::LazyLock,
-};
+use std::{collections::HashMap, sync::LazyLock};
 
 use hecs::{Entity, World};
 
 use crate::{
-    components::{
-        class::SpellcastingProgression,
-        items::equipment::slots,
-        level::CharacterLevels,
-        resource::{RechargeRule, Resource, ResourceBudget, ResourceKind, ResourceMap},
-        spells::spellbook::Spellbook,
-    },
+    components::{class::SpellcastingProgression, level::CharacterLevels, resource::ResourceMap},
     registry,
 };
 

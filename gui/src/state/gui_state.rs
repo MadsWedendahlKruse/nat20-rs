@@ -4,19 +4,13 @@ use glow::HasContext;
 use hecs::Entity;
 use imgui_glow_renderer::AutoRenderer;
 use nat20_rs::systems::{geometry::RaycastResult, movement::PathResult};
-use parry3d::{
-    na::{Point3, Vector3},
-    query::Ray,
-};
+use parry3d::na::Vector3;
 use winit::window::Window;
 
 use crate::{
-    render::{
-        ui::utils::ImguiRenderableMut,
-        world::{
-            camera::OrbitCamera, frame_uniforms::FrameUniforms, grid::GridRenderer,
-            line::LineRenderer, mesh::Mesh, program::BasicProgram,
-        },
+    render::world::{
+        camera::OrbitCamera, frame_uniforms::FrameUniforms, grid::GridRenderer, line::LineRenderer,
+        mesh::Mesh, program::BasicProgram,
     },
     state::settings::GuiSettings,
     windows::anchor::WindowManager,

@@ -12,11 +12,8 @@ use winit::{
 };
 
 use crate::{
-    render::{common::utils::RenderableMutWithContext, ui::utils::ImguiRenderableMutWithContext},
-    state::{gui_state::GuiState, parameters::RENDER_CAMERA_DEBUG},
-    windows::anchor::{
-        self, AUTO_RESIZE, HorizontalAnchor, VerticalAnchor, WindowAnchor, WindowManager,
-    },
+    render::ui::utils::ImguiRenderableMutWithContext,
+    windows::anchor::{self, AUTO_RESIZE, WindowManager},
 };
 
 // Initial camera parameters
