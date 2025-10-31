@@ -243,8 +243,8 @@ impl TargetingContext {
             // }
 
             // Check range
-            let actor_position =
-                systems::geometry::get_foot_position(&game_state.world, actor).unwrap();
+            let (_, actor_shape_pose) =
+                systems::geometry::get_shape(&game_state.world, actor).unwrap();
             // let distance = match target {
             //     TargetTypeInstance::Entity(entity) => {
             //         let target_position =
@@ -257,9 +257,11 @@ impl TargetingContext {
             //         Length::new::<meter>((point - actor_position).norm())
             //     }
             // };
-            let target_position =
-                systems::geometry::get_foot_position(&game_state.world, *target).unwrap();
-            let distance = Length::new::<meter>((target_position - actor_position).norm());
+            let (_, target_shape_pose) =
+                systems::geometry::get_shape(&game_state.world, *target).unwrap();
+            let distance = Length::new::<meter>(
+                (target_shape_pose.translation.vector - actor_shape_pose.translation.vector).norm(),
+            );
 
             if !self.range.in_range(distance) {
                 return Err(TargetingError::OutOfRange {

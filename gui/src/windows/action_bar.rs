@@ -66,10 +66,17 @@ impl PotentialTarget {
         {
             let target_position = match target {
                 TargetInstance::Entity(entity) => {
-                    systems::geometry::get_foot_position(&game_state.world, *entity).unwrap()
+                    let (_, shape_pose) =
+                        systems::geometry::get_shape(&game_state.world, *entity).unwrap();
+                    shape_pose.translation.vector.into()
                 }
                 TargetInstance::Point(point) => *point,
             };
+
+            println!(
+                "[potential target] Cannot reach target {:?}, error: {:?}, attempting pathfinding...",
+                target_position, action_error
+            );
 
             let targeting_context = systems::actions::targeting_context(
                 &game_state.world,

@@ -14,10 +14,7 @@ use polyanya::Coords;
 
 use crate::{
     components::race::CreatureSize,
-    engine::{
-        game_state::GameState,
-        geometry::WorldPath,
-    },
+    engine::{game_state::GameState, geometry::WorldPath},
 };
 
 pub static EPSILON: f32 = 1e-6;
@@ -49,7 +46,7 @@ pub fn get_foot_position(world: &World, entity: Entity) -> Option<Point3<f32>> {
 }
 
 pub fn get_eye_height(world: &World, entity: Entity) -> Option<f32> {
-    get_height(world, entity).map(|h| h * 0.9 / 2.0)
+    get_height(world, entity).map(|h| h * 0.9)
 }
 
 pub fn get_eye_position(world: &World, entity: Entity) -> Option<Point3<f32>> {
@@ -314,9 +311,14 @@ pub fn line_of_sight_point_point(
         && let Some(closest) = result.closest()
     {
         let distance = (to - from).magnitude();
+        println!(
+            "[line_of_sight_point_point] Closest hit from {:?} to {:?} at toi {:?} (distance {:?})",
+            from, to, closest.toi, distance
+        );
         closest.toi >= distance - EPSILON
     } else {
-        false
+        // No hits, so line of sight is clear
+        true
     }
 }
 
@@ -431,8 +433,9 @@ pub fn path_point_point(
 }
 
 pub fn path(game_state: &GameState, entity: Entity, goal: Point3<f32>) -> Option<WorldPath> {
-    let start = game_state.world.get::<&CreaturePose>(entity).ok()?;
-    let start_point = Point3::from(start.translation.vector);
-
-    path_point_point(game_state, start_point, goal)
+    path_point_point(
+        game_state,
+        get_foot_position(&game_state.world, entity)?,
+        goal,
+    )
 }
