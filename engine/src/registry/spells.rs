@@ -4,7 +4,6 @@ use std::{
 };
 
 use hecs::{Entity, World};
-use parry3d::na::Point3;
 use uom::si::length::foot;
 
 use crate::{
@@ -12,7 +11,7 @@ use crate::{
         ability::{Ability, AbilityScoreMap},
         actions::{
             action::{ActionContext, ActionKind, ActionKindResult, ReactionResult},
-            targeting::{AreaShape, TargetType, TargetingContext, TargetingKind, TargetingRange},
+            targeting::{AreaShape, EntityFilter, TargetingContext, TargetingKind, TargetingRange},
         },
         d20::{D20Check, D20CheckDC},
         damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
@@ -133,7 +132,8 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
         Arc::new(|_, _, _| TargetingContext {
             kind: TargetingKind::Single,
             range: TargetingRange::new::<foot>(60.0),
-            valid_target: TargetType::entity_not_dead(),
+            require_line_of_sight: true,
+            allowed_targets: EntityFilter::not_dead(),
         }),
         Some(Arc::new(|reactor, trigger_event| {
             match &trigger_event.kind {
@@ -198,7 +198,8 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
                     },
                 },
                 range: TargetingRange::new::<foot>(120.0),
-                valid_target: TargetType::entity_not_dead(),
+                require_line_of_sight: true,
+                allowed_targets: EntityFilter::not_dead(),
             }
         }),
         None,
@@ -235,12 +236,12 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
         Arc::new(|_, _, _| TargetingContext {
             kind: TargetingKind::Area {
                 shape: AreaShape::Sphere { radius: 20 },
-                // TODO: What do we do here?
-                origin: Point3::origin(),
+                fixed_on_actor: false,
             },
             range: TargetingRange::new::<foot>(150.0),
+            require_line_of_sight: true,
             // TODO: Can also hit objects
-            valid_target: TargetType::entity_not_dead(),
+            allowed_targets: EntityFilter::not_dead(),
         }),
         None,
     )
@@ -284,8 +285,9 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
                 kind: TargetingKind::Multiple {
                     max_targets: 3 + (spell_level - 1),
                 },
+                require_line_of_sight: false,
                 range: TargetingRange::new::<foot>(120.0),
-                valid_target: TargetType::entity_not_dead(),
+                allowed_targets: EntityFilter::not_dead(),
             }
         }),
         None,

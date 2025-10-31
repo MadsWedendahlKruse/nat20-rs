@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 
 use hecs::{Entity, World};
 use strum::IntoEnumIterator;
@@ -8,7 +8,7 @@ use crate::{
         ability::AbilityScoreMap,
         actions::action::{ActionContext, ActionMap, ActionProvider},
         damage::{AttackRoll, AttackRollResult, DamageRoll},
-        id::{ActionId, EffectId},
+        id::{ActionId, EffectId, ItemId},
         items::{
             equipment::{
                 armor::{Armor, ArmorClass, ArmorDexterityBonus},
@@ -16,7 +16,7 @@ use crate::{
                 slots::{EquipmentSlot, SlotProvider},
                 weapon::{Weapon, WeaponKind, WeaponProficiencyMap, WeaponProperties},
             },
-            inventory::ItemContainer,
+            inventory::{ItemContainer, ItemInstance},
             item::Item,
         },
         modifier::{ModifierSet, ModifierSource},
@@ -97,6 +97,20 @@ impl_into_equipment_instance! {
     Armor => Armor,
     Weapon => Weapon,
     EquipmentItem => Equipment,
+}
+
+impl Into<EquipmentInstance> for &LazyLock<ItemId> {
+    fn into(self) -> EquipmentInstance {
+        let item = registry::items::ITEM_REGISTRY
+            .get(&self)
+            .expect("Invalid ItemId");
+        match item {
+            ItemInstance::Armor(armor) => EquipmentInstance::Armor(armor.clone()),
+            ItemInstance::Weapon(weapon) => EquipmentInstance::Weapon(weapon.clone()),
+            ItemInstance::Equipment(equipment) => EquipmentInstance::Equipment(equipment.clone()),
+            _ => panic!("ItemId does not correspond to an equipment item"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]

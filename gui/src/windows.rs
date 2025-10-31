@@ -1,3 +1,4 @@
+pub mod action_bar;
 pub mod anchor;
 pub mod creature_debug;
 pub mod creature_right_click;

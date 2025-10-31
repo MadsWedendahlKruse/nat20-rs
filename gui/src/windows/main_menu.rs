@@ -1,5 +1,4 @@
-use hecs::Entity;
-use imgui::{ChildFlags, MouseButton, WindowFlags};
+use imgui::{ChildFlags, MouseButton};
 use nat20_rs::{
     components::{
         health::{hit_points::HitPoints, life_state::LifeState},
@@ -8,7 +7,7 @@ use nat20_rs::{
     engine::game_state::GameState,
     systems::{
         self,
-        geometry::{CreaturePose, RaycastFilter, RaycastHitKind, RaycastResult},
+        geometry::{CreaturePose, RaycastFilter, RaycastHitKind},
     },
 };
 use parry3d::na::{Matrix4, Point3};
@@ -23,24 +22,18 @@ use crate::{
             utils::{
                 ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
                 render_button_disabled_conditionally, render_uniform_buttons_with_padding,
-                render_window_at_cursor,
             },
         },
         world::{
             camera::OrbitCamera,
-            grid::GridRenderer,
             mesh::{Mesh, Wireframe},
             shapes::{self},
         },
     },
-    state::{
-        self,
-        gui_state::{self, GuiState},
-    },
+    state::{self, gui_state::GuiState},
     windows::{
-        anchor::{
-            self, AUTO_RESIZE, HorizontalAnchor, VerticalAnchor, WindowAnchor, WindowManager,
-        },
+        action_bar::ActionBarWindow,
+        anchor::{self, AUTO_RESIZE, WindowManager},
         creature_debug::CreatureDebugWindow,
         creature_right_click::CreatureRightClickWindow,
         encounter::EncounterWindow,
@@ -61,6 +54,7 @@ pub enum MainMenuState {
         spawn_predefined: Option<SpawnPredefinedWindow>,
         creature_debug: Option<CreatureDebugWindow>,
         creature_right_click: Option<CreatureRightClickWindow>,
+        action_bar: Option<ActionBarWindow>,
         navigation_debug: NavigationDebugWindow,
     },
 }
@@ -76,8 +70,7 @@ impl MainMenuWindow {
         initial_config.agent_radius = 0.5;
         initial_config.cell_size_fraction = 8.0;
         initial_config.min_region_size = 4;
-        // TODO: Add support for non-triangular polygons
-        initial_config.max_vertices_per_polygon = 3;
+        initial_config.max_vertices_per_polygon = 4;
 
         Self {
             state: MainMenuState::World {
@@ -93,6 +86,7 @@ impl MainMenuWindow {
                 spawn_predefined: None,
                 creature_debug: None,
                 creature_right_click: None,
+                action_bar: None,
                 navigation_debug: NavigationDebugWindow::new(&initial_config),
             },
         }
@@ -110,6 +104,7 @@ impl MainMenuWindow {
                 spawn_predefined,
                 creature_debug,
                 creature_right_click,
+                action_bar,
                 navigation_debug,
             } => {
                 navigation_debug.render_mut_with_context(ui, gui_state, game_state);
@@ -131,12 +126,28 @@ impl MainMenuWindow {
                 gui_state.cursor_ray_result = if ui.io().want_capture_mouse {
                     None
                 } else if let Some(ray_from_cursor) = gui_state.camera.ray_from_cursor() {
-                    systems::geometry::raycast(game_state, &ray_from_cursor, RaycastFilter::All)
+                    systems::geometry::raycast(game_state, &ray_from_cursor, &RaycastFilter::All)
                 } else {
                     None
                 };
 
                 Self::render_world(ui, gui_state, game_state);
+
+                if let Some(entity) = gui_state.selected_entity {
+                    if let Some(action_bar) = action_bar {
+                        if action_bar.entity != entity {
+                            *action_bar = ActionBarWindow::new(&game_state.world, entity);
+                        }
+                    } else if action_bar.is_none() {
+                        *action_bar = Some(ActionBarWindow::new(&game_state.world, entity));
+                    }
+                } else {
+                    *action_bar = None;
+                }
+
+                if let Some(action_bar) = action_bar {
+                    action_bar.render_mut_with_context(ui, gui_state, game_state);
+                }
 
                 let window_manager_ptr =
                     unsafe { &mut *(&mut gui_state.window_manager as *mut WindowManager) };
@@ -478,7 +489,7 @@ impl MainMenuWindow {
 
         // TODO: I feel like this should be somewhere else
         for (entity, pose) in game_state.world.query::<&CreaturePose>().iter() {
-            systems::geometry::get_shape(&game_state.world, entity).map(|shape| {
+            systems::geometry::get_shape(&game_state.world, entity).map(|(shape, shape_pose)| {
                 let key = format!("{:#?}", shape);
                 if let Some(mesh) = mesh_cache.get(&key) {
                     if let Some(current_entity) = gui_state.selected_entity
@@ -488,11 +499,7 @@ impl MainMenuWindow {
                         gui_state.line_renderer.add_circle(
                             [
                                 pose.translation.vector.x,
-                                pose.translation.vector.y
-                                    - systems::geometry::get_height(&game_state.world, entity)
-                                        .unwrap()
-                                        / 2.0
-                                    + 0.1,
+                                pose.translation.vector.y + 0.1,
                                 pose.translation.vector.z,
                             ],
                             shape.radius + 0.1,
@@ -517,7 +524,7 @@ impl MainMenuWindow {
                     mesh.draw(
                         gui_state.ig_renderer.gl_context(),
                         &gui_state.program,
-                        &pose.to_homogeneous(),
+                        &shape_pose.to_homogeneous(),
                         [0.8, 0.8, 0.8, 1.0],
                         &mode,
                     );
@@ -570,7 +577,7 @@ impl MainMenuWindow {
                 let pos = camera.world_to_screen(&Point3::new(
                     translation.x,
                     translation.y
-                        + systems::geometry::get_height(&game_state.world, entity).unwrap(),
+                        + systems::geometry::get_height(&game_state.world, entity).unwrap() * 1.5,
                     translation.z,
                 ));
 

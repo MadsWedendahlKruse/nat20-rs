@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
     sync::Arc,
 };
 
@@ -8,58 +8,23 @@ use uuid::Uuid;
 
 use crate::{
     components::{
-        actions::{action::ReactionResult, targeting::TargetType},
-        ai::{AIController, PlayerControlledTag},
+        actions::targeting::EntityFilter,
         d20::{D20CheckDC, D20CheckResult},
         health::life_state::{DEATH_SAVING_THROW_DC, LifeState},
-        id::{AIControllerId, ActionId},
         modifier::{ModifierSet, ModifierSource},
-        resource::{RechargeRule, ResourceMap},
+        resource::RechargeRule,
         saving_throw::SavingThrowKind,
         skill::{Skill, SkillSet},
     },
     engine::{
-        event::{
-            self, ActionData, ActionDecision, ActionError, ActionPrompt, CallbackResult,
-            EncounterEvent, Event, EventId, EventKind, EventListener, EventLog, EventQueue,
-            ReactionData,
-        },
-        game_state::{self, GameState},
+        event::{ActionPrompt, CallbackResult, EncounterEvent, Event, EventKind, EventLog},
+        game_state::GameState,
     },
     entities::{character::CharacterTag, monster::MonsterTag},
-    registry::{self, resources},
     systems::{self, d20::D20CheckDCKind},
 };
 
 pub type EncounterId = Uuid;
-
-pub enum ParticipantsFilter {
-    All,
-    Characters,
-    Monsters,
-    Specific(HashSet<Entity>),
-    LifeStates(HashSet<LifeState>),
-    NotLifeStates(HashSet<LifeState>),
-}
-
-impl From<TargetType> for ParticipantsFilter {
-    fn from(value: TargetType) -> Self {
-        match value {
-            TargetType::Entity {
-                allowed_states,
-                invert,
-            } => {
-                if invert {
-                    ParticipantsFilter::NotLifeStates(allowed_states)
-                } else {
-                    ParticipantsFilter::LifeStates(allowed_states)
-                }
-            }
-
-            TargetType::Point => todo!(),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct Encounter {
@@ -151,27 +116,27 @@ impl Encounter {
         front
     }
 
-    pub fn participants(&self, world: &World, filter: ParticipantsFilter) -> Vec<Entity> {
+    pub fn participants(&self, world: &World, filter: EntityFilter) -> Vec<Entity> {
         match filter {
-            ParticipantsFilter::All => self.participants.iter().cloned().collect(),
+            EntityFilter::All => self.participants.iter().cloned().collect(),
 
-            ParticipantsFilter::Characters => world
+            EntityFilter::Characters => world
                 .query::<&CharacterTag>()
                 .iter()
                 .map(|(e, _)| e)
                 .collect(),
 
-            ParticipantsFilter::Monsters => world
+            EntityFilter::Monsters => world
                 .query::<&MonsterTag>()
                 .iter()
                 .map(|(e, _)| e)
                 .collect(),
 
-            ParticipantsFilter::Specific(entities) => {
+            EntityFilter::Specific(entities) => {
                 self.participants.intersection(&entities).cloned().collect()
             }
 
-            ParticipantsFilter::LifeStates(life_states) => world
+            EntityFilter::LifeStates(life_states) => world
                 .query::<&LifeState>()
                 .iter()
                 .filter_map(|(e, ls)| {
@@ -183,7 +148,7 @@ impl Encounter {
                 })
                 .collect(),
 
-            ParticipantsFilter::NotLifeStates(life_states) => world
+            EntityFilter::NotLifeStates(life_states) => world
                 .query::<&LifeState>()
                 .iter()
                 .filter_map(|(e, ls)| {

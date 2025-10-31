@@ -9,7 +9,7 @@ use crate::{
                 Action, ActionContext, ActionCooldownMap, ActionMap, ActionProvider, ActionResult,
                 ReactionResult, ReactionSet,
             },
-            targeting::{TargetSelection, TargetTypeInstance, TargetingContext, TargetingError},
+            targeting::{TargetInstance, TargetSelection, TargetingContext, TargetingError},
         },
         id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
@@ -80,7 +80,7 @@ pub fn all_actions(world: &World, entity: Entity) -> ActionMap {
     actions
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ActionUsabilityError {
     OnCooldown(RechargeRule),
     NotEnoughResources(ResourceAmountMap),
@@ -117,18 +117,18 @@ pub fn action_usable(
 }
 
 pub fn action_usable_on_targets(
-    world: &World,
+    game_state: &GameState,
     actor: Entity,
     action_id: &ActionId,
     context: &ActionContext,
     resource_cost: &ResourceAmountMap,
     targets: &[Entity],
 ) -> Result<(), ActionUsabilityError> {
-    action_usable(world, actor, action_id, context, resource_cost)?;
+    action_usable(&game_state.world, actor, action_id, context, resource_cost)?;
 
-    let targeting_context = targeting_context(world, actor, action_id, context);
+    let targeting_context = targeting_context(&game_state.world, actor, action_id, context);
 
-    if let Err(targeting_error) = targeting_context.validate_targets(world, actor, targets) {
+    if let Err(targeting_error) = targeting_context.validate_targets(game_state, actor, targets) {
         return Err(ActionUsabilityError::TargetingError(targeting_error));
     }
 

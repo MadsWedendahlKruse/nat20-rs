@@ -1,34 +1,28 @@
 use std::collections::{HashMap, HashSet};
 
 use hecs::Entity;
-use imgui::{ChildFlags, MouseButton};
+use imgui::ChildFlags;
 use nat20_rs::{
     components::{
-        actions::{
-            action::{ActionContext, ActionMap},
-            targeting::{TargetType, TargetingContext, TargetingKind},
-        },
+        actions::action::{ActionContext, ActionMap},
         id::{ActionId, Name},
         resource::{ResourceAmountMap, ResourceMap},
         speed::Speed,
     },
     engine::{
-        encounter::{Encounter, EncounterId, ParticipantsFilter},
+        encounter::{Encounter, EncounterId},
         event::{
             ActionData, ActionDecision, ActionDecisionPartial, ActionPrompt, Event, ReactionData,
         },
         game_state::GameState,
     },
     registry,
-    systems::{
-        self,
-        geometry::{RaycastFilter, RaycastHitKind},
-    },
+    systems::{self},
 };
 
 use crate::{
     render::{
-        common::utils::{RenderableMutWithContext, RenderableWithContext},
+        common::utils::RenderableMutWithContext,
         ui::{
             components::{LOW_HEALTH_BG_COLOR, LOW_HEALTH_COLOR, SPEED_COLOR, SPEED_COLOR_BG},
             engine::LogLevel,
@@ -37,10 +31,9 @@ use crate::{
             utils::{
                 ImguiRenderable, ImguiRenderableWithContext, ProgressBarColor,
                 SELECTED_BUTTON_COLOR, render_button_disabled_conditionally,
-                render_button_selectable, render_empty_button, render_progress_bar,
+                render_button_selectable, render_progress_bar,
             },
         },
-        world::camera::OrbitCamera,
     },
     state::gui_state::GuiState,
     table_with_columns,
@@ -593,6 +586,9 @@ impl RenderableMutWithContext<(&mut GameState, &mut bool)> for Option<ActionDeci
                 targets,
                 targets_confirmed,
             } => {
+                // TEMP
+                return;
+
                 let window_manager_ptr =
                     unsafe { &mut *(&mut gui_state.window_manager as *mut WindowManager) };
 
@@ -720,16 +716,16 @@ impl RenderableMutWithContext<(&mut GameState, &mut bool)> for Option<ActionDeci
                                                 .encounter_for_entity(actor)
                                                 .unwrap()
                                                 .clone();
-                                            targeting_context.render_with_context(
-                                                ui,
-                                                gui_state,
-                                                (
-                                                    game_state,
-                                                    encounter_id,
-                                                    targets,
-                                                    targets_confirmed,
-                                                ),
-                                            );
+                                            // targeting_context.render_with_context(
+                                            //     ui,
+                                            //     gui_state,
+                                            //     (
+                                            //         game_state,
+                                            //         encounter_id,
+                                            //         targets,
+                                            //         targets_confirmed,
+                                            //     ),
+                                            // );
                                             ui.tooltip(|| {
                                                 ui.text(
                                                     chosen_action.as_ref().unwrap().to_string(),
@@ -883,143 +879,6 @@ impl RenderableMutWithContext<(&mut GameState, &mut bool)> for Option<ActionDeci
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-impl RenderableWithContext<(&mut GameState, EncounterId, &mut Vec<Entity>, &mut bool)>
-    for TargetingContext
-{
-    fn render_with_context(
-        &self,
-        ui: &imgui::Ui,
-        gui_state: &mut GuiState,
-        (game_state, encounter, targets, confirm_targets): (
-            &mut GameState,
-            EncounterId,
-            &mut Vec<Entity>,
-            &mut bool,
-        ),
-    ) {
-        match &self.valid_target {
-            TargetType::Entity { .. } => {
-                let filter = ParticipantsFilter::from(self.valid_target.clone());
-                self.kind.render_with_context(
-                    ui,
-                    gui_state,
-                    (game_state, encounter, targets, confirm_targets, filter),
-                );
-            }
-            TargetType::Point => todo!(),
-        }
-    }
-}
-
-impl
-    RenderableWithContext<(
-        &mut GameState,
-        EncounterId,
-        &mut Vec<Entity>,
-        &mut bool,
-        ParticipantsFilter,
-    )> for TargetingKind
-{
-    fn render_with_context(
-        &self,
-        ui: &imgui::Ui,
-        gui_state: &mut GuiState,
-        (game_state, encounter, targets, confirm_targets, filter): (
-            &mut GameState,
-            EncounterId,
-            &mut Vec<Entity>,
-            &mut bool,
-            ParticipantsFilter,
-        ),
-    ) {
-        let participants = game_state
-            .encounter(&encounter)
-            .unwrap()
-            .participants(&game_state.world, filter);
-        match &self {
-            TargetingKind::Single => {
-                ui.text("Select a single target:");
-
-                if let Some(raycast) = &gui_state.cursor_ray_result
-                    && let Some(closest) = raycast.closest()
-                    && let RaycastHitKind::Creature(entity) = &closest.kind
-                    && ui.is_mouse_clicked(MouseButton::Left)
-                {
-                    targets.clear();
-                    targets.push(*entity);
-                    gui_state.cursor_ray_result.take();
-                }
-
-                for entity in participants {
-                    if let Ok(name) = game_state.world.query_one_mut::<&Name>(entity) {
-                        if render_button_selectable(
-                            ui,
-                            format!("{}##{:?}", name.as_str(), entity),
-                            [200.0, 20.0],
-                            targets.contains(&entity),
-                        ) {
-                            if targets.len() > 0 {
-                                targets.clear();
-                            }
-                            targets.push(entity);
-                        }
-                    }
-                }
-            }
-
-            TargetingKind::Multiple { max_targets } => {
-                let max_targets = *max_targets as usize;
-
-                if let Some(raycast) = &gui_state.cursor_ray_result
-                    && let Some(closest) = raycast.closest()
-                {
-                    if let RaycastHitKind::Creature(entity) = &closest.kind
-                        && ui.is_mouse_clicked(MouseButton::Left)
-                        && targets.len() < max_targets
-                    {
-                        targets.push(*entity);
-                        gui_state.cursor_ray_result.take();
-                    }
-                }
-
-                if ui.is_mouse_clicked(MouseButton::Right) {
-                    targets.pop();
-                    gui_state.cursor_ray_result.take();
-                }
-
-                ui.separator_with_text(format!(
-                    "Selected targets ({}/{})",
-                    targets.len(),
-                    max_targets
-                ));
-                let mut remove_target = None;
-                for (i, target) in (&mut *targets).iter().enumerate() {
-                    if let Ok(name) = game_state.world.query_one_mut::<&Name>(*target) {
-                        if ui.button(format!("{}##{}", name.as_str(), i)) {
-                            remove_target = Some(i);
-                        }
-                    }
-                }
-                for i in targets.len()..max_targets {
-                    render_empty_button(ui, &format!("Empty##{}", i));
-                }
-                if let Some(target_index) = remove_target {
-                    targets.remove(target_index);
-                }
-            }
-
-            TargetingKind::SelfTarget => {
-                targets.push(game_state.encounter(&encounter).unwrap().current_entity());
-                *confirm_targets = true;
-            }
-
-            _ => {
-                ui.text(format!("Targeting kind {:?} is not implemented yet.", self));
             }
         }
     }

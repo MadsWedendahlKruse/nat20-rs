@@ -10,7 +10,7 @@ use crate::{
     components::{
         actions::{
             action::{ActionContext, ActionKindResult, ActionResult},
-            targeting::{TargetSelection, TargetTypeInstance, TargetingError},
+            targeting::{TargetInstance, TargetSelection, TargetingError},
         },
         damage::DamageRollResult,
         health::life_state::LifeState,
@@ -324,7 +324,7 @@ pub enum ActionDecision {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ActionError {
     PromptDecisionMismatch {
         prompt: ActionPrompt,

@@ -62,7 +62,7 @@ pub mod creatures {
                 spells::spellbook::Spellbook,
             },
             entities::character::Character,
-            registry,
+            registry::{self, items},
         };
 
         use super::*;
@@ -179,6 +179,8 @@ pub mod creatures {
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
                 ],
             );
+
+            systems::loadout::equip(world, entity, &registry::items::SHORTBOW_ID);
 
             EntityIdentifier::new(entity, name)
         }

@@ -1,4 +1,4 @@
-use glam::{UVec3, Vec2, Vec3A};
+use glam::{UVec3, Vec2, Vec3, Vec3A};
 use obj::Obj;
 use parry3d::na::Point3;
 use rerecast::{
@@ -131,23 +131,6 @@ fn build_navmesh(
 
     compact_heightfield.erode_walkable_area(config.walkable_radius);
 
-    // TODO: What are these convex volumes? Where do they come from?
-
-    // let volumes = load_json::<CppVolumes>(project, "convex_volumes");
-    // for volume in volumes.volumes {
-    //     let volume = ConvexVolume {
-    //         vertices: volume
-    //             .verts
-    //             .iter()
-    //             .map(|[x, _y, z]| Vec2::new(*x, *z))
-    //             .collect(),
-    //         min_y: volume.hmin,
-    //         max_y: volume.hmax,
-    //         area: AreaType::from(volume.area),
-    //     };
-    //     compact_heightfield.mark_convex_poly_area(&volume);
-    // }
-
     compact_heightfield.build_distance_field();
 
     compact_heightfield
@@ -163,9 +146,6 @@ fn build_navmesh(
         config.max_edge_len,
         BuildContoursFlags::DEFAULT,
     );
-
-    // TODO: Allow more vertices per polygon?
-    // let max_vertices_per_polygon = 3;
 
     let poly_navmesh = contours
         .into_polygon_mesh(config.max_vertices_per_polygon)
@@ -242,5 +222,13 @@ impl WorldPath {
         }
 
         Self::new(trimmed_points)
+    }
+
+    pub fn start(&self) -> Option<&Point3<f32>> {
+        self.points.first()
+    }
+
+    pub fn end(&self) -> Option<&Point3<f32>> {
+        self.points.last()
     }
 }

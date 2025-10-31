@@ -8,22 +8,20 @@ use hecs::{Entity, World};
 use crate::{
     components::{
         actions::{
-            action::{
-                Action, ActionContext, ActionKind, ActionKindResult, ActionResult, ReactionResult,
-            },
-            targeting::{TargetType, TargetTypeInstance, TargetingContext, TargetingKind},
+            action::{Action, ActionContext, ActionKind, ActionKindResult, ReactionResult},
+            targeting::{EntityFilter, TargetingContext, TargetingKind},
         },
         class::ClassName,
         damage::{AttackRoll, DamageRoll},
         dice::{DiceSet, DiceSetRoll, DieSize},
-        id::{ActionId, EntityIdentifier, ResourceId},
+        id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
         level::CharacterLevels,
         modifier::{ModifierSet, ModifierSource},
         resource::{RechargeRule, ResourceAmount, ResourceAmountMap},
         saving_throw::SavingThrowSet,
     },
-    engine::event::{ActionData, Event, EventKind},
+    engine::event::{Event, EventKind},
     registry,
     systems::{
         self,
@@ -262,7 +260,8 @@ static WEAPON_TARGETING: LazyLock<
                         .unwrap()
                         .range()
                         .clone(),
-                    valid_target: TargetType::entity_not_dead(),
+                    require_line_of_sight: true,
+                    allowed_targets: EntityFilter::not_dead(),
                 }
             } else {
                 panic!("Action context must be Weapon");

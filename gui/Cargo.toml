@@ -18,9 +18,9 @@ nat20_rs = { path = "../engine" }
 strum = { version = "0.27.1", features = ["derive"] }
 bytemuck = { version = "1", features = ["derive"] }
 hecs = { version = "0.10.5", features = ["std", "macros", "serde"] }
-glam = "0.29.3"
+glam = "0.30.8"
 parry3d = "0.24"
 obj-rs = "0.7.4"
-# rerecast = "0.2.0"
-rerecast = "0.1.1"
+rerecast = "0.2.0"
+# rerecast = "0.1.1"
 uom = "0.37.0"

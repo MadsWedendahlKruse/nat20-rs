@@ -11,29 +11,23 @@ use uom::{
 };
 
 use crate::{
-    components::{faction::Attitude, health::life_state::LifeState, id::EntityIdentifier},
+    components::health::life_state::LifeState,
+    engine::game_state::{self, GameState},
+    entities::{character::CharacterTag, monster::MonsterTag},
     systems,
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TargetingKind {
-    // TODO: I think None and SelfTarget are the same?
-    // None,       // e.g. Rage
     SelfTarget, // e.g. Second Wind
     Single,
     Multiple {
         max_targets: u8,
-        // kind: TargetKind,
     },
     Area {
         shape: AreaShape,
-        origin: Point3<f32>,
+        fixed_on_actor: bool,
     },
-    // e.g. Knock
-    // Object {
-    //     object_type: ObjectType,
-    // },
-    // Custom(Arc<dyn TargetingLogic>), // fallback for edge cases
 }
 
 // TODO: parry3d shapes?
@@ -47,83 +41,78 @@ pub enum AreaShape {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TargetType {
-    /// An entity in the game world, e.g. a character or a monster.
-    Entity {
-        /// If specified, the target must be in one of these states to be valid.
-        /// If `invert` is true, the target must NOT be in one of these states.
-        /// In most cases this is used to prevent targeting dead creatures, but
-        /// in some cases it could be used to specifically target dead creatures
-        /// (e.g. Revivify).
-        allowed_states: HashSet<LifeState>,
-        /// If true, the allowed_states set is inverted, i.e. the target must NOT
-        /// be in one of the allowed states.
-        invert: bool,
-    },
-
-    // TODO: Am I mixing up TargetType and TargetingKind here?
-    /// A specific point in the game world, e.g. for area-of-effect spells.
-    Point,
+pub enum EntityFilter {
+    All,
+    Characters,
+    Monsters,
+    Specific(HashSet<Entity>),
+    LifeStates(HashSet<LifeState>),
+    NotLifeStates(HashSet<LifeState>),
 }
 
-impl TargetType {
-    pub fn entity_not_dead() -> Self {
-        TargetType::Entity {
-            allowed_states: HashSet::from([LifeState::Dead, LifeState::Defeated]),
-            invert: true,
+impl EntityFilter {
+    pub fn not_dead() -> Self {
+        EntityFilter::NotLifeStates(HashSet::from([LifeState::Dead, LifeState::Defeated]))
+    }
+
+    pub fn matches(&self, world: &World, entity: &Entity) -> bool {
+        match self {
+            EntityFilter::All => true,
+            EntityFilter::Characters => world.get::<&CharacterTag>(*entity).is_ok(),
+            EntityFilter::Monsters => world.get::<&MonsterTag>(*entity).is_ok(),
+            EntityFilter::Specific(entities) => entities.contains(entity),
+            EntityFilter::LifeStates(states) => {
+                if let Ok(life_state) = world.get::<&LifeState>(*entity) {
+                    states.contains(&life_state)
+                } else {
+                    false
+                }
+            }
+            EntityFilter::NotLifeStates(states) => {
+                if let Ok(life_state) = world.get::<&LifeState>(*entity) {
+                    !states.contains(&life_state)
+                } else {
+                    true
+                }
+            }
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TargetTypeInstance {
-    // TODO: Do we need all of these?
-    // Entity(EntityIdentifier),
+pub enum TargetInstance {
     Entity(Entity),
     Point(Point3<f32>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TargetSelection {
-    targets: Vec<TargetTypeInstance>,
-    valid_target: TargetType,
+    targets: Vec<TargetInstance>,
     max_targets: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TargetingError {
     ExceedsMaxTargets,
-    InvalidTargetType {
-        target: TargetTypeInstance,
-        valid: TargetType,
-    },
     OutOfRange {
-        target: TargetTypeInstance,
+        target: TargetInstance,
         distance: Length,
         max_range: Length,
+    },
+    NoLineOfSight {
+        target: TargetInstance,
     },
 }
 
 impl TargetSelection {
-    pub fn new(allowed_type: TargetType, max_allowed_targets: usize) -> Self {
+    pub fn new(max_allowed_targets: usize) -> Self {
         TargetSelection {
             targets: Vec::new(),
-            valid_target: allowed_type,
             max_targets: max_allowed_targets,
         }
     }
 
-    pub fn add_target(&mut self, target: TargetTypeInstance) -> Result<(), TargetingError> {
-        if !matches!(
-            (&self.valid_target, &target),
-            (TargetType::Entity { .. }, TargetTypeInstance::Entity(_))
-                | (TargetType::Point, TargetTypeInstance::Point(_))
-        ) {
-            return Err(TargetingError::InvalidTargetType {
-                target,
-                valid: self.valid_target.clone(),
-            });
-        }
+    pub fn add_target(&mut self, target: TargetInstance) -> Result<(), TargetingError> {
         if self.targets.len() >= self.max_targets {
             return Err(TargetingError::ExceedsMaxTargets);
         }
@@ -131,7 +120,7 @@ impl TargetSelection {
         Ok(())
     }
 
-    pub fn targets(&self) -> &Vec<TargetTypeInstance> {
+    pub fn targets(&self) -> &Vec<TargetInstance> {
         &self.targets
     }
 }
@@ -206,15 +195,22 @@ impl TargetingRange {
 pub struct TargetingContext {
     pub kind: TargetingKind,
     pub range: TargetingRange,
-    pub valid_target: TargetType,
+    pub require_line_of_sight: bool,
+    pub allowed_targets: EntityFilter,
 }
 
 impl TargetingContext {
-    pub fn new(kind: TargetingKind, range: TargetingRange, valid_target: TargetType) -> Self {
+    pub fn new(
+        kind: TargetingKind,
+        range: TargetingRange,
+        require_line_of_sight: bool,
+        allowed_targets: EntityFilter,
+    ) -> Self {
         TargetingContext {
             kind,
             range,
-            valid_target,
+            require_line_of_sight,
+            allowed_targets,
         }
     }
 
@@ -222,16 +218,14 @@ impl TargetingContext {
         TargetingContext {
             kind: TargetingKind::SelfTarget,
             range: TargetingRange::new::<meter>(0.0),
-            valid_target: TargetType::Entity {
-                allowed_states: HashSet::new(),
-                invert: false,
-            },
+            require_line_of_sight: false,
+            allowed_targets: EntityFilter::All,
         }
     }
 
     pub fn validate_targets(
         &self,
-        world: &World,
+        game_state: &GameState,
         actor: Entity,
         targets: &[Entity],
     ) -> Result<(), TargetingError> {
@@ -249,12 +243,13 @@ impl TargetingContext {
             // }
 
             // Check range
-            let actor_position = systems::geometry::get_position(world, actor).unwrap();
+            let actor_position =
+                systems::geometry::get_foot_position(&game_state.world, actor).unwrap();
             // let distance = match target {
             //     TargetTypeInstance::Entity(entity) => {
             //         let target_position =
-            //             // systems::geometry::get_position(world, entity.id()).unwrap();
-            //             systems::geometry::get_position(world, *entity).unwrap();
+            //             // systems::geometry::get_position(&game_state.world, entity.id()).unwrap();
+            //             systems::geometry::get_position(&game_state.world, *entity).unwrap();
             //         Length::new::<meter>((target_position - actor_position).norm())
             //     }
 
@@ -262,14 +257,24 @@ impl TargetingContext {
             //         Length::new::<meter>((point - actor_position).norm())
             //     }
             // };
-            let target_position = systems::geometry::get_position(world, *target).unwrap();
+            let target_position =
+                systems::geometry::get_foot_position(&game_state.world, *target).unwrap();
             let distance = Length::new::<meter>((target_position - actor_position).norm());
 
             if !self.range.in_range(distance) {
                 return Err(TargetingError::OutOfRange {
-                    target: TargetTypeInstance::Entity(*target),
+                    target: TargetInstance::Entity(*target),
                     distance,
                     max_range: self.range.max(),
+                });
+            }
+
+            // Check line of sight
+            if self.require_line_of_sight
+                && !systems::geometry::line_of_sight_entity_entity(game_state, actor, *target)
+            {
+                return Err(TargetingError::NoLineOfSight {
+                    target: TargetInstance::Entity(*target),
                 });
             }
         }

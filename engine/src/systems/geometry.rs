@@ -6,8 +6,8 @@ use std::{collections::HashMap, path, sync::LazyLock};
 use glam::{Vec2, Vec3};
 use hecs::{Entity, World};
 use parry3d::{
-    na::{Isometry3, Point3, Vector3},
-    query::{self, Ray, RayCast},
+    na::{Isometry3, Point3, Translation3, Vector3},
+    query::{self, PointQuery, Ray, RayCast},
     shape::{Capsule, Shape, SharedShape},
 };
 use polyanya::Coords;
@@ -44,7 +44,7 @@ pub fn get_height(world: &World, entity: Entity) -> Option<f32> {
     }
 }
 
-pub fn get_position(world: &World, entity: Entity) -> Option<Point3<f32>> {
+pub fn get_foot_position(world: &World, entity: Entity) -> Option<Point3<f32>> {
     let pose = world.get::<&CreaturePose>(entity).ok()?;
     Some(Point3::from(pose.translation.vector))
 }
@@ -59,15 +59,60 @@ pub fn get_eye_position(world: &World, entity: Entity) -> Option<Point3<f32>> {
     Some((pose.translation.vector + Vector3::y() * eye_height).into())
 }
 
+pub fn get_eye_position_at_point(
+    world: &World,
+    entity: Entity,
+    point: &Point3<f32>,
+) -> Option<Point3<f32>> {
+    let eye_height = get_eye_height(world, entity)?;
+    Some(Point3::new(point.x, point.y + eye_height, point.z))
+}
+
+pub fn get_entity_at_point(world: &World, point: Point3<f32>) -> Option<Entity> {
+    for (entity, _) in world.query::<&CreaturePose>().iter() {
+        if let Some((shape, shape_pose)) = get_shape(world, entity) {
+            if shape.contains_point(&shape_pose, &point) {
+                return Some(entity);
+            }
+        }
+    }
+    None
+}
+
 // TODO: Should this really return a *new* shape each time? I guess that makes it
 // work nicely if the creature changes size, e.g. Enlarge/Reduce spells.
-pub fn get_shape(world: &World, entity: Entity) -> Option<Capsule> {
-    if let Some(height) = get_height(world, entity) {
+
+/// Get the collision shape for a creature entity and the pose of the shape, i.e
+/// the pose is the center of the shape.
+pub fn get_shape(world: &World, entity: Entity) -> Option<(Capsule, CreaturePose)> {
+    if let Some(height) = get_height(world, entity)
+        && let Some(pose) = world.get::<&CreaturePose>(entity).ok()
+    {
         // Approximate radius as 1/4 of height
         let radius = height / 4.0;
         // Height is supposed to be the entire capsule height, so the half cylinder
         // height is really just a quarter of the total height.
-        Some(Capsule::new_y(height / 4.0, radius))
+        let shape = Capsule::new_y(height / 4.0, radius);
+        // Creature pose is at the feet, so move shape up by half height
+        let shape_pose = *pose * Translation3::new(0.0, height / 2.0, 0.0);
+        Some((shape, shape_pose))
+    } else {
+        None
+    }
+}
+
+pub fn get_shape_at_point(
+    game_state: &GameState,
+    entity: Entity,
+    point: &Point3<f32>,
+) -> Option<(Capsule, CreaturePose)> {
+    if let Some((shape, shape_pose)) = get_shape(&game_state.world, entity)
+        && let Some(foot_pose) = game_state.world.get::<&CreaturePose>(entity).ok()
+    {
+        let ground_pos = ground_position(&game_state, point)?;
+        let offset = ground_pos - Point3::from(foot_pose.translation.vector);
+        let new_shape_pose = shape_pose * Translation3::from(offset);
+        Some((shape, new_shape_pose))
     } else {
         None
     }
@@ -123,7 +168,7 @@ impl RaycastResult {
 
 static DEFAULT_MAX_TOI: f32 = 10000.0;
 
-pub fn raycast(game_state: &GameState, ray: &Ray, filter: RaycastFilter) -> Option<RaycastResult> {
+pub fn raycast(game_state: &GameState, ray: &Ray, filter: &RaycastFilter) -> Option<RaycastResult> {
     raycast_with_toi(game_state, ray, DEFAULT_MAX_TOI, filter)
 }
 
@@ -131,7 +176,7 @@ pub fn raycast_with_toi(
     game_state: &GameState,
     ray: &Ray,
     max_time_of_impact: f32,
-    filter: RaycastFilter,
+    filter: &RaycastFilter,
 ) -> Option<RaycastResult> {
     let world = &game_state.world;
 
@@ -162,11 +207,11 @@ pub fn raycast_with_toi(
         let entity_result = world
             .query::<&CreaturePose>()
             .iter()
-            .filter_map(|(entity, pose)| {
-                if let Some(shape) = get_shape(world, entity)
+            .filter_map(|(entity, _)| {
+                if let Some((shape, shape_pose)) = get_shape(world, entity)
                     && !excluded_creatures.contains(&entity)
                 {
-                    let toi = shape.cast_ray(pose, ray, max_time_of_impact, true);
+                    let toi = shape.cast_ray(&shape_pose, ray, max_time_of_impact, true);
                     toi.map(|toi| RaycastHit {
                         kind: RaycastHitKind::Creature(entity),
                         toi,
@@ -211,7 +256,7 @@ pub fn raycast_with_toi(
         Some(RaycastResult {
             hits: outcomes,
             closest_index,
-            filter,
+            filter: filter.clone(),
         })
     }
 }
@@ -220,7 +265,7 @@ pub fn raycast_entity_point(
     game_state: &GameState,
     entity: Entity,
     point: Point3<f32>,
-    filter: RaycastFilter,
+    filter: &RaycastFilter,
 ) -> Option<RaycastResult> {
     let world = &game_state.world;
     let start = get_eye_position(world, entity)?;
@@ -231,7 +276,7 @@ pub fn raycast_entity_direction(
     game_state: &GameState,
     entity: Entity,
     direction: Vector3<f32>,
-    filter: RaycastFilter,
+    filter: &RaycastFilter,
 ) -> Option<RaycastResult> {
     let world = &game_state.world;
     let start = get_eye_position(world, entity)?;
@@ -242,7 +287,7 @@ pub fn raycast_point_point(
     game_state: &GameState,
     start: Point3<f32>,
     end: Point3<f32>,
-    filter: RaycastFilter,
+    filter: &RaycastFilter,
 ) -> Option<RaycastResult> {
     let dir = Vector3::normalize(&(end - start));
     let ray = Ray::new(start, dir);
@@ -253,7 +298,7 @@ pub fn raycast_point_direction(
     game_state: &GameState,
     start: Point3<f32>,
     direction: Vector3<f32>,
-    filter: RaycastFilter,
+    filter: &RaycastFilter,
 ) -> Option<RaycastResult> {
     let dir = Vector3::normalize(&direction);
     let ray = Ray::new(start, dir);
@@ -264,7 +309,7 @@ pub fn line_of_sight_point_point(
     game_state: &GameState,
     from: Point3<f32>,
     to: Point3<f32>,
-    filter: RaycastFilter,
+    filter: &RaycastFilter,
 ) -> bool {
     if let Some(result) = raycast_point_point(game_state, from, to, filter)
         && let Some(closest) = result.closest()
@@ -286,7 +331,7 @@ pub fn line_of_sight_entity_point(
             game_state,
             eye_pos,
             point,
-            RaycastFilter::ExcludeCreatures(vec![entity]),
+            &RaycastFilter::ExcludeCreatures(vec![entity]),
         )
     } else {
         false
@@ -306,13 +351,32 @@ pub fn line_of_sight_entity_entity(
             game_state,
             from_eye_pos,
             to_eye_pos,
-            RaycastFilter::ExcludeCreatures(vec![from_entity]),
+            &RaycastFilter::ExcludeCreatures(vec![from_entity]),
         )
         && let Some(closest) = result.closest()
     {
         closest.kind == RaycastHitKind::Creature(to_entity)
     } else {
         false
+    }
+}
+
+pub fn ground_position(game_state: &GameState, position: &Point3<f32>) -> Option<Point3<f32>> {
+    // Raycast straight down to find the ground
+    let down_ray = Ray::new(
+        Point3::new(position.x, position.y + 1.0, position.z),
+        Vector3::new(0.0, -1.0, 0.0),
+    );
+
+    if let Some(toi) = game_state
+        .geometry
+        .trimesh
+        .cast_local_ray(&down_ray, 10.0, true)
+    {
+        let ground_y = down_ray.origin.y + down_ray.dir.y * toi;
+        Some(Point3::new(position.x, ground_y, position.z))
+    } else {
+        None
     }
 }
 
@@ -323,25 +387,14 @@ pub fn teleport_to(world: &mut World, entity: Entity, new_position: &Point3<f32>
 }
 
 pub fn teleport_to_ground(game_state: &mut GameState, entity: Entity, new_position: &Point3<f32>) {
-    let entity_height = get_height(&game_state.world, entity).unwrap_or(0.0);
     // TODO: Can't seem to find an easy way to check for intersection between
     // the creature and the world geometry?
 
     let mut target = new_position.clone();
 
-    // Raycast straight down to find the ground
-    let down_ray = Ray::new(
-        Point3::new(target.x, target.y + 1.0, target.z),
-        Vector3::new(0.0, -1.0, 0.0),
-    );
-
-    if let Some(toi) = game_state
-        .geometry
-        .trimesh
-        .cast_local_ray(&down_ray, 10.0, true)
-    {
-        // Adjust the creature's Y position to be on the ground
-        target.y = down_ray.origin.y + down_ray.dir.y * toi + entity_height / 2.0;
+    let ground_position = ground_position(game_state, new_position);
+    if let Some(ground_pos) = ground_position {
+        target.y = ground_pos.y;
     }
 
     teleport_to(&mut game_state.world, entity, &target);

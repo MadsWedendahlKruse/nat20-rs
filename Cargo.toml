@@ -6,3 +6,6 @@
 members = [
     "engine", "gui"
 ]
+
+[patch.crates-io]
+polyanya = { git = "https://github.com/MadsWedendahlKruse/polyanya", branch = "fix-path-with-height-oob" }

@@ -61,9 +61,12 @@ impl Mesh {
         let mut normals = vec![na::Vector3::<f32>::zeros(); positions.len()];
         for tri in triangles {
             let (ia, ib, ic) = (tri[0] as usize, tri[1] as usize, tri[2] as usize);
-            let a = na::Vector3::new(positions[ia][0], positions[ia][1], positions[ia][2]);
-            let b = na::Vector3::new(positions[ib][0], positions[ib][1], positions[ib][2]);
-            let c = na::Vector3::new(positions[ic][0], positions[ic][1], positions[ic][2]);
+            if ia >= positions.len() || ib >= positions.len() || ic >= positions.len() {
+                continue; // skip invalid triangle
+            }
+            let a = na::Vector3::from_row_slice(&positions[ia]);
+            let b = na::Vector3::from_row_slice(&positions[ib]);
+            let c = na::Vector3::from_row_slice(&positions[ic]);
             let n = (b - a).cross(&(c - a));
             normals[ia] += n;
             normals[ib] += n;
@@ -149,44 +152,59 @@ impl Mesh {
                 z: poly_navmesh.aabb.min.z + v.z as f32 * poly_navmesh.cell_size,
             })
             .collect::<Vec<_>>();
-        let triangles = poly_navmesh
-            .polygons
-            .chunks(poly_navmesh.max_vertices_per_polygon.into())
-            .map(|poly| {
-                if poly.len() != 3 {
-                    todo!("Handle non-triangular polygons");
-                }
 
-                let mut tris = Vec::new();
-                for i in 1..(poly.len() - 1) {
-                    tris.push([poly[0] as u32, poly[i] as u32, poly[i + 1] as u32]);
-                }
-                tris
-            })
-            .flatten()
-            .collect::<Vec<_>>();
+        let maxv: usize = poly_navmesh.max_vertices_per_polygon as usize;
 
+        // Triangulate polygons, skipping padded entries (0xFFFF)
+        let mut triangles: Vec<[u32; 3]> = Vec::new();
+        for chunk in poly_navmesh.polygons.chunks(maxv) {
+            // Keep only valid vertex indices up to the first sentinel
+            let verts: Vec<u32> = chunk
+                .iter()
+                .take_while(|&&i| i != u16::MAX)
+                .map(|&i| i as u32)
+                .collect();
+
+            if verts.len() < 3 {
+                continue; // degenerate polygon, nothing to draw
+            }
+
+            // Optional safety: ensure indices are within bounds
+            // (defensive in case of bad data)
+            let valid = verts.iter().all(|&i| (i as usize) < positions.len());
+            if !valid {
+                // Skip or log; here we skip to avoid panics
+                continue;
+            }
+
+            // Fan triangulation: (v0, v1, v2), (v0, v2, v3), ...
+            for i in 1..(verts.len() - 1) {
+                triangles.push([verts[0], verts[i], verts[i + 1]]);
+            }
+        }
+
+        // Smooth normals
         let normals = Self::smooth_normals(
-            positions
+            &positions
                 .iter()
                 .map(|v| [v.x, v.y, v.z])
-                .collect::<Vec<_>>()
-                .as_slice(),
-            triangles
+                .collect::<Vec<_>>(),
+            &triangles
                 .iter()
-                .map(|tri| [tri[0], tri[1], tri[2]])
-                .collect::<Vec<_>>()
-                .as_slice(),
+                .map(|t| [t[0], t[1], t[2]])
+                .collect::<Vec<_>>(),
         );
 
+        // Interleave
         let mut interleaved = Vec::with_capacity(positions.len());
         for (p, n) in positions.iter().zip(normals.iter()) {
             interleaved.push([p.x, p.y, p.z, n.x, n.y, n.z]);
         }
 
+        // Indices
         let mut idx = Vec::with_capacity(triangles.len() * 3);
         for tri in triangles {
-            idx.extend_from_slice(&[tri[0], tri[1], tri[2]]);
+            idx.extend_from_slice(&tri);
         }
 
         Mesh::from_interleaved(gl, &interleaved, &idx)

@@ -278,7 +278,7 @@ impl ImguiRenderableMutWithContext<(&GameState, &mut bool, &mut WindowManager)> 
                                 &game_state,
                                 &ray,
                                 1000.0,
-                                RaycastFilter::All
+                                &RaycastFilter::All
                             )
                         ));
                     } else {

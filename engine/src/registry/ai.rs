@@ -4,14 +4,10 @@ use hecs::{Entity, World};
 use rand::seq::{IndexedRandom, IteratorRandom};
 
 use crate::{
-    components::{
-        actions::targeting::{TargetType, TargetTypeInstance, TargetingKind},
-        ai::AIController,
-        id::AIControllerId,
-    },
+    components::{actions::targeting::TargetingKind, ai::AIController, id::AIControllerId},
     engine::{
-        encounter::{Encounter, ParticipantsFilter},
-        event::{ActionData, ActionDecision, ActionDecisionPartial, ActionPrompt},
+        encounter::Encounter,
+        event::{ActionData, ActionDecisionPartial, ActionPrompt},
     },
     systems,
 };
@@ -60,58 +56,52 @@ impl AIController for RandomController {
                     systems::actions::targeting_context(world, *actor, action_id, &context);
                 let mut targets = Vec::new();
 
-                match &targeting.valid_target {
-                    TargetType::Entity { .. } => {
-                        let possible_targets = encounter
-                            .participants(
+                let possible_targets = encounter
+                    .participants(world, targeting.allowed_targets)
+                    .into_iter()
+                    .filter(|target| {
+                        let target_attitude =
+                            systems::factions::mutual_attitude(world, *actor, *target);
+                        target_attitude
+                            == systems::ai::recommeneded_target_attitude(
                                 world,
-                                ParticipantsFilter::from(targeting.valid_target.clone()),
+                                *actor,
+                                &action_kind,
                             )
-                            .into_iter()
-                            .filter(|target| {
-                                let target_attitude =
-                                    systems::factions::mutual_attitude(world, *actor, *target);
-                                target_attitude
-                                    == systems::ai::recommeneded_target_attitude(
-                                        world,
-                                        *actor,
-                                        &action_kind,
-                                    )
-                            })
-                            .collect::<Vec<Entity>>();
+                    })
+                    .collect::<Vec<Entity>>();
 
-                        match targeting.kind {
-                            TargetingKind::SelfTarget => targets.push(*actor),
+                match targeting.kind {
+                    TargetingKind::SelfTarget => targets.push(*actor),
 
-                            TargetingKind::Single => {
-                                if let Some(target) = possible_targets.iter().choose(rng) {
-                                    targets.push(*target);
-                                }
-                            }
-
-                            TargetingKind::Multiple { max_targets } => {
-                                let chosen_targets = possible_targets
-                                    .iter()
-                                    .choose_multiple(rng, max_targets.into());
-                                targets.extend(chosen_targets);
-                            }
-
-                            TargetingKind::Area { shape, origin } => todo!(),
+                    TargetingKind::Single => {
+                        if let Some(target) = possible_targets.iter().choose(rng) {
+                            targets.push(*target);
                         }
-
-                        Some(ActionDecisionPartial::Action {
-                            action: ActionData {
-                                actor: *actor,
-                                action_id: action_id.clone(),
-                                context: context.clone(),
-                                resource_cost: resource_cost.clone(),
-                                targets: targets.clone(),
-                            },
-                        })
                     }
 
-                    TargetType::Point => todo!(),
+                    TargetingKind::Multiple { max_targets } => {
+                        let chosen_targets = possible_targets
+                            .iter()
+                            .choose_multiple(rng, max_targets.into());
+                        targets.extend(chosen_targets);
+                    }
+
+                    TargetingKind::Area {
+                        shape,
+                        fixed_on_actor,
+                    } => todo!(),
                 }
+
+                Some(ActionDecisionPartial::Action {
+                    action: ActionData {
+                        actor: *actor,
+                        action_id: action_id.clone(),
+                        context: context.clone(),
+                        resource_cost: resource_cost.clone(),
+                        targets: targets.clone(),
+                    },
+                })
             }
 
             ActionPrompt::Reactions { event, options } => {

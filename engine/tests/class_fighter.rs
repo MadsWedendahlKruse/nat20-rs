@@ -7,7 +7,7 @@ mod tests {
         components::{
             actions::{
                 action::{ActionContext, ActionKind},
-                targeting::TargetTypeInstance,
+                targeting::TargetInstance,
             },
             damage::{DamageRoll, DamageSource, DamageType},
             dice::DieSize,

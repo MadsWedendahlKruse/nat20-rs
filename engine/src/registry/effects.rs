@@ -449,8 +449,6 @@ mod helpers {
         );
 
         effect.on_action = Arc::new({
-            // This closure captures the `charges` variable, so we can use it in the
-            // closure without having to pass it as an argument.
             let charges = charges;
             move |world, performer, action, context, resource_cost| {
                 // Check that this is only applied for weapon attacks
@@ -468,8 +466,7 @@ mod helpers {
                 // consumed and they're given a number of charges of an "Extra Attack"
                 // resource.
                 // Check if the character has any of those charges (i.e. they've already
-                // triggered Extra Attack). Otherwise, use an action and give them the
-                // "Extra Attack" charges.
+                // triggered Extra Attack). Otherwise, give them the "Extra Attack" charges.
                 let mut resources =
                     systems::helpers::get_component_mut::<ResourceMap>(world, performer);
                 if resources.can_afford(
@@ -479,12 +476,6 @@ mod helpers {
                     return;
                 }
 
-                // Consume the action and give the "Extra Attack" charges
-                // TODO: Assume the action has been validated?
-                let _ = resources.spend(
-                    &registry::resources::ACTION_ID,
-                    &registry::resources::ACTION.build_amount(1),
-                );
                 resources.add(
                     registry::resources::EXTRA_ATTACK.build_resource(charges),
                     true, // Set current uses to max uses

@@ -10,7 +10,10 @@ use uom::si::{f32::Length, length::meter};
 use crate::{
     components::speed::Speed,
     engine::{game_state::GameState, geometry::WorldPath},
-    systems::{self, geometry::CreaturePose},
+    systems::{
+        self,
+        geometry::{CreaturePose, RaycastFilter},
+    },
 };
 
 #[derive(Debug)]
@@ -22,6 +25,7 @@ pub enum MovementError {
     NotYourTurn,
 }
 
+#[derive(Debug, Clone)]
 pub struct PathResult {
     pub full_path: WorldPath,
     pub taken_path: WorldPath,
@@ -114,6 +118,7 @@ pub fn path_in_range_of_point(
             || systems::geometry::line_of_sight_entity_point(game_state, entity, target)
         {
             // Already in range
+            println!("Entity is already in range of target point.");
             return Ok(PathResult::empty());
         }
     }
@@ -139,6 +144,7 @@ pub fn path_in_range_of_point(
 
     if allow_partial {
         // Return the partial path even if we couldn't get in range
+        println!("No intersection found, but allowing partial path.");
         return Ok(path_to_target);
     }
 
@@ -153,6 +159,16 @@ fn determine_path_sphere_intersections(
     path_to_target: &WorldPath,
 ) -> Option<Point3<f32>> {
     let path_end = path_to_target.points.last()?;
+
+    // Entity shouldn't block its own line of sight
+    let mut excluded_entities = vec![entity];
+    // If an entity is standing on the end of the path, that's probably who we're
+    // trying to target, so don't let them block line of sight either
+    if let Some(occupant) = systems::geometry::get_entity_at_point(&game_state.world, *path_end) {
+        excluded_entities.push(occupant);
+    }
+    let raycast_filter = RaycastFilter::ExcludeCreatures(excluded_entities);
+
     for (start, end) in path_to_target
         .points
         .windows(2)
@@ -160,6 +176,7 @@ fn determine_path_sphere_intersections(
     {
         let ray = Ray::new(start, (end - start).normalize());
         let sphere = Ball::new(range.get::<meter>());
+
         if let Some(toi) = sphere.cast_ray(
             &Isometry::translation(path_end.x, path_end.y, path_end.z),
             &ray,
@@ -167,11 +184,19 @@ fn determine_path_sphere_intersections(
             true,
         ) {
             let intersection_point = ray.point_at(toi);
+            let ground_at_intersection =
+                systems::geometry::ground_position(&game_state, &intersection_point)?;
+            let eye_pos_at_intersection = systems::geometry::get_eye_position_at_point(
+                &game_state.world,
+                entity,
+                &ground_at_intersection,
+            )?;
             if line_of_sight
-                && !systems::geometry::line_of_sight_entity_point(
+                && !systems::geometry::line_of_sight_point_point(
                     game_state,
-                    entity,
-                    intersection_point,
+                    eye_pos_at_intersection,
+                    *path_end,
+                    &raycast_filter,
                 )
             {
                 // No line of sight to this intersection point; try next segment

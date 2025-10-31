@@ -3,7 +3,6 @@ use std::{
     fs::File,
     io::BufReader,
     path::Path,
-    sync::Arc,
 };
 
 use hecs::{Entity, World};
@@ -11,24 +10,20 @@ use obj::Obj;
 use parry3d::na::Point3;
 
 use crate::{
-    components::{
-        actions::{
-            action::{ActionKindResult, ReactionResult},
-            targeting::{TargetType, TargetTypeInstance, TargetingError},
-        },
-        resource,
+    components::actions::{
+        action::{ActionKindResult, ReactionResult},
+        targeting::EntityFilter,
     },
     engine::{
-        encounter::{Encounter, EncounterId, ParticipantsFilter},
+        encounter::{self, Encounter, EncounterId},
         event::{
             ActionData, ActionDecision, ActionError, ActionPrompt, EncounterEvent, Event,
             EventCallback, EventId, EventKind, EventListener, EventLog, EventQueue,
         },
-        geometry::{WorldGeometry, WorldPath},
+        geometry::WorldGeometry,
     },
     systems::{
         self,
-        actions::ActionUsabilityError,
         movement::{MovementError, PathResult},
     },
 };
@@ -104,7 +99,7 @@ impl GameState {
 
     pub fn end_encounter(&mut self, encounter_id: &EncounterId) {
         if let Some(mut encounter) = self.encounters.remove(encounter_id) {
-            for entity in encounter.participants(&self.world, ParticipantsFilter::All) {
+            for entity in encounter.participants(&self.world, EntityFilter::All) {
                 self.in_combat.remove(&entity);
             }
             self.event_log
@@ -112,6 +107,22 @@ impl GameState {
                     encounter_id.clone(),
                     encounter.combat_log_move(),
                 )));
+        }
+    }
+
+    pub fn end_turn(&mut self, entity: Entity) {
+        let encounter = if let Some(encounter_id) = self.in_combat.get(&entity) {
+            if let Some(encounter) = self.encounters.get_mut(encounter_id) {
+                unsafe { Some(&mut *(encounter as *mut Encounter)) }
+            } else {
+                panic!("Inconsistent state: entity is in combat but encounter not found");
+            }
+        } else {
+            None
+        };
+
+        if let Some(encounter) = encounter {
+            encounter.end_turn(self, entity);
         }
     }
 
@@ -248,7 +259,7 @@ impl GameState {
         } = action;
 
         systems::actions::action_usable_on_targets(
-            &self.world,
+            &self,
             *actor,
             action_id,
             action_context,
@@ -263,55 +274,6 @@ impl GameState {
         }
 
         Ok(())
-
-        // ActionUsability::TargetingError(ref targeting_error) => match targeting_error {
-        //     TargetingError::OutOfRange {
-        //         target,
-        //         distance,
-        //         max_range,
-        //     } => {
-        //         // TODO: If out of range, attempt to find a path to get in range
-        //         println!(
-        //             "Target {:?} is out of range: distance {:?}, max range {:?}",
-        //             target, distance, max_range
-        //         );
-
-        //         let target_position = match target {
-        //             TargetTypeInstance::Entity(entity) => {
-        //                 systems::geometry::get_position(&self.world, *entity).unwrap()
-        //             }
-        //             TargetTypeInstance::Point(point) => *point,
-        //         };
-
-        //         match systems::movement::path_in_range_of_point(
-        //             self,
-        //             *actor,
-        //             target_position,
-        //             *max_range,
-        //             true,
-        //             true,
-        //             true,
-        //             true,
-        //         ) {
-        //             Ok(path_result) => {
-        //                 println!("Found path to get in range: {:?}", path_result.full_path);
-        //                 // Validate the action again now that we're (potentially) in range
-        //                 self.validate_action(action, spend_resources)
-        //             }
-        //             Err(movement_error) => {
-        //                 println!("Failed to find path to get in range: {:?}", movement_error);
-        //                 Err(ActionError::TargetingError(targeting_error.clone()))
-        //             }
-        //         }
-        //     }
-
-        //     // TODO: Proper error handling
-        //     _ => panic!(
-        //         "Action {:?} is not usable by entity {:?}: {:?}",
-        //         action_id, actor, targeting_error
-        //     ),
-        // },
-        // }
     }
 
     pub fn process_event(&mut self, event: Event) -> Result<(), ActionError> {
@@ -341,10 +303,7 @@ impl GameState {
                 if let Some(encounter) = self.encounters.get_mut(encounter_id) {
                     let mut reaction_options = None;
 
-                    for reactor in &encounter.participants(
-                        &self.world,
-                        ParticipantsFilter::from(TargetType::entity_not_dead()),
-                    ) {
+                    for reactor in &encounter.participants(&self.world, EntityFilter::not_dead()) {
                         if self.event_log.has_reacted(&event.id, reactor) {
                             continue;
                         }

@@ -8,7 +8,7 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        actions::targeting::{TargetTypeInstance, TargetingContext},
+        actions::targeting::{TargetInstance, TargetingContext},
         d20::D20CheckResult,
         damage::{
             AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
@@ -231,7 +231,7 @@ pub struct Action {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActionResult {
     pub performer: EntityIdentifier,
-    pub target: TargetTypeInstance,
+    pub target: TargetInstance,
     pub kind: ActionKindResult,
 }
 
@@ -511,7 +511,7 @@ impl ActionResult {
     pub fn new(world: &World, performer: Entity, target: Entity, kind: ActionKindResult) -> Self {
         ActionResult {
             performer: EntityIdentifier::from_world(world, performer),
-            target: TargetTypeInstance::Entity(target),
+            target: TargetInstance::Entity(target),
             kind,
         }
     }

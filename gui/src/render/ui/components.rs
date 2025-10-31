@@ -6,7 +6,7 @@ use nat20_rs::{
         ability::{Ability, AbilityScore, AbilityScoreMap},
         actions::{
             action::{ActionContext, ActionKind, ActionKindResult, ActionResult, ReactionResult},
-            targeting::TargetTypeInstance,
+            targeting::TargetInstance,
         },
         d20::{D20CheckDC, D20CheckResult, RollMode},
         damage::{
@@ -933,11 +933,11 @@ impl ImguiRenderable for DamageComponentMitigation {
 impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
     fn render_with_context(&self, ui: &imgui::Ui, (world, indent_level): (&World, u8)) {
         let target_name = match &self.target {
-            TargetTypeInstance::Entity(entity) => {
+            TargetInstance::Entity(entity) => {
                 let character_name = systems::helpers::get_component::<Name>(world, *entity);
                 character_name.as_str().to_string()
             }
-            TargetTypeInstance::Point(point) => todo!(),
+            TargetInstance::Point(point) => todo!(),
             // TargetTypeInstance::Area(area_shape) => {
             //     todo!()
             // }
