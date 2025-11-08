@@ -46,8 +46,6 @@ use crate::{
     },
 };
 
-const ACTION_BAR_MIN_SIZE: [f32; 2] = [500.0, 200.0];
-
 #[derive(Debug, Clone)]
 pub enum ActionBarState {
     Action {
@@ -101,7 +99,6 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
         };
 
         let disabled_token = ui.begin_disabled(disabled);
-        let style_token = ui.push_style_var(imgui::StyleVar::WindowMinSize(ACTION_BAR_MIN_SIZE));
 
         let window_manager_ptr =
             unsafe { &mut *(&mut gui_state.window_manager as *mut WindowManager) };
@@ -134,6 +131,7 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
                     } => {
                         render_context_selection(
                             ui,
+                            gui_state,
                             game_state,
                             &mut new_state,
                             action,
@@ -164,7 +162,6 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
         );
 
         disabled_token.end();
-        style_token.end();
 
         if let Some(reaction_window) = &mut self.reaction_window {
             reaction_window.render_mut_with_context(ui, gui_state, game_state);
@@ -272,6 +269,7 @@ fn render_resources(ui: &imgui::Ui, game_state: &mut GameState, entity: Entity) 
 
 fn render_context_selection(
     ui: &imgui::Ui,
+    gui_state: &mut GuiState,
     game_state: &mut GameState,
     new_state: &mut Option<ActionBarState>,
     action: &ActionId,
@@ -307,7 +305,15 @@ fn render_context_selection(
 
     ui.separator();
 
-    if ui.button("Cancel") {
+    let right_click_cancel =
+        if gui_state.cursor_ray_result.is_some() && ui.is_mouse_clicked(MouseButton::Right) {
+            gui_state.cursor_ray_result.take();
+            true
+        } else {
+            false
+        };
+
+    if ui.button("Cancel") || right_click_cancel {
         *new_state = Some(ActionBarState::Action {
             actions: systems::actions::available_actions(&game_state.world, actor),
         });
