@@ -235,7 +235,7 @@ fn determine_path_sphere_intersections(
                     &game_state.world,
                     &game_state.geometry,
                     eye_pos_at_intersection,
-                    *path_end,
+                    *target,
                     &raycast_filter,
                 )
                 .has_line_of_sight
@@ -245,7 +245,7 @@ fn determine_path_sphere_intersections(
                     &game_state.world,
                     &game_state.geometry,
                     eye_pos_at_intersection,
-                    *path_end,
+                    *target,
                     &raycast_filter,
                 )
                 .has_line_of_sight

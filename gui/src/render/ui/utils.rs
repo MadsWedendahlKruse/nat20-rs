@@ -256,6 +256,9 @@ pub fn render_progress_bar<T: Display>(
     }
 }
 
+static COLOR_EMPTY: [f32; 4] = [0.4, 0.4, 0.4, 1.0];
+static COLOR_FULL: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+
 // TODO: Call this something else
 pub fn render_capacity_meter(ui: &imgui::Ui, label: &str, current: usize, max: usize) {
     for i in 0..max {
@@ -263,14 +266,14 @@ pub fn render_capacity_meter(ui: &imgui::Ui, label: &str, current: usize, max: u
             ui.same_line();
         }
         let color = if i >= current {
-            [0.3, 0.3, 0.3, 1.0]
+            COLOR_EMPTY
         } else {
-            [1.0, 1.0, 1.0, 1.0]
+            COLOR_FULL
         };
         // TODO: Consider using primitives instead of buttons (ui.get_window_draw_list())
-        // need to figure out how to the positioning then
+        // need to figure out how to do the positioning then
         let color_token = ui.push_style_color(imgui::StyleColor::Button, color);
-        ui.button_with_size(format!("##{}{}/{}", label, current, max), [10.0, 10.0]);
+        ui.button_with_size(format!("##{}{}/{}", label, current, max), [15.0, 15.0]);
         color_token.pop();
     }
 }

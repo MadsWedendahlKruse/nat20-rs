@@ -1,11 +1,12 @@
 use hecs::{Entity, World};
-use imgui::{ChildFlags, MouseButton};
+use imgui::{ChildFlags, MouseButton, sys};
 use nat20_rs::{
     components::{
         actions::{
-            action::{ActionContext, ActionMap},
-            targeting::{AreaShape, TargetInstance, TargetingKind},
+            action::{ActionContext, ActionKind, ActionMap},
+            targeting::{AreaShape, TargetInstance, TargetingContext, TargetingKind},
         },
+        d20::RollMode,
         id::{ActionId, Name},
         resource::{ResourceAmountMap, ResourceMap},
         speed::Speed,
@@ -19,8 +20,10 @@ use nat20_rs::{
         self,
         actions::TargetPathFindingResult,
         geometry::{RaycastHit, RaycastHitKind},
+        movement::PathResult,
     },
 };
+use parry3d::na::Point3;
 use uom::si::length::meter;
 
 use crate::{
@@ -28,6 +31,7 @@ use crate::{
         common::utils::RenderableMutWithContext,
         ui::{
             components::{LOW_HEALTH_BG_COLOR, LOW_HEALTH_COLOR, SPEED_COLOR, SPEED_COLOR_BG},
+            text::{TextKind, TextSegment, TextSegments},
             utils::{
                 ImguiRenderable, ImguiRenderableWithContext, ProgressBarColor,
                 render_button_disabled_conditionally, render_capacity_meter, render_progress_bar,
@@ -314,63 +318,20 @@ fn render_target_selection(
     {
         update_potential_target(potential_target, game_state, action, closest);
 
-        let potential_target_instance = if let Some((target, path_result)) = potential_target {
-            let (preview_position, path_to_target) = match path_result {
-                TargetPathFindingResult::AlreadyInRange => (
-                    systems::geometry::get_eye_position(&game_state.world, action.actor).unwrap(),
-                    None,
-                ),
+        let potential_target_instance = if let Some((target, path_result)) = potential_target
+            && should_render_target_preview(&targeting_context)
+        {
+            let (preview_position, path_to_target) =
+                get_target_path_preview(game_state, action, path_result);
 
-                TargetPathFindingResult::PathFound(path) => {
-                    if let Some(end) = path.taken_path.end() {
-                        (*end, Some(path.clone()))
-                    } else {
-                        (
-                            systems::geometry::get_eye_position(&game_state.world, action.actor)
-                                .unwrap(),
-                            None,
-                        )
-                    }
-                }
-            };
-
-            if let Some((shape, shape_pose_at_preview)) = systems::geometry::get_shape_at_point(
-                &game_state.world,
-                &game_state.geometry,
-                action.actor,
-                &preview_position,
-            ) && let Some(mesh) = gui_state.mesh_cache.get(&format!("{:#?}", shape))
-            {
-                if let Some(path_to_target) = &path_to_target {
-                    gui_state
-                        .path_cache
-                        .insert(action.actor, path_to_target.clone());
-                    mesh.draw(
-                        gui_state.ig_renderer.gl_context(),
-                        &gui_state.program,
-                        &shape_pose_at_preview.to_homogeneous(),
-                        [1.0, 1.0, 1.0, 0.75],
-                        &Wireframe::Only {
-                            color: [1.0, 1.0, 1.0, 0.75],
-                            width: 2.0,
-                        },
-                    );
-                }
-
-                let line_end = match target {
-                    TargetInstance::Entity(entity) => {
-                        systems::geometry::get_shape(&game_state.world, *entity)
-                            .map(|(_, shape_pose)| shape_pose.translation.vector.into())
-                            .unwrap()
-                    }
-                    TargetInstance::Point(point) => *point,
-                };
-                gui_state.line_renderer.add_line(
-                    preview_position.into(),
-                    line_end.into(),
-                    [1.0, 1.0, 1.0],
-                );
-            }
+            render_target_path_preview(
+                gui_state,
+                game_state,
+                action,
+                preview_position,
+                &path_to_target,
+                target,
+            );
 
             if let Some(path_to_target) = &path_to_target
                 && path_to_target.reaches_goal()
@@ -385,6 +346,43 @@ fn render_target_selection(
             gui_state.path_cache.remove(&action.actor);
             None
         };
+
+        match systems::actions::get_action(&action.action_id)
+            .unwrap()
+            .kind()
+        {
+            ActionKind::AttackRollDamage { attack_roll, .. } => {
+                if let Some(potential_target) = &potential_target_instance
+                    && let TargetInstance::Entity(target) = potential_target
+                {
+                    let attack_roll = attack_roll(&game_state.world, action.actor, &action.context);
+                    let target_ac = systems::loadout::armor_class(&game_state.world, *target);
+                    ui.tooltip(|| {
+                        ui.separator();
+
+                        let hitchance = attack_roll.hit_chance(
+                            &game_state.world,
+                            action.actor,
+                            target_ac.total() as u32,
+                        ) * 100.0;
+
+                        let text_kind = match attack_roll.d20_check.advantage_tracker().roll_mode()
+                        {
+                            RollMode::Normal => TextKind::Normal,
+                            RollMode::Advantage => TextKind::Green,
+                            RollMode::Disadvantage => TextKind::Red,
+                        };
+
+                        TextSegments::new(vec![
+                            ("Hit chance:", TextKind::Normal),
+                            (&format!("{:.0}%", hitchance), text_kind),
+                        ])
+                        .render(ui);
+                    });
+                }
+            }
+            _ => {}
+        }
 
         match targeting_context.kind {
             TargetingKind::SelfTarget => {
@@ -410,8 +408,10 @@ fn render_target_selection(
             TargetingKind::Multiple { max_targets } => {
                 let max_targets = max_targets as usize;
                 if ui.is_mouse_clicked(MouseButton::Right) {
-                    gui_state.cursor_ray_result.take();
                     action.targets.pop();
+                    if !action.targets.is_empty() {
+                        gui_state.cursor_ray_result.take();
+                    }
                 }
                 if let Some(potential_target) = potential_target_instance
                     && action.targets.len() < max_targets
@@ -426,6 +426,8 @@ fn render_target_selection(
 
                 ui.tooltip(|| {
                     ui.separator();
+                    ui.text("Targets:");
+                    ui.same_line();
                     render_capacity_meter(
                         ui,
                         action.action_id.as_str(),
@@ -527,6 +529,90 @@ fn render_target_selection(
         *new_state = Some(ActionBarState::Action {
             actions: systems::actions::available_actions(&game_state.world, action.actor),
         });
+    }
+}
+
+fn should_render_target_preview(targeting_context: &TargetingContext) -> bool {
+    match &targeting_context.kind {
+        TargetingKind::SelfTarget => false,
+        _ => true,
+    }
+}
+
+fn render_target_path_preview(
+    gui_state: &mut GuiState,
+    game_state: &mut GameState,
+    action: &mut ActionData,
+    preview_position: Point3<f32>,
+    path_to_target: &Option<PathResult>,
+    target: &mut TargetInstance,
+) {
+    if let Some((shape, shape_pose_at_preview)) = systems::geometry::get_shape_at_point(
+        &game_state.world,
+        &game_state.geometry,
+        action.actor,
+        &preview_position,
+    ) && let Some(mesh) = gui_state.mesh_cache.get(&format!("{:#?}", shape))
+    {
+        if let Some(path_to_target) = path_to_target {
+            gui_state
+                .path_cache
+                .insert(action.actor, path_to_target.clone());
+            mesh.draw(
+                gui_state.ig_renderer.gl_context(),
+                &gui_state.program,
+                &shape_pose_at_preview.to_homogeneous(),
+                [1.0, 1.0, 1.0, 0.75],
+                &Wireframe::Only {
+                    color: [1.0, 1.0, 1.0, 0.75],
+                    width: 2.0,
+                },
+            );
+        }
+
+        let line_end = match target {
+            TargetInstance::Entity(entity) => {
+                systems::geometry::get_shape(&game_state.world, *entity)
+                    .map(|(_, shape_pose)| shape_pose.translation.vector.into())
+                    .unwrap()
+            }
+            TargetInstance::Point(point) => *point,
+        };
+        gui_state
+            .line_renderer
+            .add_line(preview_position.into(), line_end.into(), [1.0, 1.0, 1.0]);
+    }
+}
+
+fn get_target_path_preview(
+    game_state: &mut GameState,
+    action: &mut ActionData,
+    path_result: &mut TargetPathFindingResult,
+) -> (Point3<f32>, Option<PathResult>) {
+    match path_result {
+        TargetPathFindingResult::AlreadyInRange => (
+            systems::geometry::get_eye_position(&game_state.world, action.actor).unwrap(),
+            None,
+        ),
+
+        TargetPathFindingResult::PathFound(path) => {
+            if let Some(end) = path.taken_path.end()
+                && let Some(end_at_ground) =
+                    systems::geometry::ground_position(&game_state.geometry, &end)
+                && let Some(eye_pos) = systems::geometry::get_eye_position_at_point(
+                    &game_state.world,
+                    action.actor,
+                    &end_at_ground,
+                )
+            {
+                (eye_pos, Some(path.clone()))
+            } else {
+                (
+                    systems::geometry::get_eye_position(&game_state.world, action.actor).unwrap(),
+                    None,
+                )
+            }
+        }
     }
 }
 

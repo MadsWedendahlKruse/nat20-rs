@@ -17,7 +17,7 @@ use crate::{
     engine::geometry::{WorldGeometry, WorldPath},
 };
 
-pub static EPSILON: f32 = 1e-6;
+pub static EPSILON: f32 = 1e-4;
 
 pub type CreaturePose = Isometry3<f32>;
 
@@ -104,10 +104,10 @@ pub fn get_shape_at_point(
     point: &Point3<f32>,
 ) -> Option<(Capsule, CreaturePose)> {
     if let Some((shape, shape_pose)) = get_shape(world, entity)
-        && let Some(foot_pose) = world.get::<&CreaturePose>(entity).ok()
+        && let Some(foot_pos) = get_foot_position(world, entity)
     {
         let ground_pos = ground_position(world_geometry, point)?;
-        let offset = ground_pos - Point3::from(foot_pose.translation.vector);
+        let offset = ground_pos - foot_pos;
         let new_shape_pose = shape_pose * Translation3::from(offset);
         Some((shape, new_shape_pose))
     } else {
