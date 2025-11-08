@@ -1101,8 +1101,8 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
                     event,
                     resources_refunded,
                 } => {
-                    ui.same_line();
-                    TextSegment::new("cancelling", TextKind::Normal).render(ui);
+                    // ui.same_line();
+                    TextSegment::new("\tcancelling", TextKind::Normal).render(ui);
                     ui.same_line();
                     render_event_description(ui, event, world);
                 }
@@ -1449,7 +1449,13 @@ impl ImguiRenderableWithContext<&World> for Vec<Entity> {
             )
             .render(ui);
         } else if self.len() > 1 {
+            // Hashset has random order, so we can't just convert the vec to a set
+            // since this will cause the order to change on each render
+            let mut rendered_targets = HashSet::new();
             for action_target in self.iter() {
+                if rendered_targets.contains(action_target) {
+                    continue;
+                }
                 indent_text(ui, 1);
                 TextSegment::new(
                     systems::helpers::get_component_clone::<Name>(world, *action_target)
@@ -1457,6 +1463,7 @@ impl ImguiRenderableWithContext<&World> for Vec<Entity> {
                     TextKind::Target,
                 )
                 .render(ui);
+                rendered_targets.insert(action_target);
             }
         }
     }

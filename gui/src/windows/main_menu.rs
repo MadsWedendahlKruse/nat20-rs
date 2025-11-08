@@ -438,7 +438,7 @@ impl MainMenuWindow {
                             | ChildFlags::AUTO_RESIZE_X
                             | ChildFlags::BORDERS,
                     )
-                    .size([0.0, 400.0])
+                    .size([0.0, 200.0])
                     .build(|| {
                         event_log.render_with_context(ui, &(&game_state.world, log_level));
 

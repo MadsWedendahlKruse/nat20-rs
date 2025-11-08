@@ -170,13 +170,8 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                 }
 
                 match &action.context {
-                    ActionContext::Reaction {
-                        trigger_event,
-                        resource_cost,
-                        context,
-                    } => {
-                        ui.same_line();
-                        TextSegment::new("as a response to".to_string(), TextKind::Normal)
+                    ActionContext::Reaction { trigger_event, .. } => {
+                        TextSegment::new("\tas a response to".to_string(), TextKind::Normal)
                             .render(ui);
                         ui.same_line();
                         render_event_description(ui, trigger_event, world);
