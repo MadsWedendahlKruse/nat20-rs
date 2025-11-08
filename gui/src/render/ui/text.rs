@@ -79,6 +79,7 @@ impl TextKind {
 pub struct TextSegment<'a> {
     pub text: Cow<'a, str>,
     pub kind: TextKind,
+    pub wrap_text: bool,
 }
 
 impl<'a> TextSegment<'a> {
@@ -86,17 +87,29 @@ impl<'a> TextSegment<'a> {
         Self {
             text: text.into(),
             kind,
+            wrap_text: false,
         }
     }
 
     pub fn color(&self) -> [f32; 4] {
         self.kind.color()
     }
+
+    pub fn wrap_text(mut self, wrap: bool) -> Self {
+        self.wrap_text = wrap;
+        self
+    }
 }
 
 impl ImguiRenderable for TextSegment<'_> {
     fn render(&self, ui: &imgui::Ui) {
-        ui.text_colored(self.color(), &self.text);
+        if self.wrap_text {
+            let color_token = ui.push_style_color(imgui::StyleColor::Text, self.color());
+            ui.text_wrapped(&self.text);
+            color_token.end();
+        } else {
+            ui.text_colored(self.color(), &self.text);
+        }
     }
 }
 

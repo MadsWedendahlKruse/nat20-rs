@@ -216,6 +216,7 @@ impl PartialEq for ReactionResult {
 #[derive(Clone)]
 pub struct Action {
     pub id: ActionId,
+    pub description: String,
     pub kind: ActionKind,
     pub targeting: Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
     /// e.g. Action, Bonus Action, Reaction

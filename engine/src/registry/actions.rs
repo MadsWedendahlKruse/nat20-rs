@@ -46,6 +46,9 @@ static ACTION_SURGE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(|
     (
         Action {
             id: ACTION_SURGE_ID.clone(),
+            description: "You can push yourself beyond your normal limits for a \
+                moment. On your turn, you can take one additional action."
+                .to_string(),
             kind: ActionKind::BeneficialEffect {
                 effect: registry::effects::ACTION_SURGE_ID.clone(),
             },
@@ -68,6 +71,9 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
     (
         Action {
             id: INDOMITABLE_ID.clone(),
+            description: "If you fail a saving throw, you can reroll it with a \
+                bonus equal to your Fighter level. You must use the new roll."
+                .to_string(),
             kind: ActionKind::Reaction {
                 reaction: Arc::new(|game_state, reactor, trigger_event, reaction_context| {
                     let dc = match &trigger_event.kind {
@@ -172,6 +178,11 @@ static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(||
     (
         Action {
             id: SECOND_WIND_ID.clone(),
+            description: "You have a limited well of physical and mental \
+                stamina that you can draw on. As a Bonus Action, \
+                you can use it to regain Hit Points equal to 1d10 \
+                plus your Fighter level."
+                .to_string(),
             kind: ActionKind::Healing {
                 heal: Arc::new(|world, entity, _| {
                     let mut modifiers = ModifierSet::new();
@@ -209,6 +220,7 @@ pub static WEAPON_ATTACK_ID: LazyLock<ActionId> =
 
 static WEAPON_ATTACK: LazyLock<Action> = LazyLock::new(|| Action {
     id: registry::actions::WEAPON_ATTACK_ID.clone(),
+    description: "Make an attack with a weapon you are wielding.".to_string(),
     kind: ActionKind::AttackRollDamage {
         attack_roll: WEAPON_ATTACK_ROLL.clone(),
         damage: WEAPON_DAMAGE_ROLL.clone(),

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use hecs::{Entity, World};
 use parry3d::{
-    na::{Isometry, Isometry3, OPoint, Point3},
+    na::{Isometry3, Point3},
     shape::Shape,
 };
 use uom::{
@@ -15,7 +15,7 @@ use uom::{
 
 use crate::{
     components::health::life_state::LifeState,
-    engine::{game_state::GameState, geometry::WorldGeometry},
+    engine::geometry::WorldGeometry,
     entities::{character::CharacterTag, monster::MonsterTag},
     systems,
 };

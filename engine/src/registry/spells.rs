@@ -49,6 +49,12 @@ pub static COUNTERSPELL_ID: LazyLock<SpellId> =
 static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
     Spell::new(
         COUNTERSPELL_ID.clone(),
+        "You attempt to interrupt a creature in the process of casting a spell. \
+            The creature makes a Constitution saving throw. On a failed save, the \
+            spell dissipates with no effect, and the action, Bonus Action, or \
+            Reaction used to cast it is wasted. If that spell was cast with a spell \
+            slot, the slot isn’t expended."
+            .to_string(),
         3,
         MagicSchool::Abjuration,
         ActionKind::Reaction {
@@ -166,6 +172,16 @@ pub static ELDRITCH_BLAST_ID: LazyLock<SpellId> =
 static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
     Spell::new(
         ELDRITCH_BLAST_ID.clone(),
+        "You hurl a beam of crackling energy. Make a ranged \
+            spell attack against one creature or object in range. \
+            On a hit, the target takes 1d10 Force damage.
+            \n\
+            The spell creates two beams at \
+            level 5, three beams at level 11, and four beams at \
+            level 17. You can direct the beams at the same target \
+            or at different ones. Make a separate attack roll for \
+            each beam."
+            .to_string(),
         0,
         MagicSchool::Evocation,
         ActionKind::AttackRollDamage {
@@ -211,6 +227,15 @@ pub static FIREBALL_ID: LazyLock<SpellId> = LazyLock::new(|| SpellId::from_str("
 static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
     Spell::new(
         FIREBALL_ID.clone(),
+        "A bright streak flashes from you to a point you \
+            choose within range and then blossoms with a \
+            low roar into a fiery explosion. Each creature in a \
+            20-foot-radius Sphere centered on that point makes \
+            a Dexterity saving throw, taking 8d6 Fire damage \
+            on a failed save or half as much damage on a successful one.
+            \n\
+            The damage increases by 1d6 for each spell slot level above 3"
+            .to_string(),
         3,
         MagicSchool::Evocation,
         ActionKind::SavingThrowDamage {
@@ -255,6 +280,14 @@ pub static MAGIC_MISSILE_ID: LazyLock<SpellId> =
 static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
     Spell::new(
         MAGIC_MISSILE_ID.clone(),
+        "You create three glowing darts of magical force. \
+            Each dart strikes a creature of your choice that you \
+            can see within range. A dart deals 1d4 + 1 Force \
+            damage to its target. The darts all strike simultaneously, \
+            and you can direct them to hit one creature or several.
+            \n\
+            The spell creates one more dart for each spell slot level above 1"
+            .to_string(),
         1,
         MagicSchool::Evocation,
         ActionKind::UnconditionalDamage {

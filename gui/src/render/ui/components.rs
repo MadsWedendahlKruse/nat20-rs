@@ -6,7 +6,7 @@ use nat20_rs::{
         ability::{Ability, AbilityScore, AbilityScoreMap},
         actions::{
             action::{ActionContext, ActionKind, ActionKindResult, ActionResult, ReactionResult},
-            targeting::TargetInstance,
+            targeting::{AreaShape, TargetInstance, TargetingKind, TargetingRange},
         },
         d20::{D20CheckDC, D20CheckResult, RollMode},
         damage::{
@@ -21,7 +21,7 @@ use nat20_rs::{
             equipment::{
                 armor::{Armor, ArmorClass, ArmorDexterityBonus, ArmorType},
                 loadout::Loadout,
-                weapon::Weapon,
+                weapon::{MELEE_RANGE_DEFAULT, Weapon},
             },
             item::{Item, ItemRarity},
             money::MonetaryValue,
@@ -44,7 +44,7 @@ use nat20_rs::{
 };
 use std::collections::HashSet;
 use strum::IntoEnumIterator;
-use uom::si::mass::kilogram;
+use uom::si::{angle::degree, length::meter, mass::kilogram};
 
 use crate::{
     render::ui::{
@@ -1533,21 +1533,55 @@ impl ImguiRenderable for ResourceAmountMap {
 impl ImguiRenderableWithContext<(&World, Entity)>
     for (&ActionId, &ActionContext, &ResourceAmountMap)
 {
-    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
-        let (world, entity) = context;
-
+    fn render_with_context(&self, ui: &imgui::Ui, (world, entity): (&World, Entity)) {
         let (action_id, context, cost) = self;
         let action = systems::actions::get_action(action_id).unwrap();
 
-        ui.separator_with_text(&action_id.to_string());
+        ui.child_window("Action Tooltip")
+            .size([400.0, 0.0])
+            .child_flags(imgui::ChildFlags::ALWAYS_AUTO_RESIZE | imgui::ChildFlags::AUTO_RESIZE_Y)
+            .build(|| {
+                ui.separator_with_text(&action_id.to_string());
 
-        action
-            .kind
-            .render_with_context(ui, (world, entity, context));
+                action
+                    .kind
+                    .render_with_context(ui, (world, entity, context));
 
-        ui.separator();
+                ui.separator();
 
-        cost.render(ui);
+                let targeting = (action.targeting)(world, entity, context);
+                targeting.range.render(ui);
+                targeting.kind.render(ui);
+
+                match action.kind() {
+                    ActionKind::AttackRollDamage { .. } => {
+                        TextSegment::new("Attack Roll", TextKind::Details).render(ui);
+                    }
+                    ActionKind::SavingThrowDamage { saving_throw, .. } => {
+                        let saving_throw = saving_throw(world, entity, &context);
+                        let saving_throw_ability = match saving_throw.key {
+                            SavingThrowKind::Ability(ability) => ability,
+                            SavingThrowKind::Death => todo!(),
+                        };
+                        TextSegments::new(vec![
+                            (saving_throw_ability.to_string(), TextKind::Ability),
+                            ("Saving Throw".to_string(), TextKind::Details),
+                        ])
+                        .render(ui);
+                    }
+                    _ => {}
+                }
+
+                ui.separator();
+
+                cost.render(ui);
+
+                ui.separator();
+
+                TextSegment::new(action.description.as_str(), TextKind::Details)
+                    .wrap_text(true)
+                    .render(ui);
+            });
     }
 }
 
@@ -1565,6 +1599,72 @@ impl ImguiRenderable for Speed {
                 total_speed.value - self.moved_this_turn().value,
                 total_speed.value
             )
+        };
+        TextSegment::new(text, TextKind::Details).render(ui);
+    }
+}
+
+impl ImguiRenderable for TargetingRange {
+    fn render(&self, ui: &imgui::Ui) {
+        let range_text = if self.max().get::<meter>() == 0.0 {
+            return;
+        } else if *self == *MELEE_RANGE_DEFAULT {
+            "Melee".to_string()
+        } else if self.max() == self.normal() {
+            format!("{:.1} meters", self.max().get::<meter>())
+        } else {
+            format!(
+                "{:.1} ({:.1}) meters",
+                self.normal().get::<meter>(),
+                self.max().get::<meter>()
+            )
+        };
+        TextSegments::new(vec![
+            ("Range:".to_string(), TextKind::Details),
+            (range_text, TextKind::Details),
+        ])
+        .render(ui);
+    }
+}
+
+impl ImguiRenderable for TargetingKind {
+    fn render(&self, ui: &imgui::Ui) {
+        let text = match self {
+            TargetingKind::SelfTarget => "Self Target".to_string(),
+            TargetingKind::Single => "Single Target".to_string(),
+            TargetingKind::Multiple { max_targets } => format!("{} Targets", max_targets),
+            TargetingKind::Area { shape, .. } => match shape {
+                AreaShape::Arc { angle, length } => {
+                    format!(
+                        "AoE: Arc\n\tAngle: {:.0}°, Length: {:.1} meters",
+                        angle.get::<degree>(),
+                        length.get::<meter>()
+                    )
+                }
+                AreaShape::Sphere { radius } => {
+                    format!("AoE: Sphere\n\tRadius: {:.1} meters", radius.get::<meter>())
+                }
+                AreaShape::Cube { side_length } => {
+                    format!(
+                        "AoE: Cube\n\tSide Length: {:.1} meters",
+                        side_length.get::<meter>()
+                    )
+                }
+                AreaShape::Cylinder { radius, height } => {
+                    format!(
+                        "AoE: Cylinder\n\tRadius: {:.1} meters, Height: {:.1} meters",
+                        radius.get::<meter>(),
+                        height.get::<meter>()
+                    )
+                }
+                AreaShape::Line { length, width } => {
+                    format!(
+                        "AoE: Line\n\tLength: {:.1} meters, Width: {:.1} meters",
+                        length.get::<meter>(),
+                        width.get::<meter>()
+                    )
+                }
+            },
         };
         TextSegment::new(text, TextKind::Details).render(ui);
     }

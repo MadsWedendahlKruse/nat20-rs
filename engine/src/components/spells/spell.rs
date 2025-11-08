@@ -37,6 +37,7 @@ pub struct Spell {
 impl Spell {
     pub fn new(
         id: SpellId,
+        description: String,
         base_level: u8,
         school: MagicSchool,
         kind: ActionKind,
@@ -62,6 +63,7 @@ impl Spell {
             school,
             action: Action {
                 id: action_id,
+                description,
                 kind,
                 resource_cost,
                 targeting,
