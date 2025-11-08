@@ -132,37 +132,14 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
                         action,
                         contexts_and_costs,
                     } => {
-                        ui.text(format!("Select context for action: {}", action));
-
-                        for (i, (context, cost)) in contexts_and_costs.iter().enumerate() {
-                            if i > 0 {
-                                ui.same_line();
-                            }
-
-                            if ui.button(format!("{:#?}\n{:#?}", context, cost)) {
-                                new_state = Some(ActionBarState::Targets {
-                                    action: ActionData {
-                                        actor: self.entity,
-                                        action_id: action.clone(),
-                                        context: context.clone(),
-                                        resource_cost: cost.clone(),
-                                        targets: Vec::new(),
-                                    },
-                                    potential_target: None,
-                                });
-                            }
-                        }
-
-                        ui.separator();
-
-                        if ui.button("Cancel") {
-                            new_state = Some(ActionBarState::Action {
-                                actions: systems::actions::available_actions(
-                                    &game_state.world,
-                                    self.entity,
-                                ),
-                            });
-                        }
+                        render_context_selection(
+                            ui,
+                            game_state,
+                            &mut new_state,
+                            action,
+                            self.entity,
+                            contexts_and_costs,
+                        );
                     }
 
                     ActionBarState::Targets {
@@ -244,7 +221,8 @@ fn render_actions(
 
                 if ui.is_item_hovered() {
                     ui.tooltip(|| {
-                        (action_id, contexts_and_costs)
+                        let (context, cost) = &contexts_and_costs[0];
+                        (action_id, context, cost)
                             .render_with_context(ui, (&game_state.world, entity));
                     });
                 }
@@ -290,6 +268,50 @@ fn render_resources(ui: &imgui::Ui, game_state: &mut GameState, entity: Entity) 
                 }),
             );
         });
+}
+
+fn render_context_selection(
+    ui: &imgui::Ui,
+    game_state: &mut GameState,
+    new_state: &mut Option<ActionBarState>,
+    action: &ActionId,
+    actor: Entity,
+    contexts_and_costs: &mut Vec<(ActionContext, ResourceAmountMap)>,
+) {
+    ui.text(format!("Select context for action: {}", action));
+
+    for (i, (context, cost)) in contexts_and_costs.iter().enumerate() {
+        if i > 0 {
+            ui.same_line();
+        }
+
+        if ui.button(format!("{:#?}", context)) {
+            *new_state = Some(ActionBarState::Targets {
+                action: ActionData {
+                    actor,
+                    action_id: action.clone(),
+                    context: context.clone(),
+                    resource_cost: cost.clone(),
+                    targets: Vec::new(),
+                },
+                potential_target: None,
+            });
+        }
+
+        if ui.is_item_hovered() {
+            ui.tooltip(|| {
+                (action, context, cost).render_with_context(ui, (&game_state.world, actor));
+            });
+        }
+    }
+
+    ui.separator();
+
+    if ui.button("Cancel") {
+        *new_state = Some(ActionBarState::Action {
+            actions: systems::actions::available_actions(&game_state.world, actor),
+        });
+    }
 }
 
 fn render_target_selection(

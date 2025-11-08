@@ -1531,26 +1531,23 @@ impl ImguiRenderable for ResourceAmountMap {
 
 // TODO: Pretty janky 'type' here
 impl ImguiRenderableWithContext<(&World, Entity)>
-    for (&ActionId, &mut Vec<(ActionContext, ResourceAmountMap)>)
+    for (&ActionId, &ActionContext, &ResourceAmountMap)
 {
     fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
         let (world, entity) = context;
 
-        let (action_id, contexts_and_costs) = self;
+        let (action_id, context, cost) = self;
         let action = systems::actions::get_action(action_id).unwrap();
 
         ui.separator_with_text(&action_id.to_string());
 
-        // TODO: For now just render the first context and cost
-        let context_and_cost = &contexts_and_costs[0];
-
         action
             .kind
-            .render_with_context(ui, (world, entity, &context_and_cost.0));
+            .render_with_context(ui, (world, entity, context));
 
         ui.separator();
 
-        context_and_cost.1.render(ui);
+        cost.render(ui);
     }
 }
 
