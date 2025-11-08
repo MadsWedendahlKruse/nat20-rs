@@ -270,6 +270,10 @@ impl Default for GuiSettings {
                 state::parameters::RENDER_GRID.to_string(),
                 Setting::Bool(true),
             ),
+            (
+                state::parameters::RENDER_LINE_OF_SIGHT_DEBUG.to_string(),
+                Setting::Bool(false),
+            ),
         ]))
     }
 }

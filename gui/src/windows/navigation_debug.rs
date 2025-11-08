@@ -58,7 +58,7 @@ impl RenderableMutWithContext<&mut GameState> for NavigationDebugWindow {
         gui_state.window_manager.render_window(
             ui,
             "Navigation Debug",
-            &&anchor::BOTTOM_RIGHT,
+            &anchor::CENTER_RIGHT,
             [0.0, 500.0],
             &mut nav_debug_open,
             || {
@@ -111,7 +111,7 @@ impl RenderableMutWithContext<&mut GameState> for NavigationDebugWindow {
 
                     if ui.button("Find Path") {
                         self.path = systems::geometry::path_point_point(
-                            game_state,
+                            &game_state.geometry,
                             self.path_start.into(),
                             self.path_end.into(),
                         )

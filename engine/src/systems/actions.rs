@@ -1,15 +1,14 @@
-use std::collections::HashMap;
-
 use hecs::{Entity, World};
 
 use crate::{
     components::{
         actions::{
             action::{
-                Action, ActionContext, ActionCooldownMap, ActionMap, ActionProvider, ActionResult,
-                ReactionResult, ReactionSet,
+                Action, ActionContext, ActionCooldownMap, ActionMap, ActionProvider, ReactionSet,
             },
-            targeting::{TargetInstance, TargetSelection, TargetingContext, TargetingError},
+            targeting::{
+                self, AreaShape, TargetInstance, TargetingContext, TargetingError, TargetingKind,
+            },
         },
         id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
@@ -17,10 +16,12 @@ use crate::{
         spells::spellbook::Spellbook,
     },
     engine::{
-        event::{self, ActionData, ActionError, Event, EventId, EventKind, ReactionData},
+        event::{ActionData, ActionError, Event, ReactionData},
         game_state::GameState,
+        geometry::WorldGeometry,
     },
-    registry, systems,
+    entities, registry,
+    systems::{self, movement::PathResult},
 };
 
 pub fn get_action(action_id: &ActionId) -> Option<&Action> {
@@ -70,6 +71,16 @@ pub fn on_cooldown(world: &World, entity: Entity, action_id: &ActionId) -> Optio
     }
 }
 
+pub fn set_cooldown(
+    world: &mut World,
+    entity: Entity,
+    action_id: &ActionId,
+    cooldown: RechargeRule,
+) {
+    let mut cooldowns = systems::helpers::get_component_mut::<ActionCooldownMap>(world, entity);
+    cooldowns.insert(action_id.clone(), cooldown);
+}
+
 pub fn all_actions(world: &World, entity: Entity) -> ActionMap {
     let mut actions = systems::helpers::get_component_clone::<ActionMap>(world, entity);
 
@@ -117,18 +128,21 @@ pub fn action_usable(
 }
 
 pub fn action_usable_on_targets(
-    game_state: &GameState,
+    world: &World,
+    world_geometry: &WorldGeometry,
     actor: Entity,
     action_id: &ActionId,
     context: &ActionContext,
     resource_cost: &ResourceAmountMap,
-    targets: &[Entity],
+    targets: &[TargetInstance],
 ) -> Result<(), ActionUsabilityError> {
-    action_usable(&game_state.world, actor, action_id, context, resource_cost)?;
+    action_usable(world, actor, action_id, context, resource_cost)?;
 
-    let targeting_context = targeting_context(&game_state.world, actor, action_id, context);
+    let targeting_context = targeting_context(world, actor, action_id, context);
 
-    if let Err(targeting_error) = targeting_context.validate_targets(game_state, actor, targets) {
+    if let Err(targeting_error) =
+        targeting_context.validate_targets(world, world_geometry, actor, targets)
+    {
         return Err(ActionUsabilityError::TargetingError(targeting_error));
     }
 
@@ -174,10 +188,94 @@ pub fn perform_action(game_state: &mut GameState, action_data: &ActionData) {
         .expect("Action not found in character's actions or registry");
     // Set the action on cooldown if applicable
     if let Some(cooldown) = action.cooldown {
-        systems::helpers::get_component_mut::<ActionCooldownMap>(&mut game_state.world, *performer)
-            .insert(action_id.clone(), cooldown);
+        set_cooldown(&mut game_state.world, *performer, action_id, cooldown);
     }
-    action.perform(game_state, *performer, &context, resource_cost, &targets);
+    // Determine which entities are being targeted
+    let entities = get_targeted_entities(game_state, performer, action_id, context, targets);
+    action.perform(game_state, *performer, &context, resource_cost, &entities);
+}
+
+fn get_targeted_entities(
+    game_state: &mut GameState,
+    performer: &Entity,
+    action_id: &ActionId,
+    context: &ActionContext,
+    targets: &Vec<TargetInstance>,
+) -> Vec<Entity> {
+    let mut entities = Vec::new();
+    let targeting_context = targeting_context(&game_state.world, *performer, action_id, context);
+    match targeting_context.kind {
+        TargetingKind::SelfTarget | TargetingKind::Single | TargetingKind::Multiple { .. } => {
+            for target in targets {
+                match target {
+                    TargetInstance::Entity(entity) => entities.push(*entity),
+                    TargetInstance::Point(point) => {
+                        if let Some(entity) =
+                            systems::geometry::get_entity_at_point(&game_state.world, *point)
+                        {
+                            entities.push(entity);
+                        }
+                    }
+                }
+            }
+        }
+
+        TargetingKind::Area {
+            shape,
+            fixed_on_actor,
+        } => {
+            for target in targets {
+                match target {
+                    TargetInstance::Entity(entity) => {
+                        // TODO: Proper logging instead of this homemade stuff
+                        println!(
+                            "WARNING: Targeting context for action {:?} has kind Area, but target is Entity {:?}. This is unexpected behavior, and probably not intended.",
+                            action_id, entity
+                        );
+                        entities.push(*entity)
+                    }
+
+                    TargetInstance::Point(point) => {
+                        let (shape_hitbox, shape_pose) = shape.parry3d_shape(
+                            &game_state.world,
+                            *performer,
+                            fixed_on_actor,
+                            point,
+                        );
+
+                        let mut entities_in_shape = systems::geometry::entities_in_shape(
+                            &game_state.world,
+                            shape_hitbox,
+                            &shape_pose,
+                        );
+
+                        // Check if any of the entities are behind cover and remove them
+                        // TODO: Not sure what the best way to do this is, I guess it
+                        // depends on the shape?
+
+                        match shape {
+                            AreaShape::Sphere { .. } => {
+                                entities_in_shape.retain(|entity| {
+                                    systems::geometry::line_of_sight_entity_point(
+                                        &game_state.world,
+                                        &game_state.geometry,
+                                        *entity,
+                                        *point,
+                                    )
+                                    .has_line_of_sight
+                                });
+                            }
+
+                            _ => {}
+                        }
+
+                        entities.extend(entities_in_shape);
+                    }
+                }
+            }
+        }
+    }
+    entities
 }
 
 pub fn targeting_context(
@@ -215,6 +313,7 @@ pub fn available_reactions(world: &World, entity: Entity) -> ReactionSet {
 // TODO: Struct for the return type?
 pub fn available_reactions_to_event(
     world: &World,
+    world_geometry: &WorldGeometry,
     reactor: Entity,
     event: &Event,
 ) -> Vec<ReactionData> {
@@ -230,22 +329,99 @@ pub fn available_reactions_to_event(
         if let Some(trigger) = &reaction.reaction_trigger {
             if trigger(reactor, event) {
                 for (context, resource_cost) in &contexts_and_costs {
-                    // TODO: Lots of duplicated information here
-                    reactions.push(ReactionData {
+                    if action_usable_on_targets(
+                        world,
+                        world_geometry,
                         reactor,
-                        event: event.clone().into(),
-                        reaction_id: reaction_id.clone(),
-                        context: ActionContext::Reaction {
-                            trigger_event: Box::new(event.clone()),
+                        &reaction_id,
+                        context,
+                        resource_cost,
+                        &[TargetInstance::Entity(event.actor().unwrap())],
+                    )
+                    .is_ok()
+                    {
+                        // TODO: Lots of duplicated information here
+                        reactions.push(ReactionData {
+                            reactor,
+                            event: event.clone().into(),
+                            reaction_id: reaction_id.clone(),
+                            context: ActionContext::Reaction {
+                                trigger_event: Box::new(event.clone()),
+                                resource_cost: resource_cost.clone(),
+                                context: Box::new(context.clone()),
+                            },
                             resource_cost: resource_cost.clone(),
-                            context: Box::new(context.clone()),
-                        },
-                        resource_cost: resource_cost.clone(),
-                    });
+                        });
+                    }
                 }
             }
         }
     }
 
     reactions
+}
+
+#[derive(Debug, Clone)]
+pub enum TargetPathFindingResult {
+    AlreadyInRange,
+    PathFound(PathResult),
+}
+
+#[derive(Debug, Clone)]
+pub enum TargetPathFindingError {
+    NoPathFound,
+    ActionError(ActionError),
+}
+
+// TODO: Not sure what to call this or where to put it
+pub fn path_to_target(
+    game_state: &mut GameState,
+    action: &ActionData,
+    pathfind_if_out_of_range: bool,
+) -> Result<TargetPathFindingResult, TargetPathFindingError> {
+    let validation_result = game_state.validate_action(action, false);
+
+    if let Err(action_error) = &validation_result {
+        // Check if it's an error that can be resolved with pathfinding
+        if pathfind_if_out_of_range
+            && let ActionError::Usability(usability_error) = action_error
+            && let ActionUsabilityError::TargetingError(targeting_error) = usability_error
+            && let TargetingError::OutOfRange { target, .. }
+            | TargetingError::NoLineOfSight { target } = targeting_error
+        {
+            let target_position = match target {
+                TargetInstance::Entity(entity) => {
+                    let (_, shape_pose) =
+                        systems::geometry::get_shape(&game_state.world, *entity).unwrap();
+                    shape_pose.translation.vector.into()
+                }
+                TargetInstance::Point(point) => *point,
+            };
+            let targeting_context = systems::actions::targeting_context(
+                &game_state.world,
+                action.actor,
+                &action.action_id,
+                &action.context,
+            );
+
+            if let Ok(path_result) = systems::movement::path_in_range_of_point(
+                game_state,
+                action.actor,
+                target_position,
+                targeting_context.range.max(),
+                true,
+                false,
+                targeting_context.require_line_of_sight,
+                true,
+            ) {
+                return Ok(TargetPathFindingResult::PathFound(path_result));
+            } else {
+                return Err(TargetPathFindingError::NoPathFound);
+            }
+        } else {
+            return Err(TargetPathFindingError::ActionError(action_error.clone()));
+        }
+    }
+
+    Ok(TargetPathFindingResult::AlreadyInRange)
 }

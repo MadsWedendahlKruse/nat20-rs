@@ -2,12 +2,12 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        actions::action::ActionKind, ai::PlayerControlledTag, faction::Attitude, id::AIControllerId,
+        actions::action::ActionKind,
+        ai::{AIDecision, PlayerControlledTag},
+        faction::Attitude,
+        id::AIControllerId,
     },
-    engine::{
-        encounter::Encounter,
-        event::{ActionDecisionPartial, ActionPrompt},
-    },
+    engine::{event::ActionPrompt, game_state::GameState},
     registry, systems,
 };
 
@@ -16,16 +16,17 @@ pub fn is_player_controlled(world: &World, entity: Entity) -> bool {
 }
 
 pub fn decide_action(
-    world: &World,
-    encounter: &Encounter,
+    game_state: &mut GameState,
     prompt: &ActionPrompt,
     actor: Entity,
-) -> Option<ActionDecisionPartial> {
-    let controller_id = systems::helpers::get_component::<AIControllerId>(world, actor);
+) -> AIDecision {
+    let controller_id =
+        systems::helpers::get_component_clone::<AIControllerId>(&game_state.world, actor);
 
     registry::ai::AI_CONTROLLER_REGISTRY
         .get(&controller_id)
-        .and_then(|controller| controller.decide(world, encounter, prompt, actor))
+        .unwrap()
+        .decide(game_state, prompt, actor)
 }
 
 pub fn recommeneded_target_attitude(

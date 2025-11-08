@@ -38,7 +38,9 @@ use crate::{
         creature_right_click::CreatureRightClickWindow,
         encounter::EncounterWindow,
         level_up::LevelUpWindow,
+        line_of_sight_debug::LineOfSightDebugWindow,
         navigation_debug::NavigationDebugWindow,
+        reactions::ReactionsWindow,
         spawn_predefined::SpawnPredefinedWindow,
     },
 };
@@ -55,7 +57,9 @@ pub enum MainMenuState {
         creature_debug: Option<CreatureDebugWindow>,
         creature_right_click: Option<CreatureRightClickWindow>,
         action_bar: Option<ActionBarWindow>,
+        reactions: ReactionsWindow,
         navigation_debug: NavigationDebugWindow,
+        line_of_sight_debug: LineOfSightDebugWindow,
     },
 }
 
@@ -87,7 +91,9 @@ impl MainMenuWindow {
                 creature_debug: None,
                 creature_right_click: None,
                 action_bar: None,
+                reactions: ReactionsWindow::new(),
                 navigation_debug: NavigationDebugWindow::new(&initial_config),
+                line_of_sight_debug: LineOfSightDebugWindow::new(),
             },
         }
     }
@@ -105,9 +111,12 @@ impl MainMenuWindow {
                 creature_debug,
                 creature_right_click,
                 action_bar,
+                reactions,
                 navigation_debug,
+                line_of_sight_debug,
             } => {
                 navigation_debug.render_mut_with_context(ui, gui_state, game_state);
+                line_of_sight_debug.render_mut_with_context(ui, gui_state, game_state);
 
                 gui_state.camera.render_mut_with_context(
                     ui,
@@ -126,7 +135,12 @@ impl MainMenuWindow {
                 gui_state.cursor_ray_result = if ui.io().want_capture_mouse {
                     None
                 } else if let Some(ray_from_cursor) = gui_state.camera.ray_from_cursor() {
-                    systems::geometry::raycast(game_state, &ray_from_cursor, &RaycastFilter::All)
+                    systems::geometry::raycast(
+                        &game_state.world,
+                        &game_state.geometry,
+                        &ray_from_cursor,
+                        &RaycastFilter::All,
+                    )
                 } else {
                     None
                 };
@@ -134,12 +148,26 @@ impl MainMenuWindow {
                 Self::render_world(ui, gui_state, game_state);
 
                 if let Some(entity) = gui_state.selected_entity {
-                    if let Some(action_bar) = action_bar {
-                        if action_bar.entity != entity {
-                            *action_bar = ActionBarWindow::new(&game_state.world, entity);
+                    if (action_bar.is_some() && action_bar.as_ref().unwrap().entity != entity)
+                        || action_bar.is_none()
+                    {
+                        action_bar.replace(ActionBarWindow::new(&game_state.world, entity));
+                    }
+
+                    if !reactions.is_active()
+                        && let Some(encounter_id) = game_state.in_combat.get(&entity)
+                        && let Some(encounter) = game_state.encounters.get(encounter_id)
+                        && let Some(prompt) = encounter.next_pending_prompt()
+                    {
+                        match &prompt.kind {
+                            nat20_rs::engine::event::ActionPromptKind::Reactions {
+                                event,
+                                options,
+                            } => {
+                                reactions.activate(prompt.id, &event, &options);
+                            }
+                            _ => {}
                         }
-                    } else if action_bar.is_none() {
-                        *action_bar = Some(ActionBarWindow::new(&game_state.world, entity));
                     }
                 } else {
                     *action_bar = None;
@@ -148,6 +176,7 @@ impl MainMenuWindow {
                 if let Some(action_bar) = action_bar {
                     action_bar.render_mut_with_context(ui, gui_state, game_state);
                 }
+                reactions.render_mut_with_context(ui, gui_state, game_state);
 
                 let window_manager_ptr =
                     unsafe { &mut *(&mut gui_state.window_manager as *mut WindowManager) };
@@ -239,7 +268,7 @@ impl MainMenuWindow {
                 }
 
                 if let Some(creature_right_click) = creature_right_click {
-                    ui.popup("RightClick", || {
+                    ui.popup("CreatureRightClick", || {
                         creature_right_click.render_mut_with_context(ui, game_state);
                     });
                 }

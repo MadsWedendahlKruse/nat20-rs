@@ -272,7 +272,8 @@ impl ImguiRenderableMutWithContext<(&GameState, &mut bool, &mut WindowManager)> 
                         ui.text(format!(
                             "Hit: {:#?}",
                             systems::geometry::raycast_with_toi(
-                                &game_state,
+                                &game_state.world,
+                                &game_state.geometry,
                                 &ray,
                                 1000.0,
                                 &RaycastFilter::All

@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
 };
 
@@ -17,8 +17,12 @@ use crate::{
         skill::{Skill, SkillSet},
     },
     engine::{
-        event::{ActionPrompt, CallbackResult, EncounterEvent, Event, EventKind, EventLog},
+        event::{
+            ActionDecision, ActionPrompt, ActionPromptId, ActionPromptKind, CallbackResult,
+            EncounterEvent, Event, EventKind, EventLog,
+        },
         game_state::GameState,
+        geometry::WorldGeometry,
     },
     entities::{character::CharacterTag, monster::MonsterTag},
     systems::{self, d20::D20CheckDCKind},
@@ -35,6 +39,7 @@ pub struct Encounter {
     initiative_order: Vec<(Entity, D20CheckResult)>,
     /// Pending prompts for the participants in this encounter
     pending_prompts: VecDeque<ActionPrompt>,
+    action_decisions: HashMap<ActionPromptId, HashMap<Entity, ActionDecision>>,
     event_log: EventLog,
 }
 
@@ -47,6 +52,7 @@ impl Encounter {
             turn_index: 0,
             initiative_order: Vec::new(),
             pending_prompts: VecDeque::new(),
+            action_decisions: HashMap::new(),
             event_log: EventLog::new(),
         };
         encounter.roll_initiative(&game_state.world);
@@ -106,14 +112,82 @@ impl Encounter {
         self.pending_prompts.front()
     }
 
-    pub(crate) fn pop_prompt(&mut self) -> Option<ActionPrompt> {
-        let front = self.pending_prompts.pop_front();
-        if self.pending_prompts.is_empty() {
-            self.pending_prompts.push_back(ActionPrompt::Action {
-                actor: self.current_entity(),
-            });
+    pub fn validate_next_prompt(&mut self, world: &World, geometry: &WorldGeometry) {
+        // In the event of a chain of reactions, e.g. counterspelling a counter-
+        // spell, several prompts will be put into the queue. Once they are
+        // popped, the game state may have changed such that the prompts are not
+        // valid anymore, e.g. the (re)actor has used up their resources, or they
+        // are no longer able to act. Therefore, we need to re-validate the
+        // next prompt in the queue.
+
+        // TODO: What if they die in the meantime?
+
+        if let Some(prompt) = self.pending_prompts.front_mut() {
+            let mut invalid_prompt = false;
+
+            match &mut prompt.kind {
+                ActionPromptKind::Reactions { event, options } => {
+                    let mut new_options = HashMap::new();
+                    for reactor in options.keys() {
+                        let reactions = systems::actions::available_reactions_to_event(
+                            world, geometry, *reactor, event,
+                        );
+                        if !reactions.is_empty() {
+                            new_options.insert(*reactor, reactions);
+                        }
+                    }
+                    if new_options.is_empty() {
+                        invalid_prompt = true;
+                    }
+                    *options = new_options;
+                }
+                ActionPromptKind::Action { .. } => {
+                    // TODO: Do something here?
+                }
+            }
+
+            if invalid_prompt {
+                self.pending_prompts.pop_front();
+            }
         }
+
+        if self.pending_prompts.is_empty() {
+            self.pending_prompts
+                .push_back(ActionPrompt::new(ActionPromptKind::Action {
+                    actor: self.current_entity(),
+                }));
+        }
+    }
+
+    pub(crate) fn pop_prompt_and_validate_next(
+        &mut self,
+        world: &World,
+        geometry: &WorldGeometry,
+    ) -> Option<ActionPrompt> {
+        let front = self.pending_prompts.pop_front();
+
+        self.validate_next_prompt(world, geometry);
+
         front
+    }
+
+    pub fn add_decision(&mut self, decision: ActionDecision) {
+        let actor = decision.actor();
+        self.action_decisions
+            .entry(decision.response_to)
+            .or_insert_with(HashMap::new)
+            .insert(actor, decision);
+    }
+
+    pub fn decisions(&self) -> &HashMap<ActionPromptId, HashMap<Entity, ActionDecision>> {
+        &self.action_decisions
+    }
+
+    pub fn decisions_for_prompt(
+        &self,
+        prompt_id: &ActionPromptId,
+    ) -> Option<&HashMap<Entity, ActionDecision>> {
+        self.action_decisions.get(prompt_id)
     }
 
     pub fn participants(&self, world: &World, filter: EntityFilter) -> Vec<Entity> {
@@ -174,9 +248,10 @@ impl Encounter {
             return;
         }
 
-        self.pending_prompts.push_back(ActionPrompt::Action {
-            actor: self.current_entity(),
-        });
+        self.pending_prompts
+            .push_back(ActionPrompt::new(ActionPromptKind::Action {
+                actor: self.current_entity(),
+            }));
     }
 
     pub fn end_turn(&mut self, game_state: &mut GameState, entity: Entity) {
@@ -196,6 +271,7 @@ impl Encounter {
         }
 
         self.pending_prompts.clear();
+        self.action_decisions.clear();
 
         self.turn_index = (self.turn_index + 1) % self.participants.len();
         if self.turn_index == 0 {

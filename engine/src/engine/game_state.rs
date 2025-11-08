@@ -15,10 +15,11 @@ use crate::{
         targeting::EntityFilter,
     },
     engine::{
-        encounter::{self, Encounter, EncounterId},
+        encounter::{Encounter, EncounterId},
         event::{
-            ActionData, ActionDecision, ActionError, ActionPrompt, EncounterEvent, Event,
-            EventCallback, EventId, EventKind, EventListener, EventLog, EventQueue,
+            ActionData, ActionDecision, ActionDecisionKind, ActionError, ActionPrompt,
+            ActionPromptId, ActionPromptKind, EncounterEvent, Event, EventCallback, EventId,
+            EventKind, EventListener, EventLog, EventQueue,
         },
         geometry::WorldGeometry,
     },
@@ -38,7 +39,8 @@ pub struct GameState {
     /// Pending prompts for entities that aren't in combat.
     /// Probably empty most of the time?
     pub pending_prompts: VecDeque<ActionPrompt>,
-
+    /// Decisions already submitted for prompts (out of combat). Is this needed?
+    pub action_decisions: HashMap<ActionPromptId, HashMap<Entity, ActionDecision>>,
     pub event_log: EventLog,
     pending_events: EventQueue,
     event_listeners: HashMap<EventId, EventListener>,
@@ -54,6 +56,7 @@ impl GameState {
             encounters: HashMap::new(),
             in_combat: HashMap::new(),
             pending_prompts: VecDeque::new(),
+            action_decisions: HashMap::new(),
             event_log: EventLog::new(),
             pending_events: EventQueue::new(),
             event_listeners: HashMap::new(),
@@ -123,6 +126,8 @@ impl GameState {
 
         if let Some(encounter) = encounter {
             encounter.end_turn(self, entity);
+
+            // TODO: Handle next entity being an NPC with AI controller
         }
     }
 
@@ -154,100 +159,198 @@ impl GameState {
         self.pending_prompts.front()
     }
 
-    pub fn submit_decision(&mut self, decision: ActionDecision) -> Result<(), ActionError> {
-        // Check that all of the actors involved in the decision are either:
-        // 1. All in combat
-        // 2. All out of combat
-        let mut encounter_id = None;
-        for actor in decision.actors() {
-            let actor_encounter_id = self.in_combat.get(&actor);
-            if let Some(id) = encounter_id {
-                if actor_encounter_id != Some(id) {
-                    panic!(
-                        "All actors in a decision must be either in combat or out of combat together.\n
-                        Decision actors: {:#?}\n
-                        Actor encounter IDs: {:#?}",
-                        decision.actors(),
-                        decision.actors().iter().map(|a| self.in_combat.get(a)).collect::<Vec<_>>()
-                    );
-                }
-            } else {
-                encounter_id = actor_encounter_id.as_ref().cloned();
-            }
-        }
-
+    pub fn submit_decision(&mut self, mut decision: ActionDecision) -> Result<(), ActionError> {
+        println!("[GameState] Received decision: {:#?}", decision);
+        let mut response_to = decision.response_to;
         // If the entities are in combat, then check that there is a pending
         // prompt for them, and that the decision is valid for that prompt
+        let encounter_id = self.in_combat.get(&decision.actor()).cloned();
         if let Some(encounter_id) = encounter_id {
-            if let Some(encounter) = self.encounters.get_mut(encounter_id) {
+            if let Some(encounter) = self.encounters.get_mut(&encounter_id) {
                 if encounter.pending_prompts().is_empty() {
                     return Err(ActionError::MissingPrompt {
                         decision,
+                        // TODO: Combination of the if-statement and the error seems to
+                        // mismatch. If there's no pending prompts, then why do we bother
+                        // cloning all of them into a vector?
                         prompts: encounter.pending_prompts().iter().cloned().collect(),
                     });
                 }
 
-                let prompt = encounter.pop_prompt().unwrap();
+                let prompt = encounter.next_pending_prompt().unwrap();
                 prompt.is_valid_decision(&decision)?;
+                encounter.add_decision(decision);
+            } else {
+                panic!("Inconsistent state: entity is in combat but encounter not found");
+            }
+        } else {
+            // TODO: Very unhappy with this solution
+            // Out of combat prompts
+            // Prompt order is irrelevant out of combat? Just find matching prompt
+            // TODO: Is it better that we out of combat just always have a prompt
+            // waiting for the entity?
+            let prompt = {
+                let found_prompt = self.pending_prompts.iter().find(|p| p.id == response_to);
+                if found_prompt.is_none() {
+                    self.pending_prompts
+                        .push_back(ActionPrompt::new(ActionPromptKind::Action {
+                            actor: decision.actor(),
+                        }));
+                    let new_prompt = self.pending_prompts.back().unwrap();
+                    decision.response_to = new_prompt.id;
+                    response_to = new_prompt.id;
+                    new_prompt
+                } else {
+                    found_prompt.unwrap()
+                }
+            };
+
+            prompt.is_valid_decision(&decision)?;
+
+            self.action_decisions
+                .entry(prompt.id)
+                .or_insert_with(HashMap::new)
+                .insert(decision.actor(), decision);
+        }
+
+        println!(
+            "[GameState::submit_decision] Response to prompt ID: {:?} in encounter {:?}",
+            response_to, encounter_id
+        );
+
+        self.process_decisions(response_to, encounter_id)?;
+
+        Ok(())
+    }
+
+    fn process_decisions(
+        &mut self,
+        decision_response_to: ActionPromptId,
+        encounter_id: Option<EncounterId>,
+    ) -> Result<(), ActionError> {
+        println!(
+            "[GameState::process_decisions] Processing decisions for prompt ID: {:?} in encounter {:?}",
+            decision_response_to, encounter_id
+        );
+
+        // Check that all involved entities have submitted their decisions
+        let decisions = {
+            let (prompt, decisions) = if let Some(encounter_id) = encounter_id {
+                let encounter = self.encounters.get(&encounter_id).unwrap();
+                let prompt = encounter
+                .pending_prompts()
+                .iter()
+                .find(|p| p.id == decision_response_to)
+                .expect(
+                    format!("Inconsistent state: decision submitted, but prompt {:?} not found in encounter {:?} prompts: {:#?}",
+                    decision_response_to,
+                    encounter_id,
+                    encounter.pending_prompts()).as_str(),
+                );
+                let decisions = encounter
+                .decisions_for_prompt(&decision_response_to)
+                .expect(
+                    format!("Inconsistent state: decision submitted, but not found in encounter {:?} decisions: {:#?}",
+                        encounter_id, encounter.decisions()).as_str(),
+                );
+                println!(
+                    "[GameState::process_decisions] Retrieved prompt and decisions from encounter {:?}",
+                    encounter_id
+                );
+                (prompt, decisions)
+            } else {
+                let prompt = self
+                .pending_prompts
+                .iter()
+                .find(|p| p.id == decision_response_to)
+                .expect("Inconsistent state: decision submitted, but prompt not found in pending_prompts");
+                let decisions = self.action_decisions.get(&decision_response_to).expect(
+                    "Inconsistent state: decision submitted, but not found in action_decisions",
+                );
+                println!(
+                    "[GameState::process_decisions] Retrieved prompt and decisions from out-of-combat prompts"
+                );
+                (prompt, decisions)
+            };
+
+            if !prompt
+                .actors()
+                .iter()
+                .all(|actor| decisions.contains_key(actor))
+            {
+                // Not all decisions have been submitted yet
+                return Ok(());
+            }
+
+            // Avoid borrowing issues. Performance impact should be negligible here
+            decisions.clone()
+        };
+
+        // All decisions have been submitted; pop the prompt
+        if encounter_id.is_none() {
+            self.pending_prompts
+                .retain(|p| p.id != decision_response_to);
+            self.action_decisions.remove(&decision_response_to);
+        } else if let Some(encounter_id) = &encounter_id {
+            if let Some(encounter) = self.encounters.get_mut(encounter_id) {
+                encounter.pop_prompt_and_validate_next(&self.world, &self.geometry);
             } else {
                 panic!("Inconsistent state: entity is in combat but encounter not found");
             }
         }
 
-        self.process_decision(decision)?;
+        for (_, decision) in decisions {
+            // Convert the decision into the appropriate event to process
+            let action = match &decision.kind {
+                ActionDecisionKind::Action { action } => Some(action.clone()),
 
-        Ok(())
-    }
-
-    fn process_decision(&mut self, decision: ActionDecision) -> Result<(), ActionError> {
-        // Convert the decision into the appropriate event to process
-        match &decision {
-            ActionDecision::Action { action } => {
-                self.validate_action(action, true)?;
-                self.process_event(Event::new(EventKind::ActionRequested {
-                    action: action.clone(),
-                }))
-            }
-
-            ActionDecision::Reactions { event, choices } => {
-                for (_, choice) in choices {
-                    // Process the chosen reactions, if any
+                ActionDecisionKind::Reaction { choice, .. } => {
                     if let Some(reaction) = choice {
-                        let action = ActionData::from(reaction);
-                        self.validate_action(&action, true)?;
-                        self.process_event(Event::new(EventKind::ActionRequested { action }))?;
-                    }
-                }
-                // Check if the reaction triggered more reactions
-                let mut resume_pending_events = false;
-                if let Some(encounter_id) = self.in_combat.get(&event.actor().unwrap()) {
-                    if let Some(encounter) = self.encounters.get_mut(encounter_id) {
-                        if let Some(prompt) = encounter.next_pending_prompt() {
-                            if let ActionPrompt::Reactions { .. } = prompt {
-                                // There are more reactions to process, so just return
-                                return Ok(());
-                            }
-                            // No more reactions, continue with the pending events
-                            // (if any)
-                            resume_pending_events = true;
-                        }
+                        Some(ActionData::from(reaction))
                     } else {
-                        panic!("Inconsistent state: entity is in combat but encounter not found");
+                        None
                     }
                 }
-                if resume_pending_events {
-                    while let Some(event) = self.pending_events.pop_front() {
-                        self.advance_event(event);
-                    }
-                }
-                Ok(())
+            };
+
+            if let Some(action) = action {
+                self.validate_action(&action, true)?;
+                self.process_event(Event::new(EventKind::ActionRequested { action }))?;
             }
         }
+
+        // Check if any reactions are still pending, or if we can resume processing
+        // the pending events
+        let mut resume_pending_events = false;
+        if let Some(encounter_id) = &encounter_id {
+            if let Some(encounter) = self.encounters.get_mut(encounter_id) {
+                if let Some(prompt) = encounter.next_pending_prompt() {
+                    if let ActionPromptKind::Reactions { .. } = prompt.kind {
+                        // There are more reactions to process, so just validate the
+                        // prompt and return
+                        encounter.validate_next_prompt(&self.world, &self.geometry);
+                        return Ok(());
+                    }
+                    // No more reactions, continue with the pending events
+                    // (if any)
+                    resume_pending_events = true;
+                }
+            } else {
+                panic!("Inconsistent state: entity is in combat but encounter not found");
+            }
+        }
+        if resume_pending_events {
+            while let Some(event) = self.pending_events.pop_front() {
+                self.advance_event(event);
+            }
+        }
+        Ok(())
     }
 
     pub fn validate_action(
         &mut self,
         action: &ActionData,
+        // TODO: Could also be called simulate?
         spend_resources: bool,
     ) -> Result<(), ActionError> {
         let ActionData {
@@ -259,7 +362,8 @@ impl GameState {
         } = action;
 
         systems::actions::action_usable_on_targets(
-            &self,
+            &self.world,
+            &self.geometry,
             *actor,
             action_id,
             action_context,
@@ -310,6 +414,7 @@ impl GameState {
 
                         let reactions = systems::actions::available_reactions_to_event(
                             &self.world,
+                            &self.geometry,
                             *reactor,
                             &event,
                         );
@@ -335,10 +440,10 @@ impl GameState {
 
                         // Prompt all reactors for their reaction
                         encounter.queue_prompt(
-                            ActionPrompt::Reactions {
+                            ActionPrompt::new(ActionPromptKind::Reactions {
                                 event: event.clone(),
                                 options,
-                            },
+                            }),
                             true,
                         );
 
@@ -362,7 +467,6 @@ impl GameState {
     fn advance_event(&mut self, event: Event) {
         match &event.kind {
             EventKind::ActionRequested { action } => {
-                // TODO: Where do we validate the action can be performed?
                 systems::actions::perform_action(self, action);
             }
 

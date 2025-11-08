@@ -1029,7 +1029,22 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
                 damage_roll,
                 damage_taken,
                 new_life_state,
-            } => todo!(),
+            } => {
+                ui.group(|| {
+                    damage_taken.render_with_context(
+                        ui,
+                        (&target_name, indent_level + 1, "took no damage", None),
+                    );
+                    new_life_state.render_with_context(
+                        ui,
+                        (
+                            &target_name,
+                            Some(self.performer.name().as_str()),
+                            indent_level + 1,
+                        ),
+                    );
+                });
+            }
 
             ActionKindResult::UnconditionalEffect { effect, applied } => todo!(),
 
@@ -1300,7 +1315,7 @@ impl ImguiRenderable for D20CheckDCKind {
         match self {
             D20CheckDCKind::SavingThrow(dc) => dc.render(ui),
             D20CheckDCKind::Skill(dc) => dc.render(ui),
-            D20CheckDCKind::AttackRoll(_, target, armor_class) => {
+            D20CheckDCKind::AttackRoll(target, armor_class) => {
                 armor_class.render(ui);
             }
         }

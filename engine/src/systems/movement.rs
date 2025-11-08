@@ -56,8 +56,8 @@ pub fn path(
     move_entity: bool,
     spend_movement: bool,
 ) -> Result<PathResult, MovementError> {
-    let full_path =
-        systems::geometry::path(game_state, entity, *goal).ok_or(MovementError::NoPathFound)?;
+    let full_path = systems::geometry::path(&game_state.world, &game_state.geometry, entity, *goal)
+        .ok_or(MovementError::NoPathFound)?;
 
     let remaining_movement =
         systems::helpers::get_component_mut::<Speed>(&mut game_state.world, entity)
@@ -75,7 +75,12 @@ pub fn path(
 
     if move_entity {
         // TODO: Actually make them move along the path rather than teleporting to the end
-        systems::geometry::teleport_to_ground(game_state, entity, taken_path.end().unwrap());
+        systems::geometry::teleport_to_ground(
+            &mut game_state.world,
+            &game_state.geometry,
+            entity,
+            taken_path.end().unwrap(),
+        );
         if spend_movement {
             systems::helpers::get_component_mut::<Speed>(&mut game_state.world, entity)
                 .record_movement(taken_path.length);
@@ -115,7 +120,13 @@ pub fn path_in_range_of_point(
 
     if distance_to_target <= range {
         if !line_of_sight
-            || systems::geometry::line_of_sight_entity_point(game_state, entity, target)
+            || systems::geometry::line_of_sight_entity_point(
+                &game_state.world,
+                &game_state.geometry,
+                entity,
+                target,
+            )
+            .has_line_of_sight
         {
             // Already in range
             println!("Entity is already in range of target point.");
@@ -202,7 +213,7 @@ fn determine_path_sphere_intersections(
             );
             println!("\tIntersection point: {:?}", intersection_point);
             let ground_at_intersection =
-                systems::geometry::ground_position(&game_state, &intersection_point)?;
+                systems::geometry::ground_position(&game_state.geometry, &intersection_point)?;
             println!(
                 "\tGround at intersection point: {:?}",
                 ground_at_intersection
@@ -221,19 +232,23 @@ fn determine_path_sphere_intersections(
                 eye_pos_at_intersection,
                 target,
                 systems::geometry::line_of_sight_point_point(
-                    game_state,
+                    &game_state.world,
+                    &game_state.geometry,
                     eye_pos_at_intersection,
                     *path_end,
                     &raycast_filter,
                 )
+                .has_line_of_sight
             );
             if line_of_sight
                 && !systems::geometry::line_of_sight_point_point(
-                    game_state,
+                    &game_state.world,
+                    &game_state.geometry,
                     eye_pos_at_intersection,
                     *path_end,
                     &raycast_filter,
                 )
+                .has_line_of_sight
             {
                 // No line of sight to this intersection point; try next segment
                 continue;

@@ -149,12 +149,13 @@ impl RenderableMutWithContext<&mut GameState> for SpawnPredefinedWindow {
                         if let Some(raycast) = &gui_state.cursor_ray_result
                             && let Some(raycast_world) = raycast.world_hit()
                             && let Some(navmesh_point) = systems::geometry::navmesh_nearest_point(
-                                game_state,
+                                &game_state.geometry,
                                 raycast_world.poi,
                             )
                         {
                             systems::geometry::teleport_to_ground(
-                                game_state,
+                                &mut game_state.world,
+                                &game_state.geometry,
                                 entity,
                                 &navmesh_point,
                             );

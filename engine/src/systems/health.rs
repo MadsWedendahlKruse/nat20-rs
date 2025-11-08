@@ -211,9 +211,6 @@ pub fn damage(
             let attack_roll = attack_roll(&game_state.world, performer, context)
                 .roll(&game_state.world, performer);
             let armor_class = systems::loadout::armor_class(&game_state.world, target);
-            let ActionContext::Weapon { slot } = context else {
-                panic!("AttackRollDamage action must be used with a weapon");
-            };
 
             // Create an event to represent the attack roll being made
             let event = Event::new(EventKind::D20CheckPerformed(
@@ -221,11 +218,7 @@ pub fn damage(
                 D20ResultKind::AttackRoll {
                     result: attack_roll.clone(),
                 },
-                Some(D20CheckDCKind::AttackRoll(
-                    *slot,
-                    target,
-                    armor_class.clone(),
-                )),
+                Some(D20CheckDCKind::AttackRoll(target, armor_class.clone())),
             ));
 
             // Create a callback to handle the result of the attack roll

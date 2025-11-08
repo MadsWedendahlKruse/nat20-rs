@@ -255,3 +255,20 @@ pub fn render_progress_bar<T: Display>(
         foreground.pop();
     }
 }
+
+// TODO: Call this something else
+pub fn render_capacity_meter(ui: &imgui::Ui, label: &str, current: usize, max: usize) {
+    for i in 0..max {
+        if i > 0 {
+            ui.same_line();
+        }
+        let color = if i >= current {
+            [0.3, 0.3, 0.3, 1.0]
+        } else {
+            [1.0, 1.0, 1.0, 1.0]
+        };
+        let color_token = ui.push_style_color(imgui::StyleColor::Button, color);
+        ui.button_with_size(format!("{}##{}/{}", label, current, max), [10.0, 10.0]);
+        color_token.pop();
+    }
+}

@@ -5,14 +5,17 @@ mod tests {
 
     use nat20_rs::{
         components::{
-            actions::action::{ActionContext, ActionKind},
+            actions::{
+                action::{ActionContext, ActionKind},
+                targeting::TargetInstance,
+            },
             damage::{DamageRoll, DamageSource, DamageType},
             dice::DieSize,
             health::hit_points::HitPoints,
             id::ActionId,
             resource::{RechargeRule, ResourceAmountMap, ResourceMap},
         },
-        engine::event::{ActionData, ActionDecision},
+        engine::event::{ActionData, ActionDecision, ActionDecisionKind},
         registry, systems,
         test_utils::fixtures,
     };
@@ -46,15 +49,17 @@ mod tests {
             ));
         }
 
-        let _ = game_state.submit_decision(ActionDecision::Action {
-            action: ActionData {
-                actor: fighter,
-                action_id: action_id.clone(),
-                context: contexts_and_costs[0].0.clone(),
-                resource_cost: contexts_and_costs[0].1.clone(),
-                targets: vec![fighter],
+        let _ = game_state.submit_decision(ActionDecision::without_response_to(
+            ActionDecisionKind::Action {
+                action: ActionData {
+                    actor: fighter,
+                    action_id: action_id.clone(),
+                    context: contexts_and_costs[0].0.clone(),
+                    resource_cost: contexts_and_costs[0].1.clone(),
+                    targets: vec![TargetInstance::Entity(fighter)],
+                },
             },
-        });
+        ));
 
         {
             // Check that the Action Surge effect is applied
@@ -171,7 +176,7 @@ mod tests {
                 action_id: action_id.clone(),
                 context: contexts_and_costs[0].0.clone(),
                 resource_cost: contexts_and_costs[0].1.clone(),
-                targets: vec![fighter],
+                targets: vec![TargetInstance::Entity(fighter)],
             },
         );
         println!("Second Wind Result: {:?}", result);
@@ -217,15 +222,17 @@ mod tests {
             "Fighter should have Weapon Attack action"
         );
         let contexts_and_costs = available_actions.get(&action_id).unwrap();
-        let _ = game_state.submit_decision(ActionDecision::Action {
-            action: ActionData {
-                actor: fighter,
-                action_id: action_id.clone(),
-                context: contexts_and_costs[0].0.clone(),
-                resource_cost: contexts_and_costs[0].1.clone(),
-                targets: vec![],
+        let _ = game_state.submit_decision(ActionDecision::without_response_to(
+            ActionDecisionKind::Action {
+                action: ActionData {
+                    actor: fighter,
+                    action_id: action_id.clone(),
+                    context: contexts_and_costs[0].0.clone(),
+                    resource_cost: contexts_and_costs[0].1.clone(),
+                    targets: vec![],
+                },
             },
-        });
+        ));
 
         // Check that the fighter has one stack of Extra Attack
         assert!(
@@ -247,15 +254,17 @@ mod tests {
         // Fighter makes another attack, which should consume the Extra Attack stack
         let available_actions = systems::actions::available_actions(&game_state.world, fighter);
         let contexts_and_costs = available_actions.get(&action_id).unwrap();
-        let _ = game_state.submit_decision(ActionDecision::Action {
-            action: ActionData {
-                actor: fighter,
-                action_id: action_id.clone(),
-                context: contexts_and_costs[0].0.clone(),
-                resource_cost: contexts_and_costs[0].1.clone(),
-                targets: vec![],
+        let _ = game_state.submit_decision(ActionDecision::without_response_to(
+            ActionDecisionKind::Action {
+                action: ActionData {
+                    actor: fighter,
+                    action_id: action_id.clone(),
+                    context: contexts_and_costs[0].0.clone(),
+                    resource_cost: contexts_and_costs[0].1.clone(),
+                    targets: vec![],
+                },
             },
-        });
+        ));
 
         // Check that the fighter has no stacks of Extra Attack left
         assert!(

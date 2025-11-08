@@ -22,14 +22,14 @@ use crate::{
 pub enum D20CheckKind {
     SavingThrow(SavingThrowKind),
     Skill(Skill),
-    AttackRoll(EquipmentSlot),
+    AttackRoll,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum D20CheckDCKind {
     SavingThrow(D20CheckDC<SavingThrowKind>),
     Skill(D20CheckDC<Skill>),
-    AttackRoll(EquipmentSlot, Entity, ArmorClass),
+    AttackRoll(Entity, ArmorClass),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,10 +56,7 @@ impl D20ResultKind {
             (D20ResultKind::Skill { result, .. }, D20CheckDCKind::Skill(dc)) => {
                 result.is_success(dc)
             }
-            (
-                D20ResultKind::AttackRoll { result },
-                D20CheckDCKind::AttackRoll(_, _, armor_class),
-            ) => {
+            (D20ResultKind::AttackRoll { result }, D20CheckDCKind::AttackRoll(_, armor_class)) => {
                 let result = &result.roll_result;
                 !result.is_crit_fail
                     && (result.is_crit || result.total() >= armor_class.total() as u32)
@@ -94,7 +91,7 @@ pub fn check(game_state: &mut GameState, entity: Entity, dc: &D20CheckDCKind) ->
         // D20CheckDCKind::AttackRoll(slot, target, armor_class) => D20ResultKind::AttackRoll {
         //     result: systems::combat::attack_roll_against_target(world, entity, slot, target),
         // },
-        D20CheckDCKind::AttackRoll(_, _, _) => {
+        D20CheckDCKind::AttackRoll(_, _) => {
             todo!("systems::d20 attack roll checks are not yet implemented");
         }
     };

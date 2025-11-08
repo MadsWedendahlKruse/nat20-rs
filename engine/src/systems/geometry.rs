@@ -8,13 +8,13 @@ use hecs::{Entity, World};
 use parry3d::{
     na::{Isometry3, Point3, Translation3, Vector3},
     query::{PointQuery, Ray, RayCast},
-    shape::Capsule,
+    shape::{Capsule, Shape},
 };
 use polyanya::Coords;
 
 use crate::{
     components::race::CreatureSize,
-    engine::{game_state::GameState, geometry::WorldPath},
+    engine::geometry::{WorldGeometry, WorldPath},
 };
 
 pub static EPSILON: f32 = 1e-6;
@@ -98,14 +98,15 @@ pub fn get_shape(world: &World, entity: Entity) -> Option<(Capsule, CreaturePose
 }
 
 pub fn get_shape_at_point(
-    game_state: &GameState,
+    world: &World,
+    world_geometry: &WorldGeometry,
     entity: Entity,
     point: &Point3<f32>,
 ) -> Option<(Capsule, CreaturePose)> {
-    if let Some((shape, shape_pose)) = get_shape(&game_state.world, entity)
-        && let Some(foot_pose) = game_state.world.get::<&CreaturePose>(entity).ok()
+    if let Some((shape, shape_pose)) = get_shape(world, entity)
+        && let Some(foot_pose) = world.get::<&CreaturePose>(entity).ok()
     {
-        let ground_pos = ground_position(&game_state, point)?;
+        let ground_pos = ground_position(world_geometry, point)?;
         let offset = ground_pos - Point3::from(foot_pose.translation.vector);
         let new_shape_pose = shape_pose * Translation3::from(offset);
         Some((shape, new_shape_pose))
@@ -137,8 +138,9 @@ pub enum RaycastFilter {
     ExcludeCreatures(Vec<Entity>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct RaycastResult {
+    pub ray: Ray,
     pub hits: Vec<RaycastHit>,
     pub closest_index: Option<usize>,
     pub filter: RaycastFilter,
@@ -164,26 +166,29 @@ impl RaycastResult {
 
 static DEFAULT_MAX_TOI: f32 = 10000.0;
 
-pub fn raycast(game_state: &GameState, ray: &Ray, filter: &RaycastFilter) -> Option<RaycastResult> {
-    raycast_with_toi(game_state, ray, DEFAULT_MAX_TOI, filter)
+pub fn raycast(
+    world: &World,
+    world_geometry: &WorldGeometry,
+    ray: &Ray,
+    filter: &RaycastFilter,
+) -> Option<RaycastResult> {
+    raycast_with_toi(world, world_geometry, ray, DEFAULT_MAX_TOI, filter)
 }
 
 pub fn raycast_with_toi(
-    game_state: &GameState,
+    world: &World,
+    world_geometry: &WorldGeometry,
     ray: &Ray,
     max_time_of_impact: f32,
     filter: &RaycastFilter,
 ) -> Option<RaycastResult> {
-    let world = &game_state.world;
-
     let mut outcomes = vec![];
 
-    let add_world_hit = |game_state: &GameState,
+    let add_world_hit = |world_geometry: &WorldGeometry,
                          ray: &Ray,
                          max_time_of_impact: f32,
                          outcomes: &mut Vec<RaycastHit>| {
-        if let Some(toi) = game_state
-            .geometry
+        if let Some(toi) = world_geometry
             .trimesh
             .cast_local_ray(ray, max_time_of_impact, true)
         {
@@ -226,17 +231,17 @@ pub fn raycast_with_toi(
 
     match &filter {
         RaycastFilter::All => {
-            add_world_hit(game_state, ray, max_time_of_impact, &mut outcomes);
+            add_world_hit(world_geometry, ray, max_time_of_impact, &mut outcomes);
             add_entity_hits(world, ray, max_time_of_impact, &vec![], &mut outcomes);
         }
         RaycastFilter::WorldOnly => {
-            add_world_hit(game_state, ray, max_time_of_impact, &mut outcomes);
+            add_world_hit(world_geometry, ray, max_time_of_impact, &mut outcomes);
         }
         RaycastFilter::CreaturesOnly => {
             add_entity_hits(world, ray, max_time_of_impact, &vec![], &mut outcomes);
         }
         RaycastFilter::ExcludeCreatures(excluded) => {
-            add_world_hit(game_state, ray, max_time_of_impact, &mut outcomes);
+            add_world_hit(world_geometry, ray, max_time_of_impact, &mut outcomes);
             add_entity_hits(world, ray, max_time_of_impact, excluded, &mut outcomes);
         }
     }
@@ -250,6 +255,7 @@ pub fn raycast_with_toi(
             .min_by(|(_, a), (_, b)| a.toi.partial_cmp(&b.toi).unwrap())
             .map(|(i, _)| i);
         Some(RaycastResult {
+            ray: ray.clone(),
             hits: outcomes,
             closest_index,
             filter: filter.clone(),
@@ -258,56 +264,65 @@ pub fn raycast_with_toi(
 }
 
 pub fn raycast_entity_point(
-    game_state: &GameState,
+    world: &World,
+    world_geometry: &WorldGeometry,
     entity: Entity,
     point: Point3<f32>,
     filter: &RaycastFilter,
 ) -> Option<RaycastResult> {
-    let world = &game_state.world;
     let start = get_eye_position(world, entity)?;
-    raycast_point_point(game_state, start, point, filter)
+    raycast_point_point(world, world_geometry, start, point, filter)
 }
 
 pub fn raycast_entity_direction(
-    game_state: &GameState,
+    world: &World,
+    world_geometry: &WorldGeometry,
     entity: Entity,
     direction: Vector3<f32>,
     filter: &RaycastFilter,
 ) -> Option<RaycastResult> {
-    let world = &game_state.world;
     let start = get_eye_position(world, entity)?;
-    raycast_point_direction(game_state, start, direction, filter)
+    raycast_point_direction(world, world_geometry, start, direction, filter)
 }
 
 pub fn raycast_point_point(
-    game_state: &GameState,
+    world: &World,
+    world_geometry: &WorldGeometry,
     start: Point3<f32>,
     end: Point3<f32>,
     filter: &RaycastFilter,
 ) -> Option<RaycastResult> {
     let dir = Vector3::normalize(&(end - start));
     let ray = Ray::new(start, dir);
-    raycast(game_state, &ray, filter)
+    raycast(world, world_geometry, &ray, filter)
 }
 
 pub fn raycast_point_direction(
-    game_state: &GameState,
+    world: &World,
+    world_geometry: &WorldGeometry,
     start: Point3<f32>,
     direction: Vector3<f32>,
     filter: &RaycastFilter,
 ) -> Option<RaycastResult> {
     let dir = Vector3::normalize(&direction);
     let ray = Ray::new(start, dir);
-    raycast(game_state, &ray, filter)
+    raycast(world, world_geometry, &ray, filter)
+}
+
+#[derive(Debug, Clone)]
+pub struct LineOfSightResult {
+    pub has_line_of_sight: bool,
+    pub raycast_result: Option<RaycastResult>,
 }
 
 pub fn line_of_sight_point_point(
-    game_state: &GameState,
+    world: &World,
+    world_geometry: &WorldGeometry,
     from: Point3<f32>,
     to: Point3<f32>,
     filter: &RaycastFilter,
-) -> bool {
-    if let Some(result) = raycast_point_point(game_state, from, to, filter)
+) -> LineOfSightResult {
+    if let Some(result) = raycast_point_point(world, world_geometry, from, to, filter)
         && let Some(closest) = result.closest()
     {
         let distance = (to - from).magnitude();
@@ -315,65 +330,83 @@ pub fn line_of_sight_point_point(
             "[line_of_sight_point_point] Closest hit from {:?} to {:?} at toi {:?} (distance {:?})",
             from, to, closest.toi, distance
         );
-        closest.toi >= distance - EPSILON
+        LineOfSightResult {
+            has_line_of_sight: closest.toi >= distance - EPSILON,
+            raycast_result: Some(result),
+        }
     } else {
         // No hits, so line of sight is clear
-        true
+        LineOfSightResult {
+            has_line_of_sight: true,
+            raycast_result: None,
+        }
     }
 }
 
 pub fn line_of_sight_entity_point(
-    game_state: &GameState,
+    world: &World,
+    world_geometry: &WorldGeometry,
     entity: Entity,
     point: Point3<f32>,
-) -> bool {
-    if let Some(eye_pos) = get_eye_position(&game_state.world, entity) {
+) -> LineOfSightResult {
+    if let Some(eye_pos) = get_eye_position(world, entity) {
         line_of_sight_point_point(
-            game_state,
+            world,
+            world_geometry,
             eye_pos,
             point,
             &RaycastFilter::ExcludeCreatures(vec![entity]),
         )
     } else {
-        false
+        LineOfSightResult {
+            has_line_of_sight: false,
+            raycast_result: None,
+        }
     }
 }
 
 // TODO: How to do this properly? Just because you can't see their eyes doesn't
 // mean you can't see them at all.
 pub fn line_of_sight_entity_entity(
-    game_state: &GameState,
+    world: &World,
+    world_geometry: &WorldGeometry,
     from_entity: Entity,
     to_entity: Entity,
-) -> bool {
-    if let Some(from_eye_pos) = get_eye_position(&game_state.world, from_entity)
-        && let Some(to_eye_pos) = get_eye_position(&game_state.world, to_entity)
+) -> LineOfSightResult {
+    if let Some(from_eye_pos) = get_eye_position(world, from_entity)
+        && let Some(to_eye_pos) = get_eye_position(world, to_entity)
         && let Some(result) = raycast_point_point(
-            game_state,
+            world,
+            world_geometry,
             from_eye_pos,
             to_eye_pos,
             &RaycastFilter::ExcludeCreatures(vec![from_entity]),
         )
         && let Some(closest) = result.closest()
     {
-        closest.kind == RaycastHitKind::Creature(to_entity)
+        LineOfSightResult {
+            has_line_of_sight: closest.kind == RaycastHitKind::Creature(to_entity),
+            raycast_result: Some(result),
+        }
     } else {
-        false
+        LineOfSightResult {
+            has_line_of_sight: false,
+            raycast_result: None,
+        }
     }
 }
 
-pub fn ground_position(game_state: &GameState, position: &Point3<f32>) -> Option<Point3<f32>> {
+pub fn ground_position(
+    world_geometry: &WorldGeometry,
+    position: &Point3<f32>,
+) -> Option<Point3<f32>> {
     // Raycast straight down to find the ground
     let down_ray = Ray::new(
         Point3::new(position.x, position.y + 1.0, position.z),
         Vector3::new(0.0, -1.0, 0.0),
     );
 
-    if let Some(toi) = game_state
-        .geometry
-        .trimesh
-        .cast_local_ray(&down_ray, 10.0, true)
-    {
+    if let Some(toi) = world_geometry.trimesh.cast_local_ray(&down_ray, 10.0, true) {
         let ground_y = down_ray.origin.y + down_ray.dir.y * toi;
         Some(Point3::new(position.x, ground_y, position.z))
     } else {
@@ -387,44 +420,51 @@ pub fn teleport_to(world: &mut World, entity: Entity, new_position: &Point3<f32>
     }
 }
 
-pub fn teleport_to_ground(game_state: &mut GameState, entity: Entity, new_position: &Point3<f32>) {
+pub fn teleport_to_ground(
+    world: &mut World,
+    world_geometry: &WorldGeometry,
+    entity: Entity,
+    new_position: &Point3<f32>,
+) {
     // TODO: Can't seem to find an easy way to check for intersection between
     // the creature and the world geometry?
 
     let mut target = new_position.clone();
 
-    let ground_position = ground_position(game_state, new_position);
+    let ground_position = ground_position(world_geometry, new_position);
     if let Some(ground_pos) = ground_position {
         target.y = ground_pos.y;
     }
 
-    teleport_to(&mut game_state.world, entity, &target);
+    teleport_to(world, entity, &target);
 }
 
-pub fn navmesh_nearest_point(game_state: &GameState, point: Point3<f32>) -> Option<Point3<f32>> {
-    let closest_coord = game_state
-        .geometry
+pub fn navmesh_nearest_point(
+    world_geometry: &WorldGeometry,
+    point: Point3<f32>,
+) -> Option<Point3<f32>> {
+    let closest_coord = world_geometry
         .polyanya_mesh
         .get_closest_point(Coords::on_mesh(Vec2::new(point.x, point.z)))?;
 
-    let coord_3d = closest_coord.position_with_height(&game_state.geometry.polyanya_mesh);
+    let coord_3d = closest_coord.position_with_height(&world_geometry.polyanya_mesh);
     Some(Point3::new(coord_3d.x, coord_3d.y, coord_3d.z))
 }
 
 pub fn path_point_point(
-    game_state: &GameState,
+    world_geometry: &WorldGeometry,
     start: Point3<f32>,
     goal: Point3<f32>,
 ) -> Option<WorldPath> {
-    let start = navmesh_nearest_point(game_state, start)?;
-    let goal = navmesh_nearest_point(game_state, goal)?;
+    let start = navmesh_nearest_point(world_geometry, start)?;
+    let goal = navmesh_nearest_point(world_geometry, goal)?;
 
-    let mut path = game_state.geometry.path(start, goal)?;
+    let mut path = world_geometry.path(start, goal)?;
     let num_points = path.points.len();
 
     // Snap remaining path points to navmesh
     for point in &mut path.points[1..(num_points - 1)] {
-        if let Some(nav_point) = navmesh_nearest_point(game_state, *point) {
+        if let Some(nav_point) = navmesh_nearest_point(world_geometry, *point) {
             *point = nav_point;
         }
     }
@@ -432,10 +472,37 @@ pub fn path_point_point(
     Some(path)
 }
 
-pub fn path(game_state: &GameState, entity: Entity, goal: Point3<f32>) -> Option<WorldPath> {
-    path_point_point(
-        game_state,
-        get_foot_position(&game_state.world, entity)?,
-        goal,
-    )
+pub fn path(
+    world: &World,
+    world_geometry: &WorldGeometry,
+    entity: Entity,
+    goal: Point3<f32>,
+) -> Option<WorldPath> {
+    path_point_point(world_geometry, get_foot_position(world, entity)?, goal)
+}
+
+pub fn entities_in_shape(
+    world: &World,
+    shape: Box<dyn Shape>,
+    shape_pose: &Isometry3<f32>,
+) -> Vec<Entity> {
+    let mut entities = vec![];
+
+    for (entity, _) in world.query::<&CreaturePose>().iter() {
+        if let Some((creature_shape, creature_shape_pose)) = get_shape(world, entity) {
+            let intersects = parry3d::query::intersection_test(
+                shape_pose,
+                shape.as_ref(),
+                &creature_shape_pose,
+                &creature_shape,
+            )
+            .is_ok_and(|result| result);
+
+            if intersects {
+                entities.push(entity);
+            }
+        }
+    }
+
+    entities
 }

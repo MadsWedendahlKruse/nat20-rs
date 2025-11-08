@@ -256,16 +256,7 @@ struct LevelUpPromptWithProgress {
 }
 
 impl LevelUpPromptWithProgress {
-    fn new(prompt: LevelUpPrompt) -> Self {
-        let progress = LevelUpDecisionProgress::from_prompt(&prompt);
-        Self {
-            prompt,
-            progress: progress.clone(),
-            initial_value: progress,
-        }
-    }
-
-    fn new_from_prompt_and_character(prompt: LevelUpPrompt, world: &World, entity: Entity) -> Self {
+    fn new(prompt: LevelUpPrompt, world: &World, entity: Entity) -> Self {
         let progress =
             LevelUpDecisionProgress::default_from_prompt_and_character(&prompt, world, entity);
         Self {
@@ -367,13 +358,11 @@ impl LevelUpWindow {
         for prompt in pending_prompts {
             let already_present = self.pending_decisions.iter().any(|p| p.prompt == *prompt);
             if !already_present {
-                self.pending_decisions.push(
-                    LevelUpPromptWithProgress::new_from_prompt_and_character(
-                        prompt.clone(),
-                        &world,
-                        self.character.unwrap(),
-                    ),
-                );
+                self.pending_decisions.push(LevelUpPromptWithProgress::new(
+                    prompt.clone(),
+                    &world,
+                    self.character.unwrap(),
+                ));
             }
         }
     }

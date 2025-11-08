@@ -4,22 +4,21 @@ use nat20_rs::{
     components::{
         actions::{
             action::{ActionContext, ActionMap},
-            targeting::{TargetInstance, TargetingError, TargetingKind},
+            targeting::{AreaShape, TargetInstance, TargetingKind},
         },
         id::{ActionId, Name},
         resource::{ResourceAmountMap, ResourceMap},
         speed::Speed,
     },
     engine::{
-        event::{ActionData, ActionDecision, ActionError, ActionPrompt},
+        event::{ActionData, ActionDecision, ActionDecisionKind, ActionPromptKind},
         game_state::GameState,
     },
     registry,
     systems::{
         self,
-        actions::ActionUsabilityError,
+        actions::TargetPathFindingResult,
         geometry::{RaycastHit, RaycastHitKind},
-        movement::PathResult,
     },
 };
 use uom::si::length::meter;
@@ -31,85 +30,19 @@ use crate::{
             components::{LOW_HEALTH_BG_COLOR, LOW_HEALTH_COLOR, SPEED_COLOR, SPEED_COLOR_BG},
             utils::{
                 ImguiRenderable, ImguiRenderableWithContext, ProgressBarColor,
-                render_button_disabled_conditionally, render_progress_bar,
+                render_button_disabled_conditionally, render_capacity_meter, render_progress_bar,
             },
         },
         world::mesh::Wireframe,
     },
     state::gui_state::GuiState,
-    windows::anchor::{AUTO_RESIZE, BOTTOM_CENTER, WindowManager},
+    windows::{
+        anchor::{AUTO_RESIZE, BOTTOM_CENTER, WindowManager},
+        reactions::ReactionsWindow,
+    },
 };
 
 const ACTION_BAR_MIN_SIZE: [f32; 2] = [500.0, 200.0];
-
-#[derive(Debug, Clone)]
-pub struct PotentialTarget {
-    pub entity: Entity,
-    pub validation_result: Result<(), ActionError>,
-    pub path_to_target: Option<PathResult>,
-}
-
-impl PotentialTarget {
-    pub fn new(
-        game_state: &mut GameState,
-        action: &ActionData,
-        pathfind_if_out_of_range: bool,
-    ) -> Self {
-        let result = game_state.validate_action(action, false);
-
-        let path_to_target = if pathfind_if_out_of_range
-            && let Err(action_error) = &result
-            && let ActionError::Usability(usability_error) = action_error
-            && let ActionUsabilityError::TargetingError(targeting_error) = usability_error
-            && let TargetingError::OutOfRange { target, .. }
-            | TargetingError::NoLineOfSight { target } = targeting_error
-        {
-            let target_position = match target {
-                TargetInstance::Entity(entity) => {
-                    let (_, shape_pose) =
-                        systems::geometry::get_shape(&game_state.world, *entity).unwrap();
-                    shape_pose.translation.vector.into()
-                }
-                TargetInstance::Point(point) => *point,
-            };
-
-            println!(
-                "[potential target] Cannot reach target {:?}, error: {:?}, attempting pathfinding...",
-                target_position, action_error
-            );
-
-            let targeting_context = systems::actions::targeting_context(
-                &game_state.world,
-                action.actor,
-                &action.action_id,
-                &action.context,
-            );
-
-            if let Ok(path_result) = systems::movement::path_in_range_of_point(
-                game_state,
-                action.actor,
-                target_position,
-                targeting_context.range.max(),
-                true,
-                false,
-                targeting_context.require_line_of_sight,
-                true,
-            ) {
-                Some(path_result)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        PotentialTarget {
-            entity: action.targets[0],
-            validation_result: result,
-            path_to_target: path_to_target,
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub enum ActionBarState {
@@ -122,13 +55,15 @@ pub enum ActionBarState {
     },
     Targets {
         action: ActionData,
-        potential_target: Option<PotentialTarget>,
+        potential_target: Option<(TargetInstance, TargetPathFindingResult)>,
     },
 }
 
 pub struct ActionBarWindow {
     pub state: ActionBarState,
     pub entity: Entity,
+    // TOOD: In a way these seem tightly connected, but could also live somewhere else?
+    pub reaction_window: Option<ReactionsWindow>,
 }
 
 impl ActionBarWindow {
@@ -138,6 +73,7 @@ impl ActionBarWindow {
                 actions: systems::actions::available_actions(world, entity),
             },
             entity,
+            reaction_window: None,
         }
     }
 }
@@ -152,10 +88,9 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
         let disabled = if let Some(encounter_id) = &game_state.in_combat.get(&self.entity)
             && let Some(encounter) = game_state.encounters.get(encounter_id)
             && (encounter.current_entity() != self.entity
-                || encounter
-                    .next_pending_prompt()
-                    .is_some_and(|prompt| matches!(prompt, ActionPrompt::Reactions { .. })))
-        {
+                || encounter.next_pending_prompt().is_some_and(|prompt| {
+                    matches!(prompt.kind, ActionPromptKind::Reactions { .. })
+                })) {
             true
         } else {
             false
@@ -167,6 +102,8 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
         let window_manager_ptr =
             unsafe { &mut *(&mut gui_state.window_manager as *mut WindowManager) };
 
+        let mut opened = true;
+
         window_manager_ptr.render_window(
             ui,
             format!(
@@ -176,7 +113,7 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
             .as_str(),
             &BOTTOM_CENTER,
             AUTO_RESIZE,
-            &mut true,
+            &mut opened,
             || {
                 let mut new_state = None;
 
@@ -247,6 +184,14 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
 
         disabled_token.end();
         style_token.end();
+
+        if let Some(reaction_window) = &mut self.reaction_window {
+            reaction_window.render_mut_with_context(ui, gui_state, game_state);
+        }
+
+        if !opened {
+            gui_state.selected_entity.take();
+        }
     }
 }
 
@@ -349,8 +294,10 @@ fn render_target_selection(
     game_state: &mut GameState,
     new_state: &mut Option<ActionBarState>,
     action: &mut ActionData,
-    potential_target: &mut Option<PotentialTarget>,
+    potential_target: &mut Option<(TargetInstance, TargetPathFindingResult)>,
 ) {
+    ui.tooltip_text(action.action_id.as_str());
+
     let targeting_context = systems::actions::targeting_context(
         &game_state.world,
         action.actor,
@@ -367,27 +314,37 @@ fn render_target_selection(
     {
         update_potential_target(potential_target, game_state, action, closest);
 
-        if let Some(potential_target) = potential_target {
-            let (preview_position, actor_has_to_move) = {
-                if let Some(path) = &potential_target.path_to_target
-                    && let Some(end) = path.taken_path.end()
-                {
-                    gui_state.path_cache.insert(action.actor, path.clone());
-                    (*end, true)
-                } else {
-                    (
-                        systems::geometry::get_foot_position(&game_state.world, action.actor)
-                            .unwrap(),
-                        false,
-                    )
+        let potential_target_instance = if let Some((target, path_result)) = potential_target {
+            let (preview_position, path_to_target) = match path_result {
+                TargetPathFindingResult::AlreadyInRange => (
+                    systems::geometry::get_eye_position(&game_state.world, action.actor).unwrap(),
+                    None,
+                ),
+
+                TargetPathFindingResult::PathFound(path) => {
+                    if let Some(end) = path.taken_path.end() {
+                        (*end, Some(path.clone()))
+                    } else {
+                        (
+                            systems::geometry::get_eye_position(&game_state.world, action.actor)
+                                .unwrap(),
+                            None,
+                        )
+                    }
                 }
             };
 
-            if let Some((shape, shape_pose_at_preview)) =
-                systems::geometry::get_shape_at_point(&game_state, action.actor, &preview_position)
-                && let Some(mesh) = gui_state.mesh_cache.get(&format!("{:#?}", shape))
+            if let Some((shape, shape_pose_at_preview)) = systems::geometry::get_shape_at_point(
+                &game_state.world,
+                &game_state.geometry,
+                action.actor,
+                &preview_position,
+            ) && let Some(mesh) = gui_state.mesh_cache.get(&format!("{:#?}", shape))
             {
-                if actor_has_to_move {
+                if let Some(path_to_target) = &path_to_target {
+                    gui_state
+                        .path_cache
+                        .insert(action.actor, path_to_target.clone());
                     mesh.draw(
                         gui_state.ig_renderer.gl_context(),
                         &gui_state.program,
@@ -400,41 +357,50 @@ fn render_target_selection(
                     );
                 }
 
+                let line_end = match target {
+                    TargetInstance::Entity(entity) => {
+                        systems::geometry::get_shape(&game_state.world, *entity)
+                            .map(|(_, shape_pose)| shape_pose.translation.vector.into())
+                            .unwrap()
+                    }
+                    TargetInstance::Point(point) => *point,
+                };
                 gui_state.line_renderer.add_line(
-                    systems::geometry::get_shape(&game_state.world, potential_target.entity)
-                        .map(|(_, shape_pose)| shape_pose.translation.vector.into())
-                        .unwrap(),
-                    shape_pose_at_preview.translation.vector.into(),
+                    preview_position.into(),
+                    line_end.into(),
                     [1.0, 1.0, 1.0],
                 );
             }
 
-            if let Some(path) = &potential_target.path_to_target
-                && path.reaches_goal()
+            if let Some(path_to_target) = &path_to_target
+                && path_to_target.reaches_goal()
                 && ui.is_mouse_clicked(MouseButton::Left)
             {
-                let result =
-                    game_state.submit_movement(action.actor, *path.taken_path.end().unwrap());
+                let result = game_state
+                    .submit_movement(action.actor, *path_to_target.taken_path.end().unwrap());
             }
+
+            Some(target)
         } else {
             gui_state.path_cache.remove(&action.actor);
-        }
+            None
+        };
 
         match targeting_context.kind {
             TargetingKind::SelfTarget => {
                 if ui.is_mouse_clicked(MouseButton::Left) {
                     action.targets.clear();
-                    action.targets.push(action.actor);
+                    action.targets.push(TargetInstance::Entity(action.actor));
                     gui_state.cursor_ray_result.take();
                     submit_action = true;
                 }
             }
 
             TargetingKind::Single => {
-                if let Some(potential_target) = potential_target {
+                if let Some(potential_target) = potential_target_instance {
                     if ui.is_mouse_clicked(MouseButton::Left) {
                         action.targets.clear();
-                        action.targets.push(potential_target.entity);
+                        action.targets.push(potential_target.clone());
                         gui_state.cursor_ray_result.take();
                         submit_action = true;
                     }
@@ -444,24 +410,63 @@ fn render_target_selection(
             TargetingKind::Multiple { max_targets } => {
                 let max_targets = max_targets as usize;
                 if ui.is_mouse_clicked(MouseButton::Right) {
+                    gui_state.cursor_ray_result.take();
                     action.targets.pop();
                 }
-                if let Some(potential_target) = potential_target
+                if let Some(potential_target) = potential_target_instance
                     && action.targets.len() < max_targets
                     && ui.is_mouse_clicked(MouseButton::Left)
                 {
-                    action.targets.push(potential_target.entity);
+                    action.targets.push(potential_target.clone());
                     gui_state.cursor_ray_result.take();
                     if action.targets.len() == max_targets {
                         submit_action = true;
                     }
                 }
+
+                ui.tooltip(|| {
+                    render_capacity_meter(
+                        ui,
+                        action.action_id.as_str(),
+                        action.targets.len(),
+                        max_targets,
+                    );
+                });
             }
 
             TargetingKind::Area {
                 shape,
                 fixed_on_actor,
-            } => todo!(),
+            } => {
+                if let Some(potential_target) = potential_target_instance {
+                    // 1. Render the area shape at the potential target location
+                    match &shape {
+                        AreaShape::Sphere { radius } => {
+                            let center = match &potential_target {
+                                TargetInstance::Entity(entity) => {
+                                    systems::geometry::get_foot_position(&game_state.world, *entity)
+                                        .unwrap()
+                                }
+                                TargetInstance::Point(point) => *point,
+                            };
+                            gui_state.line_renderer.add_circle(
+                                [center.x, center.y, center.z],
+                                radius.get::<meter>(),
+                                [1.0, 1.0, 1.0],
+                            );
+                        }
+                        _ => { /* TODO other shapes */ }
+                    }
+                    // 2. Highlight entities within the area
+                    // 3. On left click, select all entities within the area as targets
+                    if ui.is_mouse_clicked(MouseButton::Left) {
+                        action.targets.clear();
+                        action.targets.push(potential_target.clone());
+                        gui_state.cursor_ray_result.take();
+                        submit_action = true;
+                    }
+                }
+            }
         }
     }
 
@@ -476,17 +481,48 @@ fn render_target_selection(
     }
 
     if submit_action {
-        let result = game_state.submit_decision(ActionDecision::Action {
+        let response_to = if let Some(encounter_id) = &game_state.in_combat.get(&action.actor)
+            && let Some(encounter) = game_state.encounters.get(encounter_id)
+            && let Some(prompt) = encounter.next_pending_prompt()
+            && prompt.actors().contains(&action.actor)
+        {
+            println!(
+                "[ActionBar] Submitting action in encounter {:?} in response to prompt: {:#?}",
+                encounter_id, prompt
+            );
+            Some(prompt.id)
+        } else {
+            None
+        };
+
+        let action_kind = ActionDecisionKind::Action {
             action: action.clone(),
-        });
+        };
+
+        let result = if let Some(response_to) = response_to {
+            game_state.submit_decision(ActionDecision {
+                response_to,
+                kind: action_kind,
+            })
+        } else {
+            game_state.submit_decision(ActionDecision::without_response_to(action_kind))
+        };
 
         println!("Submitted action decision: {:#?}", result);
     }
 
-    if ui.button("Cancel")
-        || (action.targets.is_empty() && ui.is_mouse_clicked(MouseButton::Right))
-        || submit_action
+    // TODO: gui_state util function to handle checking for Some and taking?
+    let right_click_cancel = if gui_state.cursor_ray_result.is_some()
+        && ui.is_mouse_clicked(MouseButton::Right)
+        && action.targets.is_empty()
     {
+        gui_state.cursor_ray_result.take();
+        true
+    } else {
+        false
+    };
+
+    if ui.button("Cancel") || right_click_cancel || submit_action {
         *new_state = Some(ActionBarState::Action {
             actions: systems::actions::available_actions(&game_state.world, action.actor),
         });
@@ -515,25 +551,47 @@ fn render_range_preview(
 }
 
 fn update_potential_target(
-    potential_target: &mut Option<PotentialTarget>,
+    potential_target: &mut Option<(TargetInstance, TargetPathFindingResult)>,
     game_state: &mut GameState,
     action: &ActionData,
     closest: &RaycastHit,
 ) {
+    let closest_target = match &closest.kind {
+        RaycastHitKind::Creature(entity) => TargetInstance::Entity(*entity),
+        RaycastHitKind::World => TargetInstance::Point(closest.poi),
+        _ => return,
+    };
+
     let mut potential_action = action.clone();
+    potential_action.targets.clear();
+    potential_action.targets.push(closest_target.clone());
 
-    if let RaycastHitKind::Creature(entity) = &closest.kind {
-        potential_action.targets.clear();
-        potential_action.targets.push(*entity);
-
-        if let Some(potential_target) = potential_target {
-            if *entity != potential_target.entity {
-                *potential_target = PotentialTarget::new(game_state, &potential_action, true);
-            }
-        } else {
-            *potential_target = Some(PotentialTarget::new(game_state, &potential_action, true));
-        }
+    let is_new_target = if let Some((target, _)) = potential_target {
+        target != &closest_target
     } else {
-        *potential_target = None;
+        true
+    };
+
+    if is_new_target {
+        println!(
+            "[update_potential_target] Finding path to new target {:?}",
+            closest_target
+        );
+        match systems::actions::path_to_target(game_state, &potential_action, true) {
+            Ok(result) => {
+                println!(
+                    "[update_potential_target] Found path to target {:?}: {:?}",
+                    closest_target, result
+                );
+                *potential_target = Some((closest_target, result));
+            }
+            Err(err) => {
+                println!(
+                    "[update_potential_target] Error finding path to target {:?}: {:?}",
+                    closest_target, err
+                );
+                *potential_target = None;
+            }
+        }
     }
 }

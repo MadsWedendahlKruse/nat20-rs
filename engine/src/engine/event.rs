@@ -3,18 +3,18 @@ use std::{
     sync::Arc,
 };
 
-use hecs::{Entity, World};
+use hecs::Entity;
 use uuid::Uuid;
 
 use crate::{
     components::{
         actions::{
             action::{ActionContext, ActionKindResult, ActionResult},
-            targeting::{TargetInstance, TargetSelection, TargetingError},
+            targeting::TargetInstance,
         },
         damage::DamageRollResult,
         health::life_state::LifeState,
-        id::{ActionId, EntityIdentifier},
+        id::ActionId,
         resource::{ResourceAmountMap, ResourceError},
     },
     engine::{encounter::EncounterId, game_state::GameState},
@@ -81,7 +81,7 @@ impl Event {
                 action_id: action_id.clone(),
                 context: context.clone(),
                 resource_cost: resource_cost.clone(),
-                targets: vec![target],
+                targets: vec![TargetInstance::Entity(target)],
             },
             results: vec![ActionResult::new(
                 &game_state.world,
@@ -203,7 +203,7 @@ pub struct ActionData {
     pub action_id: ActionId,
     pub context: ActionContext,
     pub resource_cost: ResourceAmountMap,
-    pub targets: Vec<Entity>,
+    pub targets: Vec<TargetInstance>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -217,13 +217,13 @@ pub struct ReactionData {
 }
 
 impl From<&ReactionData> for ActionData {
-    fn from(value: &ReactionData) -> Self {
+    fn from(reaction: &ReactionData) -> Self {
         ActionData {
-            actor: value.reactor,
-            action_id: value.reaction_id.clone(),
-            context: value.context.clone(),
-            resource_cost: value.resource_cost.clone(),
-            targets: vec![value.event.actor().unwrap()], // TODO: What if no actor?
+            actor: reaction.reactor,
+            action_id: reaction.reaction_id.clone(),
+            context: reaction.context.clone(),
+            resource_cost: reaction.resource_cost.clone(),
+            targets: vec![TargetInstance::Entity(reaction.event.actor().unwrap())], // TODO: What if no actor?
         }
     }
 }
@@ -278,8 +278,10 @@ impl EventListener {
     }
 }
 
+pub type ActionPromptId = Uuid;
+
 #[derive(Debug, Clone)]
-pub enum ActionPrompt {
+pub enum ActionPromptKind {
     /// Prompt an entity to perform an action
     Action {
         /// The entity that should perform the action
@@ -298,30 +300,39 @@ pub enum ActionPrompt {
     },
 }
 
+#[derive(Debug, Clone)]
+pub struct ActionPrompt {
+    pub id: ActionPromptId,
+    pub kind: ActionPromptKind,
+}
+
+impl ActionPrompt {
+    pub fn new(kind: ActionPromptKind) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            kind,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum ActionDecisionPartial {
-    /// For actions this is the full decision
-    Action { action: ActionData },
-    /// For reactions this is just the choice made by a single reactor
+pub enum ActionDecisionKind {
+    Action {
+        action: ActionData,
+    },
     Reaction {
-        reactor: Entity,
+        /// The event that triggered the reaction
         event: Event,
+        reactor: Entity,
+        /// The chosen reaction. None if the entity chooses not to react
         choice: Option<ReactionData>,
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ActionDecision {
-    Action {
-        action: ActionData,
-    },
-    Reactions {
-        /// The event that triggered the reaction
-        event: Event,
-        /// The choices made by each entity which could react to the event. If the
-        /// entity chose not to react, this will be 'None'
-        choices: HashMap<Entity, Option<ReactionData>>,
-    },
+#[derive(Debug, Clone)]
+pub struct ActionDecision {
+    pub response_to: ActionPromptId,
+    pub kind: ActionDecisionKind,
 }
 
 #[derive(Debug, Clone)]
@@ -364,19 +375,28 @@ macro_rules! ensure_equal {
 
 impl ActionPrompt {
     pub fn actors(&self) -> Vec<Entity> {
-        match self {
-            ActionPrompt::Action { actor } => vec![*actor],
-            ActionPrompt::Reactions { options, .. } => options.keys().cloned().collect(),
+        match &self.kind {
+            ActionPromptKind::Action { actor, .. } => vec![*actor],
+            ActionPromptKind::Reactions { options, .. } => options.keys().cloned().collect(),
         }
     }
 
     pub fn is_valid_decision(&self, decision: &ActionDecision) -> Result<(), ActionError> {
-        match (self, decision) {
+        ensure_equal!(
+            self.id,
+            decision.response_to,
+            "response_to",
+            FieldMismatch,
+            self,
+            decision
+        );
+
+        match (&self.kind, &decision.kind) {
             (
-                ActionPrompt::Action {
+                ActionPromptKind::Action {
                     actor: prompt_actor,
                 },
-                ActionDecision::Action { action },
+                ActionDecisionKind::Action { action },
             ) => {
                 ensure_equal!(
                     prompt_actor,
@@ -389,23 +409,16 @@ impl ActionPrompt {
             }
 
             (
-                ActionPrompt::Reactions {
+                ActionPromptKind::Reactions {
                     event: prompt_event,
                     options,
                 },
-                ActionDecision::Reactions {
+                ActionDecisionKind::Reaction {
                     event: decision_event,
-                    choices,
+                    reactor,
+                    choice,
                 },
             ) => {
-                ensure_equal!(
-                    options.keys().collect::<HashSet<_>>(),
-                    choices.keys().collect::<HashSet<_>>(),
-                    "reactors",
-                    FieldMismatch,
-                    self,
-                    decision
-                );
                 ensure_equal!(
                     prompt_event.id,
                     decision_event.id,
@@ -415,18 +428,26 @@ impl ActionPrompt {
                     decision
                 );
 
-                for reactor in options.keys() {
-                    if let Some(choice) = choices.get(reactor).unwrap() {
-                        if !options.get(reactor).unwrap().contains(&choice) {
-                            return Err(ActionError::FieldMismatch {
-                                field: "choices",
-                                expected: format!("one of {:?}", options),
-                                actual: format!("{:?}", choice),
-                                prompt: self.clone(),
-                                decision: decision.clone(),
-                            });
-                        }
+                if let Some(options) = options.get(&reactor) {
+                    if let Some(choice) = choice
+                        && !options.contains(&choice)
+                    {
+                        return Err(ActionError::FieldMismatch {
+                            field: "choices",
+                            expected: format!("one of {:?}", options),
+                            actual: format!("{:?}", choice),
+                            prompt: self.clone(),
+                            decision: decision.clone(),
+                        });
                     }
+                } else {
+                    return Err(ActionError::FieldMismatch {
+                        field: "reactor",
+                        expected: format!("one of {:?}", options.keys()),
+                        actual: format!("{:?}", reactor),
+                        prompt: self.clone(),
+                        decision: decision.clone(),
+                    });
                 }
             }
 
@@ -441,11 +462,24 @@ impl ActionPrompt {
     }
 }
 
-impl ActionDecision {
-    pub fn actors(&self) -> Vec<Entity> {
+impl ActionDecisionKind {
+    pub fn actor(&self) -> Entity {
         match self {
-            ActionDecision::Action { action, .. } => vec![action.actor],
-            ActionDecision::Reactions { choices, .. } => choices.keys().cloned().collect(),
+            ActionDecisionKind::Action { action, .. } => action.actor,
+            ActionDecisionKind::Reaction { reactor, .. } => *reactor,
         }
+    }
+}
+
+impl ActionDecision {
+    pub fn without_response_to(kind: ActionDecisionKind) -> Self {
+        Self {
+            response_to: Uuid::nil(),
+            kind,
+        }
+    }
+
+    pub fn actor(&self) -> Entity {
+        self.kind.actor()
     }
 }

@@ -1,18 +1,21 @@
 use std::collections::HashSet;
 
 use hecs::{Entity, World};
-use parry3d::na::Point3;
+use parry3d::{
+    na::{Isometry, Isometry3, OPoint, Point3},
+    shape::Shape,
+};
 use uom::{
     Conversion,
     si::{
-        f32::Length,
+        f32::{Angle, Length},
         length::{Unit, meter},
     },
 };
 
 use crate::{
     components::health::life_state::LifeState,
-    engine::game_state::GameState,
+    engine::{game_state::GameState, geometry::WorldGeometry},
     entities::{character::CharacterTag, monster::MonsterTag},
     systems,
 };
@@ -31,13 +34,80 @@ pub enum TargetingKind {
 }
 
 // TODO: parry3d shapes?
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AreaShape {
-    Cone { angle: u32, length: u32 },      // e.g. Cone of Cold
-    Sphere { radius: u32 },                // e.g. Fireball
-    Cube { side_length: u32 },             // e.g. Wall of Force
-    Cylinder { radius: u32, height: u32 }, // e.g. Cloudkill
-    Line { length: u32, width: u32 },      // e.g. Lightning Bolt
+    Arc { angle: Angle, length: Length },        // e.g. Cone of Cold
+    Sphere { radius: Length },                   // e.g. Fireball
+    Cube { side_length: Length },                // e.g. Wall of Force
+    Cylinder { radius: Length, height: Length }, // e.g. Cloudkill
+    Line { length: Length, width: Length },      // e.g. Lightning Bolt
+}
+
+impl AreaShape {
+    pub fn parry3d_shape(
+        &self,
+        world: &World,
+        actor: Entity,
+        fixed_on_actor: bool,
+        target_point: &Point3<f32>,
+    ) -> (Box<dyn Shape>, Isometry3<f32>) {
+        let (_, actor_shape_pose) = systems::geometry::get_shape(world, actor).unwrap();
+        let actor_position = actor_shape_pose.translation.vector;
+
+        let mut translation = if fixed_on_actor {
+            actor_position
+        } else {
+            target_point.coords
+        };
+
+        match self {
+            AreaShape::Arc { .. } => {
+                todo!("Parry3D does not have a built-in arc shape");
+            }
+            AreaShape::Sphere { radius } => (
+                Box::new(parry3d::shape::Ball::new(radius.get::<meter>())),
+                Isometry3::new(translation, parry3d::na::Vector3::zeros()),
+            ),
+            AreaShape::Cube { side_length } => {
+                let half_size = side_length.get::<meter>() / 2.0;
+                (
+                    Box::new(parry3d::shape::Cuboid::new(parry3d::na::Vector3::new(
+                        half_size, half_size, half_size,
+                    ))),
+                    // TODO: Cube rotation?
+                    Isometry3::new(translation, parry3d::na::Vector3::zeros()),
+                )
+            }
+            AreaShape::Cylinder { radius, height } => (
+                Box::new(parry3d::shape::Cylinder::new(
+                    height.get::<meter>(),
+                    radius.get::<meter>(),
+                )),
+                Isometry3::new(translation, parry3d::na::Vector3::zeros()),
+            ),
+            AreaShape::Line { length, width } => {
+                let half_length = length.get::<meter>() / 2.0;
+                let half_width = width.get::<meter>() / 2.0;
+                let mut rotation = parry3d::na::Vector3::zeros();
+                if fixed_on_actor {
+                    // Line starts at the actor's position
+                    translation.x += half_length;
+                    // Rotate around Y axis to point towards target point
+                    let direction = (target_point.coords - actor_position).normalize();
+                    let yaw = direction.y.atan2(direction.x);
+                    rotation = parry3d::na::Vector3::new(0.0, yaw, 0.0);
+                }
+                (
+                    Box::new(parry3d::shape::Cuboid::new(parry3d::na::Vector3::new(
+                        half_length,
+                        half_width,
+                        half_width,
+                    ))),
+                    Isometry3::new(translation, rotation),
+                )
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,12 +156,6 @@ pub enum TargetInstance {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TargetSelection {
-    targets: Vec<TargetInstance>,
-    max_targets: usize,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum TargetingError {
     ExceedsMaxTargets,
     OutOfRange {
@@ -102,27 +166,6 @@ pub enum TargetingError {
     NoLineOfSight {
         target: TargetInstance,
     },
-}
-
-impl TargetSelection {
-    pub fn new(max_allowed_targets: usize) -> Self {
-        TargetSelection {
-            targets: Vec::new(),
-            max_targets: max_allowed_targets,
-        }
-    }
-
-    pub fn add_target(&mut self, target: TargetInstance) -> Result<(), TargetingError> {
-        if self.targets.len() >= self.max_targets {
-            return Err(TargetingError::ExceedsMaxTargets);
-        }
-        self.targets.push(target);
-        Ok(())
-    }
-
-    pub fn targets(&self) -> &Vec<TargetInstance> {
-        &self.targets
-    }
 }
 
 /// Defines the range parameters for targeting an action.
@@ -225,59 +268,59 @@ impl TargetingContext {
 
     pub fn validate_targets(
         &self,
-        game_state: &GameState,
+        world: &World,
+        world_geometry: &WorldGeometry,
         actor: Entity,
-        targets: &[Entity],
+        targets: &[TargetInstance],
     ) -> Result<(), TargetingError> {
         for target in targets {
-            // Check target type
-            // if !matches!(
-            //     (&self.valid_target, target),
-            //     (TargetType::Entity { .. }, TargetTypeInstance::Entity(_))
-            //         | (TargetType::Point, TargetTypeInstance::Point(_))
-            // ) {
-            //     return Err(TargetingError::InvalidTargetType {
-            //         target: target.clone(),
-            //         valid: self.valid_target.clone(),
-            //     });
-            // }
-
             // Check range
-            let (_, actor_shape_pose) =
-                systems::geometry::get_shape(&game_state.world, actor).unwrap();
-            // let distance = match target {
-            //     TargetTypeInstance::Entity(entity) => {
-            //         let target_position =
-            //             // systems::geometry::get_position(&game_state.world, entity.id()).unwrap();
-            //             systems::geometry::get_position(&game_state.world, *entity).unwrap();
-            //         Length::new::<meter>((target_position - actor_position).norm())
-            //     }
+            let actor_position = systems::geometry::get_foot_position(world, actor).unwrap();
 
-            //     TargetTypeInstance::Point(point) => {
-            //         Length::new::<meter>((point - actor_position).norm())
-            //     }
-            // };
-            let (_, target_shape_pose) =
-                systems::geometry::get_shape(&game_state.world, *target).unwrap();
-            let distance = Length::new::<meter>(
-                (target_shape_pose.translation.vector - actor_shape_pose.translation.vector).norm(),
-            );
+            let distance = match target {
+                TargetInstance::Entity(entity) => {
+                    let target_position =
+                        systems::geometry::get_foot_position(world, *entity).unwrap();
+                    Length::new::<meter>((target_position - actor_position).norm())
+                }
+
+                TargetInstance::Point(point) => {
+                    Length::new::<meter>((point - actor_position).norm())
+                }
+            };
 
             if !self.range.in_range(distance) {
                 return Err(TargetingError::OutOfRange {
-                    target: TargetInstance::Entity(*target),
+                    target: target.clone(),
                     distance,
                     max_range: self.range.max(),
                 });
             }
 
             // Check line of sight
-            if self.require_line_of_sight
-                && !systems::geometry::line_of_sight_entity_entity(game_state, actor, *target)
-            {
-                return Err(TargetingError::NoLineOfSight {
-                    target: TargetInstance::Entity(*target),
-                });
+            if self.require_line_of_sight {
+                let line_of_sight_result = match target {
+                    TargetInstance::Entity(entity) => {
+                        systems::geometry::line_of_sight_entity_entity(
+                            world,
+                            world_geometry,
+                            actor,
+                            *entity,
+                        )
+                    }
+                    TargetInstance::Point(point) => systems::geometry::line_of_sight_entity_point(
+                        world,
+                        world_geometry,
+                        actor,
+                        *point,
+                    ),
+                };
+
+                if !line_of_sight_result.has_line_of_sight {
+                    return Err(TargetingError::NoLineOfSight {
+                        target: target.clone(),
+                    });
+                }
             }
         }
 

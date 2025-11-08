@@ -4,7 +4,7 @@ use std::{
 };
 
 use hecs::{Entity, World};
-use uom::si::length::foot;
+use uom::si::{f32::Length, length::foot};
 
 use crate::{
     components::{
@@ -235,7 +235,9 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
         registry::actions::DEFAULT_RESOURCE_COST.clone(),
         Arc::new(|_, _, _| TargetingContext {
             kind: TargetingKind::Area {
-                shape: AreaShape::Sphere { radius: 20 },
+                shape: AreaShape::Sphere {
+                    radius: Length::new::<foot>(20.0),
+                },
                 fixed_on_actor: false,
             },
             range: TargetingRange::new::<foot>(150.0),

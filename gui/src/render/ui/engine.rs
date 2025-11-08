@@ -1,7 +1,10 @@
 use hecs::World;
 use imgui::TreeNodeFlags;
 use nat20_rs::{
-    components::{actions::action::ActionContext, id::Name},
+    components::{
+        actions::{action::ActionContext, targeting::TargetInstance},
+        id::Name,
+    },
     engine::event::{EncounterEvent, Event, EventKind, EventLog},
     systems::{
         self,
@@ -145,12 +148,25 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                 ])
                 .render(ui);
 
-                let self_target = action.targets.len() == 1 && action.targets[0] == action.actor;
+                let self_target = action.targets.len() == 1
+                    && action.targets[0] == TargetInstance::Entity(action.actor);
+
+                let targets = action
+                    .targets
+                    .iter()
+                    .map(|target| match target {
+                        TargetInstance::Entity(entity) => *entity,
+                        TargetInstance::Point(opoint) => {
+                            // Placeholder for point targets
+                            action.actor
+                        }
+                    })
+                    .collect::<Vec<_>>();
 
                 if !self_target {
                     ui.same_line();
                     TextSegment::new("on", TextKind::Normal).render(ui);
-                    action.targets.render_with_context(ui, &world);
+                    targets.render_with_context(ui, &world);
                 }
 
                 match &action.context {
@@ -181,15 +197,22 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                 ])
                 .render(ui);
 
-                if action.targets.len() == 1 && action.targets[0] != action.actor {
+                if action.targets.len() == 1
+                    && action.targets[0] != TargetInstance::Entity(action.actor)
+                {
+                    let target = match &action.targets[0] {
+                        TargetInstance::Entity(entity) => {
+                            systems::helpers::get_component::<Name>(world, *entity).to_string()
+                        }
+                        TargetInstance::Point(point) => {
+                            format!("point at ({}, {}, {})", point.x, point.y, point.z).to_string()
+                        }
+                    };
+
                     ui.same_line();
                     TextSegments::new(vec![
-                        ("on", TextKind::Normal),
-                        (
-                            systems::helpers::get_component::<Name>(world, action.targets[0])
-                                .as_str(),
-                            TextKind::Target,
-                        ),
+                        ("on".to_string(), TextKind::Normal),
+                        (target, TextKind::Target),
                     ])
                     .render(ui);
                 }
@@ -246,7 +269,7 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                             (dc.key.to_string(), TextKind::Ability),
                             ("check".to_string(), TextKind::Normal),
                         ],
-                        D20CheckDCKind::AttackRoll(_, target, _) => {
+                        D20CheckDCKind::AttackRoll(target, _) => {
                             let target_name =
                                 systems::helpers::get_component::<Name>(world, *target);
                             vec![
