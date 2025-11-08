@@ -349,14 +349,24 @@ pub fn line_of_sight_entity_point(
     entity: Entity,
     point: Point3<f32>,
 ) -> LineOfSightResult {
+    line_of_sight_entity_point_filter(
+        world,
+        world_geometry,
+        entity,
+        point,
+        &RaycastFilter::ExcludeCreatures(vec![entity]),
+    )
+}
+
+pub fn line_of_sight_entity_point_filter(
+    world: &World,
+    world_geometry: &WorldGeometry,
+    entity: Entity,
+    point: Point3<f32>,
+    filter: &RaycastFilter,
+) -> LineOfSightResult {
     if let Some(eye_pos) = get_eye_position(world, entity) {
-        line_of_sight_point_point(
-            world,
-            world_geometry,
-            eye_pos,
-            point,
-            &RaycastFilter::ExcludeCreatures(vec![entity]),
-        )
+        line_of_sight_point_point(world, world_geometry, eye_pos, point, filter)
     } else {
         LineOfSightResult {
             has_line_of_sight: false,

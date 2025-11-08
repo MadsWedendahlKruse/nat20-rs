@@ -21,7 +21,7 @@ use crate::{
         geometry::WorldGeometry,
     },
     entities, registry,
-    systems::{self, movement::PathResult},
+    systems::{self, geometry::RaycastFilter, movement::PathResult},
 };
 
 pub fn get_action(action_id: &ActionId) -> Option<&Action> {
@@ -225,53 +225,46 @@ fn get_targeted_entities(
             fixed_on_actor,
         } => {
             for target in targets {
-                match target {
+                let point = match target {
                     TargetInstance::Entity(entity) => {
-                        // TODO: Proper logging instead of this homemade stuff
-                        println!(
-                            "WARNING: Targeting context for action {:?} has kind Area, but target is Entity {:?}. This is unexpected behavior, and probably not intended.",
-                            action_id, entity
-                        );
-                        entities.push(*entity)
+                        &systems::geometry::get_foot_position(&game_state.world, *entity).unwrap()
                     }
 
-                    TargetInstance::Point(point) => {
-                        let (shape_hitbox, shape_pose) = shape.parry3d_shape(
-                            &game_state.world,
-                            *performer,
-                            fixed_on_actor,
-                            point,
-                        );
+                    TargetInstance::Point(point) => point,
+                };
 
-                        let mut entities_in_shape = systems::geometry::entities_in_shape(
-                            &game_state.world,
-                            shape_hitbox,
-                            &shape_pose,
-                        );
+                let (shape_hitbox, shape_pose) =
+                    shape.parry3d_shape(&game_state.world, *performer, fixed_on_actor, point);
 
-                        // Check if any of the entities are behind cover and remove them
-                        // TODO: Not sure what the best way to do this is, I guess it
-                        // depends on the shape?
+                let mut entities_in_shape = systems::geometry::entities_in_shape(
+                    &game_state.world,
+                    shape_hitbox,
+                    &shape_pose,
+                );
 
-                        match shape {
-                            AreaShape::Sphere { .. } => {
-                                entities_in_shape.retain(|entity| {
-                                    systems::geometry::line_of_sight_entity_point(
-                                        &game_state.world,
-                                        &game_state.geometry,
-                                        *entity,
-                                        *point,
-                                    )
-                                    .has_line_of_sight
-                                });
-                            }
+                // Check if any of the entities are behind cover and remove them
+                // TODO: Not sure what the best way to do this is, I guess it
+                // depends on the shape?
 
-                            _ => {}
-                        }
-
-                        entities.extend(entities_in_shape);
+                match shape {
+                    AreaShape::Sphere { .. } => {
+                        entities_in_shape.retain(|entity| {
+                            systems::geometry::line_of_sight_entity_point_filter(
+                                &game_state.world,
+                                &game_state.geometry,
+                                *entity,
+                                *point,
+                                // TODO: Can't hide behind other entities?
+                                &RaycastFilter::WorldOnly,
+                            )
+                            .has_line_of_sight
+                        });
                     }
+
+                    _ => {}
                 }
+
+                entities.extend(entities_in_shape);
             }
         }
     }
