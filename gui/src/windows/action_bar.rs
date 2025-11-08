@@ -425,6 +425,7 @@ fn render_target_selection(
                 }
 
                 ui.tooltip(|| {
+                    ui.separator();
                     render_capacity_meter(
                         ui,
                         action.action_id.as_str(),

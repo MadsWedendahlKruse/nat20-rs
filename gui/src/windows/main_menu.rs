@@ -230,7 +230,7 @@ impl MainMenuWindow {
                     match &closest.kind {
                         RaycastHitKind::Creature(entity) => {
                             if ui.is_mouse_clicked(MouseButton::Right) {
-                                ui.open_popup("RightClick");
+                                ui.open_popup("CreatureRightClick");
                                 creature_right_click
                                     .replace(CreatureRightClickWindow::new(*entity));
                             }

@@ -267,8 +267,10 @@ pub fn render_capacity_meter(ui: &imgui::Ui, label: &str, current: usize, max: u
         } else {
             [1.0, 1.0, 1.0, 1.0]
         };
+        // TODO: Consider using primitives instead of buttons (ui.get_window_draw_list())
+        // need to figure out how to the positioning then
         let color_token = ui.push_style_color(imgui::StyleColor::Button, color);
-        ui.button_with_size(format!("{}##{}/{}", label, current, max), [10.0, 10.0]);
+        ui.button_with_size(format!("##{}{}/{}", label, current, max), [10.0, 10.0]);
         color_token.pop();
     }
 }
