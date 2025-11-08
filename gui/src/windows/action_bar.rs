@@ -1,5 +1,5 @@
 use hecs::{Entity, World};
-use imgui::{ChildFlags, MouseButton, sys};
+use imgui::{ChildFlags, MouseButton};
 use nat20_rs::{
     components::{
         actions::{
@@ -31,7 +31,7 @@ use crate::{
         common::utils::RenderableMutWithContext,
         ui::{
             components::{LOW_HEALTH_BG_COLOR, LOW_HEALTH_COLOR, SPEED_COLOR, SPEED_COLOR_BG},
-            text::{TextKind, TextSegment, TextSegments},
+            text::{TextKind, TextSegments},
             utils::{
                 ImguiRenderable, ImguiRenderableWithContext, ProgressBarColor,
                 render_button_disabled_conditionally, render_capacity_meter, render_progress_bar,
@@ -240,13 +240,13 @@ fn render_actions(
                             contexts_and_costs: contexts_and_costs.clone(),
                         });
                     }
+                }
 
-                    if ui.is_item_hovered() {
-                        ui.tooltip(|| {
-                            (action_id, contexts_and_costs)
-                                .render_with_context(ui, (&game_state.world, entity));
-                        });
-                    }
+                if ui.is_item_hovered() {
+                    ui.tooltip(|| {
+                        (action_id, contexts_and_costs)
+                            .render_with_context(ui, (&game_state.world, entity));
+                    });
                 }
             }
 
