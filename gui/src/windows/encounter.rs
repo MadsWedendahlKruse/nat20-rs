@@ -188,7 +188,9 @@ impl RenderableMutWithContext<&mut GameState> for Encounter {
 
         // TODO: No idea where to put this
         if !systems::ai::is_player_controlled(&game_state.world, self.current_entity())
-            && let Some(prompt) = self.next_pending_prompt()
+            && let Some(prompt) = &game_state
+                .next_prompt_entity(self.current_entity())
+                .cloned()
         {
             let ai_decision = systems::ai::decide_action(game_state, prompt, self.current_entity());
             if let Some(path) = ai_decision.path {

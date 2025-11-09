@@ -155,9 +155,7 @@ impl MainMenuWindow {
                     }
 
                     if !reactions.is_active()
-                        && let Some(encounter_id) = game_state.in_combat.get(&entity)
-                        && let Some(encounter) = game_state.encounters.get(encounter_id)
-                        && let Some(prompt) = encounter.next_pending_prompt()
+                        && let Some(prompt) = game_state.next_prompt_entity(entity)
                     {
                         match &prompt.kind {
                             nat20_rs::engine::event::ActionPromptKind::Reactions {

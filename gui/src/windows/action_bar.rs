@@ -14,6 +14,7 @@ use nat20_rs::{
     engine::{
         event::{ActionData, ActionDecision, ActionDecisionKind, ActionPromptKind},
         game_state::GameState,
+        interaction::InteractionScopeId,
     },
     registry,
     systems::{
@@ -78,6 +79,22 @@ impl ActionBarWindow {
             reaction_window: None,
         }
     }
+
+    pub fn is_disabled(&self, game_state: &GameState) -> bool {
+        if let Some(encounter_id) = game_state.in_combat.get(&self.entity)
+            && let Some(encounter) = game_state.encounters.get(encounter_id)
+        {
+            if encounter.current_entity() != self.entity {
+                return true;
+            }
+            if let Some(prompt) = game_state.next_prompt_entity(self.entity)
+                && matches!(prompt.kind, ActionPromptKind::Reactions { .. })
+            {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
@@ -87,18 +104,7 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
         gui_state: &mut GuiState,
         game_state: &mut GameState,
     ) {
-        let disabled = if let Some(encounter_id) = &game_state.in_combat.get(&self.entity)
-            && let Some(encounter) = game_state.encounters.get(encounter_id)
-            && (encounter.current_entity() != self.entity
-                || encounter.next_pending_prompt().is_some_and(|prompt| {
-                    matches!(prompt.kind, ActionPromptKind::Reactions { .. })
-                })) {
-            true
-        } else {
-            false
-        };
-
-        let disabled_token = ui.begin_disabled(disabled);
+        let disabled_token = ui.begin_disabled(self.is_disabled(game_state));
 
         let window_manager_ptr =
             unsafe { &mut *(&mut gui_state.window_manager as *mut WindowManager) };
@@ -512,14 +518,12 @@ fn render_target_selection(
     }
 
     if submit_action {
-        let response_to = if let Some(encounter_id) = &game_state.in_combat.get(&action.actor)
-            && let Some(encounter) = game_state.encounters.get(encounter_id)
-            && let Some(prompt) = encounter.next_pending_prompt()
+        let response_to = if let Some(prompt) = game_state.next_prompt_entity(action.actor)
             && prompt.actors().contains(&action.actor)
         {
             println!(
-                "[ActionBar] Submitting action in encounter {:?} in response to prompt: {:#?}",
-                encounter_id, prompt
+                "[ActionBar] Submitting action in response to prompt: {:#?}",
+                prompt
             );
             Some(prompt.id)
         } else {

@@ -52,6 +52,10 @@ impl ReactionsWindow {
         event: &Event,
         options: &HashMap<Entity, Vec<ReactionData>>,
     ) {
+        println!(
+            "[ReactionsWindow] Activating reactions window for prompt {:?}",
+            prompt_id
+        );
         self.state = ReactionWindowState::Active {
             prompt_id,
             event: event.clone(),
@@ -82,17 +86,17 @@ impl RenderableMutWithContext<&mut GameState> for ReactionsWindow {
                 AUTO_RESIZE,
                 &mut true,
                 || {
+                    if options.is_empty() {
+                        ui.text("No reactions available.");
+                    }
+
                     event.render_with_context(ui, &(&game_state.world, &LogLevel::Info));
 
                     ui.text("Choose how to react:");
 
-                    // TODO: Only works in combat at the moment
-                    let decisions = options
-                        .keys()
-                        .next()
-                        .and_then(|entity| game_state.in_combat.get(entity).cloned())
-                        .and_then(|encounter_id| game_state.encounters.get(&encounter_id))
-                        .and_then(|encounter| encounter.decisions_for_prompt(&prompt_id));
+                    let decisions = game_state
+                        .session_for_entity(*options.keys().next().unwrap())
+                        .and_then(|session| session.decisions_for_prompt(prompt_id));
 
                     let (mut button_clicked, mut entity, mut choice) = (false, None, None);
 
@@ -151,17 +155,15 @@ impl RenderableMutWithContext<&mut GameState> for ReactionsWindow {
 
                     ui.separator();
 
-                    if let Some(decisions) = decisions
-                        && options.keys().all(|entity| {
-                            !systems::ai::is_player_controlled(&game_state.world, *entity)
-                                || decisions.contains_key(entity)
-                        })
-                    {
-                        new_state = Some(ReactionWindowState::Pending);
-                    }
+                    let mut decision_keys = decisions
+                        .map(|decisions| decisions.keys().cloned().collect::<Vec<Entity>>());
 
                     if button_clicked && let Some(reactor) = entity {
-                        game_state.submit_decision(ActionDecision {
+                        println!(
+                            "[ReactionsWindow] Submitting reaction decision for reactor {:?}...",
+                            reactor
+                        );
+                        let result = game_state.submit_decision(ActionDecision {
                             response_to: *prompt_id,
                             kind: ActionDecisionKind::Reaction {
                                 event: event.clone(),
@@ -169,6 +171,33 @@ impl RenderableMutWithContext<&mut GameState> for ReactionsWindow {
                                 choice,
                             },
                         });
+                        match result {
+                            Ok(()) => {
+                                if let Some(keys) = &mut decision_keys {
+                                    println!(
+                                        "[ReactionsWindow] Submitted reaction decision for reactor {:?}",
+                                        reactor
+                                    );
+                                    keys.push(*reactor);
+                                }
+                            }
+                            Err(action_error) => {
+                                println!(
+                                    "[ReactionsWindow] Failed to submit reaction decision: {:#?}",
+                                    action_error
+                                );
+                            }
+                        }
+                    }
+
+                    if let Some(decisions) = decision_keys
+                        && options.keys().all(|entity| {
+                            !systems::ai::is_player_controlled(&game_state.world, *entity)
+                                || decisions.contains(entity)
+                        })
+                    {
+                        println!("[ReactionsWindow] All reactions submitted, closing window.");
+                        new_state = Some(ReactionWindowState::Pending);
                     }
                 },
             ),

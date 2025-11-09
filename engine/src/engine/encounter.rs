@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use hecs::{Entity, World};
 use uuid::Uuid;
@@ -18,11 +15,11 @@ use crate::{
     },
     engine::{
         event::{
-            ActionDecision, ActionPrompt, ActionPromptId, ActionPromptKind, CallbackResult,
-            EncounterEvent, Event, EventKind, EventLog,
+            ActionPrompt, ActionPromptKind, CallbackResult, EncounterEvent, Event, EventKind,
+            EventLog,
         },
         game_state::GameState,
-        geometry::WorldGeometry,
+        interaction::InteractionScopeId,
     },
     entities::{character::CharacterTag, monster::MonsterTag},
     systems::{self, d20::D20CheckDCKind},
@@ -37,9 +34,6 @@ pub struct Encounter {
     round: usize,
     turn_index: usize,
     initiative_order: Vec<(Entity, D20CheckResult)>,
-    /// Pending prompts for the participants in this encounter
-    pending_prompts: VecDeque<ActionPrompt>,
-    action_decisions: HashMap<ActionPromptId, HashMap<Entity, ActionDecision>>,
     event_log: EventLog,
 }
 
@@ -51,8 +45,6 @@ impl Encounter {
             round: 1,
             turn_index: 0,
             initiative_order: Vec::new(),
-            pending_prompts: VecDeque::new(),
-            action_decisions: HashMap::new(),
             event_log: EventLog::new(),
         };
         encounter.roll_initiative(&game_state.world);
@@ -94,100 +86,6 @@ impl Encounter {
     pub fn current_entity(&self) -> Entity {
         let (idx, _) = self.initiative_order[self.turn_index];
         idx
-    }
-
-    pub fn pending_prompts(&self) -> &VecDeque<ActionPrompt> {
-        &self.pending_prompts
-    }
-
-    pub(crate) fn queue_prompt(&mut self, prompt: ActionPrompt, at_front: bool) {
-        if at_front {
-            self.pending_prompts.push_front(prompt);
-        } else {
-            self.pending_prompts.push_back(prompt);
-        }
-    }
-
-    pub fn next_pending_prompt(&self) -> Option<&ActionPrompt> {
-        self.pending_prompts.front()
-    }
-
-    pub fn validate_next_prompt(&mut self, world: &World, geometry: &WorldGeometry) {
-        // In the event of a chain of reactions, e.g. counterspelling a counter-
-        // spell, several prompts will be put into the queue. Once they are
-        // popped, the game state may have changed such that the prompts are not
-        // valid anymore, e.g. the (re)actor has used up their resources, or they
-        // are no longer able to act. Therefore, we need to re-validate the
-        // next prompt in the queue.
-
-        // TODO: What if they die in the meantime?
-
-        if let Some(prompt) = self.pending_prompts.front_mut() {
-            let mut invalid_prompt = false;
-
-            match &mut prompt.kind {
-                ActionPromptKind::Reactions { event, options } => {
-                    let mut new_options = HashMap::new();
-                    for reactor in options.keys() {
-                        let reactions = systems::actions::available_reactions_to_event(
-                            world, geometry, *reactor, event,
-                        );
-                        if !reactions.is_empty() {
-                            new_options.insert(*reactor, reactions);
-                        }
-                    }
-                    if new_options.is_empty() {
-                        invalid_prompt = true;
-                    }
-                    *options = new_options;
-                }
-                ActionPromptKind::Action { .. } => {
-                    // TODO: Do something here?
-                }
-            }
-
-            if invalid_prompt {
-                self.pending_prompts.pop_front();
-            }
-        }
-
-        if self.pending_prompts.is_empty() {
-            self.pending_prompts
-                .push_back(ActionPrompt::new(ActionPromptKind::Action {
-                    actor: self.current_entity(),
-                }));
-        }
-    }
-
-    pub(crate) fn pop_prompt_and_validate_next(
-        &mut self,
-        world: &World,
-        geometry: &WorldGeometry,
-    ) -> Option<ActionPrompt> {
-        let front = self.pending_prompts.pop_front();
-
-        self.validate_next_prompt(world, geometry);
-
-        front
-    }
-
-    pub fn add_decision(&mut self, decision: ActionDecision) {
-        let actor = decision.actor();
-        self.action_decisions
-            .entry(decision.response_to)
-            .or_insert_with(HashMap::new)
-            .insert(actor, decision);
-    }
-
-    pub fn decisions(&self) -> &HashMap<ActionPromptId, HashMap<Entity, ActionDecision>> {
-        &self.action_decisions
-    }
-
-    pub fn decisions_for_prompt(
-        &self,
-        prompt_id: &ActionPromptId,
-    ) -> Option<&HashMap<Entity, ActionDecision>> {
-        self.action_decisions.get(prompt_id)
     }
 
     pub fn participants(&self, world: &World, filter: EntityFilter) -> Vec<Entity> {
@@ -248,10 +146,16 @@ impl Encounter {
             return;
         }
 
-        self.pending_prompts
-            .push_back(ActionPrompt::new(ActionPromptKind::Action {
+        let session = game_state
+            .interaction_engine
+            .session_mut(InteractionScopeId::Encounter(self.id));
+
+        session.queue_prompt(
+            ActionPrompt::new(ActionPromptKind::Action {
                 actor: self.current_entity(),
-            }));
+            }),
+            false,
+        );
     }
 
     pub fn end_turn(&mut self, game_state: &mut GameState, entity: Entity) {
@@ -259,7 +163,11 @@ impl Encounter {
             panic!("Cannot end turn for entity that is not the current entity");
         }
 
-        for prompt in self.pending_prompts.iter() {
+        let session = game_state
+            .interaction_engine
+            .session_mut(InteractionScopeId::Encounter(self.id));
+
+        for prompt in session.pending_prompts().iter() {
             for respondent in prompt.actors() {
                 if respondent != entity {
                     panic!(
@@ -270,8 +178,7 @@ impl Encounter {
             }
         }
 
-        self.pending_prompts.clear();
-        self.action_decisions.clear();
+        session.clear_prompts();
 
         self.turn_index = (self.turn_index + 1) % self.participants.len();
         if self.turn_index == 0 {
