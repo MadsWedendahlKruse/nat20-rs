@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    hash::Hash,
+};
 
 use glow::HasContext;
 use hecs::Entity;
@@ -8,9 +11,16 @@ use parry3d::na::Vector3;
 use winit::window::Window;
 
 use crate::{
-    render::world::{
-        camera::OrbitCamera, frame_uniforms::FrameUniforms, grid::GridRenderer, line::LineRenderer,
-        mesh::Mesh, program::BasicProgram,
+    render::{
+        ui::entities::CreatureRenderMode,
+        world::{
+            camera::OrbitCamera,
+            frame_uniforms::FrameUniforms,
+            grid::GridRenderer,
+            line::LineRenderer,
+            mesh::{Mesh, MeshRenderMode},
+            program::BasicProgram,
+        },
     },
     state::settings::GuiSettings,
     windows::anchor::WindowManager,
@@ -55,6 +65,10 @@ pub struct GuiState {
     /// The entity currently selected. This can be used for various purposes, so
     /// it lives here in the GUI state :^)
     pub selected_entity: Option<Entity>,
+
+    /// The render mode for each creature entity. Mopstly used for highlighting
+    /// creatures within an AoE, etc.
+    pub creature_render_mode: HashMap<Entity, MeshRenderMode>,
 }
 
 impl GuiState {
@@ -101,6 +115,7 @@ impl GuiState {
             mesh_cache: BTreeMap::new(),
             cursor_ray_result: None,
             selected_entity: None,
+            creature_render_mode: HashMap::default(),
         }
     }
 
@@ -128,5 +143,7 @@ impl GuiState {
         self.frame_uniforms.update(gl, view, proj, light_dir);
 
         self.window_manager.new_frame();
+
+        self.creature_render_mode = HashMap::default()
     }
 }

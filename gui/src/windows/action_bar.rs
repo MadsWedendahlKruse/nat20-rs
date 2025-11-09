@@ -38,7 +38,7 @@ use crate::{
                 render_button_disabled_conditionally, render_capacity_meter, render_progress_bar,
             },
         },
-        world::mesh::Wireframe,
+        world::mesh::MeshRenderMode,
     },
     state::gui_state::GuiState,
     windows::{
@@ -477,17 +477,17 @@ fn render_target_selection(
             } => {
                 if let Some(potential_target) = potential_target_instance {
                     // 1. Render the area shape at the potential target location
+                    let point = match &potential_target {
+                        TargetInstance::Entity(entity) => {
+                            systems::geometry::get_foot_position(&game_state.world, *entity)
+                                .unwrap()
+                        }
+                        TargetInstance::Point(point) => *point,
+                    };
                     match &shape {
                         AreaShape::Sphere { radius } => {
-                            let center = match &potential_target {
-                                TargetInstance::Entity(entity) => {
-                                    systems::geometry::get_foot_position(&game_state.world, *entity)
-                                        .unwrap()
-                                }
-                                TargetInstance::Point(point) => *point,
-                            };
                             gui_state.line_renderer.add_circle(
-                                [center.x, center.y, center.z],
+                                [point.x, point.y, point.z],
                                 radius.get::<meter>(),
                                 [1.0, 1.0, 1.0],
                             );
@@ -495,6 +495,23 @@ fn render_target_selection(
                         _ => { /* TODO other shapes */ }
                     }
                     // 2. Highlight entities within the area
+                    let (shape, shape_pose) = shape.parry3d_shape(
+                        &game_state.world,
+                        action.actor,
+                        fixed_on_actor,
+                        &point,
+                    );
+                    let affected_entities =
+                        systems::geometry::entities_in_shape(&game_state.world, shape, &shape_pose);
+                    for entity in affected_entities {
+                        gui_state.creature_render_mode.insert(
+                            entity,
+                            MeshRenderMode::MeshWithWireFrame {
+                                color: [0.0, 1.0, 0.0, 0.5],
+                                width: 3.0,
+                            },
+                        );
+                    }
                     // 3. On left click, select all entities within the area as targets
                     if ui.is_mouse_clicked(MouseButton::Left) {
                         action.targets.clear();
@@ -571,51 +588,6 @@ fn should_render_target_preview(targeting_context: &TargetingContext) -> bool {
     }
 }
 
-fn render_target_path_preview(
-    gui_state: &mut GuiState,
-    game_state: &mut GameState,
-    action: &mut ActionData,
-    preview_position: Point3<f32>,
-    path_to_target: &Option<PathResult>,
-    target: &mut TargetInstance,
-) {
-    if let Some((shape, shape_pose_at_preview)) = systems::geometry::get_shape_at_point(
-        &game_state.world,
-        &game_state.geometry,
-        action.actor,
-        &preview_position,
-    ) && let Some(mesh) = gui_state.mesh_cache.get(&format!("{:#?}", shape))
-    {
-        if let Some(path_to_target) = path_to_target {
-            gui_state
-                .path_cache
-                .insert(action.actor, path_to_target.clone());
-            mesh.draw(
-                gui_state.ig_renderer.gl_context(),
-                &gui_state.program,
-                &shape_pose_at_preview.to_homogeneous(),
-                [1.0, 1.0, 1.0, 0.75],
-                &Wireframe::Only {
-                    color: [1.0, 1.0, 1.0, 0.75],
-                    width: 2.0,
-                },
-            );
-        }
-
-        let line_end = match target {
-            TargetInstance::Entity(entity) => {
-                systems::geometry::get_shape(&game_state.world, *entity)
-                    .map(|(_, shape_pose)| shape_pose.translation.vector.into())
-                    .unwrap()
-            }
-            TargetInstance::Point(point) => *point,
-        };
-        gui_state
-            .line_renderer
-            .add_line(preview_position.into(), line_end.into(), [1.0, 1.0, 1.0]);
-    }
-}
-
 fn get_target_path_preview(
     game_state: &mut GameState,
     action: &mut ActionData,
@@ -645,6 +617,51 @@ fn get_target_path_preview(
                 )
             }
         }
+    }
+}
+
+fn render_target_path_preview(
+    gui_state: &mut GuiState,
+    game_state: &mut GameState,
+    action: &mut ActionData,
+    preview_position: Point3<f32>,
+    path_to_target: &Option<PathResult>,
+    target: &mut TargetInstance,
+) {
+    if let Some((shape, shape_pose_at_preview)) = systems::geometry::get_shape_at_point(
+        &game_state.world,
+        &game_state.geometry,
+        action.actor,
+        &preview_position,
+    ) && let Some(mesh) = gui_state.mesh_cache.get(&format!("{:#?}", shape))
+    {
+        if let Some(path_to_target) = path_to_target {
+            gui_state
+                .path_cache
+                .insert(action.actor, path_to_target.clone());
+            mesh.draw(
+                gui_state.ig_renderer.gl_context(),
+                &gui_state.program,
+                &shape_pose_at_preview.to_homogeneous(),
+                [1.0, 1.0, 1.0, 0.75],
+                &MeshRenderMode::WireFrameOnly {
+                    color: [1.0, 1.0, 1.0, 0.75],
+                    width: 2.0,
+                },
+            );
+        }
+
+        let line_end = match target {
+            TargetInstance::Entity(entity) => {
+                systems::geometry::get_shape(&game_state.world, *entity)
+                    .map(|(_, shape_pose)| shape_pose.translation.vector.into())
+                    .unwrap()
+            }
+            TargetInstance::Point(point) => *point,
+        };
+        gui_state
+            .line_renderer
+            .add_line(preview_position.into(), line_end.into(), [1.0, 1.0, 1.0]);
     }
 }
 

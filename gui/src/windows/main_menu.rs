@@ -26,7 +26,7 @@ use crate::{
         },
         world::{
             camera::OrbitCamera,
-            mesh::{Mesh, Wireframe},
+            mesh::{Mesh, MeshRenderMode},
             shapes::{self},
         },
     },
@@ -144,8 +144,6 @@ impl MainMenuWindow {
                 } else {
                     None
                 };
-
-                Self::render_world(ui, gui_state, game_state);
 
                 if let Some(entity) = gui_state.selected_entity {
                     if (action_bar.is_some() && action_bar.as_ref().unwrap().entity != entity)
@@ -270,6 +268,8 @@ impl MainMenuWindow {
                         creature_right_click.render_mut_with_context(ui, game_state);
                     });
                 }
+
+                Self::render_world(ui, gui_state, game_state);
             }
         }
     }
@@ -480,7 +480,7 @@ impl MainMenuWindow {
                 &gui_state.program,
                 &Matrix4::identity(),
                 [0.75, 0.75, 0.75, 1.0],
-                &Wireframe::None,
+                &MeshRenderMode::MeshOnly,
             );
         } else {
             let mesh = Mesh::from_parry_trimesh(
@@ -500,7 +500,7 @@ impl MainMenuWindow {
                     &gui_state.program,
                     &Matrix4::identity(),
                     [0.2, 0.8, 0.2, 0.5],
-                    &Wireframe::Overlay {
+                    &MeshRenderMode::MeshWithWireFrame {
                         color: [0.0, 0.5, 0.0, 0.5],
                         width: 2.0,
                     },
@@ -540,12 +540,15 @@ impl MainMenuWindow {
                         && let RaycastHitKind::Creature(e) = &closest.kind
                         && *e == entity
                     {
-                        Wireframe::Overlay {
+                        &MeshRenderMode::MeshWithWireFrame {
                             color: [1.0, 1.0, 1.0, 1.0],
                             width: 2.0,
                         }
                     } else {
-                        Wireframe::None
+                        gui_state
+                            .creature_render_mode
+                            .get(&entity)
+                            .unwrap_or(&MeshRenderMode::MeshOnly)
                     };
 
                     mesh.draw(
@@ -553,7 +556,7 @@ impl MainMenuWindow {
                         &gui_state.program,
                         &shape_pose.to_homogeneous(),
                         [0.8, 0.8, 0.8, 1.0],
-                        &mode,
+                        mode,
                     );
 
                     // TEMP

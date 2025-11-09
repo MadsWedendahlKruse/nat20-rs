@@ -224,7 +224,7 @@ impl Mesh {
         prog: &BasicProgram,
         model: &na::Matrix4<f32>,
         color: [f32; 4],
-        wireframe: &Wireframe,
+        render_mode: &MeshRenderMode,
     ) {
         unsafe {
             gl.use_program(Some(prog.program));
@@ -236,15 +236,15 @@ impl Mesh {
             }
             gl.bind_vertex_array(Some(self.vao));
 
-            match wireframe {
-                Wireframe::None => {
+            match render_mode {
+                MeshRenderMode::MeshOnly => {
                     if let Some(loc) = &prog.loc_mode {
                         gl.uniform_1_i32(Some(loc), 0); // lit
                     }
                     gl.draw_elements(glow::TRIANGLES, self.index_count, glow::UNSIGNED_INT, 0);
                 }
 
-                Wireframe::Only { color, width } => {
+                MeshRenderMode::WireFrameOnly { color, width } => {
                     // flat, polygon lines
                     if let Some(loc) = &prog.loc_mode {
                         gl.uniform_1_i32(Some(loc), 1);
@@ -258,7 +258,7 @@ impl Mesh {
                     gl.polygon_mode(glow::FRONT_AND_BACK, glow::FILL);
                 }
 
-                Wireframe::Overlay { color, width } => {
+                MeshRenderMode::MeshWithWireFrame { color, width } => {
                     // pass 1: filled (lit)
                     if let Some(loc) = &prog.loc_mode {
                         gl.uniform_1_i32(Some(loc), 0);
@@ -293,16 +293,12 @@ impl Mesh {
     }
 }
 
-pub enum Wireframe {
-    None,
+#[derive(Debug, Clone, Default)]
+pub enum MeshRenderMode {
+    #[default]
+    MeshOnly,
     /// Draw only edges
-    Only {
-        color: [f32; 4],
-        width: f32,
-    },
+    WireFrameOnly { color: [f32; 4], width: f32 },
     /// Draw filled, then edge overlay with depth offset (avoids z-fighting)
-    Overlay {
-        color: [f32; 4],
-        width: f32,
-    },
+    MeshWithWireFrame { color: [f32; 4], width: f32 },
 }
