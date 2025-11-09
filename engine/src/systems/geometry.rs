@@ -1,6 +1,3 @@
-// TODO: For now let's just hardcode a heigh for each size and assume all creatures
-// have a "capsule" collision shape. Later we can make this more complex if needed.
-
 use std::{collections::HashMap, sync::LazyLock};
 
 use glam::Vec2;

@@ -7,7 +7,8 @@ use std::{
 
 use hecs::{Entity, World};
 use obj::Obj;
-use parry3d::na::Point3;
+use parry3d::{na::Point3, shape::Ball};
+use uom::si::f32::Length;
 
 use crate::{
     components::actions::{
@@ -317,7 +318,6 @@ impl GameState {
     ) -> Result<(), ActionError> {
         self.log_event(event.clone());
 
-        // Awaited callback handling remains unchanged
         if let Some(event_id) = event.response_to {
             if let Some(listener) = self.event_listeners.get(&event_id) {
                 if listener.matches(&event) {
@@ -327,7 +327,7 @@ impl GameState {
             }
         }
 
-        // Reaction window (encounter scope only unless you want global reactions too)
+        // Reaction window
         if let Some(actor) = event.actor() {
             if let Some(reaction_options) = self.collect_reactions(actor, &event) {
                 // Announce and prompt
@@ -436,12 +436,31 @@ impl GameState {
         actor: Entity,
         event: &Event,
     ) -> Option<HashMap<Entity, Vec<ReactionData>>> {
-        let encounter_id = self.in_combat.get(&actor)?;
-        let encounter = self.encounters.get(encounter_id)?;
+        // If in combat, only consider participants. Otherwise, consider all entities
+        // that are nearby
+        let reactors = if let Some(encounter_id) = self.in_combat.get(&actor)
+            && let Some(encounter) = self.encounters.get(encounter_id)
+        {
+            encounter.participants(&self.world, EntityFilter::not_dead())
+        } else if let Some((_, shape_pose)) = systems::geometry::get_shape(&self.world, actor) {
+            systems::geometry::entities_in_shape(
+                &self.world,
+                // TODO: Not entirely sure what the right shape is here
+                Box::new(Ball { radius: 100.0 }),
+                &shape_pose,
+            )
+        } else {
+            return None;
+        };
+
+        println!(
+            "[GameState] Collecting reactions to event {:?} from reactors: {:?}",
+            event.id, reactors
+        );
 
         let mut reaction_options = HashMap::new();
 
-        for reactor in &encounter.participants(&self.world, EntityFilter::not_dead()) {
+        for reactor in &reactors {
             if self.event_log.has_reacted(&event.id, reactor) {
                 continue;
             }
@@ -459,8 +478,14 @@ impl GameState {
         }
 
         if reaction_options.is_empty() {
+            println!("\tNo reaction options available for event {:?}", event.id);
             None
         } else {
+            println!(
+                "\tFound reactors for event {:?}: {:?}",
+                event.id,
+                reaction_options.keys()
+            );
             Some(reaction_options)
         }
     }

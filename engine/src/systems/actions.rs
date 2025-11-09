@@ -7,7 +7,7 @@ use crate::{
                 Action, ActionContext, ActionCooldownMap, ActionMap, ActionProvider, ReactionSet,
             },
             targeting::{
-                self, AreaShape, TargetInstance, TargetingContext, TargetingError, TargetingKind,
+                AreaShape, TargetInstance, TargetingContext, TargetingError, TargetingKind,
             },
         },
         id::{ActionId, ResourceId},
@@ -20,7 +20,7 @@ use crate::{
         game_state::GameState,
         geometry::WorldGeometry,
     },
-    entities, registry,
+    registry,
     systems::{self, geometry::RaycastFilter, movement::PathResult},
 };
 
