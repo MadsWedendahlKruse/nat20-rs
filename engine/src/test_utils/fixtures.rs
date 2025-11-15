@@ -429,12 +429,12 @@ pub mod creatures {
 pub mod engine {
     use rerecast::ConfigBuilder;
 
-    use crate::engine::game_state::GameState;
+    use crate::engine::{game_state::GameState, geometry::WorldGeometry};
 
     pub fn test_game_state() -> GameState {
-        GameState::new(
+        GameState::new(WorldGeometry::from_obj_path(
             "../assets/test_terrain.obj",
             &ConfigBuilder::default().build(),
-        )
+        ))
     }
 }

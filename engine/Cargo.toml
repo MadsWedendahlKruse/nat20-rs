@@ -11,15 +11,14 @@ rstest = "0.25.0"
 strum = { version = "0.27.1", features = ["derive"] }
 uuid = { version = "1.16.0", features = ["v4"] }
 paste = "1"
-parry3d = "0.24"
+parry3d = { version = "0.24", features = ["serde-serialize"] }
 obj-rs = "0.7.4"
-rerecast = "0.2.0"
-# rerecast = "0.1.1"
+rerecast = { version = "0.2.0", features = ["serialize"] }
 glam = "0.30.8"
-# glam = "0.29.3"
-polyanya = "0.15.1"
+polyanya = { version = "0.15.1", features = ["serde"] }
 uom = "0.37.0"
 num-traits = "0.2.19"
+serde = "1.0.228"
 
 [lib]
 name = "nat20_rs"

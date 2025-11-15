@@ -44,10 +44,7 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new<P: AsRef<Path>>(world_geometry_path: P, navmesh_config: &rerecast::Config) -> Self {
-        let obj: Obj = obj::load_obj(BufReader::new(File::open(world_geometry_path).unwrap()))
-            .expect("Failed to load world geometry");
-
+    pub fn new(geometry: WorldGeometry) -> Self {
         Self {
             world: World::new(),
             encounters: HashMap::new(),
@@ -55,7 +52,7 @@ impl GameState {
             interaction_engine: InteractionEngine::default(),
             event_log: EventLog::new(),
             event_listeners: HashMap::new(),
-            geometry: WorldGeometry::from_obj(obj, navmesh_config),
+            geometry,
         }
     }
 

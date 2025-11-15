@@ -1,12 +1,16 @@
-use glam::{UVec3, Vec2, Vec3, Vec3A};
+use std::{fs::File, io::BufReader, path::Path};
+
+use glam::{UVec3, Vec2, Vec3A};
 use obj::Obj;
 use parry3d::na::Point3;
 use polyanya::Coords;
 use rerecast::{
     AreaType, BuildContoursFlags, Config, DetailNavmesh, HeightfieldBuilder, PolygonNavmesh,
 };
+use serde::{Deserialize, Serialize};
 use uom::si::{f32::Length, length::meter};
 
+#[derive(Serialize, Deserialize)]
 pub struct WorldGeometry {
     points: Vec<[f32; 3]>,
     indices: Vec<[u32; 3]>,
@@ -49,6 +53,12 @@ impl WorldGeometry {
             .collect();
 
         Self::new(points, indices, config)
+    }
+
+    pub fn from_obj_path<P: AsRef<Path>>(obj_path: P, config: &Config) -> Self {
+        let obj: Obj = obj::load_obj(BufReader::new(File::open(obj_path).unwrap()))
+            .expect("Failed to load world geometry");
+        Self::from_obj(obj, config)
     }
 
     pub fn rebuild_navmesh(&mut self, config: &Config) {
