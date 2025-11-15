@@ -432,6 +432,9 @@ pub mod engine {
     use crate::engine::game_state::GameState;
 
     pub fn test_game_state() -> GameState {
-        GameState::new("assets/test_terrain.obj", &ConfigBuilder::default().build())
+        GameState::new(
+            "../assets/test_terrain.obj",
+            &ConfigBuilder::default().build(),
+        )
     }
 }

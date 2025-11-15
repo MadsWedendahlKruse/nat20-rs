@@ -136,6 +136,20 @@ impl RenderableMutWithContext<&mut GameState> for NavigationDebugWindow {
                         }
                     }
                 }
+
+                if ui.collapsing_header("Polyanya", TreeNodeFlags::empty()) {
+                    let polyanya_mesh = &mut game_state.geometry.polyanya_mesh;
+                    ui.input_scalar("Search Delta", &mut polyanya_mesh.search_delta)
+                        .build();
+                    ui.input_scalar("Search Steps", &mut polyanya_mesh.search_steps)
+                        .build();
+                    for (i, layer) in game_state.geometry.polyanya_mesh.layers.iter().enumerate() {
+                        ui.tree_node_config(format!("Layer {}", i)).build(|| {
+                            // ui.text(format!("Polygons: {}", layer.polygons.len()));
+                            // ui.text(format!("Nodes: {}", layer.nodes.len()));
+                        });
+                    }
+                }
             },
         );
 

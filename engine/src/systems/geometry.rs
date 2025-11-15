@@ -452,7 +452,7 @@ pub fn navmesh_nearest_point(
 ) -> Option<Point3<f32>> {
     let closest_coord = world_geometry
         .polyanya_mesh
-        .get_closest_point(Coords::on_mesh(Vec2::new(point.x, point.z)))?;
+        .get_closest_point_at_height(Coords::on_mesh(Vec2::new(point.x, point.z)), point.y)?;
 
     let coord_3d = closest_coord.position_with_height(&world_geometry.polyanya_mesh);
     Some(Point3::new(coord_3d.x, coord_3d.y, coord_3d.z))

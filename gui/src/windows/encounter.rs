@@ -204,6 +204,10 @@ impl RenderableMutWithContext<&mut GameState> for Encounter {
             if let Some(action_decision) = ai_decision.decision {
                 let result = game_state.submit_decision(action_decision);
                 println!("AI decision submitted: {:?}", result);
+                if result.is_err() {
+                    println!("Failed to submit AI decision, skipping turn.");
+                    self.end_turn(game_state, ai_decision.actor);
+                }
             } else {
                 self.end_turn(game_state, self.current_entity());
             }

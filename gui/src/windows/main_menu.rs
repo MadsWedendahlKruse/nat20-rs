@@ -82,7 +82,7 @@ impl MainMenuWindow {
                 log_level: LogLevel::Info,
                 log_source: 0,
                 game_state: GameState::new(
-                    "engine/assets/test_terrain.obj",
+                    "assets/test_terrain_2.obj",
                     &initial_config.clone().build(),
                 ),
                 encounters: Vec::new(),

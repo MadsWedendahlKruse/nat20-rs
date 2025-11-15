@@ -1,6 +1,7 @@
 use glam::{UVec3, Vec2, Vec3, Vec3A};
 use obj::Obj;
 use parry3d::na::Point3;
+use polyanya::Coords;
 use rerecast::{
     AreaType, BuildContoursFlags, Config, DetailNavmesh, HeightfieldBuilder, PolygonNavmesh,
 };
@@ -63,8 +64,15 @@ impl WorldGeometry {
         // Path found with pathfinding doesn't include start, so add it manually
         let mut final_path = vec![start];
 
+        let start_coords = self
+            .polyanya_mesh
+            .get_closest_point_at_height(Coords::on_mesh(Vec2::new(start.x, start.z)), start.y)?;
+        let end_coords = self
+            .polyanya_mesh
+            .get_closest_point_at_height(Coords::on_mesh(Vec2::new(end.x, end.z)), end.y)?;
+
         self.polyanya_mesh
-            .path(Vec2::new(start.x, start.z), Vec2::new(end.x, end.z))
+            .path(start_coords, end_coords)
             .map(|path| {
                 final_path.extend(
                     path.path_with_height(
@@ -90,6 +98,7 @@ fn build_navmesh(
     // For params see: https://github.com/janhohenheim/rerecast/blob/main/crates/rerecast/src/config.rs
     // see also: https://www.youtube.com/watch?v=wYRrvWaLjJ8
 
+    let start_time = std::time::Instant::now();
     let mut nav_trimesh = rerecast::TriMesh {
         vertices: points
             .iter()
@@ -101,11 +110,26 @@ fn build_navmesh(
             .collect(),
         area_types: vec![AreaType::DEFAULT_WALKABLE; indices.len()],
     };
+    println!(
+        "[WorldGeometry] - Created nav trimesh in {:?}",
+        start_time.elapsed()
+    );
 
+    let start_time = std::time::Instant::now();
     nav_trimesh.mark_walkable_triangles(f32::to_radians(45.0));
+    println!(
+        "[WorldGeometry] - Marked walkable triangles in {:?}",
+        start_time.elapsed()
+    );
 
+    let start_time = std::time::Instant::now();
     let aabb = nav_trimesh.compute_aabb().unwrap();
+    println!(
+        "[WorldGeometry] - Computed AABB in {:?}",
+        start_time.elapsed()
+    );
 
+    let start_time = std::time::Instant::now();
     let mut heightfield = HeightfieldBuilder {
         aabb,
         cell_size: config.cell_size,
@@ -113,26 +137,56 @@ fn build_navmesh(
     }
     .build()
     .unwrap();
+    println!(
+        "[WorldGeometry] - Built heightfield in {:?}",
+        start_time.elapsed()
+    );
 
+    let start_time = std::time::Instant::now();
     heightfield
         .rasterize_triangles(&nav_trimesh, config.walkable_climb)
         .unwrap();
+    println!(
+        "[WorldGeometry] - Rasterized triangles in {:?}",
+        start_time.elapsed()
+    );
 
+    let start_time = std::time::Instant::now();
     // Once all geometry is rasterized, we do initial pass of filtering to
     // remove unwanted overhangs caused by the conservative rasterization
     // as well as filter spans where the character cannot possibly stand.
     heightfield.filter_low_hanging_walkable_obstacles(config.walkable_climb);
     heightfield.filter_ledge_spans(config.walkable_height, config.walkable_climb);
     heightfield.filter_walkable_low_height_spans(config.walkable_height);
+    println!(
+        "[WorldGeometry] - Filtered walkable surfaces in {:?}",
+        start_time.elapsed()
+    );
 
+    let start_time = std::time::Instant::now();
     let mut compact_heightfield = heightfield
         .into_compact(config.walkable_height, config.walkable_climb)
         .unwrap();
+    println!(
+        "[WorldGeometry] - Converted to compact heightfield in {:?}",
+        start_time.elapsed()
+    );
 
+    let start_time = std::time::Instant::now();
     compact_heightfield.erode_walkable_area(config.walkable_radius);
+    println!(
+        "[WorldGeometry] - Eroded walkable area in {:?}",
+        start_time.elapsed()
+    );
 
+    let start_time = std::time::Instant::now();
     compact_heightfield.build_distance_field();
+    println!(
+        "[WorldGeometry] - Built distance field in {:?}",
+        start_time.elapsed()
+    );
 
+    let start_time = std::time::Instant::now();
     compact_heightfield
         .build_regions(
             config.border_size,
@@ -140,13 +194,24 @@ fn build_navmesh(
             config.merge_region_area,
         )
         .unwrap();
+    println!(
+        "[WorldGeometry] - Built compact heightfield in {:?}",
+        start_time.elapsed()
+    );
 
+    let start_time = std::time::Instant::now();
     let contours = compact_heightfield.build_contours(
         config.max_simplification_error,
         config.max_edge_len,
         BuildContoursFlags::DEFAULT,
     );
+    println!(
+        "[WorldGeometry] - Built contours in {:?}",
+        start_time.elapsed()
+    );
 
+    println!("[WorldGeometry] Creating navmesh",);
+    let build_start_time = std::time::Instant::now();
     let poly_navmesh = contours
         .into_polygon_mesh(config.max_vertices_per_polygon)
         .unwrap();
@@ -159,10 +224,15 @@ fn build_navmesh(
     )
     .unwrap();
 
+    println!(
+        "[WorldGeometry] - Navmesh built in {:?}",
+        build_start_time.elapsed()
+    );
+
     let mut polyanya_mesh: polyanya::Mesh =
         polyanya::RecastFullMesh::new(poly_navmesh.clone(), detail_navmesh.clone()).into();
     // Increase search steps to allow snapping points to navmesh from further away
-    polyanya_mesh.search_steps *= 10;
+    // polyanya_mesh.search_steps *= 10;
 
     (poly_navmesh, detail_navmesh, polyanya_mesh)
 }
