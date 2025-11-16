@@ -8,7 +8,7 @@ use parry3d::{
 use uom::{
     Conversion,
     si::{
-        f32::{Angle, Length},
+        f32::{Angle, Length, Velocity},
         length::{Unit, meter},
     },
 };
@@ -235,10 +235,17 @@ impl TargetingRange {
 }
 
 #[derive(Debug, Clone)]
+pub enum LineOfSightMode {
+    Ignore,
+    Ray,
+    Parabola { launch_speed: Velocity },
+}
+
+#[derive(Debug, Clone)]
 pub struct TargetingContext {
     pub kind: TargetingKind,
     pub range: TargetingRange,
-    pub require_line_of_sight: bool,
+    pub line_of_sight: LineOfSightMode,
     pub allowed_targets: EntityFilter,
 }
 
@@ -246,13 +253,13 @@ impl TargetingContext {
     pub fn new(
         kind: TargetingKind,
         range: TargetingRange,
-        require_line_of_sight: bool,
+        line_of_sight: LineOfSightMode,
         allowed_targets: EntityFilter,
     ) -> Self {
         TargetingContext {
             kind,
             range,
-            require_line_of_sight,
+            line_of_sight,
             allowed_targets,
         }
     }
@@ -261,7 +268,7 @@ impl TargetingContext {
         TargetingContext {
             kind: TargetingKind::SelfTarget,
             range: TargetingRange::new::<meter>(0.0),
-            require_line_of_sight: false,
+            line_of_sight: LineOfSightMode::Ignore,
             allowed_targets: EntityFilter::All,
         }
     }
@@ -298,29 +305,27 @@ impl TargetingContext {
             }
 
             // Check line of sight
-            if self.require_line_of_sight {
-                let line_of_sight_result = match target {
-                    TargetInstance::Entity(entity) => {
-                        systems::geometry::line_of_sight_entity_entity(
-                            world,
-                            world_geometry,
-                            actor,
-                            *entity,
-                        )
-                    }
-                    TargetInstance::Point(point) => systems::geometry::line_of_sight_entity_point(
-                        world,
-                        world_geometry,
-                        actor,
-                        *point,
-                    ),
-                };
+            let line_of_sight_result = match target {
+                TargetInstance::Entity(entity) => systems::geometry::line_of_sight_entity_entity(
+                    world,
+                    world_geometry,
+                    actor,
+                    *entity,
+                    &self.line_of_sight,
+                ),
+                TargetInstance::Point(point) => systems::geometry::line_of_sight_entity_point(
+                    world,
+                    world_geometry,
+                    actor,
+                    *point,
+                    &self.line_of_sight,
+                ),
+            };
 
-                if !line_of_sight_result.has_line_of_sight {
-                    return Err(TargetingError::NoLineOfSight {
-                        target: target.clone(),
-                    });
-                }
+            if !line_of_sight_result.has_line_of_sight {
+                return Err(TargetingError::NoLineOfSight {
+                    target: target.clone(),
+                });
             }
         }
 

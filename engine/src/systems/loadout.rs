@@ -1,10 +1,13 @@
 use hecs::{Entity, Ref, World};
 
 use crate::{
-    components::items::equipment::{
-        armor::ArmorClass,
-        loadout::{EquipmentInstance, Loadout, TryEquipError},
-        slots::EquipmentSlot,
+    components::{
+        actions::targeting::TargetingRange,
+        items::equipment::{
+            armor::ArmorClass,
+            loadout::{EquipmentInstance, Loadout, TryEquipError},
+            slots::EquipmentSlot,
+        },
     },
     systems,
 };
@@ -77,4 +80,11 @@ pub fn armor_class(world: &World, entity: Entity) -> ArmorClass {
 
 pub fn can_equip(world: &World, entity: Entity, equipment: &EquipmentInstance) -> bool {
     loadout(world, entity).can_equip(equipment)
+}
+
+pub fn weapon_range(world: &World, entity: Entity, slot: &EquipmentSlot) -> Option<TargetingRange> {
+    loadout(world, entity)
+        .weapon_in_hand(slot)
+        .map(|w| w.range())
+        .cloned()
 }

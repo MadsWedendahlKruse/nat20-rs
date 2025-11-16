@@ -4,7 +4,9 @@ use nat20_rs::{
     components::{
         actions::{
             action::{ActionContext, ActionKind, ActionMap},
-            targeting::{AreaShape, TargetInstance, TargetingContext, TargetingKind},
+            targeting::{
+                AreaShape, LineOfSightMode, TargetInstance, TargetingContext, TargetingKind,
+            },
         },
         d20::RollMode,
         id::{ActionId, Name},
@@ -20,7 +22,7 @@ use nat20_rs::{
     systems::{
         self,
         actions::TargetPathFindingResult,
-        geometry::{RaycastHit, RaycastHitKind},
+        geometry::{LineOfSightResult, RaycastHit, RaycastHitKind, RaycastMode},
         movement::PathResult,
     },
 };
@@ -58,7 +60,7 @@ pub enum ActionBarState {
     },
     Targets {
         action: ActionData,
-        potential_target: Option<(TargetInstance, TargetPathFindingResult)>,
+        potential_target: Option<(TargetInstance, TargetPathFindingResult, LineOfSightResult)>,
     },
 }
 
@@ -332,7 +334,7 @@ fn render_target_selection(
     game_state: &mut GameState,
     new_state: &mut Option<ActionBarState>,
     action: &mut ActionData,
-    potential_target: &mut Option<(TargetInstance, TargetPathFindingResult)>,
+    potential_target: &mut Option<(TargetInstance, TargetPathFindingResult, LineOfSightResult)>,
 ) {
     ui.tooltip_text(action.action_id.as_str());
 
@@ -352,7 +354,8 @@ fn render_target_selection(
     {
         update_potential_target(potential_target, game_state, action, closest);
 
-        let potential_target_instance = if let Some((target, path_result)) = potential_target
+        let potential_target_instance = if let Some((target, path_result, line_of_sight)) =
+            potential_target
             && should_render_target_preview(&targeting_context)
         {
             let (preview_position, path_to_target) =
@@ -363,7 +366,8 @@ fn render_target_selection(
                 game_state,
                 action,
                 preview_position,
-                &path_to_target,
+                path_to_target,
+                line_of_sight,
                 target,
             );
 
@@ -588,11 +592,11 @@ fn should_render_target_preview(targeting_context: &TargetingContext) -> bool {
     }
 }
 
-fn get_target_path_preview(
+fn get_target_path_preview<'p>(
     game_state: &mut GameState,
     action: &mut ActionData,
-    path_result: &mut TargetPathFindingResult,
-) -> (Point3<f32>, Option<PathResult>) {
+    path_result: &'p mut TargetPathFindingResult,
+) -> (Point3<f32>, Option<&'p PathResult>) {
     match path_result {
         TargetPathFindingResult::AlreadyInRange => (
             systems::geometry::get_eye_position(&game_state.world, action.actor).unwrap(),
@@ -609,7 +613,7 @@ fn get_target_path_preview(
                     &end_at_ground,
                 )
             {
-                (eye_pos, Some(path.clone()))
+                (eye_pos, Some(path))
             } else {
                 (
                     systems::geometry::get_eye_position(&game_state.world, action.actor).unwrap(),
@@ -625,7 +629,8 @@ fn render_target_path_preview(
     game_state: &mut GameState,
     action: &mut ActionData,
     preview_position: Point3<f32>,
-    path_to_target: &Option<PathResult>,
+    path_to_target: Option<&PathResult>,
+    line_of_sight: &LineOfSightResult,
     target: &mut TargetInstance,
 ) {
     if let Some((shape, shape_pose_at_preview)) = systems::geometry::get_shape_at_point(
@@ -651,17 +656,46 @@ fn render_target_path_preview(
             );
         }
 
-        let line_end = match target {
-            TargetInstance::Entity(entity) => {
-                systems::geometry::get_shape(&game_state.world, *entity)
-                    .map(|(_, shape_pose)| shape_pose.translation.vector.into())
-                    .unwrap()
+        if let Some(los_raycast) = &line_of_sight.raycast_result {
+            let col = if line_of_sight.has_line_of_sight {
+                [1.0, 1.0, 1.0]
+            } else {
+                [1.0, 0.0, 0.0]
+            };
+
+            match &los_raycast.mode {
+                RaycastMode::Ray(ray) => {
+                    let end_point = if let Some(closest) = los_raycast.closest() {
+                        ray.point_at(closest.toi)
+                    } else {
+                        ray.point_at(f32::MAX)
+                    };
+                    gui_state.line_renderer.add_line(
+                        preview_position.into(),
+                        end_point.into(),
+                        col,
+                    );
+                }
+                RaycastMode::Parabola {
+                    start,
+                    initial_velocity,
+                    time_step,
+                    ..
+                } => {
+                    let toi = if let Some(closest) = los_raycast.closest() {
+                        closest.toi
+                    } else {
+                        10.0 // Arbitrary fallback
+                    };
+                    gui_state.line_renderer.add_parabola(
+                        start.clone().into(),
+                        initial_velocity.clone().into(),
+                        ((toi / time_step).ceil() as usize).max(2),
+                        [1.0, 1.0, 1.0],
+                    );
+                }
             }
-            TargetInstance::Point(point) => *point,
-        };
-        gui_state
-            .line_renderer
-            .add_line(preview_position.into(), line_end.into(), [1.0, 1.0, 1.0]);
+        }
     }
 }
 
@@ -687,7 +721,7 @@ fn render_range_preview(
 }
 
 fn update_potential_target(
-    potential_target: &mut Option<(TargetInstance, TargetPathFindingResult)>,
+    potential_target: &mut Option<(TargetInstance, TargetPathFindingResult, LineOfSightResult)>,
     game_state: &mut GameState,
     action: &ActionData,
     closest: &RaycastHit,
@@ -702,7 +736,7 @@ fn update_potential_target(
     potential_action.targets.clear();
     potential_action.targets.push(closest_target.clone());
 
-    let is_new_target = if let Some((target, _)) = potential_target {
+    let is_new_target = if let Some((target, _, _)) = potential_target {
         target != &closest_target
     } else {
         true
@@ -714,12 +748,40 @@ fn update_potential_target(
             closest_target
         );
         match systems::actions::path_to_target(game_state, &potential_action, true) {
-            Ok(result) => {
+            Ok(target_path_result) => {
                 println!(
                     "[update_potential_target] Found path to target {:?}: {:?}",
-                    closest_target, result
+                    closest_target, target_path_result
                 );
-                *potential_target = Some((closest_target, result));
+
+                let targeting_context = systems::actions::targeting_context(
+                    &game_state.world,
+                    potential_action.actor,
+                    &potential_action.action_id,
+                    &potential_action.context,
+                );
+
+                let line_of_sight_result = match closest_target {
+                    TargetInstance::Entity(entity) => {
+                        systems::geometry::line_of_sight_entity_entity(
+                            &game_state.world,
+                            &game_state.geometry,
+                            potential_action.actor,
+                            entity,
+                            &targeting_context.line_of_sight,
+                        )
+                    }
+                    TargetInstance::Point(point) => systems::geometry::line_of_sight_entity_point(
+                        &game_state.world,
+                        &game_state.geometry,
+                        potential_action.actor,
+                        point,
+                        &targeting_context.line_of_sight,
+                    ),
+                };
+
+                *potential_target =
+                    Some((closest_target, target_path_result, line_of_sight_result));
             }
             Err(err) => {
                 println!(

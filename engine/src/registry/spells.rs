@@ -11,7 +11,10 @@ use crate::{
         ability::{Ability, AbilityScoreMap},
         actions::{
             action::{ActionContext, ActionKind, ActionKindResult, ReactionResult},
-            targeting::{AreaShape, EntityFilter, TargetingContext, TargetingKind, TargetingRange},
+            targeting::{
+                AreaShape, EntityFilter, LineOfSightMode, TargetingContext, TargetingKind,
+                TargetingRange,
+            },
         },
         d20::{D20Check, D20CheckDC},
         damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
@@ -138,7 +141,7 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
         Arc::new(|_, _, _| TargetingContext {
             kind: TargetingKind::Single,
             range: TargetingRange::new::<foot>(60.0),
-            require_line_of_sight: true,
+            line_of_sight: LineOfSightMode::Ray,
             allowed_targets: EntityFilter::not_dead(),
         }),
         Some(Arc::new(|reactor, trigger_event| {
@@ -214,7 +217,7 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
                     },
                 },
                 range: TargetingRange::new::<foot>(120.0),
-                require_line_of_sight: true,
+                line_of_sight: LineOfSightMode::Ray,
                 allowed_targets: EntityFilter::not_dead(),
             }
         }),
@@ -266,8 +269,7 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
                 fixed_on_actor: false,
             },
             range: TargetingRange::new::<foot>(150.0),
-            require_line_of_sight: true,
-            // TODO: Can also hit objects
+            line_of_sight: LineOfSightMode::Ray,
             allowed_targets: EntityFilter::not_dead(),
         }),
         None,
@@ -320,7 +322,7 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
                 kind: TargetingKind::Multiple {
                     max_targets: 3 + (spell_level - 1),
                 },
-                require_line_of_sight: false,
+                line_of_sight: LineOfSightMode::Ray,
                 range: TargetingRange::new::<foot>(120.0),
                 allowed_targets: EntityFilter::not_dead(),
             }

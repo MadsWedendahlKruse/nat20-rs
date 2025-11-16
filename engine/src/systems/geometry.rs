@@ -8,9 +8,10 @@ use parry3d::{
     shape::{Capsule, Shape},
 };
 use polyanya::Coords;
+use uom::si::{f32::Velocity, velocity::meter_per_second};
 
 use crate::{
-    components::race::CreatureSize,
+    components::{actions::targeting::LineOfSightMode, race::CreatureSize},
     engine::geometry::{WorldGeometry, WorldPath},
 };
 
@@ -135,9 +136,25 @@ pub enum RaycastFilter {
     ExcludeCreatures(Vec<Entity>),
 }
 
+static DEFAULT_GRAVITY: Vector3<f32> = Vector3::new(0.0, -9.81, 0.0);
+static DEFAULT_TIME_STEP: f32 = 1.0 / 60.0;
+static DEFAULT_MAX_TIME: f32 = 10.0;
+
+#[derive(Debug, Clone)]
+pub enum RaycastMode {
+    Ray(Ray),
+    Parabola {
+        start: Point3<f32>,
+        initial_velocity: Vector3<f32>,
+        gravity: Vector3<f32>,
+        time_step: f32,
+        max_time: f32,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub struct RaycastResult {
-    pub ray: Ray,
+    pub mode: RaycastMode,
     pub hits: Vec<RaycastHit>,
     pub closest_index: Option<usize>,
     pub filter: RaycastFilter,
@@ -159,17 +176,6 @@ impl RaycastResult {
             .iter()
             .find(|o| matches!(o.kind, RaycastHitKind::Creature(_)))
     }
-}
-
-static DEFAULT_MAX_TOI: f32 = 10000.0;
-
-pub fn raycast(
-    world: &World,
-    world_geometry: &WorldGeometry,
-    ray: &Ray,
-    filter: &RaycastFilter,
-) -> Option<RaycastResult> {
-    raycast_with_toi(world, world_geometry, ray, DEFAULT_MAX_TOI, filter)
 }
 
 pub fn raycast_with_toi(
@@ -252,12 +258,131 @@ pub fn raycast_with_toi(
             .min_by(|(_, a), (_, b)| a.toi.partial_cmp(&b.toi).unwrap())
             .map(|(i, _)| i);
         Some(RaycastResult {
-            ray: ray.clone(),
+            mode: RaycastMode::Ray(*ray),
             hits: outcomes,
             closest_index,
             filter: filter.clone(),
         })
     }
+}
+
+pub fn raycast_parabola(
+    world: &World,
+    world_geometry: &WorldGeometry,
+    start: Point3<f32>,
+    initial_velocity: Vector3<f32>,
+    gravity: Vector3<f32>,
+    time_step: f32,
+    max_time: f32,
+    filter: &RaycastFilter,
+) -> Option<RaycastResult> {
+    let mut outcomes = vec![];
+    let mut time = 0.0;
+    let mut previous_position = start;
+
+    while time < max_time {
+        let current_position = start + initial_velocity * time + 0.5 * gravity * time * time;
+        let dir = Vector3::normalize(&(current_position - previous_position));
+        let ray = Ray::new(previous_position, dir);
+        let segment_length = (current_position - previous_position).magnitude();
+
+        if let Some(mut result) =
+            raycast_with_toi(world, world_geometry, &ray, segment_length, filter)
+        {
+            // Adjust TOI to be relative to the entire parabola
+            for hit in &mut result.hits {
+                hit.toi += (time - time_step) * initial_velocity.magnitude();
+            }
+            outcomes.extend(result.hits);
+        }
+
+        previous_position = current_position;
+        time += time_step;
+    }
+
+    if outcomes.is_empty() {
+        None
+    } else {
+        let closest_index = outcomes
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| a.toi.partial_cmp(&b.toi).unwrap())
+            .map(|(i, _)| i);
+        Some(RaycastResult {
+            mode: RaycastMode::Parabola {
+                start,
+                initial_velocity,
+                gravity,
+                time_step,
+                max_time,
+            },
+            hits: outcomes,
+            closest_index,
+            filter: filter.clone(),
+        })
+    }
+}
+
+fn solve_parabola_initial_velocity(
+    start: Point3<f32>,
+    end: Point3<f32>,
+    launch_speed: &Velocity,
+    gravity: &Vector3<f32>,
+) -> Vector3<f32> {
+    println!(
+        "[solve_parabola_initial_velocity] start: {:?}, end: {:?}, launch_speed: {:?}, gravity: {:?}",
+        start, end, launch_speed, gravity
+    );
+    let speed = launch_speed.get::<meter_per_second>();
+    let g = gravity.magnitude();
+    println!("\tSpeed in m/s: {:?}", speed);
+    let horizontal_displacement = Vec2::new(end.x - start.x, end.z - start.z);
+    println!("\tHorizontal displacement: {:?}", horizontal_displacement);
+    let horizontal_distance = horizontal_displacement.length();
+    println!("\tHorizontal distance: {:?}", horizontal_distance);
+    let delta_y = end.y - start.y;
+    println!("\tDelta Y: {:?}", delta_y);
+    let speed_2 = speed * speed;
+    let speed_4 = speed_2 * speed_2;
+    println!("\tSpeed^2: {:?}, Speed^4: {:?}", speed_2, speed_4);
+    let discriminant =
+        speed_4 - g * (g * horizontal_distance * horizontal_distance + 2.0 * delta_y * speed_2);
+    if discriminant < 0.0 {
+        return Vector3::zeros();
+    }
+    println!("\tDiscriminant: {:?}", discriminant);
+    let root = discriminant.sqrt();
+    println!("\tSqrt(Discriminant): {:?}", root);
+    let tan_angle_1 = (speed_2 + root) / (g * horizontal_distance);
+    let tan_angle_2 = (speed_2 - root) / (g * horizontal_distance);
+    println!("\tTan(angle) options: {:?}, {:?}", tan_angle_1, tan_angle_2);
+    let angle1 = tan_angle_1.atan();
+    let angle2 = tan_angle_2.atan();
+    let chosen_angle = angle1.min(angle2);
+    println!(
+        "\tPossible angles: {:?}, {:?}, chosen angle: {:?}",
+        angle1, angle2, chosen_angle
+    );
+    let v_xz = speed * chosen_angle.cos();
+    let v_y = speed * chosen_angle.sin();
+    let direction_xz = horizontal_displacement.normalize();
+    let initial_velocity = Vector3::new(direction_xz.x * v_xz, v_y, direction_xz.y * v_xz);
+    println!(
+        "[solve_parabola_initial_velocity] start: {:?}, end: {:?}, launch_speed: {:?}, gravity: {:?} => initial_velocity: {:?}",
+        start, end, launch_speed, gravity, initial_velocity
+    );
+    initial_velocity
+}
+
+static DEFAULT_MAX_TOI: f32 = 10000.0;
+
+pub fn raycast(
+    world: &World,
+    world_geometry: &WorldGeometry,
+    ray: &Ray,
+    filter: &RaycastFilter,
+) -> Option<RaycastResult> {
+    raycast_with_toi(world, world_geometry, ray, DEFAULT_MAX_TOI, filter)
 }
 
 pub fn raycast_entity_point(
@@ -317,9 +442,30 @@ pub fn line_of_sight_point_point(
     world_geometry: &WorldGeometry,
     from: Point3<f32>,
     to: Point3<f32>,
+    mode: &LineOfSightMode,
     filter: &RaycastFilter,
 ) -> LineOfSightResult {
-    if let Some(result) = raycast_point_point(world, world_geometry, from, to, filter)
+    let raycast_result = match mode {
+        LineOfSightMode::Ignore => {
+            return LineOfSightResult {
+                has_line_of_sight: true,
+                raycast_result: None,
+            };
+        }
+        LineOfSightMode::Ray => raycast_point_point(world, world_geometry, from, to, filter),
+        LineOfSightMode::Parabola { launch_speed } => raycast_parabola(
+            world,
+            world_geometry,
+            from,
+            solve_parabola_initial_velocity(from, to, launch_speed, &DEFAULT_GRAVITY),
+            DEFAULT_GRAVITY,
+            DEFAULT_TIME_STEP,
+            DEFAULT_MAX_TIME,
+            filter,
+        ),
+    };
+
+    if let Some(result) = raycast_result
         && let Some(closest) = result.closest()
     {
         let distance = (to - from).magnitude();
@@ -345,12 +491,14 @@ pub fn line_of_sight_entity_point(
     world_geometry: &WorldGeometry,
     entity: Entity,
     point: Point3<f32>,
+    mode: &LineOfSightMode,
 ) -> LineOfSightResult {
     line_of_sight_entity_point_filter(
         world,
         world_geometry,
         entity,
         point,
+        mode,
         &RaycastFilter::ExcludeCreatures(vec![entity]),
     )
 }
@@ -360,10 +508,11 @@ pub fn line_of_sight_entity_point_filter(
     world_geometry: &WorldGeometry,
     entity: Entity,
     point: Point3<f32>,
+    mode: &LineOfSightMode,
     filter: &RaycastFilter,
 ) -> LineOfSightResult {
     if let Some(eye_pos) = get_eye_position(world, entity) {
-        line_of_sight_point_point(world, world_geometry, eye_pos, point, filter)
+        line_of_sight_point_point(world, world_geometry, eye_pos, point, mode, filter)
     } else {
         LineOfSightResult {
             has_line_of_sight: false,
@@ -372,28 +521,51 @@ pub fn line_of_sight_entity_point_filter(
     }
 }
 
-// TODO: How to do this properly? Just because you can't see their eyes doesn't
-// mean you can't see them at all.
 pub fn line_of_sight_entity_entity(
     world: &World,
     world_geometry: &WorldGeometry,
     from_entity: Entity,
     to_entity: Entity,
+    mode: &LineOfSightMode,
 ) -> LineOfSightResult {
-    if let Some(from_eye_pos) = get_eye_position(world, from_entity)
-        && let Some(to_eye_pos) = get_eye_position(world, to_entity)
-        && let Some(result) = raycast_point_point(
-            world,
-            world_geometry,
-            from_eye_pos,
-            to_eye_pos,
-            &RaycastFilter::ExcludeCreatures(vec![from_entity]),
-        )
-        && let Some(closest) = result.closest()
+    if let Some(from) = get_eye_position(world, from_entity)
+        && let Some((_, to_pose)) = get_shape(world, to_entity)
     {
-        LineOfSightResult {
-            has_line_of_sight: closest.kind == RaycastHitKind::Creature(to_entity),
-            raycast_result: Some(result),
+        let to = to_pose.translation.vector.into();
+        let filter = RaycastFilter::ExcludeCreatures(vec![from_entity]);
+        let raycast_result = match mode {
+            LineOfSightMode::Ignore => {
+                return LineOfSightResult {
+                    has_line_of_sight: true,
+                    raycast_result: None,
+                };
+            }
+            LineOfSightMode::Ray => raycast_point_point(world, world_geometry, from, to, &filter),
+            LineOfSightMode::Parabola { launch_speed } => raycast_parabola(
+                world,
+                world_geometry,
+                from,
+                solve_parabola_initial_velocity(from, to, launch_speed, &DEFAULT_GRAVITY),
+                DEFAULT_GRAVITY,
+                DEFAULT_TIME_STEP,
+                DEFAULT_MAX_TIME,
+                &filter,
+            ),
+        };
+
+        if let Some(result) = raycast_result
+            && let Some(closest) = result.closest()
+        {
+            LineOfSightResult {
+                has_line_of_sight: closest.kind == RaycastHitKind::Creature(to_entity),
+                raycast_result: Some(result),
+            }
+        } else {
+            // No hits, so line of sight is clear?
+            LineOfSightResult {
+                has_line_of_sight: true,
+                raycast_result: None,
+            }
         }
     } else {
         LineOfSightResult {

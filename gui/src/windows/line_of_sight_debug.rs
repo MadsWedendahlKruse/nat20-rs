@@ -1,7 +1,11 @@
 use hecs::Entity;
 use nat20_rs::{
+    components::actions::targeting::LineOfSightMode,
     engine::game_state::GameState,
-    systems::{self, geometry::LineOfSightResult},
+    systems::{
+        self,
+        geometry::{LineOfSightResult, RaycastMode},
+    },
 };
 use parry3d::query::Ray;
 
@@ -11,15 +15,17 @@ use crate::{
     windows::anchor::{self, AUTO_RESIZE},
 };
 
+// TODO: No idea what to call this
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum LineOfSightMode {
+pub enum LineOfSightKind {
     Entity(Option<Entity>),
     Point([f32; 3]),
 }
 
 pub struct LineOfSightDebugWindow {
-    pub from: LineOfSightMode,
-    pub to: LineOfSightMode,
+    pub from: LineOfSightKind,
+    pub to: LineOfSightKind,
+    pub mode: LineOfSightMode,
     pub result: Option<LineOfSightResult>,
     pub show_raycast: bool,
 }
@@ -27,8 +33,9 @@ pub struct LineOfSightDebugWindow {
 impl LineOfSightDebugWindow {
     pub fn new() -> Self {
         Self {
-            from: LineOfSightMode::Point([0.0, 0.0, 0.0]),
-            to: LineOfSightMode::Point([0.0, 0.0, 0.0]),
+            from: LineOfSightKind::Point([0.0, 0.0, 0.0]),
+            to: LineOfSightKind::Point([0.0, 0.0, 0.0]),
+            mode: LineOfSightMode::Ray,
             result: None,
             show_raycast: true,
         }
@@ -62,10 +69,10 @@ impl RenderableMutWithContext<&mut GameState> for LineOfSightDebugWindow {
                 let width_token = ui.push_item_width(200.0);
 
                 match &mut self.from {
-                    LineOfSightMode::Entity(entity_option) => {
+                    LineOfSightKind::Entity(entity_option) => {
                         // TODO
                     }
-                    LineOfSightMode::Point(point) => {
+                    LineOfSightKind::Point(point) => {
                         ui.input_float3("Point##From", point).build();
                     }
                 }
@@ -73,10 +80,10 @@ impl RenderableMutWithContext<&mut GameState> for LineOfSightDebugWindow {
                 ui.separator_with_text("To");
 
                 match &mut self.to {
-                    LineOfSightMode::Entity(entity_option) => {
+                    LineOfSightKind::Entity(entity_option) => {
                         // TODO
                     }
-                    LineOfSightMode::Point(point) => {
+                    LineOfSightKind::Point(point) => {
                         ui.input_float3("Point##To", point).build();
                     }
                 }
@@ -86,8 +93,8 @@ impl RenderableMutWithContext<&mut GameState> for LineOfSightDebugWindow {
                 if ui.button("Compute Line of Sight") {
                     match (&self.from, &self.to) {
                         (
-                            LineOfSightMode::Entity(from_entity_option),
-                            LineOfSightMode::Entity(to_entity_option),
+                            LineOfSightKind::Entity(from_entity_option),
+                            LineOfSightKind::Entity(to_entity_option),
                         ) => {
                             if let (Some(from_entity), Some(to_entity)) =
                                 (from_entity_option, to_entity_option)
@@ -97,18 +104,19 @@ impl RenderableMutWithContext<&mut GameState> for LineOfSightDebugWindow {
                                     &game_state.geometry,
                                     *from_entity,
                                     *to_entity,
+                                    &self.mode,
                                 ));
                             }
                         }
 
-                        (LineOfSightMode::Entity(entity), LineOfSightMode::Point(_)) => todo!(),
+                        (LineOfSightKind::Entity(entity), LineOfSightKind::Point(_)) => todo!(),
 
-                        (LineOfSightMode::Point(_), LineOfSightMode::Entity(entity)) => todo!(),
+                        (LineOfSightKind::Point(_), LineOfSightKind::Entity(entity)) => todo!(),
 
-                        (LineOfSightMode::Point(_), LineOfSightMode::Point(_)) => {
+                        (LineOfSightKind::Point(_), LineOfSightKind::Point(_)) => {
                             if let (
-                                LineOfSightMode::Point(from_point),
-                                LineOfSightMode::Point(to_point),
+                                LineOfSightKind::Point(from_point),
+                                LineOfSightKind::Point(to_point),
                             ) = (self.from.clone(), self.to.clone())
                             {
                                 self.result = Some(systems::geometry::line_of_sight_point_point(
@@ -116,6 +124,7 @@ impl RenderableMutWithContext<&mut GameState> for LineOfSightDebugWindow {
                                     &game_state.geometry,
                                     from_point.into(),
                                     to_point.into(),
+                                    &self.mode,
                                     &systems::geometry::RaycastFilter::All,
                                 ));
                             }
@@ -131,17 +140,38 @@ impl RenderableMutWithContext<&mut GameState> for LineOfSightDebugWindow {
                     if self.show_raycast
                         && let Some(raycast_result) = &result.raycast_result
                     {
-                        let ray = &raycast_result.ray;
-                        let end_point = if let Some(closest) = raycast_result.closest() {
-                            ray.point_at(closest.toi)
-                        } else {
-                            ray.point_at(f32::MAX)
-                        };
-                        gui_state.line_renderer.add_line(
-                            ray.origin.into(),
-                            end_point.into(),
-                            [1.0, 1.0, 1.0],
-                        );
+                        match raycast_result.mode {
+                            RaycastMode::Ray(ray) => {
+                                let end_point = if let Some(closest) = raycast_result.closest() {
+                                    ray.point_at(closest.toi)
+                                } else {
+                                    ray.point_at(f32::MAX)
+                                };
+                                gui_state.line_renderer.add_line(
+                                    ray.origin.into(),
+                                    end_point.into(),
+                                    [1.0, 1.0, 1.0],
+                                );
+                            }
+                            RaycastMode::Parabola {
+                                start,
+                                initial_velocity,
+                                time_step,
+                                ..
+                            } => {
+                                let toi = if let Some(closest) = raycast_result.closest() {
+                                    closest.toi
+                                } else {
+                                    5.0 // Arbitrary fallback
+                                };
+                                gui_state.line_renderer.add_parabola(
+                                    start.into(),
+                                    initial_velocity.into(),
+                                    ((toi / time_step).ceil() as usize).max(2),
+                                    [1.0, 1.0, 1.0],
+                                );
+                            }
+                        }
                     }
                 }
             },

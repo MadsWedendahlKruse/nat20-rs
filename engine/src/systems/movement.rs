@@ -8,12 +8,9 @@ use parry3d::{
 use uom::si::{f32::Length, length::meter};
 
 use crate::{
-    components::speed::Speed,
+    components::{actions::targeting::LineOfSightMode, speed::Speed},
     engine::{game_state::GameState, geometry::WorldPath},
-    systems::{
-        self,
-        geometry::{CreaturePose, RaycastFilter},
-    },
+    systems::{self, geometry::RaycastFilter},
 };
 
 #[derive(Debug)]
@@ -100,7 +97,7 @@ pub fn path_in_range_of_point(
     range: Length,
     allow_partial: bool,
     move_entity: bool,
-    line_of_sight: bool,
+    line_of_sight: &LineOfSightMode,
     spend_movement: bool,
 ) -> Result<PathResult, MovementError> {
     println!(
@@ -119,14 +116,14 @@ pub fn path_in_range_of_point(
     let distance_to_target = Length::new::<meter>(direction.magnitude());
 
     if distance_to_target <= range {
-        if !line_of_sight
-            || systems::geometry::line_of_sight_entity_point(
-                &game_state.world,
-                &game_state.geometry,
-                entity,
-                target,
-            )
-            .has_line_of_sight
+        if systems::geometry::line_of_sight_entity_point(
+            &game_state.world,
+            &game_state.geometry,
+            entity,
+            target,
+            line_of_sight,
+        )
+        .has_line_of_sight
         {
             // Already in range
             println!("Entity is already in range of target point.");
@@ -171,13 +168,11 @@ pub fn path_in_range_of_point(
 fn determine_path_sphere_intersections(
     game_state: &mut GameState,
     entity: Entity,
-    line_of_sight: bool,
+    line_of_sight: &LineOfSightMode,
     range: Length,
     path_to_target: &WorldPath,
     target: &Point3<f32>,
 ) -> Option<Point3<f32>> {
-    let path_end = path_to_target.points.last()?;
-
     // Entity shouldn't block its own line of sight
     let mut excluded_entities = vec![entity];
     // If an entity is standing on the end of the path, that's probably who we're
@@ -236,19 +231,20 @@ fn determine_path_sphere_intersections(
                     &game_state.geometry,
                     eye_pos_at_intersection,
                     *target,
+                    line_of_sight,
                     &raycast_filter,
                 )
                 .has_line_of_sight
             );
-            if line_of_sight
-                && !systems::geometry::line_of_sight_point_point(
-                    &game_state.world,
-                    &game_state.geometry,
-                    eye_pos_at_intersection,
-                    *target,
-                    &raycast_filter,
-                )
-                .has_line_of_sight
+            if !systems::geometry::line_of_sight_point_point(
+                &game_state.world,
+                &game_state.geometry,
+                eye_pos_at_intersection,
+                *target,
+                line_of_sight,
+                &raycast_filter,
+            )
+            .has_line_of_sight
             {
                 // No line of sight to this intersection point; try next segment
                 continue;

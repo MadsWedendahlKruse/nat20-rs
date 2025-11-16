@@ -207,6 +207,28 @@ impl LineRenderer {
         self.add_line(origin, b, col);
     }
 
+    pub fn add_parabola(
+        &mut self,
+        start: [f32; 3],
+        velocity: [f32; 3],
+        steps: usize,
+        col: [f32; 3],
+    ) {
+        if steps < 2 {
+            return;
+        }
+        let mut points = Vec::with_capacity(steps);
+        for i in 0..steps {
+            let t = i as f32 / (steps - 1) as f32;
+            let x = start[0] + velocity[0] * t;
+            // Gravity could be a parameter, but seems unnecessary for now
+            let y = start[1] + velocity[1] * t - 0.5 * 9.81 * t * t;
+            let z = start[2] + velocity[2] * t;
+            points.push([x, y, z]);
+        }
+        self.add_polyline(&points, col);
+    }
+
     /// Upload & draw everything in the batch.
     /// `model` lets you draw in a local space (pass identity for world-space lines).
     pub fn draw(&mut self, gl: &glow::Context, model: &na::Matrix4<f32>, line_width: f32) {

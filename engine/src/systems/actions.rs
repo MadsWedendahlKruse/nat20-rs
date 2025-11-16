@@ -7,7 +7,8 @@ use crate::{
                 Action, ActionContext, ActionCooldownMap, ActionMap, ActionProvider, ReactionSet,
             },
             targeting::{
-                AreaShape, TargetInstance, TargetingContext, TargetingError, TargetingKind,
+                AreaShape, LineOfSightMode, TargetInstance, TargetingContext, TargetingError,
+                TargetingKind,
             },
         },
         id::{ActionId, ResourceId},
@@ -254,6 +255,7 @@ fn get_targeted_entities(
                                 &game_state.geometry,
                                 *entity,
                                 *point,
+                                &LineOfSightMode::Ray,
                                 // TODO: Can't hide behind other entities?
                                 &RaycastFilter::WorldOnly,
                             )
@@ -404,7 +406,7 @@ pub fn path_to_target(
                 targeting_context.range.max(),
                 true,
                 false,
-                targeting_context.require_line_of_sight,
+                &targeting_context.line_of_sight,
                 true,
             ) {
                 return Ok(TargetPathFindingResult::PathFound(path_result));

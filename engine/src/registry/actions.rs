@@ -1,21 +1,23 @@
+use core::panic;
 use std::{
     collections::HashMap,
     sync::{Arc, LazyLock},
 };
 
 use hecs::{Entity, World};
+use uom::si::{f32::Velocity, velocity::meter_per_second};
 
 use crate::{
     components::{
         actions::{
             action::{Action, ActionContext, ActionKind, ActionKindResult, ReactionResult},
-            targeting::{EntityFilter, TargetingContext, TargetingKind},
+            targeting::{EntityFilter, LineOfSightMode, TargetingContext, TargetingKind},
         },
         class::ClassName,
         damage::{AttackRoll, DamageRoll},
         dice::{DiceSet, DiceSetRoll, DieSize},
         id::{ActionId, ResourceId},
-        items::equipment::loadout::Loadout,
+        items::equipment::slots::EquipmentSlot,
         level::CharacterLevels,
         modifier::{ModifierSet, ModifierSource},
         resource::{RechargeRule, ResourceAmount, ResourceAmountMap},
@@ -259,20 +261,30 @@ static WEAPON_DAMAGE_ROLL: LazyLock<
     )
 });
 
+static DEFAULT_PROJECTILE_VELOCITY: LazyLock<Velocity> =
+    LazyLock::new(|| Velocity::new::<meter_per_second>(60.0));
+
 static WEAPON_TARGETING: LazyLock<
     Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
 > = LazyLock::new(|| {
     Arc::new(
         |world: &World, entity: Entity, action_context: &ActionContext| {
             if let ActionContext::Weapon { slot } = action_context {
+                let line_of_sight = match slot {
+                    EquipmentSlot::MeleeMainHand | EquipmentSlot::MeleeOffHand => {
+                        LineOfSightMode::Ray
+                    }
+                    EquipmentSlot::RangedMainHand | EquipmentSlot::RangedOffHand => {
+                        LineOfSightMode::Parabola {
+                            launch_speed: *DEFAULT_PROJECTILE_VELOCITY,
+                        }
+                    }
+                    _ => panic!("Invalid equipment slot for weapon attack"),
+                };
                 TargetingContext {
                     kind: TargetingKind::Single,
-                    range: systems::helpers::get_component::<Loadout>(world, entity)
-                        .weapon_in_hand(slot)
-                        .unwrap()
-                        .range()
-                        .clone(),
-                    require_line_of_sight: true,
+                    range: systems::loadout::weapon_range(world, entity, slot).unwrap(),
+                    line_of_sight,
                     allowed_targets: EntityFilter::not_dead(),
                 }
             } else {
