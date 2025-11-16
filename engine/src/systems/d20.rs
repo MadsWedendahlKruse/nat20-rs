@@ -95,11 +95,7 @@ pub fn check(game_state: &mut GameState, entity: Entity, dc: &D20CheckDCKind) ->
             todo!("systems::d20 attack roll checks are not yet implemented");
         }
     };
-    Event::new(EventKind::D20CheckPerformed(
-        entity,
-        result,
-        Some(dc.clone()),
-    ))
+    Event::new(EventKind::D20CheckPerformed(entity, result, dc.clone()))
 }
 
 // fn process_event(

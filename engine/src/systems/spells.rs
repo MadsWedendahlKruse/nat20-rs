@@ -10,8 +10,8 @@ use crate::{
 pub fn spellcaster_levels(world: &World, entity: Entity) -> u8 {
     let mut spellcaster_levels = 0.0;
     if let Ok(class_levels) = world.get::<&CharacterLevels>(entity) {
-        for (class_name, level_progression) in class_levels.all_classes() {
-            if let Some(class) = registry::classes::CLASS_REGISTRY.get(&class_name) {
+        for (class_id, level_progression) in class_levels.all_classes() {
+            if let Some(class) = registry::classes::CLASS_REGISTRY.get(&class_id) {
                 let spellcasting_progression = class.spellcasting_progression(
                     // TODO: Not entirely sure why it's necessary to do it like this
                     level_progression.subclass(),

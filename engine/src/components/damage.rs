@@ -495,7 +495,7 @@ mod tests {
         components::{
             ability::Ability,
             actions::action::{ActionContext, ActionKind, ActionProvider},
-            id::{ItemId, SpellId},
+            id::{EffectId, ItemId, SpellId},
             items::item::Item,
             modifier::{ModifierSet, ModifierSource},
         },
@@ -671,7 +671,7 @@ mod tests {
                     operation: MitigationOperation::Resistance,
                 },
                 DamageMitigationEffect {
-                    source: ModifierSource::Spell(SpellId::from_str("Curse of Slashing")),
+                    source: ModifierSource::Effect(EffectId::from_str("Curse of Slashing")),
                     operation: MitigationOperation::Vulnerability,
                 },
                 DamageMitigationEffect {

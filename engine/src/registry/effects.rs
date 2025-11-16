@@ -109,7 +109,7 @@ pub static ACTION_SURGE_ID: LazyLock<EffectId> =
 static ACTION_SURGE: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         ACTION_SURGE_ID.clone(),
-        ModifierSource::ClassFeature(ACTION_SURGE_ID.to_string()),
+        ModifierSource::Action(registry::actions::ACTION_SURGE_ID.clone()),
         EffectDuration::temporary(1),
     );
     effect.on_apply = Arc::new(|world, entity| {
@@ -222,6 +222,7 @@ macro_rules! draconic_ancestry {
                     LazyLock::new(|| {
                         helpers::damage_resistance_effect(
                             [<DRACONIC_ANCESTRY_ $Name _ID>].clone(),
+                            ModifierSource::Race(registry::races::DRAGONBORN_ID.clone()),
                             $dtype
                         )
                     });
@@ -246,8 +247,14 @@ draconic_ancestry!(
 pub static EXTRA_ATTACK_ID: LazyLock<EffectId> =
     LazyLock::new(|| EffectId::from_str("effect.extra_attack"));
 
-static EXTRA_ATTACK: LazyLock<Effect> =
-    LazyLock::new(|| helpers::extra_attack_effect(EXTRA_ATTACK_ID.clone(), 1));
+static EXTRA_ATTACK: LazyLock<Effect> = LazyLock::new(|| {
+    helpers::extra_attack_effect(
+        EXTRA_ATTACK_ID.clone(),
+        // TODO: Other classes can get Extra Attack too
+        registry::classes::FIGHTER_ID.clone(),
+        1,
+    )
+});
 
 // TODO: In the SRD fighting styles are a specific type of Feat, but I don't think that's necessary
 
@@ -257,7 +264,7 @@ pub static FIGHTING_STYLE_ARCHERY_ID: LazyLock<EffectId> =
 static FIGHTING_STYLE_ARCHERY: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         FIGHTING_STYLE_ARCHERY_ID.clone(),
-        ModifierSource::ClassFeature("Fighting Style: Archery".to_string()),
+        ModifierSource::Feat(registry::feats::FIGHTING_STYLE_ARCHERY_ID.clone()),
         EffectDuration::Permanent,
     );
     effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
@@ -265,10 +272,9 @@ static FIGHTING_STYLE_ARCHERY: LazyLock<Effect> = LazyLock::new(|| {
             DamageSource::Weapon(weapon_type) => *weapon_type == WeaponKind::Ranged,
             _ => false,
         } {
-            attack_roll.d20_check.add_modifier(
-                ModifierSource::ClassFeature("Fighting Style: Archery".to_string()),
-                2,
-            );
+            attack_roll
+                .d20_check
+                .add_modifier(ModifierSource::Effect(FIGHTING_STYLE_ARCHERY_ID.clone()), 2);
         }
     });
     effect
@@ -280,7 +286,7 @@ pub static FIGHTING_STYLE_DEFENSE_ID: LazyLock<EffectId> =
 static FIGHTING_STYLE_DEFENSE: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         FIGHTING_STYLE_DEFENSE_ID.clone(),
-        ModifierSource::ClassFeature("Fighting Style: Defense".to_string()),
+        ModifierSource::Feat(registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone()),
         EffectDuration::Permanent,
     );
     effect.on_armor_class = Arc::new(|world, entity, armor_class| {
@@ -293,10 +299,7 @@ static FIGHTING_STYLE_DEFENSE: LazyLock<Effect> = LazyLock::new(|| {
         } else {
             return;
         }
-        armor_class.add_modifier(
-            ModifierSource::ClassFeature("Fighting Style: Defense".to_string()),
-            1,
-        );
+        armor_class.add_modifier(ModifierSource::Effect(FIGHTING_STYLE_DEFENSE_ID.clone()), 1);
     });
     effect
 });
@@ -307,7 +310,7 @@ pub static FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID: LazyLock<EffectId> =
 static FIGHTING_STYLE_GREAT_WEAPON_FIGHTING: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
-        ModifierSource::ClassFeature("Fighting Style: Great Weapon Fighting".to_string()),
+        ModifierSource::Feat(registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone()),
         EffectDuration::Permanent,
     );
     effect.post_damage_roll = Arc::new(|world, entity, damage_roll_result| {
@@ -347,7 +350,7 @@ pub static IMPROVED_CRITICAL_ID: LazyLock<EffectId> =
 static IMPROVED_CRITICAL: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         IMPROVED_CRITICAL_ID.clone(),
-        ModifierSource::ClassFeature("Improved Critical".to_string()),
+        ModifierSource::SubclassFeature(registry::classes::CHAMPION_ID.clone()),
         EffectDuration::Permanent,
     );
     effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
@@ -362,7 +365,7 @@ pub static REMARKABLE_ATHLETE_ID: LazyLock<EffectId> =
 static REMARKABLE_ATHLETE: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         REMARKABLE_ATHLETE_ID.clone(),
-        ModifierSource::ClassFeature("Remarkable Athlete".to_string()),
+        ModifierSource::SubclassFeature(registry::classes::CHAMPION_ID.clone()),
         EffectDuration::Permanent,
     );
 
@@ -374,7 +377,7 @@ static REMARKABLE_ATHLETE: LazyLock<Effect> = LazyLock::new(|| {
                 D20CheckHooks::with_check_hook(|_, _, d20_check| {
                     d20_check.advantage_tracker_mut().add(
                         AdvantageType::Advantage,
-                        ModifierSource::ClassFeature("Remarkable Athlete".to_string()),
+                        ModifierSource::Effect(REMARKABLE_ATHLETE_ID.clone()),
                     );
                 }),
             );
@@ -406,7 +409,7 @@ pub static SUPERIOR_CRITICAL_ID: LazyLock<EffectId> =
 static SUPERIOR_CRITICAL: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         SUPERIOR_CRITICAL_ID.clone(),
-        ModifierSource::ClassFeature("Superior Critical".to_string()),
+        ModifierSource::SubclassFeature(registry::classes::CHAMPION_ID.clone()),
         EffectDuration::Permanent,
     );
     effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
@@ -420,7 +423,11 @@ pub static THREE_EXTRA_ATTACKS_ID: LazyLock<EffectId> =
     LazyLock::new(|| EffectId::from_str("effect.fighter.three_extra_attacks"));
 
 static THREE_EXTRA_ATTACKS: LazyLock<Effect> = LazyLock::new(|| {
-    let mut effect = helpers::extra_attack_effect(THREE_EXTRA_ATTACKS_ID.clone(), 3);
+    let mut effect = helpers::extra_attack_effect(
+        THREE_EXTRA_ATTACKS_ID.clone(),
+        registry::classes::FIGHTER_ID.clone(),
+        3,
+    );
     effect.replaces = Some(TWO_EXTRA_ATTACKS_ID.clone());
     effect
 });
@@ -429,22 +436,27 @@ pub static TWO_EXTRA_ATTACKS_ID: LazyLock<EffectId> =
     LazyLock::new(|| EffectId::from_str("effect.fighter.two_extra_attacks"));
 
 static TWO_EXTRA_ATTACKS: LazyLock<Effect> = LazyLock::new(|| {
-    let mut effect = helpers::extra_attack_effect(TWO_EXTRA_ATTACKS_ID.clone(), 2);
+    let mut effect = helpers::extra_attack_effect(
+        TWO_EXTRA_ATTACKS_ID.clone(),
+        registry::classes::FIGHTER_ID.clone(),
+        2,
+    );
     effect.replaces = Some(EXTRA_ATTACK_ID.clone());
     effect
 });
 
 mod helpers {
-    use crate::components::damage::{
-        DamageMitigationEffect, DamageResistances, DamageType, MitigationOperation,
+    use crate::components::{
+        damage::{DamageMitigationEffect, DamageResistances, DamageType, MitigationOperation},
+        id::ClassId,
     };
 
     use super::*;
 
-    pub fn extra_attack_effect(effect_id: EffectId, charges: u8) -> Effect {
+    pub fn extra_attack_effect(effect_id: EffectId, class_id: ClassId, charges: u8) -> Effect {
         let mut effect = Effect::new(
             effect_id.clone(),
-            ModifierSource::ClassFeature(effect_id.to_string()),
+            ModifierSource::ClassFeature(class_id),
             EffectDuration::Permanent,
         );
 
@@ -512,12 +524,12 @@ mod helpers {
         effect
     }
 
-    pub fn damage_resistance_effect(effect_id: EffectId, damage_type: DamageType) -> Effect {
-        let mut effect = Effect::new(
-            effect_id.clone(),
-            ModifierSource::ClassFeature(effect_id.to_string()),
-            EffectDuration::Permanent,
-        );
+    pub fn damage_resistance_effect(
+        effect_id: EffectId,
+        source: ModifierSource,
+        damage_type: DamageType,
+    ) -> Effect {
+        let mut effect = Effect::new(effect_id.clone(), source, EffectDuration::Permanent);
 
         effect.on_apply = Arc::new({
             move |world, entity| {

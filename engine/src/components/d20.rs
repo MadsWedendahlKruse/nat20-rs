@@ -248,6 +248,10 @@ impl D20CheckResult {
     {
         self.is_crit || (!self.is_crit_fail && self.total() >= dc.dc.total() as u32)
     }
+
+    pub fn add_bonus(&mut self, source: ModifierSource, value: i32) {
+        self.modifier_breakdown.add_modifier(source, value);
+    }
 }
 
 impl fmt::Display for D20CheckResult {

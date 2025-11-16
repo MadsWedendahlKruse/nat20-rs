@@ -130,12 +130,12 @@ impl ImguiRenderable for Name {
 impl ImguiRenderable for CharacterLevels {
     fn render(&self, ui: &imgui::Ui) {
         let mut class_strings = Vec::new();
-        for (class_name, level_progression) in self.all_classes() {
+        for (class_id, level_progression) in self.all_classes() {
             let level = level_progression.level();
-            let class_str = if let Some(subclass_name) = level_progression.subclass() {
-                format!("Level {} {} {}", level, subclass_name.name, class_name)
+            let class_str = if let Some(subclass_id) = level_progression.subclass() {
+                format!("Level {} {}", level, subclass_id)
             } else {
-                format!("Level {} {}", level, class_name)
+                format!("Level {} {}", level, class_id)
             };
             class_strings.push(class_str);
         }

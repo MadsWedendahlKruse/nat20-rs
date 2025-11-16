@@ -8,7 +8,6 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::Ability,
-            class::{ClassName, SubclassName},
             level::CharacterLevels,
             level_up::ChoiceItem,
             proficiency::ProficiencyLevel,
@@ -41,10 +40,12 @@ mod tests {
                 LevelUpDecision::single_choice(ChoiceItem::Background(
                     registry::backgrounds::SOLDIER_ID.clone(),
                 )),
-                LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                LevelUpDecision::single_choice(ChoiceItem::Class(
+                    registry::classes::FIGHTER_ID.clone(),
+                )),
                 LevelUpDecision::AbilityScores(
                     registry::classes::CLASS_REGISTRY
-                        .get(&ClassName::Fighter)
+                        .get(&registry::classes::FIGHTER_ID)
                         .unwrap()
                         .default_abilities
                         .clone(),
@@ -79,26 +80,35 @@ mod tests {
                     },
                 ),
                 // Level 2
-                LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
+                LevelUpDecision::single_choice(ChoiceItem::Class(
+                    registry::classes::FIGHTER_ID.clone(),
+                )),
                 // Level 3
-                LevelUpDecision::single_choice(ChoiceItem::Class(ClassName::Fighter)),
-                LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassName {
-                    class: ClassName::Fighter,
-                    name: "Champion".to_string(),
-                })),
+                LevelUpDecision::single_choice(ChoiceItem::Class(
+                    registry::classes::FIGHTER_ID.clone(),
+                )),
+                LevelUpDecision::single_choice(ChoiceItem::Subclass(
+                    registry::classes::CHAMPION_ID.clone(),
+                )),
             ],
         );
 
         {
             let levels = systems::helpers::get_component::<CharacterLevels>(&mut world, character);
             assert_eq!(levels.total_level(), 3);
-            assert_eq!(levels.class_level(&ClassName::Fighter).unwrap().level(), 3);
             assert_eq!(
-                levels.class_level(&ClassName::Fighter).unwrap().subclass(),
-                Some(&SubclassName {
-                    class: ClassName::Fighter,
-                    name: "Champion".to_string()
-                })
+                levels
+                    .class_level(&registry::classes::FIGHTER_ID.clone())
+                    .unwrap()
+                    .level(),
+                3
+            );
+            assert_eq!(
+                levels
+                    .class_level(&registry::classes::FIGHTER_ID.clone())
+                    .unwrap()
+                    .subclass(),
+                Some(&registry::classes::CHAMPION_ID.clone())
             );
         }
 

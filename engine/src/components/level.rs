@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::LazyLock};
 
 use crate::{
-    components::class::{ClassName, SubclassName},
+    components::id::{ClassId, SubclassId},
     registry,
 };
 
@@ -112,11 +112,11 @@ static MAX_LEVEL: u8 = 20;
 #[derive(Debug, Clone)]
 pub struct ClassLevelProgression {
     level: u8,
-    subclass: Option<SubclassName>,
+    subclass: Option<SubclassId>,
 }
 
 impl ClassLevelProgression {
-    pub fn new(level: u8, subclass: Option<SubclassName>) -> Self {
+    pub fn new(level: u8, subclass: Option<SubclassId>) -> Self {
         if level == 0 {
             panic!("Class level cannot be zero");
         }
@@ -127,20 +127,20 @@ impl ClassLevelProgression {
         self.level
     }
 
-    pub fn subclass(&self) -> Option<&SubclassName> {
+    pub fn subclass(&self) -> Option<&SubclassId> {
         self.subclass.as_ref()
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct CharacterLevels {
-    class_levels: HashMap<ClassName, ClassLevelProgression>,
+    class_levels: HashMap<ClassId, ClassLevelProgression>,
     /// The class that was first leveled up. Occasionally this is relevant, e.g
     /// when calculating the HP of the character
-    first_class: Option<ClassName>,
+    first_class: Option<ClassId>,
     /// The latest class that was leveled up. Right now it's only used to have a
     /// default class for level up decisions
-    latest_class: Option<ClassName>,
+    latest_class: Option<ClassId>,
     experience: u32,
 }
 
@@ -154,15 +154,15 @@ impl CharacterLevels {
         }
     }
 
-    pub fn class_level(&self, class: &ClassName) -> Option<&ClassLevelProgression> {
+    pub fn class_level(&self, class: &ClassId) -> Option<&ClassLevelProgression> {
         self.class_levels.get(class)
     }
 
-    pub fn all_classes(&self) -> &HashMap<ClassName, ClassLevelProgression> {
+    pub fn all_classes(&self) -> &HashMap<ClassId, ClassLevelProgression> {
         &self.class_levels
     }
 
-    pub fn level_up(&mut self, class: ClassName) -> u8 {
+    pub fn level_up(&mut self, class: ClassId) -> u8 {
         if !self.class_levels.contains_key(&class) {
             self.class_levels
                 .insert(class.clone(), ClassLevelProgression::new(1, None));
@@ -182,29 +182,29 @@ impl CharacterLevels {
         self.class_levels.get(&class).unwrap().level
     }
 
-    pub fn subclass(&self, class: &ClassName) -> Option<&SubclassName> {
+    pub fn subclass(&self, class: &ClassId) -> Option<&SubclassId> {
         self.class_levels
             .get(class)
             .and_then(|progression| progression.subclass())
     }
 
-    pub fn set_subclass(&mut self, class_name: ClassName, subclass: SubclassName) {
-        if !self.class_levels.contains_key(&class_name) {
+    pub fn set_subclass(&mut self, class_id: &ClassId, subclass: &SubclassId) {
+        if !self.class_levels.contains_key(class_id) {
             panic!("Cannot set subclass for a class that has not been leveled up");
         }
-        if let Some(class) = registry::classes::CLASS_REGISTRY.get(&class_name) {
-            if !class.subclasses.contains_key(&subclass) {
+        if let Some(class) = registry::classes::CLASS_REGISTRY.get(class_id) {
+            if !class.subclasses.contains_key(subclass) {
                 panic!(
                     "Subclass {:?} does not exist for class {:?}",
-                    subclass, class_name
+                    subclass, class_id
                 );
             }
         } else {
-            panic!("Class {:?} does not exist", class_name);
+            panic!("Class {:?} does not exist", class_id);
         }
 
-        if let Some(progression) = self.class_levels.get_mut(&class_name) {
-            progression.subclass = Some(subclass);
+        if let Some(progression) = self.class_levels.get_mut(class_id) {
+            progression.subclass = Some(subclass.clone());
         }
     }
 
@@ -224,11 +224,11 @@ impl CharacterLevels {
         *EXPERIENCE_PER_LEVEL.get(next_level as usize).unwrap_or(&0)
     }
 
-    pub fn first_class(&self) -> Option<&ClassName> {
+    pub fn first_class(&self) -> Option<&ClassId> {
         self.first_class.as_ref()
     }
 
-    pub fn latest_class(&self) -> Option<&ClassName> {
+    pub fn latest_class(&self) -> Option<&ClassId> {
         self.latest_class.as_ref()
     }
 }
@@ -263,10 +263,7 @@ mod tests {
 
     #[test]
     fn class_level_progression_new_and_accessors() {
-        let subclass = Some(SubclassName {
-            class: ClassName::Fighter,
-            name: "Champion".to_string(),
-        });
+        let subclass = Some(registry::classes::FIEND_PATRON_ID.clone());
         let clp = ClassLevelProgression::new(3, subclass.clone());
         assert_eq!(clp.level(), 3);
         assert_eq!(clp.subclass(), subclass.as_ref());
@@ -282,7 +279,7 @@ mod tests {
     #[test]
     fn character_level_level_up_and_class_level() {
         let mut cl = CharacterLevels::new();
-        let class = ClassName::Fighter;
+        let class = registry::classes::FIGHTER_ID.clone();
         cl.level_up(class.clone());
         assert_eq!(cl.class_level(&class).unwrap().level(), 1);
         cl.level_up(class.clone());
@@ -293,7 +290,7 @@ mod tests {
     #[should_panic(expected = "Cannot level up beyond maximum level")]
     fn character_level_level_up_beyond_max_panics() {
         let mut cl = CharacterLevels::new();
-        let class = ClassName::Wizard;
+        let class = registry::classes::WIZARD_ID.clone();
         for _ in 0..MAX_LEVEL {
             cl.level_up(class.clone());
         }
@@ -304,20 +301,17 @@ mod tests {
     #[test]
     fn character_level_set_and_get_subclass() {
         let mut cl = CharacterLevels::new();
-        let class = ClassName::Warlock;
+        let class = registry::classes::WARLOCK_ID.clone();
         cl.level_up(class.clone());
-        let subclass = SubclassName {
-            class: class.clone(),
-            name: "Fiend Patron".to_string(),
-        };
-        cl.set_subclass(class.clone(), subclass.clone());
+        let subclass = registry::classes::FIEND_PATRON_ID.clone();
+        cl.set_subclass(&class, &subclass);
         assert_eq!(cl.subclass(&class), Some(&subclass));
     }
 
     #[test]
     fn character_level_experience_for_next_level() {
         let mut cl = CharacterLevels::new();
-        let class = ClassName::Rogue;
+        let class = registry::classes::WIZARD_ID.clone();
         cl.level_up(class.clone()); // level 1
         assert_eq!(cl.experience_for_next_level(), 300);
         cl.level_up(class.clone()); // level 2
@@ -327,7 +321,7 @@ mod tests {
     #[test]
     fn character_level_experience_for_next_level_at_max() {
         let mut cl = CharacterLevels::new();
-        let class = ClassName::Barbarian;
+        let class = registry::classes::WARLOCK_ID.clone();
         for _ in 0..MAX_LEVEL {
             cl.level_up(class.clone());
         }

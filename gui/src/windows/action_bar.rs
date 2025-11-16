@@ -193,10 +193,10 @@ fn render_actions(
 
             for (action_id, contexts_and_costs) in actions {
                 // Don't render reactions
-                if contexts_and_costs
-                    .iter()
-                    .all(|(_, cost)| cost.contains_key(&registry::resources::REACTION_ID))
-                {
+                if matches!(
+                    systems::actions::get_action(action_id).unwrap().kind(),
+                    ActionKind::Reaction { .. }
+                ) {
                     continue;
                 }
 

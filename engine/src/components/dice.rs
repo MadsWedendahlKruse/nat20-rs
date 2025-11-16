@@ -2,7 +2,7 @@ use std::fmt::{self, Display};
 
 use rand::Rng;
 
-use crate::components::modifier::ModifierSet;
+use crate::components::modifier::{ModifierSet, ModifierSource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DieSize {
@@ -109,6 +109,32 @@ impl fmt::Display for DiceSetRoll {
             "{}d{} {}",
             self.dice.num_dice, self.dice.die_size as u32, self.modifiers
         )
+    }
+}
+
+impl<T> From<T> for DiceSetRoll
+where
+    T: AsRef<str>,
+{
+    fn from(s: T) -> Self {
+        // Simple parser for strings like "2d6 +3" or "1d20 -1"
+        let s = s.as_ref();
+        let parts: Vec<&str> = s.split_whitespace().collect();
+        let dice_part = parts[0];
+        let dice_set: DiceSet = dice_part.into();
+        let mut modifiers = ModifierSet::new();
+        if parts.len() == 2 {
+            let mod_part = parts[1];
+            let mod_value: i32 = mod_part.parse().unwrap_or(0);
+            if mod_value != 0 {
+                modifiers.add_modifier(ModifierSource::Base, mod_value);
+            }
+        }
+        Self {
+            dice: dice_set,
+            modifiers,
+            label: s.to_string(),
+        }
     }
 }
 

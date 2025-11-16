@@ -11,7 +11,6 @@ use crate::{
             action::{Action, ActionContext, ActionKind, ActionKindResult, ReactionResult},
             targeting::{EntityFilter, TargetingContext, TargetingKind},
         },
-        class::ClassName,
         damage::{AttackRoll, DamageRoll},
         dice::{DiceSet, DiceSetRoll, DieSize},
         id::{ActionId, ResourceId},
@@ -35,6 +34,7 @@ pub static ACTION_REGISTRY: LazyLock<HashMap<ActionId, (Action, Option<ActionCon
             (ACTION_SURGE_ID.clone(), ACTION_SURGE.to_owned()),
             (INDOMITABLE_ID.clone(), INDOMITABLE.to_owned()),
             (SECOND_WIND_ID.clone(), SECOND_WIND.to_owned()),
+            (TACTICAL_MIND_ID.clone(), TACTICAL_MIND.to_owned()),
             (WEAPON_ATTACK_ID.clone(), (WEAPON_ATTACK.to_owned(), None)),
         ])
     });
@@ -81,12 +81,10 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
                     let reaction_context = &reaction_data.context;
 
                     let dc = match &trigger_event.kind {
-                        EventKind::D20CheckPerformed(_, _, dc_kind) => {
-                            match dc_kind.as_ref().unwrap() {
-                                D20CheckDCKind::SavingThrow(dc) => dc,
-                                _ => panic!("Indomitable can only be triggered by a saving throw"),
-                            }
-                        }
+                        EventKind::D20CheckPerformed(_, _, dc_kind) => match dc_kind {
+                            D20CheckDCKind::SavingThrow(dc) => dc,
+                            _ => panic!("Indomitable can only be triggered by a saving throw"),
+                        },
                         _ => panic!("Invalid trigger event for Indomitable"),
                     };
 
@@ -97,11 +95,11 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
                     .check_dc(dc, &game_state.world, reactor);
 
                     new_roll.modifier_breakdown.add_modifier(
-                        ModifierSource::ClassFeature("fighter.indomitable".to_string()),
+                        ModifierSource::Action(INDOMITABLE_ID.clone()),
                         systems::class::class_level(
                             &game_state.world,
                             reactor,
-                            &ClassName::Fighter,
+                            &registry::classes::FIGHTER_ID,
                         ),
                     );
 
@@ -165,7 +163,7 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
             reaction_trigger: Some(Arc::new(|reactor, event| match &event.kind {
                 EventKind::D20CheckPerformed(performer, result, dc_kind) => {
                     performer == &reactor
-                        && !result.is_success(dc_kind.as_ref().unwrap())
+                        && !result.is_success(dc_kind)
                         && matches!(result, D20ResultKind::SavingThrow { .. })
                 }
                 _ => false,
@@ -191,9 +189,9 @@ static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(||
                 heal: Arc::new(|world, entity, _| {
                     let mut modifiers = ModifierSet::new();
                     modifiers.add_modifier(
-                        ModifierSource::ClassFeature("Fighter level".to_string()),
+                        ModifierSource::ClassLevel(registry::classes::FIGHTER_ID.clone()),
                         systems::helpers::get_component::<CharacterLevels>(world, entity)
-                            .class_level(&ClassName::Fighter)
+                            .class_level(&registry::classes::FIGHTER_ID)
                             .unwrap()
                             .level() as i32,
                     );
@@ -214,6 +212,81 @@ static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(||
             )]),
             cooldown: None,
             reaction_trigger: None,
+        },
+        Some(ActionContext::Other),
+    )
+});
+
+pub static TACTICAL_MIND_ID: LazyLock<ActionId> =
+    LazyLock::new(|| ActionId::from_str("action.fighter.tactical_mind"));
+
+static TACTICAL_MIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(|| {
+    (
+        Action {
+            id: TACTICAL_MIND_ID.clone(),
+            description: "You have a mind for tactics on and off the battlefield. \
+                When you fail an ability check, you can expend \
+                a use of your Second Wind to push yourself toward \
+                success. Rather than regaining Hit Points, you roll \
+                1d10 and add the number rolled to the ability check, \
+                potentially turning it into a success. If the check still \
+                fails, this use of Second Wind isn’t expended"
+                .to_string(),
+            kind: ActionKind::Reaction {
+                reaction: Arc::new(|game_state, reaction_data| {
+                    let _ = game_state.process_event(
+                        Event::action_performed_event(
+                            &game_state,
+                            reaction_data.reactor,
+                            &TACTICAL_MIND_ID.clone().into(),
+                            &reaction_data.context,
+                            &ResourceAmountMap::from([(
+                                registry::resources::SECOND_WIND_ID.clone(),
+                                registry::resources::SECOND_WIND.build_amount(1),
+                            )]),
+                            reaction_data.reactor,
+                            ActionKindResult::Reaction {
+                                result: ReactionResult::ModifyEvent {
+                                    modification: Arc::new({
+                                        move |event: &mut Event| {
+                                            if let EventKind::D20CheckPerformed(
+                                                _,
+                                                ref mut existing_result,
+                                                _,
+                                            ) = event.kind
+                                            {
+                                                match existing_result {
+                                                    D20ResultKind::Skill { result, .. } => {
+                                                        result.add_bonus(ModifierSource::Action(TACTICAL_MIND_ID.clone()), DiceSetRoll::from("1d10").roll().subtotal);
+                                                    }
+                                                    _ => panic!("Tactical Mind modification applied to wrong result type"),
+
+                                                }
+                                            } else {
+                                                panic!("Tactical Mind modification applied to wrong event type");
+                                            }
+                                        }
+                                    }),
+                                },
+                            }
+                        ),
+                    );
+                }),
+            },
+            targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
+            resource_cost: HashMap::from([(
+                registry::resources::SECOND_WIND_ID.clone(),
+                registry::resources::SECOND_WIND.build_amount(1),
+            )]),
+            cooldown: None,
+            reaction_trigger: Some(Arc::new(|reactor, event| match &event.kind {
+                EventKind::D20CheckPerformed(performer, result, dc_kind) => {
+                    performer == &reactor
+                        && !result.is_success(dc_kind)
+                        && matches!(result, D20ResultKind::Skill { .. })
+                }
+                _ => false,
+            })),
         },
         Some(ActionContext::Other),
     )

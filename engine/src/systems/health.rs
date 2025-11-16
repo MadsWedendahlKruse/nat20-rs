@@ -218,7 +218,7 @@ pub fn damage(
                 D20ResultKind::AttackRoll {
                     result: attack_roll.clone(),
                 },
-                Some(D20CheckDCKind::AttackRoll(target, armor_class.clone())),
+                D20CheckDCKind::AttackRoll(target, armor_class.clone()),
             ));
 
             // Create a callback to handle the result of the attack roll
@@ -236,7 +236,7 @@ pub fn damage(
                 move |game_state, event| match &event.kind {
                     EventKind::D20CheckResolved(performer, result, dc) => {
                         // Determine the damage to apply based on whether the attack hits or misses
-                        let (damage_roll, is_crit) = if result.is_success(dc.as_ref().unwrap()) {
+                        let (damage_roll, is_crit) = if result.is_success(dc) {
                             (
                                 damage(&game_state.world, *performer, &context),
                                 result.d20_result().is_crit,
@@ -379,9 +379,7 @@ pub fn damage(
                                 move |game_state, event| match &event.kind {
                                     EventKind::D20CheckResolved(performer, result, dc) => {
                                         let mut resistances = resistances.clone();
-                                        if result.is_success(dc.as_ref().unwrap())
-                                            && half_damage_on_save
-                                        {
+                                        if result.is_success(dc) && half_damage_on_save {
                                             // Apply half damage on successful save
 
                                             let ability = match saving_throw_dc.key {
@@ -495,11 +493,11 @@ pub fn update_hit_points(world: &mut World, entity: Entity) {
                     .ability_modifier()
                     .total();
 
-            for (class_name, class_level) in class_levels.all_classes() {
-                if let Some(class) = registry::classes::CLASS_REGISTRY.get(class_name) {
+            for (class_id, class_level) in class_levels.all_classes() {
+                if let Some(class) = registry::classes::CLASS_REGISTRY.get(class_id) {
                     for level in 1..=class_level.level() {
                         let hp_increase =
-                            if class_name == class_levels.first_class().unwrap() && level == 1 {
+                            if class_id == class_levels.first_class().unwrap() && level == 1 {
                                 class.hit_die as u32
                             } else {
                                 class.hp_per_level as u32

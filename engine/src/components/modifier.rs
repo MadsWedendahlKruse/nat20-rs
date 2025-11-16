@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::components::id::{BackgroundId, EffectId, ItemId, SpellId};
+use uuid::Uuid;
+
+use crate::components::id::{
+    ActionId, BackgroundId, ClassId, EffectId, FeatId, ItemId, RaceId, SubclassId, SubraceId,
+};
 
 use super::{ability::Ability, proficiency::ProficiencyLevel};
 
@@ -9,16 +13,20 @@ use super::{ability::Ability, proficiency::ProficiencyLevel};
 pub enum ModifierSource {
     Base, // The base value, no specific source
     Background(BackgroundId),
-    Spell(SpellId),       // e.g. "Bless"
-    Item(ItemId),         // e.g. "Belt of Strength"
-    Condition(String),    // e.g. "Poisoned"
-    ClassFeature(String), // e.g. "Rage"
-    Effect(EffectId),     // optional: unique ID for internal tracking
-    Ability(Ability),     // e.g. "Strength"
+    Item(ItemId), // e.g. "Belt of Strength"
+    ClassFeature(ClassId),
+    ClassLevel(ClassId),         // e.g. "Fighter Level 3"
+    SubclassFeature(SubclassId), // e.g. "Champion Improved Critical"
+    Action(ActionId),            // e.g. "Tactical Mind"
+    Effect(EffectId),            // optional: unique ID for internal tracking
+    Ability(Ability),            // e.g. "Strength"
     Proficiency(ProficiencyLevel),
-    Feat(String),   // e.g. "Great Weapon Master"
-    Custom(String), // fallback for ad-hoc things
-    None,           // Used for cases where no modifier is applicable
+    Feat(FeatId),                 // e.g. "Great Weapon Master"
+    FeatRepeatable(FeatId, Uuid), // e.g. "Ability Score Improvement" with unique instance ID
+    Custom(String),               // fallback for ad-hoc things
+    Race(RaceId),                 // e.g. "Dwarf"
+    Subrace(SubraceId),           // e.g. "Hill Dwarf"
+    None,                         // Used for cases where no modifier is applicable
 }
 
 impl fmt::Display for ModifierSource {
@@ -26,15 +34,23 @@ impl fmt::Display for ModifierSource {
         match self {
             ModifierSource::Base => write!(f, "Base"),
             ModifierSource::Background(id) => write!(f, "Background: {}", id),
-            ModifierSource::Spell(id) => write!(f, "Spell: {}", id),
             ModifierSource::Item(name) => write!(f, "Item: {}", name),
-            ModifierSource::Condition(name) => write!(f, "Condition: {}", name),
-            ModifierSource::ClassFeature(name) => write!(f, "Class Feature: {}", name),
+            ModifierSource::ClassFeature(id) => write!(f, "Class Feature: {}", id),
+            ModifierSource::ClassLevel(id) => {
+                write!(f, "Class Level: {}", id)
+            }
+            ModifierSource::SubclassFeature(id) => write!(f, "Subclass Feature: {}", id),
+            ModifierSource::Action(id) => write!(f, "Action: {}", id),
             ModifierSource::Effect(id) => write!(f, "Effect: {}", id),
             ModifierSource::Custom(text) => write!(f, "{}", text),
             ModifierSource::Ability(ability) => write!(f, "{:?} Modifier", ability),
             ModifierSource::Proficiency(proficiency) => write!(f, "Proficiency: {:?}", proficiency),
             ModifierSource::Feat(feat) => write!(f, "Feat: {}", feat),
+            ModifierSource::FeatRepeatable(feat, instance_id) => {
+                write!(f, "Feat: {} ({})", feat, instance_id)
+            }
+            ModifierSource::Race(id) => write!(f, "Race: {}", id),
+            ModifierSource::Subrace(id) => write!(f, "Subrace: {}", id),
             ModifierSource::None => write!(f, "No Modifier"),
         }
     }
@@ -143,12 +159,15 @@ mod tests {
             ModifierSource::Item(ItemId::from_str("item.belt_of_strength")),
             4,
         );
-        modifiers.add_modifier(ModifierSource::Spell(SpellId::from_str("BLESS")), 1);
+        modifiers.add_modifier(
+            ModifierSource::Effect(EffectId::from_str("effect.bless")),
+            1,
+        );
 
         assert_eq!(modifiers.modifiers.len(), 2);
         assert_eq!(modifiers.total(), 5);
 
-        modifiers.remove_modifier(&ModifierSource::Spell(SpellId::from_str("BLESS")));
+        modifiers.remove_modifier(&ModifierSource::Effect(EffectId::from_str("effect.bless")));
         assert_eq!(modifiers.modifiers.len(), 1);
         assert_eq!(modifiers.total(), 4);
         println!("Modifiers breakdown: {}", modifiers);

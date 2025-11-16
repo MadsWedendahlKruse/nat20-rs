@@ -7,52 +7,52 @@ use std::{
 use crate::{
     components::{
         ability::{Ability, AbilityScoreDistribution},
-        class::{Class, ClassBase, ClassName, SpellcastingProgression, Subclass, SubclassName},
+        class::{Class, ClassBase, SpellcastingProgression, Subclass},
         dice::DieSize,
+        id::{ClassId, SubclassId},
         items::equipment::{armor::ArmorType, weapon::WeaponCategory},
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
-        resource::{RechargeRule, Resource},
         skill::Skill,
     },
     registry,
 };
 
-pub static CLASS_REGISTRY: LazyLock<HashMap<ClassName, Class>> = LazyLock::new(|| {
+pub static CLASS_REGISTRY: LazyLock<HashMap<ClassId, Class>> = LazyLock::new(|| {
     HashMap::from([
         // (ClassName::Barbarian, BARBARIAN.to_owned()),
         // (ClassName::Bard, BARD.to_owned()),
         // (ClassName::Cleric, CLERIC.to_owned()),
         // (ClassName::Druid, DRUID.to_owned()),
-        (ClassName::Fighter, FIGHTER.to_owned()),
+        (FIGHTER_ID.clone(), FIGHTER.to_owned()),
         // (ClassName::Monk, MONK.to_owned()),
         // (ClassName::Paladin, PALADIN.to_owned()),
         // (ClassName::Ranger, RANGER.to_owned()),
         // (ClassName::Rogue, ROGUE.to_owned()),
         // (ClassName::Sorcerer, SORCERER.to_owned()),
-        (ClassName::Warlock, WARLOCK.to_owned()),
-        (ClassName::Wizard, WIZARD.to_owned()),
+        (WARLOCK_ID.clone(), WARLOCK.to_owned()),
+        (WIZARD_ID.clone(), WIZARD.to_owned()),
     ])
 });
 
-// TODO-LIST
 // [x] Level 1: Second Wind
 // [ ] Level 1: Weapon Mastery
 // [x] Level 2: Action Surge
-// [ ] Level 2: Tactical Mind
+// [x] Level 2: Tactical Mind
 // [x] Level 3: Fighter Subclass
 // [x] Level 4: Ability Score Improvement
 // [x] Level 5: Extra Attack
 // [ ] Level 5: Tactical Shift
-// [ ] Level 9: Indomitable
-//     Requires that a reaction can be triggered outside of combat
+// [x] Level 9: Indomitable
 // [ ] Level 9: Tactical Master
 // [x] Level 11: Two Extra Attacks
 // [ ] Level 13: Studied Attacks
 // [ ] Level 19: Epic Boon
 // [x] Level 20: Three Extra Attacks
+pub static FIGHTER_ID: LazyLock<ClassId> = LazyLock::new(|| ClassId::from_str("class.fighter"));
+
 static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
     Class::new(
-        ClassName::Fighter,
+        FIGHTER_ID.clone(),
         DieSize::D10,
         6,
         AbilityScoreDistribution {
@@ -69,7 +69,7 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         },
         [Ability::Strength, Ability::Constitution],
         3,
-        HashMap::from([(CHAMPION.name.clone(), CHAMPION.to_owned())]),
+        HashMap::from([(CHAMPION_ID.clone(), CHAMPION.to_owned())]),
         HashSet::from([4, 6, 8, 12, 14, 16]),
         HashSet::from([
             Skill::Acrobatics,
@@ -158,7 +158,13 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
         )]),
         HashMap::from([
             (1, vec![registry::actions::SECOND_WIND_ID.clone()]),
-            (2, vec![registry::actions::ACTION_SURGE_ID.clone()]),
+            (
+                2,
+                vec![
+                    registry::actions::ACTION_SURGE_ID.clone(),
+                    registry::actions::TACTICAL_MIND_ID.clone(),
+                ],
+            ),
             (9, vec![registry::actions::INDOMITABLE_ID.clone()]),
         ]),
     )
@@ -172,11 +178,11 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
 ///    Pretty complicated to implement
 // [x] Level 15: Superior Critical
 // [ ] Level 18: Survivor
+pub static CHAMPION_ID: LazyLock<SubclassId> =
+    LazyLock::new(|| SubclassId::from_str("subclass.fighter.champion"));
+
 static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
-    name: SubclassName {
-        class: ClassName::Fighter,
-        name: "Champion".to_string(),
-    },
+    id: CHAMPION_ID.clone(),
     base: ClassBase {
         skill_proficiencies: HashSet::new(),
         skill_prompts: 0,
@@ -216,9 +222,11 @@ static CHAMPION: LazyLock<Subclass> = LazyLock::new(|| Subclass {
     },
 });
 
+pub static WARLOCK_ID: LazyLock<ClassId> = LazyLock::new(|| ClassId::from_str("class.warlock"));
+
 static WARLOCK: LazyLock<Class> = LazyLock::new(|| {
     Class::new(
-        ClassName::Warlock,
+        WARLOCK_ID.clone(),
         DieSize::D8,
         5,
         AbilityScoreDistribution {
@@ -235,7 +243,7 @@ static WARLOCK: LazyLock<Class> = LazyLock::new(|| {
         },
         [Ability::Wisdom, Ability::Charisma],
         3,
-        HashMap::from([(FIEND_PATRON.name.clone(), FIEND_PATRON.to_owned())]),
+        HashMap::from([(FIEND_PATRON_ID.clone(), FIEND_PATRON.to_owned())]),
         HashSet::from([4, 8, 12, 16, 19]),
         HashSet::from([
             Skill::Arcana,
@@ -258,11 +266,11 @@ static WARLOCK: LazyLock<Class> = LazyLock::new(|| {
     )
 });
 
+pub static FIEND_PATRON_ID: LazyLock<SubclassId> =
+    LazyLock::new(|| SubclassId::from_str("subclass.warlock.fiend_patron"));
+
 static FIEND_PATRON: LazyLock<Subclass> = LazyLock::new(|| Subclass {
-    name: SubclassName {
-        class: ClassName::Warlock,
-        name: "Fiend Patron".to_string(),
-    },
+    id: FIEND_PATRON_ID.clone(),
     base: ClassBase {
         skill_proficiencies: HashSet::new(),
         skill_prompts: 0,
@@ -279,9 +287,11 @@ static FIEND_PATRON: LazyLock<Subclass> = LazyLock::new(|| Subclass {
     },
 });
 
+pub static WIZARD_ID: LazyLock<ClassId> = LazyLock::new(|| ClassId::from_str("class.wizard"));
+
 static WIZARD: LazyLock<Class> = LazyLock::new(|| {
     Class::new(
-        ClassName::Wizard,
+        WIZARD_ID.clone(),
         DieSize::D6,
         4,
         AbilityScoreDistribution {
@@ -298,7 +308,7 @@ static WIZARD: LazyLock<Class> = LazyLock::new(|| {
         },
         [Ability::Intelligence, Ability::Wisdom],
         3,
-        HashMap::from([(EVOKER.name.clone(), EVOKER.to_owned())]),
+        HashMap::from([(EVOKER_ID.clone(), EVOKER.to_owned())]),
         HashSet::from([4, 8, 12, 16, 19]),
         HashSet::from([
             Skill::Arcana,
@@ -319,11 +329,11 @@ static WIZARD: LazyLock<Class> = LazyLock::new(|| {
     )
 });
 
+pub static EVOKER_ID: LazyLock<SubclassId> =
+    LazyLock::new(|| SubclassId::from_str("subclass.wizard.evoker"));
+
 static EVOKER: LazyLock<Subclass> = LazyLock::new(|| Subclass {
-    name: SubclassName {
-        class: ClassName::Wizard,
-        name: "Evoker".to_string(),
-    },
+    id: EVOKER_ID.clone(),
     base: ClassBase {
         skill_proficiencies: HashSet::new(),
         skill_prompts: 0,

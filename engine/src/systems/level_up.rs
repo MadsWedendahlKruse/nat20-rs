@@ -7,9 +7,8 @@ use uuid::Uuid;
 use crate::{
     components::{
         ability::{Ability, AbilityScore, AbilityScoreDistribution, AbilityScoreMap},
-        class::ClassName,
         health::hit_points::HitPoints,
-        id::{ActionId, EffectId, Name},
+        id::{ActionId, ClassId, EffectId, Name},
         items::{equipment::loadout::EquipmentInstance, money::MonetaryValue},
         level::CharacterLevels,
         level_up::{ChoiceItem, LevelUpPrompt},
@@ -160,11 +159,11 @@ impl LevelUpSession {
         Ok(())
     }
 
-    pub fn chosen_class(&self) -> Option<ClassName> {
+    pub fn chosen_class(&self) -> Option<ClassId> {
         self.decisions.iter().find_map(|d| match d {
             LevelUpDecision::Choice { selected, .. } => {
                 selected.iter().find_map(|item| match item {
-                    ChoiceItem::Class(class_name) => Some(class_name.clone()),
+                    ChoiceItem::Class(class_id) => Some(class_id.clone()),
                     _ => None,
                 })
             }
@@ -230,7 +229,7 @@ fn resolve_level_up_prompt(
                         ));
                     }
 
-                    ChoiceItem::Class(class_name) => {
+                    ChoiceItem::Class(class_id) => {
                         // Special prompt when creating a new character
                         if systems::helpers::get_component::<CharacterLevels>(world, entity)
                             .total_level()
@@ -240,11 +239,11 @@ fn resolve_level_up_prompt(
                         }
 
                         prompts.extend(systems::class::increment_class_level(
-                            world, entity, class_name,
+                            world, entity, class_id,
                         ));
                     }
-                    ChoiceItem::Subclass(subclass_name) => {
-                        systems::class::set_subclass(world, entity, subclass_name);
+                    ChoiceItem::Subclass(subclass_id) => {
+                        systems::class::set_subclass(world, entity, subclass_id);
                     }
 
                     ChoiceItem::Race(race_id) => {
@@ -380,7 +379,7 @@ fn resolve_level_up_prompt(
                     *ability,
                     // Since some feats are repeatable, we can't use the same source
                     // every time, so we'll have to make it unique
-                    ModifierSource::Feat(format!("{}.{}", feat.to_string(), Uuid::new_v4())),
+                    ModifierSource::FeatRepeatable(feat.clone(), Uuid::new_v4()),
                     *bonus as i32,
                 );
             }
@@ -468,11 +467,11 @@ pub struct LevelUpGains {
 pub fn level_up_gains(
     world: &World,
     entity: Entity,
-    class_name: &ClassName,
+    class_id: &ClassId,
     level: u8,
 ) -> LevelUpGains {
     let class = registry::classes::CLASS_REGISTRY
-        .get(class_name)
+        .get(class_id)
         .expect("Class should exist in the registry");
 
     let hit_points = systems::helpers::get_component_clone::<HitPoints>(world, entity);
@@ -496,7 +495,7 @@ pub fn level_up_gains(
         .unwrap_or_default();
 
     if let Some(subclass) =
-        systems::helpers::get_component::<CharacterLevels>(world, entity).subclass(class_name)
+        systems::helpers::get_component::<CharacterLevels>(world, entity).subclass(class_id)
     {
         if let Some(subclass) = class.subclass(&subclass) {
             if let Some(subclass_effects) = subclass.base.effects_by_level.get(&level) {

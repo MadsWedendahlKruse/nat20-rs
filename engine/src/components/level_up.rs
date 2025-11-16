@@ -4,13 +4,13 @@ use std::{
     sync::LazyLock,
 };
 
-use strum::IntoEnumIterator;
-
 use crate::{
     components::{
         ability::Ability,
-        class::{ClassName, SubclassName},
-        id::{ActionId, BackgroundId, EffectId, FeatId, ItemId, RaceId, SubraceId},
+        id::{
+            ActionId, BackgroundId, ClassId, EffectId, FeatId, ItemId, RaceId, SubclassId,
+            SubraceId,
+        },
         modifier::ModifierSource,
         skill::Skill,
     },
@@ -36,8 +36,8 @@ static ABILITY_SCORE_POINTS: u8 = 27;
 pub enum ChoiceItem {
     Action(ActionId),
     Background(BackgroundId),
-    Class(ClassName),
-    Subclass(SubclassName),
+    Class(ClassId),
+    Subclass(SubclassId),
     Effect(EffectId),
     Feat(FeatId),
     Race(RaceId),
@@ -89,7 +89,7 @@ impl std::fmt::Display for ChoiceItem {
             ChoiceItem::Action(id) => write!(f, "{}", id),
             ChoiceItem::Background(id) => write!(f, "{}", id),
             ChoiceItem::Class(id) => write!(f, "{}", id),
-            ChoiceItem::Subclass(id) => write!(f, "{}", id.name),
+            ChoiceItem::Subclass(id) => write!(f, "{}", id),
             ChoiceItem::Race(id) => write!(f, "{}", id),
             ChoiceItem::Subrace(id) => write!(f, "{}", id),
             ChoiceItem::Equipment { items, money } => {
@@ -189,12 +189,11 @@ impl LevelUpPrompt {
     pub fn class() -> Self {
         LevelUpPrompt::Choice(ChoiceSpec::single(
             "Class",
-            // registry::classes::CLASS_REGISTRY
-            //     .keys()
-            //     .cloned()
-            //     .map(ChoiceItem::Class)
-            //     .collect(),
-            ClassName::iter().map(ChoiceItem::Class).collect(),
+            registry::classes::CLASS_REGISTRY
+                .keys()
+                .cloned()
+                .map(ChoiceItem::Class)
+                .collect(),
         ))
     }
 

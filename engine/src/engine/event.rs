@@ -126,9 +126,9 @@ pub enum EventKind {
         actor: Option<Entity>,
     },
     /// The initial D20 roll which can be reacted to, e.g. with the Lucky feat.
-    D20CheckPerformed(Entity, D20ResultKind, Option<D20CheckDCKind>),
+    D20CheckPerformed(Entity, D20ResultKind, D20CheckDCKind),
     /// The final result of a D20 check after reactions have been applied.
-    D20CheckResolved(Entity, D20ResultKind, Option<D20CheckDCKind>),
+    D20CheckResolved(Entity, D20ResultKind, D20CheckDCKind),
     DamageRollPerformed(Entity, DamageRollResult),
     DamageRollResolved(Entity, DamageRollResult),
 }

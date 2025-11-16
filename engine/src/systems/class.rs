@@ -1,7 +1,7 @@
 use crate::{
     components::{
-        class::{ClassBase, ClassName, SubclassName},
-        id::FeatId,
+        class::ClassBase,
+        id::{ClassId, FeatId, SubclassId},
         items::equipment::{armor::ArmorTrainingSet, weapon::WeaponProficiencyMap},
         level_up::ChoiceItem,
         proficiency::ProficiencyLevel,
@@ -20,9 +20,25 @@ use crate::{
     systems,
 };
 
-pub fn class_level(world: &World, entity: Entity, class_name: &ClassName) -> u8 {
+enum ClassIdentifier {
+    Class(ClassId),
+    Subclass(SubclassId),
+}
+
+impl ClassIdentifier {
+    pub fn modifier_source(&self) -> ModifierSource {
+        match self {
+            ClassIdentifier::Class(class_id) => ModifierSource::ClassFeature(class_id.clone()),
+            ClassIdentifier::Subclass(subclass_id) => {
+                ModifierSource::SubclassFeature(subclass_id.clone())
+            }
+        }
+    }
+}
+
+pub fn class_level(world: &World, entity: Entity, class_id: &ClassId) -> u8 {
     if let Ok(character_levels) = world.get::<&CharacterLevels>(entity) {
-        if let Some(class_level) = character_levels.class_level(class_name) {
+        if let Some(class_level) = character_levels.class_level(class_id) {
             return class_level.level();
         }
     }
@@ -32,21 +48,21 @@ pub fn class_level(world: &World, entity: Entity, class_name: &ClassName) -> u8 
 pub fn increment_class_level(
     world: &mut World,
     entity: Entity,
-    class_name: &ClassName,
+    class_id: &ClassId,
 ) -> Vec<LevelUpPrompt> {
     let class = registry::classes::CLASS_REGISTRY
-        .get(class_name)
+        .get(class_id)
         .expect(&format!(
             "Class with name `{}` not found in the registry",
-            class_name
+            class_id
         ));
 
     let (new_level, subclass) = {
         let mut character_levels =
             systems::helpers::get_component_mut::<CharacterLevels>(world, entity);
-        let new_level = character_levels.level_up(class_name.clone());
-        let subclass = if let Some(subclass_name) = character_levels.subclass(&class_name) {
-            class.subclass(&subclass_name)
+        let new_level = character_levels.level_up(class_id.clone());
+        let subclass = if let Some(subclass_id) = character_levels.subclass(&class_id) {
+            class.subclass(&subclass_id)
         } else {
             None
         };
@@ -58,7 +74,7 @@ pub fn increment_class_level(
             SavingThrowKind::Ability(*ability),
             Proficiency::new(
                 ProficiencyLevel::Proficient,
-                ModifierSource::ClassFeature(class_name.to_string().clone()),
+                ModifierSource::ClassFeature(class_id.clone()),
             ),
         );
     }
@@ -74,7 +90,7 @@ pub fn increment_class_level(
         world,
         entity,
         &class.base,
-        class_name.to_string(),
+        ClassIdentifier::Class(class_id.clone()),
         new_level,
     );
     if let Some(subclass) = subclass {
@@ -82,7 +98,7 @@ pub fn increment_class_level(
             world,
             entity,
             subclass.base(),
-            subclass.name.name.clone(),
+            ClassIdentifier::Subclass(subclass.id.clone()),
             new_level,
         ));
     }
@@ -92,24 +108,27 @@ pub fn increment_class_level(
 pub fn set_subclass(
     world: &mut World,
     entity: Entity,
-    subclass_name: &SubclassName,
+    subclass_id: &SubclassId,
 ) -> Vec<LevelUpPrompt> {
+    let class_name = subclass_id.as_str().split(".").collect::<Vec<_>>()[1];
+    let class_id = &ClassId::from_str(format!("class.{}", class_name));
+
     let class = registry::classes::CLASS_REGISTRY
-        .get(&subclass_name.class)
+        .get(class_id)
         .expect(&format!(
             "Class with name `{}` not found in the registry",
-            subclass_name.class
+            class_id
         ));
 
     let (subclass, level) = {
         let mut character_levels =
             systems::helpers::get_component_mut::<CharacterLevels>(world, entity);
-        character_levels.set_subclass(subclass_name.class, subclass_name.clone());
+        character_levels.set_subclass(class_id, &subclass_id);
 
         let subclass = class
-            .subclass(&subclass_name)
+            .subclass(&subclass_id)
             .expect("Subclass should exist in the class registry");
-        let level = character_levels.class_level(&class.name).unwrap().level();
+        let level = character_levels.class_level(class_id).unwrap().level();
 
         (subclass, level)
     };
@@ -118,7 +137,7 @@ pub fn set_subclass(
         world,
         entity,
         subclass.base(),
-        subclass_name.name.clone(),
+        ClassIdentifier::Subclass(subclass_id.clone()),
         level,
     )
 }
@@ -127,7 +146,7 @@ fn apply_class_base(
     world: &mut World,
     entity: Entity,
     class_base: &ClassBase,
-    name: String,
+    id: ClassIdentifier,
     level: u8,
 ) -> Vec<LevelUpPrompt> {
     // Effect
@@ -161,10 +180,7 @@ fn apply_class_base(
         for proficiency in class_base.weapon_proficiencies.iter() {
             weapon_proficiencies.set_proficiency(
                 proficiency.clone(),
-                Proficiency::new(
-                    ProficiencyLevel::Proficient,
-                    ModifierSource::ClassFeature(name.clone()),
-                ),
+                Proficiency::new(ProficiencyLevel::Proficient, id.modifier_source()),
             );
         }
     }

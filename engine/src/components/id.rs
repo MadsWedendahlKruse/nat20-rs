@@ -32,6 +32,8 @@ macro_rules! id_newtypes {
 }
 
 id_newtypes!(
+    ClassId,
+    SubclassId,
     ItemId,
     EffectId,
     ResourceId,

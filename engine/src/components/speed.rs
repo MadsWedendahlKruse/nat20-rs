@@ -97,7 +97,7 @@ impl Default for Speed {
 
 #[cfg(test)]
 mod tests {
-    use crate::components::id::{ItemId, SpellId};
+    use crate::components::id::{EffectId, ItemId};
 
     use super::*;
 
@@ -133,7 +133,7 @@ mod tests {
     fn test_add_multiplier() {
         let mut speed = Speed::default();
         speed.add_multiplier(
-            ModifierSource::Spell(SpellId::from_str("Expeditious Retreat!")),
+            ModifierSource::Effect(EffectId::from_str("Expeditious Retreat!")),
             2.0,
         );
         assert_eq!(speed.get_total_speed().get::<meter>(), 20.0);
@@ -143,10 +143,10 @@ mod tests {
     fn test_remove_multiplier() {
         let mut speed = Speed::default();
         speed.add_multiplier(
-            ModifierSource::Spell(SpellId::from_str("Expeditious Retreat!")),
+            ModifierSource::Effect(EffectId::from_str("Expeditious Retreat!")),
             2.0,
         );
-        speed.remove_multiplier(&ModifierSource::Spell(SpellId::from_str(
+        speed.remove_multiplier(&ModifierSource::Effect(EffectId::from_str(
             "Expeditious Retreat!",
         )));
         assert_eq!(speed.get_total_speed().get::<meter>(), 10.0);
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn test_total_speed_with_zero_multiplier() {
         let mut speed = Speed::default();
-        speed.add_multiplier(ModifierSource::Spell(SpellId::from_str("Fear!")), 0.0);
+        speed.add_multiplier(ModifierSource::Effect(EffectId::from_str("Fear!")), 0.0);
         assert_eq!(speed.get_total_speed().get::<meter>(), 0.0);
     }
 
@@ -191,7 +191,7 @@ mod tests {
             5.0,
         );
         speed.add_multiplier(
-            ModifierSource::Spell(SpellId::from_str("Expeditious Retreat!")),
+            ModifierSource::Effect(EffectId::from_str("Expeditious Retreat!")),
             2.0,
         );
         assert_eq!(speed.get_total_speed().get::<meter>(), 30.0);

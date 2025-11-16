@@ -236,58 +236,55 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
 
             EventKind::D20CheckResolved(entity, result_kind, dc_kind)
             | EventKind::D20CheckPerformed(entity, result_kind, dc_kind) => {
-                if let Some(dc_kind) = dc_kind {
-                    let dc_text_segments = match dc_kind {
-                        D20CheckDCKind::SavingThrow(dc) => {
-                            vec![
-                                (dc.key.to_string(), TextKind::Ability),
-                                ("saving throw".to_string(), TextKind::Normal),
-                            ]
-                        }
-                        D20CheckDCKind::Skill(dc) => vec![
+                let dc_text_segments = match dc_kind {
+                    D20CheckDCKind::SavingThrow(dc) => {
+                        vec![
                             (dc.key.to_string(), TextKind::Ability),
-                            ("check".to_string(), TextKind::Normal),
-                        ],
-                        D20CheckDCKind::AttackRoll(target, _) => {
-                            let target_name =
-                                systems::helpers::get_component::<Name>(world, *target);
-                            vec![
-                                ("attack roll against".to_string(), TextKind::Normal),
-                                (target_name.to_string(), TextKind::Actor),
-                            ]
-                        }
-                    };
-
-                    let mut segments = vec![
-                        (
-                            systems::helpers::get_component::<Name>(world, *entity).to_string(),
-                            TextKind::Actor,
-                        ),
-                        (
-                            if result_kind.is_success(dc_kind) {
-                                "succeeded a".to_string()
-                            } else {
-                                "failed a".to_string()
-                            },
-                            TextKind::Normal,
-                        ),
-                    ];
-
-                    segments.extend(dc_text_segments);
-
-                    TextSegments::new(segments).render(ui);
-
-                    if ui.is_item_hovered() {
-                        ui.tooltip(|| {
-                            ui.text("DC:");
-                            ui.same_line();
-                            dc_kind.render(ui);
-                            ui.text("");
-                            ui.text("D20 Check:");
-                            ui.same_line();
-                            result_kind.render(ui);
-                        });
+                            ("saving throw".to_string(), TextKind::Normal),
+                        ]
                     }
+                    D20CheckDCKind::Skill(dc) => vec![
+                        (dc.key.to_string(), TextKind::Ability),
+                        ("check".to_string(), TextKind::Normal),
+                    ],
+                    D20CheckDCKind::AttackRoll(target, _) => {
+                        let target_name = systems::helpers::get_component::<Name>(world, *target);
+                        vec![
+                            ("attack roll against".to_string(), TextKind::Normal),
+                            (target_name.to_string(), TextKind::Actor),
+                        ]
+                    }
+                };
+
+                let mut segments = vec![
+                    (
+                        systems::helpers::get_component::<Name>(world, *entity).to_string(),
+                        TextKind::Actor,
+                    ),
+                    (
+                        if result_kind.is_success(dc_kind) {
+                            "succeeded a".to_string()
+                        } else {
+                            "failed a".to_string()
+                        },
+                        TextKind::Normal,
+                    ),
+                ];
+
+                segments.extend(dc_text_segments);
+
+                TextSegments::new(segments).render(ui);
+
+                if ui.is_item_hovered() {
+                    ui.tooltip(|| {
+                        ui.text("DC:");
+                        ui.same_line();
+                        dc_kind.render(ui);
+                        ui.text("");
+                        ui.text("D20 Check:");
+                        ui.same_line();
+                        result_kind.render(ui);
+                    });
                 }
             }
             EventKind::DamageRollPerformed(entity, damage_roll_result)

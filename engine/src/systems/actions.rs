@@ -17,12 +17,12 @@ use crate::{
         spells::spellbook::Spellbook,
     },
     engine::{
-        event::{ActionData, ActionError, Event, ReactionData},
+        event::{ActionData, Event, ReactionData},
         game_state::GameState,
         geometry::WorldGeometry,
     },
     registry,
-    systems::{self, geometry::RaycastFilter, movement::PathResult},
+    systems::{self, geometry::RaycastFilter},
 };
 
 pub fn get_action(action_id: &ActionId) -> Option<&Action> {
@@ -334,7 +334,6 @@ pub fn available_reactions_to_event(
                     )
                     .is_ok()
                     {
-                        // TODO: Lots of duplicated information here
                         reactions.push(ReactionData {
                             reactor,
                             event: event.clone().into(),

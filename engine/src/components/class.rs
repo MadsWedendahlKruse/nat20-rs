@@ -1,44 +1,15 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-};
-
-use strum::EnumIter;
+use std::collections::{HashMap, HashSet};
 
 use crate::components::{
     ability::{Ability, AbilityScoreDistribution},
     dice::DieSize,
-    id::{ActionId, EffectId},
+    id::{ActionId, ClassId, EffectId, SubclassId},
     items::equipment::{armor::ArmorType, weapon::WeaponCategory},
     level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
     modifier::ModifierSource,
     resource::Resource,
     skill::Skill,
 };
-
-// TODO: Better name
-// TODO: Classes are an enum, but subclasses are just a string?
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
-pub enum ClassName {
-    Fighter,
-    Wizard,
-    Rogue,
-    Cleric,
-    Druid,
-    Paladin,
-    Ranger,
-    Bard,
-    Sorcerer,
-    Warlock,
-    Monk,
-    Barbarian,
-}
-
-impl fmt::Display for ClassName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
 
 /// Classes and subclasses share a lot of common properties, so we define a base struct
 // TODO: Better name
@@ -83,8 +54,7 @@ pub enum SpellcastingProgression {
 
 #[derive(Debug, Clone)]
 pub struct Class {
-    // TODO: Can also be a string
-    pub name: ClassName,
+    pub id: ClassId,
     pub hit_die: DieSize,
     pub hp_per_level: u8,
 
@@ -93,20 +63,20 @@ pub struct Class {
     /// Saving throw proficiencies granted at level 1 (e.g. STR + CON for Fighter)
     pub saving_throw_proficiencies: [Ability; 2],
 
-    pub subclasses: HashMap<SubclassName, Subclass>,
+    pub subclasses: HashMap<SubclassId, Subclass>,
 
     pub base: ClassBase,
 }
 
 impl Class {
     pub fn new(
-        name: ClassName,
+        id: ClassId,
         hit_die: DieSize,
         hp_per_level: u8,
         default_abilities: AbilityScoreDistribution,
         saving_throw_proficiencies: [Ability; 2],
         subclass_level: u8,
-        subclasses: HashMap<SubclassName, Subclass>,
+        subclasses: HashMap<SubclassId, Subclass>,
         feat_levels: HashSet<u8>,
         skill_proficiencies: HashSet<Skill>,
         skill_prompts: u8,
@@ -125,7 +95,7 @@ impl Class {
             .push(LevelUpPrompt::SkillProficiency(
                 skill_proficiencies.clone(),
                 skill_prompts,
-                ModifierSource::ClassFeature(name.to_string()),
+                ModifierSource::ClassFeature(id.clone()),
             ));
 
         // Add subclass prompt
@@ -156,7 +126,7 @@ impl Class {
         // TODO: What if the subclass triggers its own prompts?
 
         Self {
-            name,
+            id,
             hit_die,
             hp_per_level,
             default_abilities,
@@ -176,18 +146,18 @@ impl Class {
         }
     }
 
-    pub fn subclass(&self, subclass_name: &SubclassName) -> Option<&Subclass> {
-        self.subclasses.get(subclass_name)
+    pub fn subclass(&self, subclass_id: &SubclassId) -> Option<&Subclass> {
+        self.subclasses.get(subclass_id)
     }
 
     pub fn spellcasting_progression(
         &self,
-        subclass_name: Option<&SubclassName>,
+        subclass_id: Option<&SubclassId>,
     ) -> SpellcastingProgression {
         if self.base.spellcasting != SpellcastingProgression::None {
             return self.base.spellcasting.clone();
         }
-        if let Some(subclass) = subclass_name.and_then(|name| self.subclass(name)) {
+        if let Some(subclass) = subclass_id.and_then(|name| self.subclass(name)) {
             return subclass.base.spellcasting.clone();
         }
         SpellcastingProgression::None
@@ -198,16 +168,9 @@ impl Class {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SubclassName {
-    /// Validation logic becomes easier if the subclass knows what class it belongs to
-    pub class: ClassName,
-    pub name: String,
-}
-
 #[derive(Debug, Clone)]
 pub struct Subclass {
-    pub name: SubclassName,
+    pub id: SubclassId,
     pub base: ClassBase,
 }
 
