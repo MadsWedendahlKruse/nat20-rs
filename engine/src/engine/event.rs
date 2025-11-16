@@ -57,12 +57,13 @@ impl Event {
             EventKind::ActionPerformed { action, .. } => Some(action.actor),
             // TODO: What to do here? Multiple reactors?
             EventKind::ReactionTriggered { reactors, .. } => Some(*reactors.iter().next()?),
+            EventKind::ReactionRequested { reaction } => Some(reaction.reactor),
             EventKind::LifeStateChanged { actor, .. } => *actor,
             EventKind::D20CheckPerformed(entity, _, _) => Some(*entity),
             EventKind::D20CheckResolved(entity, _, _) => Some(*entity),
             EventKind::DamageRollPerformed(entity, _) => Some(*entity),
             EventKind::DamageRollResolved(entity, _) => Some(*entity),
-            _ => None,
+            EventKind::Encounter(_) => None,
         }
     }
 
@@ -115,11 +116,9 @@ pub enum EventKind {
         trigger_event: Arc<Event>,
         reactors: HashSet<Entity>,
     },
-    // ReactionPerformed {
-    //     reactor: Entity,
-    //     reaction: Arc<ReactionData>,
-    //     event: Arc<Event>,
-    // },
+    ReactionRequested {
+        reaction: ReactionData,
+    },
     LifeStateChanged {
         entity: Entity,
         new_state: LifeState,
@@ -141,6 +140,7 @@ impl EventKind {
             EventKind::ActionRequested { .. } => "ActionRequested",
             EventKind::ActionPerformed { .. } => "ActionPerformed",
             EventKind::ReactionTriggered { .. } => "ReactionTriggered",
+            EventKind::ReactionRequested { .. } => "ReactionRequested",
             EventKind::LifeStateChanged { .. } => "LifeStateChanged",
             EventKind::D20CheckPerformed(_, _, _) => "D20CheckPerformed",
             EventKind::D20CheckResolved(_, _, _) => "D20CheckResolved",

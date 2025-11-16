@@ -184,10 +184,7 @@ impl GameState {
     }
 
     pub fn submit_decision(&mut self, mut decision: ActionDecision) -> Result<(), ActionError> {
-        let scope = match decision.kind {
-            ActionDecisionKind::Action { ref action } => self.scope_for_entity(action.actor),
-            ActionDecisionKind::Reaction { reactor, .. } => self.scope_for_entity(reactor),
-        };
+        let scope = self.scope_for_entity(decision.actor());
 
         // Avoid double mutable borrow
         let prompt_id = {
@@ -239,7 +236,7 @@ impl GameState {
         scope: InteractionScopeId,
         prompt_id: ActionPromptId,
     ) -> Result<(), ActionError> {
-        let (all_decisions_ready, prompt, decisions) = {
+        let (all_decisions_ready, decisions) = {
             let session = self.interaction_engine.session(scope);
             let prompt = session
                 .and_then(|s| s.pending_prompts().iter().find(|p| p.id == prompt_id))
@@ -260,7 +257,7 @@ impl GameState {
                 .actors()
                 .iter()
                 .all(|a| decisions_map.contains_key(a));
-            (all_actors_submitted, prompt, decisions_map)
+            (all_actors_submitted, decisions_map)
         };
 
         if !all_decisions_ready {
@@ -273,21 +270,36 @@ impl GameState {
             session.pop_prompt_by_id(&prompt_id);
         }
 
-        // Convert decisions → events and validate/queue
+        // Convert decisions → actions / reactions and validate/execute
         for (_actor, decision) in decisions {
-            let maybe_action = match &decision.kind {
-                ActionDecisionKind::Action { action } => Some(action.clone()),
-                ActionDecisionKind::Reaction { choice, .. } => {
-                    choice.as_ref().map(ActionData::from)
+            match &decision.kind {
+                ActionDecisionKind::Action { action } => {
+                    // Normal action flow: validate + enqueue ActionRequested
+                    self.validate_action(action, true)?;
+                    self.process_event_scoped(
+                        scope,
+                        Event::new(EventKind::ActionRequested {
+                            action: action.clone(),
+                        }),
+                    )?;
                 }
-            };
 
-            if let Some(action) = maybe_action {
-                self.validate_action(&action, true)?;
-                self.process_event_scoped(
-                    scope,
-                    Event::new(EventKind::ActionRequested { action }),
-                )?;
+                ActionDecisionKind::Reaction { choice, .. } => {
+                    // No reaction chosen – skip
+                    let Some(reaction_data) = choice else {
+                        continue;
+                    };
+
+                    // Validate reaction as if it were an action:
+                    let action_view = ActionData::from(reaction_data);
+                    self.validate_action(&action_view, true)?;
+                    self.process_event_scoped(
+                        scope,
+                        Event::new(EventKind::ReactionRequested {
+                            reaction: reaction_data.clone(),
+                        }),
+                    )?;
+                }
             }
         }
 
@@ -341,7 +353,7 @@ impl GameState {
             }
         }
 
-        // No reaction window → advance now (same as your `advance_event`)
+        // No reaction window → advance now
         self.advance_event(event);
         Ok(())
     }
@@ -525,6 +537,10 @@ impl GameState {
         match &event.kind {
             EventKind::ActionRequested { action } => {
                 systems::actions::perform_action(self, action);
+            }
+
+            EventKind::ReactionRequested { reaction } => {
+                systems::actions::perform_reaction(self, reaction);
             }
 
             EventKind::ActionPerformed { results, .. } => {

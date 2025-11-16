@@ -4,7 +4,8 @@ use crate::{
     components::{
         actions::{
             action::{
-                Action, ActionContext, ActionCooldownMap, ActionMap, ActionProvider, ReactionSet,
+                Action, ActionContext, ActionCooldownMap, ActionKind, ActionMap, ActionProvider,
+                ReactionSet,
             },
             targeting::{
                 AreaShape, TargetInstance, TargetingContext, TargetingError, TargetingKind,
@@ -338,11 +339,7 @@ pub fn available_reactions_to_event(
                             reactor,
                             event: event.clone().into(),
                             reaction_id: reaction_id.clone(),
-                            context: ActionContext::Reaction {
-                                trigger_event: Box::new(event.clone()),
-                                resource_cost: resource_cost.clone(),
-                                context: Box::new(context.clone()),
-                            },
+                            context: context.clone(),
                             resource_cost: resource_cost.clone(),
                         });
                     }
@@ -354,67 +351,17 @@ pub fn available_reactions_to_event(
     reactions
 }
 
-#[derive(Debug, Clone)]
-pub enum TargetPathFindingResult {
-    AlreadyInRange,
-    PathFound(PathResult),
-}
+pub fn perform_reaction(game_state: &mut GameState, reaction_data: &ReactionData) {
+    let action = get_action(&reaction_data.reaction_id)
+        .unwrap_or_else(|| panic!("Reaction action not found: {:?}", reaction_data.reaction_id));
 
-#[derive(Debug, Clone)]
-pub enum TargetPathFindingError {
-    NoPathFound,
-    ActionError(ActionError),
-}
-
-// TODO: Not sure what to call this or where to put it
-pub fn path_to_target(
-    game_state: &mut GameState,
-    action: &ActionData,
-    pathfind_if_out_of_range: bool,
-) -> Result<TargetPathFindingResult, TargetPathFindingError> {
-    let validation_result = game_state.validate_action(action, false);
-
-    if let Err(action_error) = &validation_result {
-        // Check if it's an error that can be resolved with pathfinding
-        if pathfind_if_out_of_range
-            && let ActionError::Usability(usability_error) = action_error
-            && let ActionUsabilityError::TargetingError(targeting_error) = usability_error
-            && let TargetingError::OutOfRange { target, .. }
-            | TargetingError::NoLineOfSight { target } = targeting_error
-        {
-            let target_position = match target {
-                TargetInstance::Entity(entity) => {
-                    let (_, shape_pose) =
-                        systems::geometry::get_shape(&game_state.world, *entity).unwrap();
-                    shape_pose.translation.vector.into()
-                }
-                TargetInstance::Point(point) => *point,
-            };
-            let targeting_context = systems::actions::targeting_context(
-                &game_state.world,
-                action.actor,
-                &action.action_id,
-                &action.context,
-            );
-
-            if let Ok(path_result) = systems::movement::path_in_range_of_point(
-                game_state,
-                action.actor,
-                target_position,
-                targeting_context.range.max(),
-                true,
-                false,
-                targeting_context.require_line_of_sight,
-                true,
-            ) {
-                return Ok(TargetPathFindingResult::PathFound(path_result));
-            } else {
-                return Err(TargetPathFindingError::NoPathFound);
-            }
-        } else {
-            return Err(TargetPathFindingError::ActionError(action_error.clone()));
+    match &action.kind {
+        ActionKind::Reaction { reaction } => {
+            reaction(game_state, reaction_data);
         }
+        _ => panic!(
+            "ReactionData refers to non-Reaction ActionKind: {:?}",
+            reaction_data.reaction_id
+        ),
     }
-
-    Ok(TargetPathFindingResult::AlreadyInRange)
 }

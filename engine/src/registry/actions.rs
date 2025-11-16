@@ -75,7 +75,11 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
                 bonus equal to your Fighter level. You must use the new roll."
                 .to_string(),
             kind: ActionKind::Reaction {
-                reaction: Arc::new(|game_state, reactor, trigger_event, reaction_context| {
+                reaction: Arc::new(|game_state, reaction_data| {
+                    let reactor = reaction_data.reactor;
+                    let trigger_event = &reaction_data.event;
+                    let reaction_context = &reaction_data.context;
+
                     let dc = match &trigger_event.kind {
                         EventKind::D20CheckPerformed(_, _, dc_kind) => {
                             match dc_kind.as_ref().unwrap() {

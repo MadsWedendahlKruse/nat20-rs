@@ -26,7 +26,7 @@ use crate::{
             spellbook::Spellbook,
         },
     },
-    engine::event::{CallbackResult, Event, EventKind},
+    engine::event::{ActionData, CallbackResult, Event, EventKind},
     registry,
     systems::{
         self,
@@ -58,9 +58,14 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
         3,
         MagicSchool::Abjuration,
         ActionKind::Reaction {
-            reaction: Arc::new(|game_state, reactor, trigger_event, reaction_context| {
+            reaction: Arc::new(|game_state, reaction_data| {
+                let reactor = reaction_data.reactor;
+                let trigger_event = &reaction_data.event;
+                let reaction_context = &reaction_data.context;
+
                 let trigger_action = match &trigger_event.kind {
                     EventKind::ActionRequested { action } => action,
+                    EventKind::ReactionRequested { reaction } => &ActionData::from(reaction),
                     _ => panic!("Invalid event kind for Counterspell reaction"),
                 };
 
@@ -85,10 +90,10 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
                         let trigger_action = trigger_action.clone();
                         let reaction_context = reaction_context.clone();
                         move |game_state, event| match &event.kind {
-                            EventKind::D20CheckResolved(actor, result_kind, dc_kind) => {
+                            EventKind::D20CheckResolved(_, result_kind, _) => {
                                 match result_kind {
-                                    D20ResultKind::SavingThrow { kind, result } => {
-                                        let result = if result.success {
+                                    D20ResultKind::SavingThrow { result, .. } => {
+                                        let result: ReactionResult = if result.success {
                                             // Successful save, Counterspell fails
                                             ReactionResult::NoEffect
                                         } else {
@@ -142,24 +147,18 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
             allowed_targets: EntityFilter::not_dead(),
         }),
         Some(Arc::new(|reactor, trigger_event| {
-            match &trigger_event.kind {
-                EventKind::ActionRequested { action } => {
-                    if reactor == action.actor {
-                        // Cannot counterspell yourself
-                        return false;
-                    }
-                    // TODO: Can we just counterspell spells of any level?
-                    // Find a way to get rid of ActionContext::Reaction
-                    match &action.context {
-                        ActionContext::Spell { level } => true,
-                        // TODO: *NOT* a fan of having to check both of these
-                        ActionContext::Reaction { context, .. } => match context.as_ref() {
-                            ActionContext::Spell { level } => true,
-                            _ => false,
-                        },
-                        _ => false,
-                    }
-                }
+            let trigger_action = match &trigger_event.kind {
+                EventKind::ActionRequested { action } => action,
+                EventKind::ReactionRequested { reaction } => &ActionData::from(reaction),
+                _ => return false,
+            };
+            if reactor == trigger_action.actor {
+                // Cannot counterspell yourself
+                return false;
+            }
+            // TODO: Can we just counterspell spells of any level?
+            match &trigger_action.context {
+                ActionContext::Spell { .. } => true,
                 _ => false,
             }
         })),

@@ -20,7 +20,10 @@ use crate::{
         resource::{RechargeRule, ResourceAmountMap, ResourceError},
         saving_throw::SavingThrowDC,
     },
-    engine::{event::Event, game_state::GameState},
+    engine::{
+        event::{Event, ReactionData},
+        game_state::GameState,
+    },
     systems::{self},
 };
 
@@ -37,16 +40,6 @@ pub enum ActionContext {
     /// For example, Fireball deals more damage when cast at a higher level.
     Spell {
         level: u8,
-    },
-    Reaction {
-        /// Reactions can be triggered by a variety of events, so it is important
-        /// to know what event triggered the reaction. This can be used to determine
-        /// the effect of the reaction (e.g. Counterspell, Shield, etc.)
-        trigger_event: Box<Event>,
-        resource_cost: ResourceAmountMap,
-        /// Useful to know if the reaction is e.g. a spell.
-        /// Note: don't nest reactions :)
-        context: Box<ActionContext>,
     },
     // TODO: Not sure if Other is needed
     Other,
@@ -107,7 +100,7 @@ pub enum ActionKind {
 
     Reaction {
         // TODO: What should this return?
-        reaction: Arc<dyn Fn(&mut GameState, Entity, &Event, &ActionContext) + Send + Sync>,
+        reaction: Arc<dyn Fn(&mut GameState, &ReactionData) + Send + Sync>,
     },
     /// Custom actions can have any kind of effect, including damage, healing, or utility.
     /// Please note that this should only be used for actions that don't fit into the
@@ -367,18 +360,11 @@ impl ActionKind {
                 }
             }
 
-            ActionKind::Reaction { reaction } => match context {
-                ActionContext::Reaction {
-                    trigger_event,
-                    context: reaction_context,
-                    ..
-                } => {
-                    reaction(game_state, performer, trigger_event, reaction_context);
-                }
-                _ => {
-                    panic!("ActionContext must be Reaction for Reaction actions");
-                }
-            },
+            ActionKind::Reaction { reaction } => {
+                panic!(
+                    "ActionKind::Reaction should be performed via ActionKind::Reaction.reaction(&game_state, &reaction_data)"
+                );
+            }
 
             ActionKind::Custom(custom) => {
                 // custom(game_state.world, target, context)

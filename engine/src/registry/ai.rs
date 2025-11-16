@@ -13,7 +13,7 @@ use crate::{
         event::{ActionData, ActionDecision, ActionDecisionKind, ActionPrompt, ActionPromptKind},
         game_state::GameState,
     },
-    systems,
+    systems::{self, movement::TargetPathFindingResult},
 };
 
 pub static AI_CONTROLLER_REGISTRY: LazyLock<HashMap<AIControllerId, Box<dyn AIController>>> =
@@ -121,15 +121,13 @@ impl AIController for RandomController {
                             .collect(),
                     };
 
-                    let path = match systems::actions::path_to_target(game_state, &action, true) {
+                    let path = match systems::movement::path_to_target(game_state, &action, true) {
                         Ok(result) => match result {
-                            systems::actions::TargetPathFindingResult::AlreadyInRange => {
+                            TargetPathFindingResult::AlreadyInRange => {
                                 // Nothing to do
                                 None
                             }
-                            systems::actions::TargetPathFindingResult::PathFound(path_result) => {
-                                Some(path_result)
-                            }
+                            TargetPathFindingResult::PathFound(path_result) => Some(path_result),
                         },
                         Err(error) => {
                             // TODO: Not sure what to do here for AI

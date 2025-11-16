@@ -14,14 +14,12 @@ use nat20_rs::{
     engine::{
         event::{ActionData, ActionDecision, ActionDecisionKind, ActionPromptKind},
         game_state::GameState,
-        interaction::InteractionScopeId,
     },
     registry,
     systems::{
         self,
-        actions::TargetPathFindingResult,
         geometry::{RaycastHit, RaycastHitKind},
-        movement::PathResult,
+        movement::{PathResult, TargetPathFindingResult},
     },
 };
 use parry3d::na::Point3;
@@ -695,7 +693,6 @@ fn update_potential_target(
     let closest_target = match &closest.kind {
         RaycastHitKind::Creature(entity) => TargetInstance::Entity(*entity),
         RaycastHitKind::World => TargetInstance::Point(closest.poi),
-        _ => return,
     };
 
     let mut potential_action = action.clone();
@@ -713,7 +710,7 @@ fn update_potential_target(
             "[update_potential_target] Finding path to new target {:?}",
             closest_target
         );
-        match systems::actions::path_to_target(game_state, &potential_action, true) {
+        match systems::movement::path_to_target(game_state, &potential_action, true) {
             Ok(result) => {
                 println!(
                     "[update_potential_target] Found path to target {:?}: {:?}",

@@ -8,12 +8,16 @@ use parry3d::{
 use uom::si::{f32::Length, length::meter};
 
 use crate::{
-    components::speed::Speed,
-    engine::{game_state::GameState, geometry::WorldPath},
-    systems::{
-        self,
-        geometry::{CreaturePose, RaycastFilter},
+    components::{
+        actions::targeting::{TargetInstance, TargetingError},
+        speed::Speed,
     },
+    engine::{
+        event::{ActionData, ActionError},
+        game_state::GameState,
+        geometry::WorldPath,
+    },
+    systems::{self, actions::ActionUsabilityError, geometry::RaycastFilter},
 };
 
 #[derive(Debug)]
@@ -176,8 +180,6 @@ fn determine_path_sphere_intersections(
     path_to_target: &WorldPath,
     target: &Point3<f32>,
 ) -> Option<Point3<f32>> {
-    let path_end = path_to_target.points.last()?;
-
     // Entity shouldn't block its own line of sight
     let mut excluded_entities = vec![entity];
     // If an entity is standing on the end of the path, that's probably who we're
@@ -263,4 +265,68 @@ fn determine_path_sphere_intersections(
 
 pub fn recharge_movement(world: &mut World, entity: Entity) {
     systems::helpers::get_component_mut::<Speed>(world, entity).reset();
+}
+
+#[derive(Debug, Clone)]
+pub enum TargetPathFindingResult {
+    AlreadyInRange,
+    PathFound(PathResult),
+}
+
+#[derive(Debug, Clone)]
+pub enum TargetPathFindingError {
+    NoPathFound,
+    ActionError(ActionError),
+}
+
+pub fn path_to_target(
+    game_state: &mut GameState,
+    action: &ActionData,
+    pathfind_if_out_of_range: bool,
+) -> Result<TargetPathFindingResult, TargetPathFindingError> {
+    let validation_result = game_state.validate_action(action, false);
+
+    if let Err(action_error) = &validation_result {
+        // Check if it's an error that can be resolved with pathfinding
+        if pathfind_if_out_of_range
+            && let ActionError::Usability(usability_error) = action_error
+            && let ActionUsabilityError::TargetingError(targeting_error) = usability_error
+            && let TargetingError::OutOfRange { target, .. }
+            | TargetingError::NoLineOfSight { target } = targeting_error
+        {
+            let target_position = match target {
+                TargetInstance::Entity(entity) => {
+                    let (_, shape_pose) =
+                        systems::geometry::get_shape(&game_state.world, *entity).unwrap();
+                    shape_pose.translation.vector.into()
+                }
+                TargetInstance::Point(point) => *point,
+            };
+            let targeting_context = systems::actions::targeting_context(
+                &game_state.world,
+                action.actor,
+                &action.action_id,
+                &action.context,
+            );
+
+            if let Ok(path_result) = systems::movement::path_in_range_of_point(
+                game_state,
+                action.actor,
+                target_position,
+                targeting_context.range.max(),
+                true,
+                false,
+                targeting_context.require_line_of_sight,
+                true,
+            ) {
+                return Ok(TargetPathFindingResult::PathFound(path_result));
+            } else {
+                return Err(TargetPathFindingError::NoPathFound);
+            }
+        } else {
+            return Err(TargetPathFindingError::ActionError(action_error.clone()));
+        }
+    }
+
+    Ok(TargetPathFindingResult::AlreadyInRange)
 }
