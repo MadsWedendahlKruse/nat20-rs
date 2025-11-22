@@ -16,7 +16,7 @@ pub enum ModifierSource {
     Item(ItemId), // e.g. "Belt of Strength"
     ClassFeature(ClassId),
     ClassLevel(ClassId),         // e.g. "Fighter Level 3"
-    SubclassFeature(SubclassId), // e.g. "Champion Improved Critical"
+    SubclassFeature(SubclassId), // e.g. "Champion"
     Action(ActionId),            // e.g. "Tactical Mind"
     Effect(EffectId),            // optional: unique ID for internal tracking
     Ability(Ability),            // e.g. "Strength"

@@ -87,7 +87,7 @@ impl MainMenuWindow {
             serde_json::from_reader(BufReader::new(file)).expect("Failed to load cached geometry")
         } else {
             let geometry = WorldGeometry::from_obj_path(
-                format!("assets/{}.obj", geometry_name),
+                format!("assets/models/geometry/{}.obj", geometry_name),
                 &initial_config.clone().build(),
             );
             // Save to local cache for next time
