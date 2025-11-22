@@ -6,9 +6,10 @@ use std::{
 
 use super::modifier::{ModifierSet, ModifierSource};
 
+use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoEnumIterator};
 
-#[derive(EnumIter, Hash, Eq, PartialEq, Debug, Clone, Copy, Display)]
+#[derive(EnumIter, Hash, Eq, PartialEq, Debug, Clone, Copy, Display, Serialize, Deserialize)]
 pub enum Ability {
     Strength = 0,
     Dexterity = 1,
@@ -19,6 +20,7 @@ pub enum Ability {
 }
 
 impl Ability {
+    // TODO: Support for parsing acronyms?
     pub fn acronym(&self) -> &'static str {
         match self {
             Ability::Strength => "STR",

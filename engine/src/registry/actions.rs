@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    str::FromStr,
     sync::{Arc, LazyLock},
 };
 
@@ -201,7 +202,6 @@ static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(||
                             die_size: DieSize::D10,
                         },
                         modifiers,
-                        SECOND_WIND_ID.to_string(),
                     )
                 }),
             },
@@ -257,7 +257,7 @@ static TACTICAL_MIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(
                                             {
                                                 match existing_result {
                                                     D20ResultKind::Skill { result, .. } => {
-                                                        result.add_bonus(ModifierSource::Action(TACTICAL_MIND_ID.clone()), DiceSetRoll::from("1d10").roll().subtotal);
+                                                        result.add_bonus(ModifierSource::Action(TACTICAL_MIND_ID.clone()), DiceSetRoll::from_str("1d10").unwrap().roll().subtotal);
                                                     }
                                                     _ => panic!("Tactical Mind modification applied to wrong result type"),
 

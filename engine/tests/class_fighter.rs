@@ -22,7 +22,7 @@ mod tests {
 
     #[test]
     fn fighter_action_surge() {
-        let mut game_state = fixtures::engine::test_game_state();
+        let mut game_state = fixtures::engine::game_state();
         let fighter = fixtures::creatures::heroes::fighter(&mut game_state.world).id();
 
         // Check that the fighter has the Action Surge action
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn fighter_second_wind() {
-        let mut game_state = fixtures::engine::test_game_state();
+        let mut game_state = fixtures::engine::game_state();
         let fighter = fixtures::creatures::heroes::fighter(&mut game_state.world).id();
 
         // Check that the fighter has the Second Wind action
@@ -141,13 +141,7 @@ mod tests {
         // Let the fighter take some damage
         let damage_source = ActionKind::UnconditionalDamage {
             damage: Arc::new(|_, _, _| {
-                DamageRoll::new(
-                    1,
-                    DieSize::D4,
-                    DamageType::Force,
-                    DamageSource::Spell,
-                    "Magic Missile".to_string(),
-                )
+                DamageRoll::new(1, DieSize::D4, DamageType::Force, DamageSource::Spell)
             }),
         };
         systems::health::damage(
@@ -190,7 +184,7 @@ mod tests {
 
     #[test]
     fn fighter_extra_attack() {
-        let mut game_state = fixtures::engine::test_game_state();
+        let mut game_state = fixtures::engine::game_state();
         let fighter = fixtures::creatures::heroes::fighter(&mut game_state.world).id();
 
         // Check that the fighter has the Extra Attack effect

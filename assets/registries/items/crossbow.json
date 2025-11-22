@@ -1,0 +1,30 @@
+{
+  "item": {
+    "id": "item.crossbow",
+    "name": "Crossbow",
+    "description": "If you're reading this, that means the deserialization worked!",
+    "weight": 1.3607771,
+    "value": "1 GP",
+    "rarity": "uncommon"
+  },
+  "category": "simple",
+  "kind": "ranged",
+  "properties": [
+    "Range (24.4 / 97.5 m)"
+  ],
+  "damage_roll": {
+    "primary": {
+      "dice_roll": "1d8",
+      "damage_type": "piercing"
+    },
+    "bonus": [],
+    "source": {
+      "weapon": "ranged"
+    }
+  },
+  "ability": "Dexterity",
+  "weapon_actions": [
+    "action.weapon.attack"
+  ],
+  "effects": []
+}

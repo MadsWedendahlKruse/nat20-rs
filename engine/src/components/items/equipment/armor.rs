@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use serde::{Deserialize, Serialize};
 use strum::Display;
 
 use crate::{
@@ -15,7 +16,8 @@ use crate::{
     registry,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Display, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ArmorType {
     Clothing,
     Light,
@@ -23,7 +25,8 @@ pub enum ArmorType {
     Heavy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ArmorDexterityBonus {
     Unlimited,   // No limit on Dexterity bonus
     Limited(u8), // Maximum Dexterity bonus allowed
@@ -46,7 +49,7 @@ pub struct ArmorClass {
 }
 
 impl ArmorClass {
-    pub fn new(
+    fn new(
         base_value: i32,
         base_source: ModifierSource,
         dexterity_bonus: ArmorDexterityBonus,
@@ -78,11 +81,12 @@ impl ArmorClass {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Armor {
     pub item: Item,
     pub armor_type: ArmorType,
-    pub armor_class: ArmorClass,
+    pub armor_class: i32,
+    pub dexterity_bonus: ArmorDexterityBonus,
     pub stealth_disadvantage: bool,
     pub effects: Vec<EffectId>,
 }
@@ -100,16 +104,11 @@ impl Armor {
             effects.push(registry::effects::ARMOR_STEALTH_DISADVANTAGE_ID.clone());
         }
 
-        let item_id = item.id.clone();
-
         Armor {
             item,
             armor_type,
-            armor_class: ArmorClass::new(
-                armor_class,
-                ModifierSource::Item(item_id),
-                dexterity_bonus,
-            ),
+            armor_class,
+            dexterity_bonus,
             stealth_disadvantage,
             effects,
         }
@@ -165,7 +164,11 @@ impl Armor {
     }
 
     pub fn armor_class(&self, ability_scores: &AbilityScoreMap) -> ArmorClass {
-        let mut armor_class = self.armor_class.clone();
+        let mut armor_class = ArmorClass::new(
+            self.armor_class,
+            ModifierSource::Item(self.item.id.clone()),
+            self.dexterity_bonus,
+        );
         let dex_bonus = ability_scores
             .get(Ability::Dexterity)
             .ability_modifier()

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::components::items::{
     equipment::{
         armor::Armor, equipment::EquipmentItem, loadout::EquipmentInstance, weapon::Weapon,
@@ -6,7 +8,8 @@ use crate::components::items::{
     money::{MonetaryValue, MonetaryValueError},
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum ItemInstance {
     Item(Item),
     Armor(Armor),

@@ -14,7 +14,7 @@ mod tests {
             skill::{Skill, SkillSet},
         },
         entities::character::Character,
-        registry,
+        registry::registry::ItemsRegistry,
         systems::{self},
         test_utils::fixtures,
     };
@@ -101,8 +101,7 @@ mod tests {
         let _ = systems::loadout::equip(
             &mut world,
             character,
-            registry::items::ITEM_REGISTRY
-                .get(&registry::items::CHAINMAIL_ID)
+            ItemsRegistry::get(&ItemId::from_str("item.chainmail"))
                 .unwrap()
                 .clone(),
         );

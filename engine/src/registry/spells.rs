@@ -188,13 +188,7 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
                 spell_attack_roll(world, caster, &ELDRITCH_BLAST_ID)
             }),
             damage: Arc::new(|_, _, _| {
-                DamageRoll::new(
-                    1,
-                    DieSize::D10,
-                    DamageType::Force,
-                    DamageSource::Spell,
-                    "Eldritch Blast".to_string(),
-                )
+                DamageRoll::new(1, DieSize::D10, DamageType::Force, DamageSource::Spell)
             }),
             damage_on_miss: None,
         },
@@ -252,7 +246,6 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
                     DieSize::D6,
                     DamageType::Fire,
                     DamageSource::Spell,
-                    "Fireball".to_string(),
                 )
             }),
         },
@@ -292,13 +285,8 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
         ActionKind::UnconditionalDamage {
             damage: Arc::new(|_, _, _| {
                 // TODO: Damage roll hooks? e.g. Empowered Evocation
-                let mut damage_roll = DamageRoll::new(
-                    1,
-                    DieSize::D4,
-                    DamageType::Force,
-                    DamageSource::Spell,
-                    "Magic Missile".to_string(),
-                );
+                let mut damage_roll =
+                    DamageRoll::new(1, DieSize::D4, DamageType::Force, DamageSource::Spell);
                 damage_roll
                     .primary
                     .dice_roll

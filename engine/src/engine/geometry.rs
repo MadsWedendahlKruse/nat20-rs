@@ -55,7 +55,7 @@ impl WorldGeometry {
         Self::new(points, indices, config)
     }
 
-    pub fn from_obj_path<P: AsRef<Path>>(obj_path: P, config: &Config) -> Self {
+    pub fn from_obj_path(obj_path: impl AsRef<Path>, config: &Config) -> Self {
         let obj: Obj = obj::load_obj(BufReader::new(File::open(obj_path).unwrap()))
             .expect("Failed to load world geometry");
         Self::from_obj(obj, config)

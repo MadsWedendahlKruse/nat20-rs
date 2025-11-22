@@ -1,0 +1,31 @@
+{
+  "item": {
+    "id": "item.shortbow",
+    "name": "Shortbow",
+    "description": "A lightweight bMass::new::<pound>(ow,) ideal for quick shots.",
+    "weight": 0.9071848,
+    "value": "25 GP",
+    "rarity": "common"
+  },
+  "category": "simple",
+  "kind": "ranged",
+  "properties": [
+    "Range (24.384 / 97.536 m)",
+    "Two-Handed"
+  ],
+  "damage_roll": {
+    "primary": {
+      "dice_roll": "1d6",
+      "damage_type": "piercing"
+    },
+    "bonus": [],
+    "source": {
+      "weapon": "ranged"
+    }
+  },
+  "ability": "Dexterity",
+  "weapon_actions": [
+    "action.weapon.attack"
+  ],
+  "effects": []
+}

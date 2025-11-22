@@ -1,0 +1,15 @@
+{
+  "item": {
+    "id": "item.robe",
+    "name": "Robe",
+    "description": "A simple robe, providing minimal protection.",
+    "weight": 1.8143696,
+    "value": "1 GP",
+    "rarity": "common"
+  },
+  "armor_type": "clothing",
+  "armor_class": 10,
+  "dexterity_bonus": "unlimited",
+  "stealth_disadvantage": false,
+  "effects": []
+}

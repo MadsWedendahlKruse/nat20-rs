@@ -1,0 +1,31 @@
+{
+  "item": {
+    "id": "item.greatsword",
+    "name": "Greatsword",
+    "description": "A large two-handed sword, capable of dealing heavy damage.",
+    "weight": 2.7215543,
+    "value": "50 GP",
+    "rarity": "common"
+  },
+  "category": "martial",
+  "kind": "melee",
+  "properties": [
+    "Heavy",
+    "Two-Handed"
+  ],
+  "damage_roll": {
+    "primary": {
+      "dice_roll": "2d6",
+      "damage_type": "slashing"
+    },
+    "bonus": [],
+    "source": {
+      "weapon": "melee"
+    }
+  },
+  "ability": "Strength",
+  "weapon_actions": [
+    "action.weapon.attack"
+  ],
+  "effects": []
+}

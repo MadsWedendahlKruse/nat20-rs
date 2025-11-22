@@ -10,7 +10,8 @@ mod tests {
             modifier::ModifierSource,
         },
         entities::character::Character,
-        registry, systems,
+        registry::{self, registry::ItemsRegistry},
+        systems,
     };
 
     #[test]
@@ -21,8 +22,7 @@ mod tests {
         let _ = systems::loadout::equip(
             &mut world,
             character,
-            registry::items::ITEM_REGISTRY
-                .get(&registry::items::CHAINMAIL_ID)
+            ItemsRegistry::get(&ItemId::from_str("item.chainmail"))
                 .unwrap()
                 .clone(),
         );
@@ -64,8 +64,7 @@ mod tests {
         let _ = systems::loadout::equip(
             &mut world,
             character,
-            registry::items::ITEM_REGISTRY
-                .get(&registry::items::STUDDED_LEATHER_ARMOR_ID)
+            ItemsRegistry::get(&ItemId::from_str("item.studded_leather_armor"))
                 .unwrap()
                 .clone(),
         );

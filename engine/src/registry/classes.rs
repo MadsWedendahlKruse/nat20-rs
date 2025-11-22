@@ -9,7 +9,7 @@ use crate::{
         ability::{Ability, AbilityScoreDistribution},
         class::{Class, ClassBase, SpellcastingProgression, Subclass},
         dice::DieSize,
-        id::{ClassId, SubclassId},
+        id::{ClassId, ItemId, SubclassId},
         items::equipment::{armor::ArmorType, weapon::WeaponCategory},
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         skill::Skill,
@@ -125,23 +125,23 @@ static FIGHTER: LazyLock<Class> = LazyLock::new(|| {
                 ),
                 LevelUpPrompt::Choice(
                     ChoiceSpec::single(
-                        "Figter Starting Equipment",
+                        "Fighter Starting Equipment",
                         vec![
                             ChoiceItem::Equipment {
                                 items: vec![
-                                    (1, registry::items::CHAINMAIL_ID.clone()),
-                                    (1, registry::items::GREATSWORD_ID.clone()),
-                                    (1, registry::items::FLAIL_ID.clone()),
-                                    (8, registry::items::JAVELIN_ID.clone()),
+                                    (1, ItemId::from_str("item.chainmail")),
+                                    (1, ItemId::from_str("item.greatsword")),
+                                    (1, ItemId::from_str("item.flail")),
+                                    (8, ItemId::from_str("item.javelin")),
                                 ],
                                 money: "4 GP".to_string(),
                             },
                             ChoiceItem::Equipment {
                                 items: vec![
-                                    (1, registry::items::STUDDED_LEATHER_ARMOR_ID.clone()),
-                                    (1, registry::items::SCIMITAR_ID.clone()),
-                                    (1, registry::items::SHORTSWORD_ID.clone()),
-                                    (1, registry::items::LONGBOW_ID.clone()),
+                                    (1, ItemId::from_str("item.studded_leather_armor")),
+                                    (1, ItemId::from_str("item.scimitar")),
+                                    (1, ItemId::from_str("item.shortsword")),
+                                    (1, ItemId::from_str("item.longbow")),
                                 ],
                                 money: "11 GP".to_string(),
                             },

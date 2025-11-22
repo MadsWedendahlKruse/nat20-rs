@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 use hecs::{Entity, World};
 use strum::IntoEnumIterator;
@@ -17,7 +20,8 @@ use crate::{
         resource::Resource,
         skill::{Skill, SkillSet},
     },
-    registry, systems,
+    registry::{self, registry::ItemsRegistry},
+    systems,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -258,8 +262,7 @@ fn resolve_level_up_prompt(
                         for (count, item_id) in items {
                             // TODO: Not the most elegant solution
                             for _ in 0..*count {
-                                let item =
-                                    registry::items::ITEM_REGISTRY.get(item_id).unwrap().clone();
+                                let item = ItemsRegistry::get(item_id).unwrap().clone();
                                 if item.equipable() {
                                     let equipment: EquipmentInstance = item.clone().into();
                                     if systems::loadout::can_equip(world, entity, &equipment) {
@@ -278,7 +281,7 @@ fn resolve_level_up_prompt(
                             }
                         }
                         if !money.is_empty() {
-                            let money = MonetaryValue::from(money.clone());
+                            let money = MonetaryValue::from_str(money).unwrap();
                             systems::inventory::add_money(world, entity, money);
                         }
                     }

@@ -1,14 +1,14 @@
 use std::{collections::HashMap, sync::LazyLock};
 
 use hecs::{Entity, World};
-use strum::IntoEnumIterator;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     components::{
         ability::AbilityScoreMap,
         actions::action::{ActionContext, ActionMap, ActionProvider},
         damage::{AttackRoll, AttackRollResult, DamageRoll},
-        id::{ActionId, EffectId, ItemId},
+        id::{EffectId, ItemId},
         items::{
             equipment::{
                 armor::{Armor, ArmorClass, ArmorDexterityBonus},
@@ -20,9 +20,8 @@ use crate::{
             item::Item,
         },
         modifier::{ModifierSet, ModifierSource},
-        resource::ResourceAmountMap,
     },
-    registry,
+    registry::{self, registry::ItemsRegistry},
     systems::{self},
 };
 
@@ -37,7 +36,8 @@ pub enum TryEquipError {
     WrongWeaponType,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum EquipmentInstance {
     Armor(Armor),
     Weapon(Weapon),
@@ -101,9 +101,7 @@ impl_into_equipment_instance! {
 
 impl Into<EquipmentInstance> for &LazyLock<ItemId> {
     fn into(self) -> EquipmentInstance {
-        let item = registry::items::ITEM_REGISTRY
-            .get(&self)
-            .expect("Invalid ItemId");
+        let item = ItemsRegistry::get(&self).expect("Invalid ItemId");
         match item {
             ItemInstance::Armor(armor) => EquipmentInstance::Armor(armor.clone()),
             ItemInstance::Weapon(weapon) => EquipmentInstance::Weapon(weapon.clone()),
@@ -385,8 +383,7 @@ mod tests {
     fn equip_unequip_armor() {
         let mut loadout = Loadout::new();
 
-        let armor = registry::items::ITEM_REGISTRY
-            .get(&registry::items::CHAINMAIL_ID)
+        let armor = ItemsRegistry::get(&ItemId::from_str("item.chainmail"))
             .unwrap()
             .clone();
         let slot = EquipmentSlot::Armor;
@@ -394,13 +391,13 @@ mod tests {
         assert!(unequipped.unwrap().is_empty());
         assert_eq!(
             loadout.armor().unwrap().item.id,
-            registry::items::CHAINMAIL_ID.clone()
+            ItemId::from_str("item.chainmail")
         );
 
         let unequipped = loadout.unequip(&slot);
         assert_eq!(
             unequipped.unwrap().item().id,
-            registry::items::CHAINMAIL_ID.clone()
+            ItemId::from_str("item.chainmail")
         );
         assert!(loadout.armor().is_none());
 
@@ -413,8 +410,7 @@ mod tests {
     fn equip_armor_twice() {
         let mut loadout = Loadout::new();
 
-        let armor1 = registry::items::ITEM_REGISTRY
-            .get(&registry::items::CHAINMAIL_ID)
+        let armor1 = ItemsRegistry::get(&ItemId::from_str("item.chainmail"))
             .unwrap()
             .clone();
         let slot = EquipmentSlot::Armor;
@@ -422,11 +418,9 @@ mod tests {
         assert!(unequipped1.unwrap().is_empty());
         assert_eq!(
             loadout.armor().unwrap().item.id,
-            *registry::items::CHAINMAIL_ID
+            ItemId::from_str("item.chainmail")
         );
-
-        let armor2 = registry::items::ITEM_REGISTRY
-            .get(&registry::items::STUDDED_LEATHER_ARMOR_ID)
+        let armor2 = ItemsRegistry::get(&ItemId::from_str("item.studded_leather_armor"))
             .unwrap()
             .clone();
         let unequipped2 = loadout.equip_in_slot(&slot, armor2.clone());
@@ -434,7 +428,7 @@ mod tests {
             unequipped2
                 .unwrap()
                 .iter()
-                .any(|item| item.item().id == *registry::items::CHAINMAIL_ID)
+                .any(|item| item.item().id == ItemId::from_str("item.chainmail"))
         );
         assert_eq!(loadout.armor().unwrap().item.id, armor2.item().id);
     }
@@ -482,8 +476,7 @@ mod tests {
     fn equip_unequip_weapon() {
         let mut loadout = Loadout::new();
 
-        let weapon: EquipmentInstance = registry::items::ITEM_REGISTRY
-            .get(&registry::items::DAGGER_ID)
+        let weapon: EquipmentInstance = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
             .unwrap()
             .clone()
             .into();
@@ -501,8 +494,7 @@ mod tests {
     fn equip_weapon_twice() {
         let mut loadout = Loadout::new();
 
-        let weapon1: EquipmentInstance = registry::items::ITEM_REGISTRY
-            .get(&registry::items::DAGGER_ID)
+        let weapon1: EquipmentInstance = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
             .unwrap()
             .clone()
             .into();
@@ -511,8 +503,7 @@ mod tests {
         assert_eq!(unequipped1.unwrap().len(), 0);
         assert!(loadout.weapon_in_hand(&slot).is_some());
 
-        let weapon2: EquipmentInstance = registry::items::ITEM_REGISTRY
-            .get(&registry::items::DAGGER_ID)
+        let weapon2: EquipmentInstance = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
             .unwrap()
             .clone()
             .into();
@@ -525,12 +516,10 @@ mod tests {
     fn equip_two_handed_weapon_should_unequip_other_hand() {
         let mut loadout = Loadout::new();
 
-        let weapon_main_hand = registry::items::ITEM_REGISTRY
-            .get(&registry::items::DAGGER_ID)
+        let weapon_main_hand = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
             .unwrap()
             .clone();
-        let weapon_off_hand = registry::items::ITEM_REGISTRY
-            .get(&registry::items::DAGGER_ID)
+        let weapon_off_hand = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
             .unwrap()
             .clone();
         let main_slot = EquipmentSlot::MeleeMainHand;
@@ -544,8 +533,7 @@ mod tests {
         assert!(unequipped_off.is_ok());
         assert!(loadout.weapon_in_hand(&off_slot).is_some());
 
-        let weapon_two_handed = registry::items::ITEM_REGISTRY
-            .get(&registry::items::GREATSWORD_ID)
+        let weapon_two_handed = ItemsRegistry::get(&ItemId::from_str("item.greatsword"))
             .unwrap()
             .clone();
         let unequipped = loadout.equip_in_slot(&main_slot, weapon_two_handed);
@@ -586,14 +574,12 @@ mod tests {
     fn available_actions_melee_and_ranged_weapon() {
         let mut loadout = Loadout::new();
 
-        let weapon1 = registry::items::ITEM_REGISTRY
-            .get(&registry::items::DAGGER_ID)
+        let weapon1 = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
             .unwrap()
             .clone();
         loadout.equip(weapon1);
 
-        let weapon2 = registry::items::ITEM_REGISTRY
-            .get(&registry::items::SHORTBOW_ID)
+        let weapon2 = ItemsRegistry::get(&ItemId::from_str("item.shortbow"))
             .unwrap()
             .clone();
         loadout.equip(weapon2);

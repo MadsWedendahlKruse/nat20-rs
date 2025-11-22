@@ -1,15 +1,13 @@
-use std::{
-    fmt::{self, Display},
-    ops::Deref,
-};
+use std::ops::Deref;
 
 use hecs::Entity;
-use uuid::Uuid;
+use serde::{Deserialize, Serialize};
+use std::fmt;
 
 macro_rules! id_newtypes {
     ($($name:ident),+) => {
         $(
-            #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+            #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
             pub struct $name(String);
 
             impl $name {

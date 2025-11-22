@@ -1,6 +1,8 @@
 use std::{collections::HashMap, fmt};
 
 use hecs::{Entity, World};
+use serde::{Deserialize, Serialize};
+use serde_with::{DisplayFromStr, serde_as};
 
 use crate::{
     components::{
@@ -12,7 +14,8 @@ use crate::{
     systems::{self},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DamageType {
     Acid,
     Bludgeoning,
@@ -37,16 +40,18 @@ impl fmt::Display for DamageType {
 
 /// --- DAMAGE APPLICATION ---
 
-#[derive(Debug, Clone, PartialEq)]
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DamageComponent {
+    #[serde_as(as = "DisplayFromStr")]
     pub dice_roll: DiceSetRoll,
     pub damage_type: DamageType,
 }
 
 impl DamageComponent {
-    pub fn new(num_dice: u32, die_size: DieSize, damage_type: DamageType, label: String) -> Self {
+    pub fn new(num_dice: u32, die_size: DieSize, damage_type: DamageType) -> Self {
         Self {
-            dice_roll: DiceSetRoll::new(DiceSet { num_dice, die_size }, ModifierSet::new(), label),
+            dice_roll: DiceSetRoll::new(DiceSet { num_dice, die_size }, ModifierSet::new()),
             damage_type,
         }
     }
@@ -83,7 +88,8 @@ impl fmt::Display for DamageComponentResult {
 
 /// This is used in the attack roll hook so we e.g. only apply Fighting Style
 /// Archery when making a ranged attack
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DamageSource {
     // TODO: Could also just use the entire weapon instead? Would be a lot of cloning unless
     // we introduce a lifetime for a reference
@@ -97,13 +103,12 @@ impl DamageSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DamageRoll {
     /// Separate the primary so we know where to apply e.g. ability modifiers
     pub primary: DamageComponent,
     pub bonus: Vec<DamageComponent>,
     pub source: DamageSource,
-    pub label: String,
 }
 
 impl DamageRoll {
@@ -113,25 +118,17 @@ impl DamageRoll {
         die_size: DieSize,
         damage_type: DamageType,
         source: DamageSource,
-        label: String,
     ) -> Self {
         Self {
-            label: label.clone(),
-            primary: DamageComponent::new(num_dice, die_size, damage_type, label),
+            primary: DamageComponent::new(num_dice, die_size, damage_type),
             bonus: Vec::new(),
             source,
         }
     }
 
-    pub fn add_bonus(
-        &mut self,
-        num_dice: u32,
-        die_size: DieSize,
-        damage_type: DamageType,
-        label: String,
-    ) {
+    pub fn add_bonus(&mut self, num_dice: u32, die_size: DieSize, damage_type: DamageType) {
         self.bonus
-            .push(DamageComponent::new(num_dice, die_size, damage_type, label));
+            .push(DamageComponent::new(num_dice, die_size, damage_type));
     }
 
     pub fn roll(&self) -> DamageRollResult {
@@ -165,7 +162,6 @@ impl DamageRoll {
         }
 
         DamageRollResult {
-            label: self.label.clone(),
             components: results,
             total,
             source: self.source.clone(),
@@ -202,7 +198,6 @@ impl fmt::Display for DamageRoll {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DamageRollResult {
-    pub label: String,
     pub components: Vec<DamageComponentResult>,
     pub total: i32,
     pub source: DamageSource,
@@ -768,7 +763,6 @@ mod tests {
         let mut modifiers = ModifierSet::new();
         modifiers.add_modifier(ModifierSource::Ability(Ability::Strength), 2);
         DamageRoll {
-            label: "Sword of Flame".to_string(),
             primary: DamageComponent {
                 dice_roll: DiceSetRoll::new(
                     DiceSet {
@@ -776,7 +770,6 @@ mod tests {
                         die_size: DieSize::D6,
                     },
                     modifiers,
-                    "Base damage".to_string(),
                 ),
                 damage_type: DamageType::Slashing,
             },
@@ -787,7 +780,6 @@ mod tests {
                         die_size: DieSize::D4,
                     },
                     ModifierSet::new(),
-                    "Fire Enchant".to_string(),
                 ),
                 damage_type: DamageType::Fire,
             }],
@@ -798,12 +790,10 @@ mod tests {
     #[fixture]
     fn damage_roll_result() -> DamageRollResult {
         DamageRollResult {
-            label: "Sword of Flame".to_string(),
             components: vec![
                 DamageComponentResult {
                     damage_type: DamageType::Slashing,
                     result: DiceSetRollResult {
-                        label: "Base damage".to_string(),
                         rolls: vec![3, 4],
                         die_size: DieSize::D6,
                         modifiers: ModifierSet::new(),
@@ -813,7 +803,6 @@ mod tests {
                 DamageComponentResult {
                     damage_type: DamageType::Fire,
                     result: DiceSetRollResult {
-                        label: "Fire Enchant".to_string(),
                         rolls: vec![2],
                         die_size: DieSize::D4,
                         modifiers: ModifierSet::new(),

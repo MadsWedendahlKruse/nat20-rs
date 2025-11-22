@@ -5,7 +5,7 @@ pub mod classes;
 pub mod effects;
 pub mod factions;
 pub mod feats;
-pub mod items;
 pub mod races;
+pub mod registry;
 pub mod resources;
 pub mod spells;

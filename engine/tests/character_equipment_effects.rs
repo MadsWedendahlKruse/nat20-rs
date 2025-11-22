@@ -2,6 +2,8 @@ extern crate nat20_rs;
 
 mod tests {
 
+    use std::str::FromStr;
+
     use hecs::World;
     use nat20_rs::{
         components::{
@@ -21,7 +23,8 @@ mod tests {
             skill::{Skill, SkillSet},
         },
         entities::character::Character,
-        registry, systems,
+        registry::{self, registry::ItemsRegistry},
+        systems,
     };
     use uom::si::{f32::Mass, mass::pound};
 
@@ -36,7 +39,7 @@ mod tests {
                 name: "Ring of Attacking".to_string(),
                 description: "A magical ring that grants advantage on attack rolls.".to_string(),
                 weight: Mass::new::<pound>(0.1),
-                value: MonetaryValue::from("1000 GP"),
+                value: MonetaryValue::from_str("1000 GP").unwrap(),
                 rarity: ItemRarity::Rare,
             },
             kind: EquipmentKind::Ring,
@@ -46,8 +49,7 @@ mod tests {
         let _ = systems::loadout::equip(
             &mut world,
             entity,
-            registry::items::ITEM_REGISTRY
-                .get(&registry::items::DAGGER_ID)
+            ItemsRegistry::get(&ItemId::from_str("item.dagger"))
                 .unwrap()
                 .clone(),
         );
@@ -90,7 +92,7 @@ mod tests {
                 name: "Armor of Sneaking".to_string(),
                 description: "A magical armor that grants a bonus to Stealth.".to_string(),
                 weight: Mass::new::<pound>(0.5),
-                value: MonetaryValue::from("500 GP"),
+                value: MonetaryValue::from_str("500 GP").unwrap(),
                 rarity: ItemRarity::Rare,
             },
             12,
@@ -128,7 +130,7 @@ mod tests {
                 description: "A magical armor that grants advantage on Constitution saving throws."
                     .to_string(),
                 weight: Mass::new::<pound>(10.0),
-                value: MonetaryValue::from("1500 GP"),
+                value: MonetaryValue::from_str("1500 GP").unwrap(),
                 rarity: ItemRarity::VeryRare,
             },
             18,

@@ -1,4 +1,6 @@
 pub mod equipment {
+    use std::str::FromStr;
+
     use uom::si::{f32::Mass, mass::pound};
 
     use crate::components::{
@@ -17,7 +19,7 @@ pub mod equipment {
                 name: "Boots".to_string(),
                 description: "A test pair of boots.".to_string(),
                 weight: Mass::new::<pound>(1.8),
-                value: MonetaryValue::from("10 GP"),
+                value: MonetaryValue::from_str("10 GP").unwrap(),
                 rarity: ItemRarity::Common,
             },
             kind: EquipmentKind::Boots,
@@ -32,7 +34,7 @@ pub mod equipment {
                 name: "Gloves".to_string(),
                 description: "A test pair of gloves.".to_string(),
                 weight: Mass::new::<pound>(0.5),
-                value: MonetaryValue::from("5 GP"),
+                value: MonetaryValue::from_str("5 GP").unwrap(),
                 rarity: ItemRarity::Common,
             },
             kind: EquipmentKind::Gloves,
@@ -55,13 +57,13 @@ pub mod creatures {
 
         use crate::{
             components::{
-                id::{EntityIdentifier, Name},
+                id::{EntityIdentifier, ItemId, Name},
                 level_up::ChoiceItem,
                 skill::SkillSet,
                 spells::spellbook::Spellbook,
             },
             entities::character::Character,
-            registry::{self},
+            registry::{self, registry::ItemsRegistry},
         };
 
         use super::*;
@@ -118,10 +120,10 @@ pub mod creatures {
                         "choice.starting_equipment.fighter",
                         ChoiceItem::Equipment {
                             items: vec![
-                                (1, registry::items::CHAINMAIL_ID.clone()),
-                                (1, registry::items::GREATSWORD_ID.clone()),
-                                (1, registry::items::FLAIL_ID.clone()),
-                                (8, registry::items::JAVELIN_ID.clone()),
+                                (1, ItemId::from_str("item.chainmail")),
+                                (1, ItemId::from_str("item.greatsword")),
+                                (1, ItemId::from_str("item.flail")),
+                                (8, ItemId::from_str("item.javelin")),
                             ],
                             money: "4 GP".to_string(),
                         },
@@ -196,7 +198,14 @@ pub mod creatures {
                 ],
             );
 
-            let _ = systems::loadout::equip(world, entity, &registry::items::SHORTBOW_ID);
+            // let _ = systems::loadout::equip(world, entity, &ItemId::from_str("item).unwrap()),
+            let _ = systems::loadout::equip(
+                world,
+                entity,
+                ItemsRegistry::get(&ItemId::from_str("item.crossbow"))
+                    .unwrap()
+                    .clone(),
+            );
 
             EntityIdentifier::new(entity, name)
         }
@@ -239,8 +248,8 @@ pub mod creatures {
                         "choice.starting_equipment.sage",
                         ChoiceItem::Equipment {
                             items: vec![
-                                (1, registry::items::QUARTERSTAFF_ID.clone()),
-                                (1, registry::items::ROBE_ID.clone()),
+                                (1, ItemId::from_str("item.quarterstaff")),
+                                (1, ItemId::from_str("item.robe")),
                             ],
                             money: "8 GP".to_string(),
                         },
@@ -322,7 +331,7 @@ pub mod creatures {
                     LevelUpDecision::single_choice_with_id(
                         "choice.starting_equipment.acolyte",
                         ChoiceItem::Equipment {
-                            items: vec![(1, registry::items::ROBE_ID.clone())],
+                            items: vec![(1, ItemId::from_str("item.robe"))],
                             money: "8 GP".to_string(),
                         },
                     ),
@@ -385,7 +394,7 @@ pub mod creatures {
                 speed::Speed,
             },
             entities::monster::Monster,
-            registry,
+            registry::{self, registry::ItemsRegistry},
         };
 
         use super::*;
@@ -416,10 +425,10 @@ pub mod creatures {
                 entity,
                 &[
                     // TODO: Should be LEATHER_ARMOR_ID
-                    registry::items::STUDDED_LEATHER_ARMOR_ID.clone(),
-                    registry::items::SCIMITAR_ID.clone(),
+                    ItemId::from_str("item.studded_leather_armor"),
+                    ItemId::from_str("item.scimitar"),
                     // TODO: Add SHIELD_ID
-                    registry::items::SHORTBOW_ID.clone(),
+                    ItemId::from_str("item.shortbow"),
                 ],
             );
 
@@ -432,7 +441,7 @@ pub mod creatures {
             item_ids: &[ItemId],
         ) -> Result<(), TryEquipError> {
             for item_id in item_ids {
-                let item = registry::items::ITEM_REGISTRY.get(item_id).unwrap().clone();
+                let item = ItemsRegistry::get(item_id).unwrap().clone();
                 // Monsters are considered proficient with all their equipment
                 // so we can add proficiency for what they equip
                 match &item {
@@ -465,7 +474,7 @@ pub mod engine {
 
     use crate::engine::{game_state::GameState, geometry::WorldGeometry};
 
-    pub fn test_game_state() -> GameState {
+    pub fn game_state() -> GameState {
         GameState::new(WorldGeometry::from_obj_path(
             "../assets/models/geometry/test_terrain.obj",
             &ConfigBuilder::default().build(),

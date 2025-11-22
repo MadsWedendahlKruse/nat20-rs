@@ -1,0 +1,33 @@
+{
+  "item": {
+    "id": "item.dagger",
+    "name": "Dagger",
+    "description": "A simple dagger.",
+    "weight": 0.4535924,
+    "value": "2 GP",
+    "rarity": "common"
+  },
+  "category": "martial",
+  "kind": "melee",
+  "properties": [
+    "Finesse",
+    "Thrown",
+    "Range (6.096 / 18.288 m)",
+    "Light"
+  ],
+  "damage_roll": {
+    "primary": {
+      "dice_roll": "1d4",
+      "damage_type": "piercing"
+    },
+    "bonus": [],
+    "source": {
+      "weapon": "melee"
+    }
+  },
+  "ability": "Strength",
+  "weapon_actions": [
+    "action.weapon.attack"
+  ],
+  "effects": []
+}

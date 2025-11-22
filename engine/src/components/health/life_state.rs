@@ -93,14 +93,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_death_saving_throws_new() {
+    fn death_saving_throws_new() {
         let dst = DeathSavingThrows::new();
         assert_eq!(dst.successes(), 0);
         assert_eq!(dst.failures(), 0);
     }
 
     #[test]
-    fn test_record_success_and_failure() {
+    fn record_success_and_failure() {
         let mut dst = DeathSavingThrows::new();
         dst.record_success(1);
         assert_eq!(dst.successes(), 1);
@@ -114,7 +114,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_dead_and_is_stable() {
+    fn is_dead_and_is_stable() {
         let mut dst = DeathSavingThrows::new();
         assert!(!dst.is_defeated());
         assert!(!dst.is_stable());
@@ -128,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn test_reset() {
+    fn reset() {
         let mut dst = DeathSavingThrows::new();
         dst.record_success(2);
         dst.record_failure(2);

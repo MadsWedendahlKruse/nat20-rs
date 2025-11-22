@@ -4,7 +4,7 @@ use crate::{
     components::{
         ability::Ability,
         background::Background,
-        id::BackgroundId,
+        id::{BackgroundId, ItemId},
         level_up::{ChoiceItem, ChoiceSpec},
         skill::Skill,
     },
@@ -34,7 +34,7 @@ static ACOLYTE: LazyLock<Background> = LazyLock::new(|| {
             "Acolyte Starting Equipment",
             vec![
                 ChoiceItem::Equipment {
-                    items: vec![(1, registry::items::ROBE_ID.clone())],
+                    items: vec![(1, ItemId::from_str("item.robe"))],
                     money: "8 GP".to_string(),
                 },
                 ChoiceItem::Equipment {
@@ -63,8 +63,8 @@ static CRIMINAL: LazyLock<Background> = LazyLock::new(|| {
             vec![
                 ChoiceItem::Equipment {
                     items: vec![
-                        (2, registry::items::DAGGER_ID.clone()),
-                        (1, registry::items::TRAVELERS_CLOTHES_ID.clone()),
+                        (2, ItemId::from_str("item.dagger")),
+                        (1, ItemId::from_str("item.travelers_clothes")),
                     ],
                     money: "16 GP".to_string(),
                 },
@@ -94,8 +94,8 @@ static SAGE: LazyLock<Background> = LazyLock::new(|| {
             vec![
                 ChoiceItem::Equipment {
                     items: vec![
-                        (1, registry::items::QUARTERSTAFF_ID.clone()),
-                        (1, registry::items::ROBE_ID.clone()),
+                        (1, ItemId::from_str("item.quarterstaff")),
+                        (1, ItemId::from_str("item.robe")),
                     ],
                     money: "8 GP".to_string(),
                 },
@@ -132,9 +132,9 @@ static SOLDIER: LazyLock<Background> = LazyLock::new(|| {
             vec![
                 ChoiceItem::Equipment {
                     items: vec![
-                        (1, registry::items::SPEAR_ID.clone()),
-                        (1, registry::items::SHORTBOW_ID.clone()),
-                        (1, registry::items::TRAVELERS_CLOTHES_ID.clone()),
+                        (1, ItemId::from_str("spear")),
+                        (1, ItemId::from_str("shortbow")),
+                        (1, ItemId::from_str("travelers_clothes")),
                     ],
                     money: "14 GP".to_string(),
                 },

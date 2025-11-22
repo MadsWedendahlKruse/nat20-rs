@@ -1,0 +1,15 @@
+{
+  "item": {
+    "id": "item.studded_leather_armor",
+    "name": "Studded Leather Armor",
+    "description": "A suit of studded leather armor, providing good protection with minimal weight.",
+    "weight": 5.896701,
+    "value": "45 GP",
+    "rarity": "uncommon"
+  },
+  "armor_type": "light",
+  "armor_class": 12,
+  "dexterity_bonus": "unlimited",
+  "stealth_disadvantage": false,
+  "effects": []
+}

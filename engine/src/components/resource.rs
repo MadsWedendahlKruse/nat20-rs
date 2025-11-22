@@ -544,14 +544,14 @@ mod tests {
     }
 
     #[test]
-    fn test_flat_spend_success() {
+    fn flat_spend_success() {
         let mut res = flat_resource("Ki Point", 3, 3, RechargeRule::ShortRest);
         assert!(res.spend(&ResourceAmount::Flat(2)).is_ok());
         assert_eq!(res.current_uses()[0], ResourceAmount::Flat(1));
     }
 
     #[test]
-    fn test_flat_spend_insufficient() {
+    fn flat_spend_insufficient() {
         let mut res = flat_resource("Rage", 1, 2, RechargeRule::LongRest);
         let err = res.spend(&ResourceAmount::Flat(2)).unwrap_err();
         match err {
@@ -567,20 +567,20 @@ mod tests {
     }
 
     #[test]
-    fn test_flat_recharge() {
+    fn flat_recharge() {
         let mut res = flat_resource("Bardic Inspiration", 2, 5, RechargeRule::LongRest);
         res.kind.recharge_full();
         assert_eq!(res.current_uses()[0], ResourceAmount::Flat(5));
     }
 
     #[test]
-    fn test_flat_is_empty() {
+    fn flat_is_empty() {
         let res = flat_resource("Channel Divinity", 0, 1, RechargeRule::ShortRest);
         assert!(res.kind.is_empty());
     }
 
     #[test]
-    fn test_flat_add_uses() {
+    fn flat_add_uses() {
         let mut res = flat_resource("Wild Shape", 2, 2, RechargeRule::ShortRest);
         res.add_uses(&ResourceAmount::Flat(3));
         assert_eq!(res.max_uses()[0], ResourceAmount::Flat(5));
@@ -588,7 +588,7 @@ mod tests {
     }
 
     #[test]
-    fn test_flat_remove_uses_success() {
+    fn flat_remove_uses_success() {
         let mut res = flat_resource("Sorcery Point", 4, 4, RechargeRule::LongRest);
         assert!(res.remove_uses(&ResourceAmount::Flat(2)).is_ok());
         assert_eq!(res.max_uses()[0], ResourceAmount::Flat(2));
@@ -596,7 +596,7 @@ mod tests {
     }
 
     #[test]
-    fn test_flat_remove_uses_too_many() {
+    fn flat_remove_uses_too_many() {
         let mut res = flat_resource("Lay On Hands", 1, 1, RechargeRule::LongRest);
         let err = res.remove_uses(&ResourceAmount::Flat(2)).unwrap_err();
         match err {
@@ -612,21 +612,21 @@ mod tests {
     }
 
     #[test]
-    fn test_flat_set_current_uses() {
+    fn flat_set_current_uses() {
         let mut res = flat_resource("Superiority Die", 3, 3, RechargeRule::ShortRest);
         assert!(res.set_current_uses(&ResourceAmount::Flat(2)).is_ok());
         assert_eq!(res.current_uses()[0], ResourceAmount::Flat(2));
     }
 
     #[test]
-    fn test_flat_set_max_uses() {
+    fn flat_set_max_uses() {
         let mut res = flat_resource("Superiority Die", 3, 3, RechargeRule::ShortRest);
         assert!(res.set_max_uses(&ResourceAmount::Flat(4)).is_ok());
         assert_eq!(res.max_uses()[0], ResourceAmount::Flat(4));
     }
 
     #[test]
-    fn test_flat_recharge_rule_order() {
+    fn flat_recharge_rule_order() {
         assert!(RechargeRule::ShortRest > RechargeRule::Turn);
         assert!(RechargeRule::LongRest > RechargeRule::ShortRest);
         assert!(RechargeRule::Daily > RechargeRule::LongRest);
@@ -634,7 +634,7 @@ mod tests {
     }
 
     #[test]
-    fn test_flat_resource_recharge_respects_order() {
+    fn flat_resource_recharge_respects_order() {
         let mut res = flat_resource("Test Resource", 0, 2, RechargeRule::ShortRest);
         res.recharge_full(&RechargeRule::ShortRest);
         assert_eq!(res.current_uses()[0], ResourceAmount::Flat(2));
@@ -653,7 +653,7 @@ mod tests {
     }
 
     #[test]
-    fn test_flat_resource_recharge_rule_never() {
+    fn flat_resource_recharge_rule_never() {
         let mut res = flat_resource("No Recharge", 0, 1, RechargeRule::Never);
         res.recharge_full(&RechargeRule::ShortRest);
         assert_eq!(res.current_uses()[0], ResourceAmount::Flat(0));
@@ -664,7 +664,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tiered_spend_success() {
+    fn tiered_spend_success() {
         let mut res = tiered_resource(
             "Spell Slot",
             &[(1, 2, 2), (2, 1, 1)],
@@ -685,7 +685,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tiered_spend_invalid_tier() {
+    fn tiered_spend_invalid_tier() {
         let mut res = tiered_resource("Spell Slot", &[(1, 2, 2)], RechargeRule::LongRest);
         let err = res
             .spend(&ResourceAmount::Tiered { tier: 2, amount: 1 })
@@ -697,7 +697,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tiered_add_uses() {
+    fn tiered_add_uses() {
         let mut res = tiered_resource(
             "Spell Slot",
             &[(1, 2, 2), (2, 1, 1)],
@@ -715,7 +715,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tiered_remove_uses_success() {
+    fn tiered_remove_uses_success() {
         let mut res = tiered_resource(
             "Spell Slot",
             &[(1, 2, 2), (2, 1, 1)],
@@ -736,7 +736,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tiered_remove_uses_too_many() {
+    fn tiered_remove_uses_too_many() {
         let mut res = tiered_resource("Spell Slot", &[(1, 2, 2)], RechargeRule::LongRest);
         let err = res
             .remove_uses(&ResourceAmount::Tiered { tier: 1, amount: 3 })
@@ -754,7 +754,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tiered_recharge() {
+    fn tiered_recharge() {
         let mut res = tiered_resource(
             "Spell Slot",
             &[(1, 0, 2), (2, 0, 1)],
@@ -772,7 +772,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tiered_is_empty() {
+    fn tiered_is_empty() {
         let res = tiered_resource(
             "Spell Slot",
             &[(1, 0, 2), (2, 0, 1)],
@@ -782,7 +782,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_add_and_get() {
+    fn resource_map_add_and_get() {
         let mut map = ResourceMap::new();
         let res = flat_resource("Action", 1, 1, RechargeRule::Turn);
         map.add(res.clone(), false);
@@ -791,7 +791,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_iter() {
+    fn resource_map_iter() {
         let mut map = ResourceMap::new();
         map.add(flat_resource("Action", 1, 1, RechargeRule::Turn), false);
         map.add(
@@ -804,7 +804,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_can_afford_flat() {
+    fn resource_map_can_afford_flat() {
         let mut map = ResourceMap::new();
         map.add(
             flat_resource("Ki Point", 3, 3, RechargeRule::ShortRest),
@@ -818,7 +818,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_can_afford_flat_insufficient() {
+    fn resource_map_can_afford_flat_insufficient() {
         let mut map = ResourceMap::new();
         map.add(
             flat_resource("Ki Point", 1, 3, RechargeRule::ShortRest),
@@ -832,7 +832,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_can_afford_tier() {
+    fn resource_map_can_afford_tier() {
         let mut map = ResourceMap::new();
         map.add(
             tiered_resource(
@@ -853,7 +853,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_can_afford_tier_insufficient() {
+    fn resource_map_can_afford_tier_insufficient() {
         let mut map = ResourceMap::new();
         map.add(
             tiered_resource(
@@ -874,7 +874,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_spend_flat_success() {
+    fn resource_map_spend_flat_success() {
         let mut map = ResourceMap::new();
         map.add(
             flat_resource("Ki Point", 3, 3, RechargeRule::ShortRest),
@@ -890,7 +890,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_spend_flat_insufficient() {
+    fn resource_map_spend_flat_insufficient() {
         let mut map = ResourceMap::new();
         map.add(
             flat_resource("Ki Point", 1, 3, RechargeRule::ShortRest),
@@ -916,7 +916,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_spend_tier_success() {
+    fn resource_map_spend_tier_success() {
         let mut map = ResourceMap::new();
         map.add(
             tiered_resource(
@@ -946,7 +946,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_can_afford_mixed_resources() {
+    fn resource_map_can_afford_mixed_resources() {
         let mut map = ResourceMap::new();
         map.add(
             flat_resource("Ki Point", 3, 3, RechargeRule::ShortRest),
@@ -972,7 +972,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_spend_multiple_resources() {
+    fn resource_map_spend_multiple_resources() {
         let mut map = ResourceMap::new();
         map.add(
             flat_resource("Ki Point", 3, 3, RechargeRule::ShortRest),
@@ -992,7 +992,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_map_spend_mixed_resources() {
+    fn resource_map_spend_mixed_resources() {
         let mut map = ResourceMap::new();
         map.add(
             flat_resource("Ki Point", 3, 3, RechargeRule::ShortRest),

@@ -1,0 +1,31 @@
+{
+  "item": {
+    "id": "item.scimitar",
+    "name": "Scimitar",
+    "description": "A curved sword, favored for its speed and agility.",
+    "weight": 1.3607771,
+    "value": "25 GP",
+    "rarity": "common"
+  },
+  "category": "martial",
+  "kind": "melee",
+  "properties": [
+    "Finesse",
+    "Light"
+  ],
+  "damage_roll": {
+    "primary": {
+      "dice_roll": "1d6",
+      "damage_type": "slashing"
+    },
+    "bonus": [],
+    "source": {
+      "weapon": "melee"
+    }
+  },
+  "ability": "Strength",
+  "weapon_actions": [
+    "action.weapon.attack"
+  ],
+  "effects": []
+}

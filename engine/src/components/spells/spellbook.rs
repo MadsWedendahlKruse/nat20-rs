@@ -153,7 +153,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_add_and_has_spell() {
+    fn add_and_has_spell() {
         let spell_id = &registry::spells::MAGIC_MISSILE_ID;
 
         let mut spellbook = Spellbook::new();
@@ -167,7 +167,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_spell() {
+    fn remove_spell() {
         let spell_id = &registry::spells::MAGIC_MISSILE_ID;
 
         let mut spellbook = Spellbook::new();
@@ -180,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prepare_and_unprepare_spell() {
+    fn prepare_and_unprepare_spell() {
         let spell_id = &registry::spells::MAGIC_MISSILE_ID;
 
         let mut spellbook = Spellbook::new();
@@ -196,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn test_all_spells_and_prepared_spells() {
+    fn all_spells_and_prepared_spells() {
         let spell_id1 = &registry::spells::MAGIC_MISSILE_ID;
         let spell_id2 = &registry::spells::FIREBALL_ID;
 

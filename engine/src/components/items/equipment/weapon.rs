@@ -1,14 +1,14 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
+    str::FromStr,
     sync::LazyLock,
 };
 
+use serde::{Deserialize, Serialize};
+use serde_with::{DisplayFromStr, serde_as};
 use strum::{Display, EnumIter};
-use uom::si::{
-    f32::Length,
-    length::{foot, meter},
-};
+use uom::si::length::foot;
 
 use crate::{
     components::{
@@ -28,22 +28,18 @@ use crate::{
     registry,
 };
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Display)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Display, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum WeaponCategory {
     Simple,
     Martial,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumIter)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Display, EnumIter, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum WeaponKind {
     Melee,
     Ranged,
-}
-
-impl Display for WeaponKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -67,7 +63,63 @@ impl Display for WeaponProperties {
         match self {
             WeaponProperties::Enchantment(level) => write!(f, "Enchantment +{}", level),
             WeaponProperties::Versatile(dice) => write!(f, "Versatile ({})", dice),
+            WeaponProperties::Range(range) => write!(f, "Range ({})", range),
+            WeaponProperties::TwoHanded => write!(f, "Two-Handed"),
             _ => write!(f, "{:?}", self),
+        }
+    }
+}
+
+impl FromStr for WeaponProperties {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        let parts = s.split_whitespace().collect::<Vec<&str>>();
+        if parts.len() == 1 {
+            match s.to_lowercase().as_str() {
+                "finesse" => Ok(WeaponProperties::Finesse),
+                "heavy" => Ok(WeaponProperties::Heavy),
+                "light" => Ok(WeaponProperties::Light),
+                "reach" => Ok(WeaponProperties::Reach),
+                "thrown" => Ok(WeaponProperties::Thrown),
+                "twohanded" | "two-handed" => Ok(WeaponProperties::TwoHanded),
+                _ => Err(format!("Invalid weapon property: {}", s)),
+            }
+        } else if parts.len() > 1 {
+            match parts[0].to_lowercase().as_str() {
+                "enchantment" => {
+                    let level = parts[1]
+                        .trim()
+                        .trim_start_matches('+')
+                        .parse::<u32>()
+                        .map_err(|_| format!("Invalid enchantment level: {}", parts[1]))?;
+                    Ok(WeaponProperties::Enchantment(level))
+                }
+                "versatile" => {
+                    let dice = DiceSet::from_str(
+                        parts[1]
+                            .trim()
+                            .trim_start_matches('(')
+                            .trim_end_matches(')'),
+                    )?;
+                    Ok(WeaponProperties::Versatile(dice))
+                }
+                "range" => {
+                    let rest = parts[1..].join(" ");
+                    let range = TargetingRange::from_str(
+                        rest.trim()
+                            .trim_start_matches('(')
+                            .trim_end_matches(')')
+                            // TODO: Support other units
+                            .trim_end_matches("m"),
+                    )?;
+                    Ok(WeaponProperties::Range(range))
+                }
+                _ => Err(format!("Invalid weapon property: {}", s)),
+            }
+        } else {
+            Err(format!("Invalid weapon property: {}", s))
         }
     }
 }
@@ -114,11 +166,13 @@ pub static MELEE_RANGE_DEFAULT: LazyLock<TargetingRange> =
 pub static MELEE_RANGE_REACH: LazyLock<TargetingRange> =
     LazyLock::new(|| TargetingRange::new::<foot>(10.0));
 
-#[derive(Debug, Clone, PartialEq)]
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Weapon {
     item: Item,
     category: WeaponCategory,
     kind: WeaponKind,
+    #[serde_as(as = "HashSet<DisplayFromStr>")]
     properties: HashSet<WeaponProperties>,
     damage_roll: DamageRoll,
     ability: Ability,
@@ -156,16 +210,10 @@ impl Weapon {
         }
         let (num_dice, die_size, damage_type) = damage[0];
         let source = DamageSource::Weapon(kind.clone());
-        let mut damage_roll = DamageRoll::new(
-            num_dice,
-            die_size,
-            damage_type,
-            source.clone(),
-            item.name.clone(),
-        );
+        let mut damage_roll = DamageRoll::new(num_dice, die_size, damage_type, source.clone());
         for i in 1..damage.len() {
             let (num_dice, die_size, damage_type) = damage[i];
-            damage_roll.add_bonus(num_dice, die_size, damage_type, item.name.clone());
+            damage_roll.add_bonus(num_dice, die_size, damage_type);
         }
 
         weapon_actions.extend(extra_weapon_actions);
@@ -343,6 +391,7 @@ impl SlotProvider for Weapon {
 
 #[cfg(test)]
 mod tests {
+
     use std::str::FromStr;
 
     use uom::si::{f32::Mass, mass::pound};
@@ -350,7 +399,7 @@ mod tests {
     use crate::components::{
         ability::AbilityScore,
         id::ItemId,
-        items::{item::ItemRarity, money::MonetaryValue},
+        items::{inventory::ItemInstance, item::ItemRarity, money::MonetaryValue},
     };
 
     use super::*;
@@ -362,7 +411,7 @@ mod tests {
             name: "Longsword".to_string(),
             description: "A longsword".to_string(),
             weight: Mass::new::<pound>(5.0),
-            value: MonetaryValue::from("1 GP"),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
             rarity: ItemRarity::Common,
         };
         let weapon = Weapon::new(
@@ -395,7 +444,7 @@ mod tests {
             name: "Shortbow".to_string(),
             description: "A ranged weapon".to_string(),
             weight: Mass::new::<pound>(2.0),
-            value: MonetaryValue::from("1 GP"),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
             rarity: ItemRarity::Common,
         };
         Weapon::new(
@@ -416,7 +465,7 @@ mod tests {
             name: "Dagger".to_string(),
             description: "A small dagger".to_string(),
             weight: Mass::new::<pound>(1.0),
-            value: MonetaryValue::from("1 GP"),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
             rarity: ItemRarity::Common,
         };
         let weapon = Weapon::new(
@@ -440,7 +489,7 @@ mod tests {
             "Magic Sword".to_string(),
             "A sword with enchantment".to_string(),
             Mass::new::<pound>(3.0),
-            MonetaryValue::from("1 GP"),
+            MonetaryValue::from_str("1 GP").unwrap(),
             ItemRarity::Uncommon,
         );
         let weapon = Weapon::new(
@@ -462,7 +511,7 @@ mod tests {
             "Rapier".to_string(),
             "A finesse weapon".to_string(),
             Mass::new::<pound>(2.5),
-            MonetaryValue::from("1 GP"),
+            MonetaryValue::from_str("1 GP").unwrap(),
             ItemRarity::Common,
         );
         let weapon = Weapon::new(
@@ -493,7 +542,7 @@ mod tests {
             "Warhammer".to_string(),
             "A heavy warhammer".to_string(),
             Mass::new::<pound>(8.0),
-            MonetaryValue::from("1 GP"),
+            MonetaryValue::from_str("1 GP").unwrap(),
             ItemRarity::Rare,
         );
         let weapon = Weapon::new(
@@ -516,7 +565,7 @@ mod tests {
             "Shortbow".to_string(),
             "A ranged weapon".to_string(),
             Mass::new::<pound>(2.0),
-            MonetaryValue::from("1 GP"),
+            MonetaryValue::from_str("1 GP").unwrap(),
             ItemRarity::Common,
         );
         let weapon = Weapon::new(
@@ -540,7 +589,7 @@ mod tests {
             "Club".to_string(),
             "A simple club".to_string(),
             Mass::new::<pound>(2.0),
-            MonetaryValue::from("1 GP"),
+            MonetaryValue::from_str("1 GP").unwrap(),
             ItemRarity::Common,
         );
         let weapon = Weapon::new(
@@ -562,7 +611,7 @@ mod tests {
             "Whip".to_string(),
             "A whip with reach".to_string(),
             Mass::new::<pound>(3.0),
-            MonetaryValue::from("1 GP"),
+            MonetaryValue::from_str("1 GP").unwrap(),
             ItemRarity::Uncommon,
         );
         let weapon = Weapon::new(
@@ -584,7 +633,7 @@ mod tests {
             "Longbow".to_string(),
             "A long ranged bow".to_string(),
             Mass::new::<pound>(2.0),
-            MonetaryValue::from("1 GP"),
+            MonetaryValue::from_str("1 GP").unwrap(),
             ItemRarity::Rare,
         );
         let weapon = Weapon::new(
@@ -611,7 +660,7 @@ mod tests {
             "Axe".to_string(),
             "A hand axe".to_string(),
             Mass::new::<pound>(2.0),
-            MonetaryValue::from("1 GP"),
+            MonetaryValue::from_str("1 GP").unwrap(),
             ItemRarity::Common,
         );
         let weapon = Weapon::new(
@@ -635,7 +684,7 @@ mod tests {
             "Crossbow".to_string(),
             "A light crossbow".to_string(),
             Mass::new::<pound>(3.0),
-            MonetaryValue::from("1 GP"),
+            MonetaryValue::from_str("1 GP").unwrap(),
             ItemRarity::Uncommon,
         );
         let weapon = Weapon::new(
@@ -652,5 +701,42 @@ mod tests {
         let slots = <Weapon as SlotProvider>::valid_slots(&weapon);
         assert!(slots.contains(&EquipmentSlot::RangedMainHand));
         assert!(slots.contains(&EquipmentSlot::RangedOffHand));
+    }
+
+    #[test]
+    fn serialize() {
+        let item = Item::new(
+            ItemId::from_str("item.spear"),
+            "Spear".to_string(),
+            "A simple spear".to_string(),
+            Mass::new::<pound>(3.0),
+            MonetaryValue::from_str("1 GP").unwrap(),
+            ItemRarity::Common,
+        );
+        let weapon = Weapon::new(
+            item,
+            WeaponKind::Melee,
+            WeaponCategory::Simple,
+            HashSet::from([
+                WeaponProperties::Thrown,
+                WeaponProperties::Range(TargetingRange::with_max::<foot>(20.0, 60.0)),
+            ]),
+            vec![(1, DieSize::D6, DamageType::Piercing)],
+            vec![],
+            vec![],
+        );
+        let serialized = serde_json::to_string_pretty(&weapon).unwrap();
+        println!("Weapon:\n{}\n", serialized);
+        let deserialized: Weapon = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(weapon, deserialized);
+
+        let item_instance = ItemInstance::Weapon(weapon);
+        let serialized_instance = serde_json::to_string_pretty(&item_instance).unwrap();
+        println!("ItemInstance::Weapon\n{}\n", serialized_instance);
+        let deserialized_instance: ItemInstance =
+            serde_json::from_str(&serialized_instance).unwrap();
+        assert_eq!(item_instance, deserialized_instance);
+
+        assert_eq!(serialized_instance, serialized);
     }
 }

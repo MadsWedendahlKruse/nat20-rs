@@ -102,14 +102,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_new_speed() {
+    fn new_speed() {
         let speed = Speed::default();
         assert_eq!(speed.get_total_speed().get::<meter>(), 10.0);
         assert_eq!(speed.moved_this_turn().get::<meter>(), 0.0);
     }
 
     #[test]
-    fn test_add_flat_modifier() {
+    fn add_flat_modifier() {
         let mut speed = Speed::default();
         speed.add_flat_modifier(
             ModifierSource::Item(ItemId::from_str("Boots of Speed!")),
@@ -119,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_flat_modifier() {
+    fn remove_flat_modifier() {
         let mut speed = Speed::default();
         speed.add_flat_modifier(
             ModifierSource::Item(ItemId::from_str("Boots of Speed!")),
@@ -130,7 +130,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_multiplier() {
+    fn add_multiplier() {
         let mut speed = Speed::default();
         speed.add_multiplier(
             ModifierSource::Effect(EffectId::from_str("Expeditious Retreat!")),
@@ -140,7 +140,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_multiplier() {
+    fn remove_multiplier() {
         let mut speed = Speed::default();
         speed.add_multiplier(
             ModifierSource::Effect(EffectId::from_str("Expeditious Retreat!")),
@@ -153,7 +153,7 @@ mod tests {
     }
 
     #[test]
-    fn test_record_movement_and_remaining() {
+    fn record_movement_and_remaining() {
         let mut speed = Speed::default();
         speed.record_movement(Length::new::<meter>(3.0));
         assert_eq!(speed.moved_this_turn().get::<meter>(), 3.0);
@@ -161,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn test_reset() {
+    fn reset() {
         let mut speed = Speed::default();
         speed.record_movement(Length::new::<meter>(5.0));
         speed.reset();
@@ -169,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn test_can_move() {
+    fn can_move() {
         let mut speed = Speed::default();
         assert!(speed.can_move());
         speed.record_movement(Length::new::<meter>(10.0));
@@ -177,14 +177,14 @@ mod tests {
     }
 
     #[test]
-    fn test_total_speed_with_zero_multiplier() {
+    fn total_speed_with_zero_multiplier() {
         let mut speed = Speed::default();
         speed.add_multiplier(ModifierSource::Effect(EffectId::from_str("Fear!")), 0.0);
         assert_eq!(speed.get_total_speed().get::<meter>(), 0.0);
     }
 
     #[test]
-    fn test_flat_and_multiplier_combination() {
+    fn flat_and_multiplier_combination() {
         let mut speed = Speed::default();
         speed.add_flat_modifier(
             ModifierSource::Item(ItemId::from_str("Boots of Speed!")),

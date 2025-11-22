@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt, str::FromStr};
 
 use hecs::{Entity, World};
 use parry3d::{
@@ -231,6 +231,45 @@ impl TargetingRange {
 
     fn mm_to_length(mm: u32) -> Length {
         Length::new::<meter>(mm as f32 / 1000.0)
+    }
+}
+
+impl fmt::Display for TargetingRange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.normal == self.max {
+            write!(f, "{} m", self.normal as f32 / 1000.0)
+        } else {
+            write!(
+                f,
+                "{} / {} m",
+                self.normal as f32 / 1000.0,
+                self.max as f32 / 1000.0
+            )
+        }
+    }
+}
+
+impl FromStr for TargetingRange {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split('/').map(|part| part.trim()).collect();
+        if parts.len() == 1 {
+            let normal: f32 = parts[0]
+                .parse()
+                .map_err(|_| format!("Invalid range value: {}", parts[0]))?;
+            Ok(TargetingRange::new::<meter>(normal))
+        } else if parts.len() == 2 {
+            let normal: f32 = parts[0]
+                .parse()
+                .map_err(|_| format!("Invalid range value: {}", parts[0]))?;
+            let max: f32 = parts[1]
+                .parse()
+                .map_err(|_| format!("Invalid range value: {}", parts[1]))?;
+            Ok(TargetingRange::with_max::<meter>(normal, max))
+        } else {
+            Err(format!("Invalid range format: {}", s))
+        }
     }
 }
 

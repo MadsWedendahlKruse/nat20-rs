@@ -1,7 +1,7 @@
 extern crate nat20_rs;
 
 mod tests {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, str::FromStr};
 
     use hecs::World;
     use nat20_rs::{
@@ -24,7 +24,7 @@ mod tests {
             proficiency::ProficiencyLevel,
         },
         entities::character::Character,
-        registry,
+        registry::{self, registry::ItemsRegistry},
         systems::{self, helpers},
     };
     use uom::si::{f32::Mass, mass::pound};
@@ -44,8 +44,7 @@ mod tests {
             );
         }
 
-        let weapon = registry::items::ITEM_REGISTRY
-            .get(&registry::items::SCIMITAR_ID)
+        let weapon = ItemsRegistry::get(&ItemId::from_str("item.scimitar"))
             .unwrap()
             .clone();
         let weapon = match weapon {
@@ -87,8 +86,7 @@ mod tests {
         let entity = world.spawn(Character::default());
 
         // Equip longsword
-        let longsword = registry::items::ITEM_REGISTRY
-            .get(&registry::items::LONGSWORD_ID)
+        let longsword = ItemsRegistry::get(&ItemId::from_str("item.longsword"))
             .unwrap()
             .clone();
         let _ = systems::loadout::equip(&mut world, entity, longsword);
@@ -102,8 +100,7 @@ mod tests {
             &mut world,
             entity,
             &EquipmentSlot::MeleeOffHand,
-            registry::items::ITEM_REGISTRY
-                .get(&registry::items::DAGGER_ID)
+            ItemsRegistry::get(&ItemId::from_str("item.dagger"))
                 .unwrap()
                 .clone(),
         )
@@ -132,8 +129,7 @@ mod tests {
             &mut world,
             entity,
             &EquipmentSlot::MeleeOffHand,
-            registry::items::ITEM_REGISTRY
-                .get(&registry::items::DAGGER_ID)
+            ItemsRegistry::get(&ItemId::from_str("item.dagger"))
                 .unwrap()
                 .clone(),
         )
@@ -142,8 +138,7 @@ mod tests {
             &mut world,
             entity,
             &EquipmentSlot::MeleeMainHand,
-            registry::items::ITEM_REGISTRY
-                .get(&registry::items::LONGSWORD_ID)
+            ItemsRegistry::get(&ItemId::from_str("item.longsword"))
                 .unwrap()
                 .clone(),
         );
@@ -151,8 +146,7 @@ mod tests {
         let unequipped = systems::loadout::equip(
             &mut world,
             entity,
-            registry::items::ITEM_REGISTRY
-                .get(&registry::items::GREATSWORD_ID)
+            ItemsRegistry::get(&ItemId::from_str("item.greatsword"))
                 .unwrap()
                 .clone(),
         )
@@ -185,7 +179,7 @@ mod tests {
                 name: "Longsword".to_string(),
                 description: "A longsword.".to_string(),
                 weight: Mass::new::<pound>(3.0),
-                value: MonetaryValue::from("15 GP"),
+                value: MonetaryValue::from_str("15 GP").unwrap(),
                 rarity: ItemRarity::Common,
             },
             WeaponKind::Melee,

@@ -1,0 +1,19 @@
+{
+  "item": {
+    "id": "item.scale_mail",
+    "name": "Scale Mail",
+    "description": "A suit of scale mail armor, providing good protection with moderate weight.",
+    "weight": 20.411657,
+    "value": "50 GP",
+    "rarity": "uncommon"
+  },
+  "armor_type": "medium",
+  "armor_class": 14,
+  "dexterity_bonus": {
+    "limited": 2
+  },
+  "stealth_disadvantage": true,
+  "effects": [
+    "effect.armor.stealth_disadvantage"
+  ]
+}

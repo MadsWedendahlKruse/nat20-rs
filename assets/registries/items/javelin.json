@@ -1,0 +1,31 @@
+{
+  "item": {
+    "id": "item.javelin",
+    "name": "Javelin",
+    "description": "A versatile javelin, effective in both melee and ranged combat.",
+    "weight": 0.9071848,
+    "value": "5 SP",
+    "rarity": "common"
+  },
+  "category": "simple",
+  "kind": "melee",
+  "properties": [
+    "Thrown",
+    "Range (9.144 / 36.576 m)"
+  ],
+  "damage_roll": {
+    "primary": {
+      "dice_roll": "1d6",
+      "damage_type": "piercing"
+    },
+    "bonus": [],
+    "source": {
+      "weapon": "melee"
+    }
+  },
+  "ability": "Strength",
+  "weapon_actions": [
+    "action.weapon.attack"
+  ],
+  "effects": []
+}

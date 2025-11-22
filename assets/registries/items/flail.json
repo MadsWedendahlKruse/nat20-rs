@@ -1,0 +1,28 @@
+{
+  "item": {
+    "id": "item.flail",
+    "name": "Flail",
+    "description": "A flail with a spiked head, effective against armored foes.",
+    "weight": 0.9071848,
+    "value": "10 GP",
+    "rarity": "common"
+  },
+  "category": "martial",
+  "kind": "melee",
+  "properties": [],
+  "damage_roll": {
+    "primary": {
+      "dice_roll": "1d8",
+      "damage_type": "bludgeoning"
+    },
+    "bonus": [],
+    "source": {
+      "weapon": "melee"
+    }
+  },
+  "ability": "Strength",
+  "weapon_actions": [
+    "action.weapon.attack"
+  ],
+  "effects": []
+}

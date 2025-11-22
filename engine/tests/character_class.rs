@@ -8,6 +8,7 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::Ability,
+            id::ItemId,
             level::CharacterLevels,
             level_up::ChoiceItem,
             proficiency::ProficiencyLevel,
@@ -64,10 +65,10 @@ mod tests {
                     "choice.starting_equipment.fighter",
                     ChoiceItem::Equipment {
                         items: vec![
-                            (1, registry::items::CHAINMAIL_ID.clone()),
-                            (1, registry::items::GREATSWORD_ID.clone()),
-                            (1, registry::items::FLAIL_ID.clone()),
-                            (8, registry::items::JAVELIN_ID.clone()),
+                            (1, ItemId::from_str("item.chainmail")),
+                            (1, ItemId::from_str("item.greatsword")),
+                            (1, ItemId::from_str("item.flail")),
+                            (8, ItemId::from_str("item.javelin")),
                         ],
                         money: "4 GP".to_string(),
                     },

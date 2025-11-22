@@ -1,0 +1,32 @@
+{
+  "item": {
+    "id": "item.longbow",
+    "name": "Longbow",
+    "description": "A powerful longbow, effective for ranged combat.",
+    "weight": 0.9071848,
+    "value": "50 GP",
+    "rarity": "common"
+  },
+  "category": "martial",
+  "kind": "ranged",
+  "properties": [
+    "Two-Handed",
+    "Heavy",
+    "Range (45.72 / 182.88 m)"
+  ],
+  "damage_roll": {
+    "primary": {
+      "dice_roll": "1d8",
+      "damage_type": "piercing"
+    },
+    "bonus": [],
+    "source": {
+      "weapon": "ranged"
+    }
+  },
+  "ability": "Dexterity",
+  "weapon_actions": [
+    "action.weapon.attack"
+  ],
+  "effects": []
+}

@@ -1,0 +1,31 @@
+{
+  "item": {
+    "id": "item.shortsword",
+    "name": "Shortsword",
+    "description": "A versatile shortsword, effective in close combat.",
+    "weight": 0.9071848,
+    "value": "10 GP",
+    "rarity": "common"
+  },
+  "category": "martial",
+  "kind": "melee",
+  "properties": [
+    "Light",
+    "Finesse"
+  ],
+  "damage_roll": {
+    "primary": {
+      "dice_roll": "1d6",
+      "damage_type": "slashing"
+    },
+    "bonus": [],
+    "source": {
+      "weapon": "melee"
+    }
+  },
+  "ability": "Strength",
+  "weapon_actions": [
+    "action.weapon.attack"
+  ],
+  "effects": []
+}

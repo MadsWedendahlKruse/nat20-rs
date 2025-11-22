@@ -1,0 +1,32 @@
+{
+  "item": {
+    "id": "item.spear",
+    "name": "Spear",
+    "description": "A versatile spear, effective in both melee and ranged combat.",
+    "weight": 1.3607771,
+    "value": "1 GP",
+    "rarity": "common"
+  },
+  "category": "simple",
+  "kind": "melee",
+  "properties": [
+    "Versatile (1d8)",
+    "Range (6.096 / 18.288 m)",
+    "Thrown"
+  ],
+  "damage_roll": {
+    "primary": {
+      "dice_roll": "1d6",
+      "damage_type": "piercing"
+    },
+    "bonus": [],
+    "source": {
+      "weapon": "melee"
+    }
+  },
+  "ability": "Strength",
+  "weapon_actions": [
+    "action.weapon.attack"
+  ],
+  "effects": []
+}

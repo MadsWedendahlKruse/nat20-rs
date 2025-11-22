@@ -1,8 +1,10 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{
+    collections::HashMap,
+    fmt::{self},
+    str::FromStr,
+};
 
-use strum::{Display, EnumIter, IntoEnumIterator};
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Display, EnumIter)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Currency {
     Copper,
     Silver,
@@ -12,16 +14,6 @@ pub enum Currency {
 }
 
 impl Currency {
-    pub fn acronym(&self) -> &str {
-        match self {
-            Currency::Copper => "CP",
-            Currency::Silver => "SP",
-            Currency::Electrum => "EP",
-            Currency::Gold => "GP",
-            Currency::Platinum => "PP",
-        }
-    }
-
     pub fn to_gold(&self, amount: u32) -> f32 {
         let amount = amount as f32;
         match self {
@@ -34,17 +26,30 @@ impl Currency {
     }
 }
 
-impl<T> From<T> for Currency
-where
-    T: AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        for currency in Currency::iter() {
-            if currency.acronym().eq_ignore_ascii_case(s.as_ref()) {
-                return currency;
-            }
+impl fmt::Display for Currency {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let acronym = match self {
+            Currency::Copper => "CP",
+            Currency::Silver => "SP",
+            Currency::Electrum => "EP",
+            Currency::Gold => "GP",
+            Currency::Platinum => "PP",
+        };
+        write!(f, "{}", acronym)
+    }
+}
+
+impl FromStr for Currency {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "CP" => Ok(Currency::Copper),
+            "SP" => Ok(Currency::Silver),
+            "EP" => Ok(Currency::Electrum),
+            "GP" => Ok(Currency::Gold),
+            "PP" => Ok(Currency::Platinum),
+            _ => Err(format!("Invalid currency format: {}", s)),
         }
-        panic!("Invalid currency format: {}", s.as_ref());
     }
 }
 
@@ -53,6 +58,7 @@ pub struct MonetaryValue {
     pub values: HashMap<Currency, u32>,
 }
 
+#[derive(Debug, Clone)]
 pub enum MonetaryValueError {
     InsufficientFunds,
 }
@@ -89,35 +95,49 @@ impl MonetaryValue {
     }
 }
 
-impl<T> From<T> for MonetaryValue
-where
-    T: AsRef<str>,
-{
-    fn from(s: T) -> Self {
+impl fmt::Display for MonetaryValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut parts = Vec::new();
+        let sorted_keys: Vec<_> = {
+            let mut keys: Vec<_> = self.values.keys().collect();
+            keys.sort_by_key(|k| *k);
+            keys.reverse();
+            keys
+        };
+        for currency in sorted_keys {
+            if let Some(&amount) = self.values.get(currency) {
+                if amount > 0 {
+                    parts.push(format!("{} {}", amount, currency));
+                }
+            }
+        }
+        if parts.is_empty() {
+            parts.push("0 GP".to_string());
+        }
+        write!(f, "{}", parts.join(", "))
+    }
+}
+
+impl FromStr for MonetaryValue {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut values = HashMap::new();
-        for part in s.as_ref().split(',') {
+        for part in s.split(',') {
             let part = part.trim();
             if part.is_empty() {
                 continue;
             }
             let mut parts = part.split_whitespace();
-            let amount = parts.next().unwrap().parse::<u32>().unwrap_or(0);
-            let currency = parts.next().unwrap_or("GP").into();
+            let amount = parts
+                .next()
+                .ok_or_else(|| format!("Invalid monetary value format: {}", s))?
+                .parse::<u32>()
+                .map_err(|_| format!("Invalid amount in monetary value: {}", s))?;
+            let currency_str = parts.next().unwrap_or("GP");
+            let currency = Currency::from_str(currency_str)?;
             values.insert(currency, amount);
         }
-        Self { values }
-    }
-}
-
-impl Display for MonetaryValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut parts = Vec::new();
-        for (currency, &amount) in &self.values {
-            if amount > 0 {
-                parts.push(format!("{} {}", amount, currency.acronym()));
-            }
-        }
-        write!(f, "{}", parts.join(", "))
+        Ok(Self { values })
     }
 }
 
@@ -126,16 +146,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_currency_acronym() {
-        assert_eq!(Currency::Copper.acronym(), "CP");
-        assert_eq!(Currency::Silver.acronym(), "SP");
-        assert_eq!(Currency::Electrum.acronym(), "EP");
-        assert_eq!(Currency::Gold.acronym(), "GP");
-        assert_eq!(Currency::Platinum.acronym(), "PP");
+    fn currency_acronym() {
+        assert_eq!(Currency::Copper.to_string(), "CP");
+        assert_eq!(Currency::Silver.to_string(), "SP");
+        assert_eq!(Currency::Electrum.to_string(), "EP");
+        assert_eq!(Currency::Gold.to_string(), "GP");
+        assert_eq!(Currency::Platinum.to_string(), "PP");
     }
 
     #[test]
-    fn test_currency_to_gold() {
+    fn currency_to_gold() {
         assert!((Currency::Copper.to_gold(100) - 1.0).abs() < f32::EPSILON);
         assert!((Currency::Silver.to_gold(10) - 1.0).abs() < f32::EPSILON);
         assert!((Currency::Electrum.to_gold(2) - 1.0).abs() < f32::EPSILON);
@@ -144,43 +164,69 @@ mod tests {
     }
 
     #[test]
-    fn test_currency_from_str() {
-        assert_eq!(Currency::from("GP"), Currency::Gold);
-        assert_eq!(Currency::from("gp"), Currency::Gold);
-        assert_eq!(Currency::from("SP"), Currency::Silver);
-        assert_eq!(Currency::from("pp"), Currency::Platinum);
+    fn currency_from_str() {
+        assert_eq!(Currency::from_str("GP").unwrap(), Currency::Gold);
+        assert_eq!(Currency::from_str("gp").unwrap(), Currency::Gold);
+        assert_eq!(Currency::from_str("SP").unwrap(), Currency::Silver);
+        assert_eq!(Currency::from_str("pp").unwrap(), Currency::Platinum);
     }
 
     #[test]
-    #[should_panic(expected = "Invalid currency format")]
-    fn test_currency_from_invalid_str() {
-        let _ = Currency::from("ZZ");
+    fn currency_from_invalid_str() {
+        assert!(Currency::from_str("ZZ").is_err());
     }
 
     #[test]
-    fn test_item_value_from_str_single() {
-        let value = MonetaryValue::from("10 GP");
+    fn value_from_str_single() {
+        let value = MonetaryValue::from_str("10 GP").unwrap();
         assert_eq!(value.values.get(&Currency::Gold), Some(&10));
     }
 
     #[test]
-    fn test_item_value_from_str_multiple() {
-        let value = MonetaryValue::from("5 GP, 20 SP, 100 CP");
+    fn value_from_str_multiple() {
+        let value = MonetaryValue::from_str("5 GP, 20 SP, 100 CP").unwrap();
         assert_eq!(value.values.get(&Currency::Gold), Some(&5));
         assert_eq!(value.values.get(&Currency::Silver), Some(&20));
         assert_eq!(value.values.get(&Currency::Copper), Some(&100));
     }
 
     #[test]
-    fn test_item_value_from_str_with_whitespace() {
-        let value = MonetaryValue::from("  3 GP ,  7 SP ");
+    fn value_from_str_with_whitespace() {
+        let value = MonetaryValue::from_str("  3 GP ,  7 SP ").unwrap();
         assert_eq!(value.values.get(&Currency::Gold), Some(&3));
         assert_eq!(value.values.get(&Currency::Silver), Some(&7));
     }
 
     #[test]
-    fn test_item_value_from_str_default_currency() {
-        let value = MonetaryValue::from("42");
+    fn value_from_str_default_currency() {
+        let value = MonetaryValue::from_str("42").unwrap();
         assert_eq!(value.values.get(&Currency::Gold), Some(&42));
+    }
+
+    #[test]
+    fn value_from_invalid_str() {
+        assert!(MonetaryValue::from_str("ten GP").is_err());
+        assert!(MonetaryValue::from_str("5 ZZ").is_err());
+    }
+
+    #[test]
+    fn value_zero() {
+        let value = MonetaryValue::from_str("0 GP").unwrap();
+        assert_eq!(value.values.get(&Currency::Gold), Some(&0));
+    }
+
+    #[test]
+    fn add_remove_money() {
+        let mut value = MonetaryValue::new();
+        value.add(Currency::Gold, 10);
+        value.add(Currency::Silver, 50);
+        assert_eq!(value.values.get(&Currency::Gold), Some(&10));
+        assert_eq!(value.values.get(&Currency::Silver), Some(&50));
+
+        value.remove(Currency::Silver, 20).unwrap();
+        assert_eq!(value.values.get(&Currency::Silver), Some(&30));
+
+        let result = value.remove(Currency::Gold, 15);
+        assert!(matches!(result, Err(MonetaryValueError::InsufficientFunds)));
     }
 }

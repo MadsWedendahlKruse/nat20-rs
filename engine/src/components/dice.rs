@@ -1,4 +1,7 @@
-use std::fmt::{self, Display};
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use rand::Rng;
 
@@ -33,14 +36,13 @@ impl Display for DiceSet {
     }
 }
 
-impl<T> From<T> for DiceSet
-where
-    T: AsRef<str>,
-{
-    fn from(s: T) -> Self {
-        let parts: Vec<&str> = s.as_ref().split('d').collect();
+impl FromStr for DiceSet {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split('d').collect();
         if parts.len() != 2 {
-            panic!("Invalid dice format: {}", s.as_ref());
+            return Err("Invalid dice format".to_string());
         }
         let num_dice = parts[0].parse::<u32>().unwrap_or(1);
         let die_size = match parts[1] {
@@ -51,9 +53,9 @@ where
             "12" => DieSize::D12,
             "20" => DieSize::D20,
             "100" => DieSize::D100,
-            _ => DieSize::D6, // Default to D6 if unknown
+            _ => return Err(format!("Invalid die size: {}", parts[1])),
         };
-        Self::new(num_dice, die_size)
+        Ok(Self::new(num_dice, die_size))
     }
 }
 
@@ -61,16 +63,14 @@ where
 pub struct DiceSetRoll {
     pub dice: DiceSet,
     pub modifiers: ModifierSet,
-    pub label: String,
 }
 
 impl DiceSetRoll {
     // TODO: Redundant new?
-    pub fn new(dice_set: DiceSet, modifier: ModifierSet, label: String) -> Self {
+    pub fn new(dice_set: DiceSet, modifier: ModifierSet) -> Self {
         Self {
             dice: dice_set,
             modifiers: modifier,
-            label,
         }
     }
 
@@ -82,7 +82,6 @@ impl DiceSetRoll {
         let subtotal = rolls.iter().sum::<u32>() as i32 + self.modifiers.total();
 
         DiceSetRollResult {
-            label: self.label.clone(),
             die_size: self.dice.die_size,
             rolls,
             modifiers: self.modifiers.clone(),
@@ -112,16 +111,20 @@ impl fmt::Display for DiceSetRoll {
     }
 }
 
-impl<T> From<T> for DiceSetRoll
-where
-    T: AsRef<str>,
-{
-    fn from(s: T) -> Self {
+impl FromStr for DiceSetRoll {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Simple parser for strings like "2d6 +3" or "1d20 -1"
-        let s = s.as_ref();
         let parts: Vec<&str> = s.split_whitespace().collect();
+        if parts.is_empty() {
+            return Err("Empty dice roll string".to_string());
+        }
+        if parts.len() > 2 {
+            return Err(format!("Invalid dice roll format: {}", s));
+        }
         let dice_part = parts[0];
-        let dice_set: DiceSet = dice_part.into();
+        let dice_set: DiceSet = dice_part.parse()?;
         let mut modifiers = ModifierSet::new();
         if parts.len() == 2 {
             let mod_part = parts[1];
@@ -130,17 +133,15 @@ where
                 modifiers.add_modifier(ModifierSource::Base, mod_value);
             }
         }
-        Self {
+        Ok(Self {
             dice: dice_set,
             modifiers,
-            label: s.to_string(),
-        }
+        })
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiceSetRollResult {
-    pub label: String,
     pub die_size: DieSize,
     pub rolls: Vec<u32>,
     pub modifiers: ModifierSet,
@@ -167,7 +168,6 @@ impl fmt::Display for DiceSetRollResult {
 #[derive(Debug)]
 pub struct CompositeRoll {
     pub groups: Vec<DiceSetRoll>,
-    pub label: String, // optional general label for the whole roll
 }
 
 impl CompositeRoll {
@@ -181,11 +181,7 @@ impl CompositeRoll {
             components.push(result);
         }
 
-        CompositeRollResult {
-            label: self.label.clone(),
-            components,
-            total,
-        }
+        CompositeRollResult { components, total }
     }
 
     pub fn min_roll(&self) -> i32 {
@@ -199,14 +195,12 @@ impl CompositeRoll {
 
 #[derive(Debug)]
 pub struct CompositeRollResult {
-    pub label: String,
     pub components: Vec<DiceSetRollResult>,
     pub total: i32,
 }
 
 impl fmt::Display for CompositeRollResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: ", self.label)?;
         for comp in &self.components {
             write!(f, "{} ", comp)?;
         }
@@ -230,7 +224,6 @@ mod tests {
                 die_size: DieSize::D6,
             },
             modifiers,
-            label: "Test Dice".to_string(),
         };
         println!("Rolling:\n{}", dice);
         let result = dice.roll();
@@ -261,7 +254,6 @@ mod tests {
                 die_size: DieSize::D6,
             },
             modifiers: modifiers,
-            label: "Group 1".to_string(),
         };
         let group2 = DiceSetRoll {
             dice: DiceSet {
@@ -269,11 +261,9 @@ mod tests {
                 die_size: DieSize::D4,
             },
             modifiers: ModifierSet::new(),
-            label: "Group 2".to_string(),
         };
         let composite = CompositeRoll {
             groups: vec![group1, group2],
-            label: "Composite Roll".to_string(),
         };
         let result = composite.roll();
         assert_eq!(result.components.len(), 2);
@@ -295,42 +285,39 @@ mod tests {
 
     #[test]
     fn parse_simple_dice_string() {
-        let dice: DiceSet = "2d6".into();
+        let dice: DiceSet = "2d6".parse().unwrap();
         assert_eq!(dice.num_dice, 2);
         assert_eq!(dice.die_size, DieSize::D6);
 
-        let dice: DiceSet = "1d20".into();
+        let dice: DiceSet = "1d20".parse().unwrap();
         assert_eq!(dice.num_dice, 1);
         assert_eq!(dice.die_size, DieSize::D20);
 
-        let dice: DiceSet = "3d4".into();
+        let dice: DiceSet = "3d4".parse().unwrap();
         assert_eq!(dice.num_dice, 3);
         assert_eq!(dice.die_size, DieSize::D4);
     }
 
     #[test]
     fn parse_dice_string_with_missing_number_defaults_to_one() {
-        let dice: DiceSet = "d8".into();
+        let dice: DiceSet = "d8".parse().unwrap();
         assert_eq!(dice.num_dice, 1);
         assert_eq!(dice.die_size, DieSize::D8);
     }
 
     #[test]
-    fn parse_dice_string_with_invalid_die_size_defaults_to_d6() {
-        let dice: DiceSet = "2d13".into();
-        assert_eq!(dice.num_dice, 2);
-        assert_eq!(dice.die_size, DieSize::D6);
+    fn parse_dice_string_with_invalid_die_size_errors() {
+        assert!(DiceSet::from_str("2d13").is_err());
     }
 
     #[test]
-    #[should_panic(expected = "Invalid dice format")]
-    fn parse_invalid_format_panics() {
-        let _: DiceSet = "2x6".into();
+    fn parse_invalid_format_errors() {
+        assert!(DiceSet::from_str("2x6").is_err());
     }
 
     #[test]
     fn parse_d100() {
-        let dice: DiceSet = "1d100".into();
+        let dice: DiceSet = "1d100".parse().unwrap();
         assert_eq!(dice.num_dice, 1);
         assert_eq!(dice.die_size, DieSize::D100);
     }

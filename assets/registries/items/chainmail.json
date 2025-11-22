@@ -1,0 +1,19 @@
+{
+  "item": {
+    "id": "item.chainmail",
+    "name": "Chainmail",
+    "description": "A suit of chainmail armor, providing good protection.",
+    "weight": 24.947582,
+    "value": "75 GP",
+    "rarity": "uncommon"
+  },
+  "armor_type": "heavy",
+  "armor_class": 16,
+  "dexterity_bonus": {
+    "limited": 0
+  },
+  "stealth_disadvantage": true,
+  "effects": [
+    "effect.armor.stealth_disadvantage"
+  ]
+}
