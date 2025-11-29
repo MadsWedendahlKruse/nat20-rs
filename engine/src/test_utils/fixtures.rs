@@ -200,13 +200,16 @@ pub mod creatures {
                 ],
             );
 
-            // let _ = systems::loadout::equip(world, entity, &ItemId::from_str("item).unwrap()),
             let _ = systems::loadout::equip(
                 world,
                 entity,
-                ItemsRegistry::get(&ItemId::from_str("item.crossbow"))
-                    .unwrap()
-                    .clone(),
+                ItemsRegistry::get(&ItemId::from_str("item.crossbow")).unwrap(),
+            );
+
+            let _ = systems::inventory::add_item(
+                world,
+                entity,
+                ItemsRegistry::get(&ItemId::from_str("item.admin_dagger")).unwrap(),
             );
 
             EntityIdentifier::new(entity, name)

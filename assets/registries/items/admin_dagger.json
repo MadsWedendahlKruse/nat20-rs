@@ -1,0 +1,54 @@
+{
+  "item": {
+    "id": "item.admin_dagger",
+    "name": "Admin Dagger",
+    "description": "Test dagger, please ignore.",
+    "weight": 0.4535924,
+    "value": "2 GP",
+    "rarity": "legendary"
+  },
+  "category": "martial",
+  "kind": "melee",
+  "properties": [
+    "Finesse",
+    "Thrown",
+    "Range (6.096 / 18.288 m)",
+    "Light"
+  ],
+  "damage": [
+    [
+      "1d4",
+      "piercing"
+    ],
+    [
+      "1d4",
+      "fire"
+    ],
+    [
+      "1d4",
+      "cold"
+    ],
+    [
+      "1d4",
+      "lightning"
+    ],
+    [
+      "1d4",
+      "acid"
+    ],
+    [
+      "1d4",
+      "poison"
+    ],
+    [
+      "1d4",
+      "thunder"
+    ],
+    [
+      "1d4",
+      "radiant"
+    ]
+  ],
+  "extra_weapon_actions": [],
+  "effects": []
+}
