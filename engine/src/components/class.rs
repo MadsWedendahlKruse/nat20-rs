@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
+use serde_with::{DisplayFromStr, serde_as};
 
 use crate::{
     components::{
@@ -10,7 +11,7 @@ use crate::{
         items::equipment::{armor::ArmorType, weapon::WeaponCategory},
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         modifier::ModifierSource,
-        resource::ResourceAmount,
+        resource::{ResourceAmount, ResourceBudgetKind},
         skill::Skill,
     },
     registry::registry::SubclassesRegistry,
@@ -36,7 +37,7 @@ pub struct ClassBase {
     // pub features_by_level: HashMap<u8, Vec<ClassFeature>>,
     /// Passive effects that are always active for the class or subclass.
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
-    pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceAmount)>>,
+    pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
     /// Class specific prompts that can be made at each level.
     /// For example, a Fighter might choose a fighting style at level 1.
     /// TODO: Include subclass prompts?
@@ -75,6 +76,7 @@ pub struct Class {
     pub base: ClassBase,
 }
 
+// #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct ClassDefinition {
     pub id: ClassId,
@@ -91,7 +93,8 @@ pub struct ClassDefinition {
     pub weapon_proficiencies: HashSet<WeaponCategory>,
     pub spellcasting: SpellcastingProgression,
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
-    pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceAmount)>>,
+    // #[serde_as(as = "HashMap<_, Vec<(_, DisplayFromStr)>>")]
+    pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
     pub prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
     pub actions_by_level: HashMap<u8, Vec<ActionId>>,
 }
@@ -112,7 +115,7 @@ impl Class {
         weapon_proficiencies: HashSet<WeaponCategory>,
         spellcasting: SpellcastingProgression,
         effects_by_level: HashMap<u8, Vec<EffectId>>,
-        resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceAmount)>>,
+        resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
         mut prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
         actions_by_level: HashMap<u8, Vec<ActionId>>,
     ) -> Self {

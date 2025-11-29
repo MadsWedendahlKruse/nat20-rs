@@ -180,7 +180,7 @@ pub struct Weapon {
 }
 
 #[serde_as]
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct WeaponDefinition {
     pub item: Item,
     pub kind: WeaponKind,

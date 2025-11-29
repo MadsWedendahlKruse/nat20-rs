@@ -11,6 +11,10 @@ use crate::{
 };
 
 // TODO: No idea where to put this
+pub fn recharge_rule(resource: &ResourceId) -> Option<RechargeRule> {
+    ResourcesRegistry::get(resource).map(|res_def| res_def.recharge.clone())
+}
+
 pub fn recharge(world: &mut World, entity: Entity, rest_type: &RechargeRule) {
     for (resource_id, resource) in
         systems::helpers::get_component_mut::<ResourceMap>(world, entity).iter_mut()

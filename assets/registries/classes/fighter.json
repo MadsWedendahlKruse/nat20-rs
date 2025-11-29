@@ -32,19 +32,19 @@
     ],
     "skill_proficiencies": [
         "acrobatics",
-        "history",
-        "intimidation",
-        "perception",
-        "survival",
         "animal_handling",
         "athletics",
-        "insight"
+        "history",
+        "insight",
+        "intimidation",
+        "perception",
+        "survival"
     ],
     "skill_prompts": 2,
     "armor_proficiencies": [
+        "light",
         "medium",
-        "heavy",
-        "light"
+        "heavy"
     ],
     "weapon_proficiencies": [
         "simple",
@@ -52,77 +52,61 @@
     ],
     "spellcasting": "none",
     "effects_by_level": {
-        "20": [
-            "effect.fighter.three_extra_attacks"
-        ],
         "5": [
             "effect.extra_attack"
         ],
         "11": [
             "effect.fighter.two_extra_attacks"
+        ],
+        "20": [
+            "effect.fighter.three_extra_attacks"
         ]
     },
     "resources_by_level": {
-        "9": [
-            [
-                "resource.fighter.indomitable",
-                {
-                    "flat": 1
-                }
-            ]
-        ],
         "1": [
             [
                 "resource.fighter.second_wind",
-                {
-                    "flat": 2
-                }
+                "2"
             ]
         ],
         "2": [
             [
                 "resource.fighter.action_surge",
-                {
-                    "flat": 1
-                }
+                "1"
             ]
         ],
         "4": [
             [
                 "resource.fighter.second_wind",
-                {
-                    "flat": 3
-                }
+                "3"
+            ]
+        ],
+        "9": [
+            [
+                "resource.fighter.indomitable",
+                "1"
             ]
         ],
         "10": [
             [
                 "resource.fighter.second_wind",
-                {
-                    "flat": 4
-                }
+                "4"
             ]
         ],
         "13": [
             [
                 "resource.fighter.indomitable",
-                {
-                    "flat": 2
-                }
+                "2"
             ]
         ],
         "17": [
             [
                 "resource.fighter.action_surge",
-                {
-                    "flat": 2
-                }
+                "2"
             ],
             [
                 "resource.fighter.indomitable",
-                {
-                    "flat": 3
-                }
+                "3"
             ]
         ]
     },

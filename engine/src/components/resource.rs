@@ -192,6 +192,7 @@ impl FromStr for ResourceBudget {
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum ResourceBudgetKind {
     Flat(#[serde_as(as = "DisplayFromStr")] ResourceBudget),
     Tiered(#[serde_as(as = "BTreeMap<_, DisplayFromStr>")] BTreeMap<u8, ResourceBudget>),
@@ -357,84 +358,6 @@ pub enum ResourceAmount {
 }
 
 pub type ResourceAmountMap = HashMap<ResourceId, ResourceAmount>;
-
-// #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-// pub struct Resource {
-//     id: ResourceId,
-//     budget: ResourceBudgetKind,
-//     recharge: RechargeRule,
-// }
-
-// macro_rules! impl_resource_kind_router {
-//     ($( $fn_name:ident => $inner:ident ),+ $(,)?) => {
-//         $(
-//             pub fn $fn_name(&mut self, __arg: &ResourceAmount) -> Result<(), ResourceError> {
-//                 self.budget.$inner(__arg)
-//             }
-//         )+
-//     };
-// }
-
-// impl Resource {
-//     pub fn new(definition: &ResourceDefinition, budget: &ResourceBudgetKind) -> Self {
-//         match (&definition.kind, budget) {
-//             (ResourceDefinitionKind::Flat, ResourceBudgetKind::Flat(_))
-//             | (ResourceDefinitionKind::Tiered, ResourceBudgetKind::Tiered(_)) => {}
-//             _ => {
-//                 panic!(
-//                     "Mismatched resource definition kind and budget kind for resource id {}. Definition kind: {:?}, budget kind: {:?}",
-//                     definition.id, definition.kind, budget,
-//                 );
-//             }
-//         }
-//         Self {
-//             id: definition.id.clone(),
-//             budget: budget.clone(),
-//             recharge: definition.recharge,
-//         }
-//     }
-
-//     impl_resource_kind_router! {
-//         spend => spend,
-//         restore => restore,
-//         add_uses => add_uses,
-//         remove_uses => remove_uses,
-//         set_current_uses => set_current_uses,
-//         set_max_uses => set_max_uses,
-//     }
-
-//     pub fn recharge_full(&mut self, rest_type: &RechargeRule) {
-//         // If the rest type is higher or equal to the resource's recharge rule,
-//         // recharge the resource.
-//         if self.recharge.is_recharged_by(rest_type) {
-//             self.budget.recharge_full();
-//         }
-//     }
-
-//     pub fn max_uses(&self) -> Vec<ResourceAmount> {
-//         self.budget.max_uses()
-//     }
-
-//     pub fn current_uses(&self) -> Vec<ResourceAmount> {
-//         self.budget.current_uses()
-//     }
-
-//     pub fn id(&self) -> &ResourceId {
-//         &self.id
-//     }
-
-//     pub fn recharge_rule(&self) -> RechargeRule {
-//         self.recharge
-//     }
-
-//     pub fn can_afford(&self, cost: &ResourceAmount) -> bool {
-//         self.budget.can_afford(cost)
-//     }
-
-//     pub fn kind(&self) -> &ResourceBudgetKind {
-//         &self.budget
-//     }
-// }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceMap {

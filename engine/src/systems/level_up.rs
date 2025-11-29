@@ -17,7 +17,7 @@ use crate::{
         level_up::{ChoiceItem, LevelUpPrompt},
         modifier::ModifierSource,
         proficiency::{Proficiency, ProficiencyLevel},
-        resource::ResourceAmount,
+        resource::ResourceBudgetKind,
         skill::{Skill, SkillSet},
     },
     registry::registry::{ClassesRegistry, ItemsRegistry},
@@ -464,7 +464,7 @@ pub struct LevelUpGains {
     pub hit_points: HitPoints,
     pub actions: Vec<ActionId>,
     pub effects: Vec<EffectId>,
-    pub resources: Vec<(ResourceId, ResourceAmount)>,
+    pub resources: Vec<(ResourceId, ResourceBudgetKind)>,
 }
 
 pub fn level_up_gains(

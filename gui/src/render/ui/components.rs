@@ -30,13 +30,13 @@ use nat20_rs::{
         modifier::ModifierSet,
         proficiency::{Proficiency, ProficiencyLevel},
         race::{CreatureSize, CreatureType},
-        resource::{Resource, ResourceAmount, ResourceAmountMap, ResourceBudgetKind, ResourceMap},
+        resource::{ResourceAmount, ResourceAmountMap, ResourceBudgetKind, ResourceMap},
         saving_throw::{SavingThrowKind, SavingThrowSet},
         skill::{Skill, SkillSet, skill_ability},
         speed::Speed,
         spells::spellbook::Spellbook,
     },
-    registry,
+    registry::{self},
     systems::{
         self,
         d20::{D20CheckDCKind, D20ResultKind},
@@ -369,13 +369,13 @@ static FILLED_RESOURCE_ICON: &str = "O"; // Placeholder for filled resource icon
 impl ImguiRenderable for ResourceMap {
     fn render(&self, ui: &imgui::Ui) {
         // Split resources into flat and tiered
-        let flat_resources: Vec<(&ResourceId, &Resource)> = self
+        let flat_resources: Vec<(&ResourceId, &ResourceBudgetKind)> = self
             .iter()
-            .filter(|(_, r)| matches!(r.kind(), ResourceBudgetKind::Flat(_)))
+            .filter(|(_, r)| matches!(r, ResourceBudgetKind::Flat(_)))
             .collect();
-        let tiered_resources: Vec<(&ResourceId, &Resource)> = self
+        let tiered_resources: Vec<(&ResourceId, &ResourceBudgetKind)> = self
             .iter()
-            .filter(|(_, r)| matches!(r.kind(), ResourceBudgetKind::Tiered { .. }))
+            .filter(|(_, r)| matches!(r, ResourceBudgetKind::Tiered { .. }))
             .collect();
 
         if let Some(table) = table_with_columns!(ui, "Resources", "Resource", "Count", "Recharge") {
@@ -385,7 +385,7 @@ impl ImguiRenderable for ResourceMap {
                 ui.text(resource_id.to_string());
                 // Resource count column
                 ui.table_next_column();
-                match resource.kind() {
+                match resource {
                     ResourceBudgetKind::Flat(budget) => {
                         ui.text(format!("{}/{}", budget.current_uses, budget.max_uses));
                     }
@@ -404,7 +404,10 @@ impl ImguiRenderable for ResourceMap {
                 // ui.text(text);
                 // Recharge column
                 ui.table_next_column();
-                ui.text(format!("{}", resource.recharge_rule()));
+                ui.text(format!(
+                    "{}",
+                    systems::resources::recharge_rule(resource_id).unwrap()
+                ));
             }
             table.end();
         }
@@ -413,7 +416,7 @@ impl ImguiRenderable for ResourceMap {
             ui.separator_with_text(resource_id.to_string());
             if let Some(table) = table_with_columns!(ui, resource_id.to_string(), "Level", "Slots")
             {
-                match resource.kind() {
+                match resource {
                     ResourceBudgetKind::Tiered(budgets) => {
                         for (tier, budget) in budgets {
                             // Level column
@@ -529,8 +532,8 @@ fn render_spellbook_ui(
         let max_level = spells_by_level.keys().max().cloned().unwrap_or(0);
 
         let slots = resources
-            .get(&registry::resources::SPELL_SLOT_ID)
-            .and_then(|r| match r.kind() {
+            .get(&ResourceId::from_str("resource.spell_slot"))
+            .and_then(|r| match r {
                 ResourceBudgetKind::Tiered(budgets) => Some(budgets),
                 _ => panic!("Expected ResourceKind::Tiered for SPELL_SLOT"),
             })
