@@ -1,0 +1,47 @@
+{
+    "id": "background.soldier",
+    "ability_scores": [
+        "strength",
+        "constitution",
+        "charisma"
+    ],
+    "_comment": "Placeholder feat",
+    "feat": "feat.fighting_style.archery",
+    "skill_proficiencies": [
+        "athletics",
+        "intimidation"
+    ],
+    "equipment": {
+        "id": "choice.starting_equipment.soldier",
+        "label": "Soldier Starting Equipment",
+        "options": [
+            {
+                "equipment": {
+                    "items": [
+                        [
+                            1,
+                            "item.spear"
+                        ],
+                        [
+                            1,
+                            "item.shortbow"
+                        ],
+                        [
+                            1,
+                            "item.travelers_clothes"
+                        ]
+                    ],
+                    "money": "14 GP"
+                }
+            },
+            {
+                "equipment": {
+                    "items": [],
+                    "money": "50 GP"
+                }
+            }
+        ],
+        "picks": 1,
+        "allow_duplicates": false
+    }
+}

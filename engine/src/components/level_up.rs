@@ -16,7 +16,10 @@ use crate::{
         modifier::ModifierSource,
         skill::Skill,
     },
-    registry::{self, registry::ClassesRegistry},
+    registry::{
+        self,
+        registry::{BackgroundsRegistry, ClassesRegistry},
+    },
 };
 
 static ABILITY_SCORE_POINT_COST: LazyLock<HashMap<u8, u8>> = LazyLock::new(|| {
@@ -181,9 +184,8 @@ impl LevelUpPrompt {
     pub fn background() -> Self {
         LevelUpPrompt::Choice(ChoiceSpec::single(
             "Background",
-            registry::backgrounds::BACKGROUND_REGISTRY
-                .keys()
-                .cloned()
+            BackgroundsRegistry::keys()
+                .into_iter()
                 .map(ChoiceItem::Background)
                 .collect(),
         ))

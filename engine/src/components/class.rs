@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
-use serde_with::{DisplayFromStr, serde_as};
 
 use crate::{
     components::{
@@ -11,7 +10,7 @@ use crate::{
         items::equipment::{armor::ArmorType, weapon::WeaponCategory},
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         modifier::ModifierSource,
-        resource::{ResourceAmount, ResourceBudgetKind},
+        resource::ResourceBudgetKind,
         skill::Skill,
     },
     registry::registry::SubclassesRegistry,

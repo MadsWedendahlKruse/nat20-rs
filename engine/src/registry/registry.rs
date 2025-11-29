@@ -10,8 +10,9 @@ use std::{
 use serde::de::DeserializeOwned;
 
 use crate::components::{
+    background::Background,
     class::{Class, Subclass},
-    id::{ClassId, ItemId, ResourceId, SubclassId},
+    id::{BackgroundId, ClassId, ItemId, ResourceId, SubclassId},
     items::inventory::{ItemContainer, ItemInstance},
     resource::ResourceDefinition,
 };
@@ -25,6 +26,18 @@ pub trait RegistryEntry {
     type Id: Eq + Hash + Clone + Debug;
 
     fn id(&self) -> Self::Id;
+}
+
+macro_rules! impl_registry_entry {
+    ($type:ty, $id_type:ty, $field:ident) => {
+        impl RegistryEntry for $type {
+            type Id = $id_type;
+
+            fn id(&self) -> &Self::Id {
+                &self.$field
+            }
+        }
+    };
 }
 
 #[derive(Debug)]
@@ -110,8 +123,17 @@ impl RegistryEntry for Subclass {
     }
 }
 
+impl RegistryEntry for Background {
+    type Id = BackgroundId;
+
+    fn id(&self) -> Self::Id {
+        self.id.clone()
+    }
+}
+
 pub struct RegistrySet {
     // pub actions: Registry<ActionId, Action>,
+    pub backgrounds: Registry<BackgroundId, Background>,
     pub classes: Registry<ClassId, Class>,
     pub subclasses: Registry<SubclassId, Subclass>,
     pub items: Registry<ItemId, ItemInstance>,
@@ -125,6 +147,7 @@ impl RegistrySet {
     ) -> Result<Self, RegistryError> {
         let root_directory = root_directory.as_ref();
 
+        let backgrounds_directory = root_directory.join("backgrounds");
         let classes_directory = root_directory.join("classes");
         let subclasses_directory = root_directory.join("subclasses");
         // let spells_directory  = root_directory.join("spells");
@@ -132,6 +155,7 @@ impl RegistrySet {
         let resources_directory = root_directory.join("resources");
 
         Ok(Self {
+            backgrounds: Registry::load_from_directory(backgrounds_directory)?,
             classes: Registry::load_from_directory(classes_directory)?,
             subclasses: Registry::load_from_directory(subclasses_directory)?,
             // spells: Registry::load_from_directory(spells_directory)?,
@@ -153,11 +177,12 @@ static REGISTRIES: LazyLock<RwLock<RegistrySet>> = LazyLock::new(|| {
     RwLock::new(set)
 });
 
-pub struct ItemsRegistry;
-pub struct SpellsRegistry;
-pub struct ClassesRegistry;
-pub struct SubclassesRegistry;
-pub struct ResourcesRegistry;
+// pub struct ItemsRegistry;
+// pub struct SpellsRegistry;
+// pub struct ClassesRegistry;
+// pub struct SubclassesRegistry;
+// pub struct ResourcesRegistry;
+// pub struct BackgroundsRegistry;
 
 pub fn registry() -> std::sync::RwLockReadGuard<'static, RegistrySet> {
     REGISTRIES.read().unwrap()
@@ -166,30 +191,24 @@ pub fn registry() -> std::sync::RwLockReadGuard<'static, RegistrySet> {
 // TODO: Right now it's convenient to just clone everything, but we might want to
 // consider the performance implications of this later on.
 
-impl ItemsRegistry {
-    pub fn get(id: &ItemId) -> Option<ItemInstance> {
-        registry().items.entries.get(id).cloned()
-    }
+macro_rules! define_registry {
+    ($registry_name:ident, $key_type:ty, $value_type:ty, $field:ident) => {
+        pub struct $registry_name;
+
+        impl $registry_name {
+            pub fn get(key: &$key_type) -> Option<$value_type> {
+                registry().$field.entries.get(key).cloned()
+            }
+
+            pub fn keys() -> Vec<$key_type> {
+                registry().$field.entries.keys().cloned().collect()
+            }
+        }
+    };
 }
 
-impl ResourcesRegistry {
-    pub fn get(id: &ResourceId) -> Option<ResourceDefinition> {
-        registry().resources.entries.get(id).cloned()
-    }
-}
-
-impl ClassesRegistry {
-    pub fn get(id: &ClassId) -> Option<Class> {
-        registry().classes.entries.get(id).cloned()
-    }
-
-    pub fn keys() -> Vec<ClassId> {
-        registry().classes.entries.keys().cloned().collect()
-    }
-}
-
-impl SubclassesRegistry {
-    pub fn get(id: &SubclassId) -> Option<Subclass> {
-        registry().subclasses.entries.get(id).cloned()
-    }
-}
+define_registry!(ItemsRegistry, ItemId, ItemInstance, items);
+define_registry!(ResourcesRegistry, ResourceId, ResourceDefinition, resources);
+define_registry!(ClassesRegistry, ClassId, Class, classes);
+define_registry!(SubclassesRegistry, SubclassId, Subclass, subclasses);
+define_registry!(BackgroundsRegistry, BackgroundId, Background, backgrounds);

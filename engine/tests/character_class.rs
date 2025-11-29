@@ -8,7 +8,7 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::Ability,
-            id::{ClassId, ItemId, SubclassId},
+            id::{BackgroundId, ClassId, ItemId, SubclassId},
             level::CharacterLevels,
             level_up::ChoiceItem,
             proficiency::ProficiencyLevel,
@@ -38,9 +38,9 @@ mod tests {
                 LevelUpDecision::single_choice(ChoiceItem::Subrace(
                     registry::races::DRAGONBORN_WHITE_ID.clone(),
                 )),
-                LevelUpDecision::single_choice(ChoiceItem::Background(
-                    registry::backgrounds::SOLDIER_ID.clone(),
-                )),
+                LevelUpDecision::single_choice(ChoiceItem::Background(BackgroundId::from_str(
+                    "background.soldier",
+                ))),
                 LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
                     "class.fighter",
                 ))),

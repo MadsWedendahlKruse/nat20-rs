@@ -1,0 +1,43 @@
+{
+    "id": "background.criminal",
+    "ability_scores": [
+        "dexterity",
+        "intelligence",
+        "charisma"
+    ],
+    "_comment": "Placeholder feat",
+    "feat": "feat.fighting_style.archery",
+    "skill_proficiencies": [
+        "stealth",
+        "sleight_of_hand"
+    ],
+    "equipment": {
+        "id": "choice.starting_equipment.criminal",
+        "label": "Criminal Starting Equipment",
+        "options": [
+            {
+                "equipment": {
+                    "items": [
+                        [
+                            2,
+                            "item.dagger"
+                        ],
+                        [
+                            1,
+                            "item.travelers_clothes"
+                        ]
+                    ],
+                    "money": "16 GP"
+                }
+            },
+            {
+                "equipment": {
+                    "items": [],
+                    "money": "50 GP"
+                }
+            }
+        ],
+        "picks": 1,
+        "allow_duplicates": false
+    }
+}

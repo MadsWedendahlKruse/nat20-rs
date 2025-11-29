@@ -1,0 +1,39 @@
+{
+    "id": "background.acolyte",
+    "ability_scores": [
+        "charisma",
+        "intelligence",
+        "wisdom"
+    ],
+    "_comment": "Placeholder feat",
+    "feat": "feat.fighting_style.archery",
+    "skill_proficiencies": [
+        "insight",
+        "religion"
+    ],
+    "equipment": {
+        "id": "choice.starting_equipment.acolyte",
+        "label": "Acolyte Starting Equipment",
+        "options": [
+            {
+                "equipment": {
+                    "items": [
+                        [
+                            1,
+                            "item.robe"
+                        ]
+                    ],
+                    "money": "8 GP"
+                }
+            },
+            {
+                "equipment": {
+                    "items": [],
+                    "money": "50 GP"
+                }
+            }
+        ],
+        "picks": 1,
+        "allow_duplicates": false
+    }
+}

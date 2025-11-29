@@ -57,7 +57,7 @@ pub mod creatures {
 
         use crate::{
             components::{
-                id::{ClassId, EntityIdentifier, ItemId, Name, SubclassId},
+                id::{BackgroundId, ClassId, EntityIdentifier, ItemId, Name, SubclassId},
                 level_up::ChoiceItem,
                 skill::SkillSet,
                 spells::spellbook::Spellbook,
@@ -96,9 +96,9 @@ pub mod creatures {
                     LevelUpDecision::single_choice(ChoiceItem::Subrace(
                         registry::races::DRAGONBORN_WHITE_ID.clone(),
                     )),
-                    LevelUpDecision::single_choice(ChoiceItem::Background(
-                        registry::backgrounds::SOLDIER_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Background(BackgroundId::from_str(
+                        "background.soldier",
+                    ))),
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
                         "class.fighter",
                     ))),
@@ -232,9 +232,9 @@ pub mod creatures {
                     LevelUpDecision::single_choice(ChoiceItem::Subrace(
                         registry::races::DRAGONBORN_RED_ID.clone(),
                     )),
-                    LevelUpDecision::single_choice(ChoiceItem::Background(
-                        registry::backgrounds::SAGE_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Background(BackgroundId::from_str(
+                        "background.sage",
+                    ))),
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
                         "class.wizard",
                     ))),
@@ -315,9 +315,9 @@ pub mod creatures {
                     LevelUpDecision::single_choice(ChoiceItem::Subrace(
                         registry::races::DRAGONBORN_BLACK_ID.clone(),
                     )),
-                    LevelUpDecision::single_choice(ChoiceItem::Background(
-                        registry::backgrounds::ACOLYTE_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Background(BackgroundId::from_str(
+                        "background.acolyte",
+                    ))),
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
                         "class.warlock",
                     ))),

@@ -436,23 +436,6 @@ impl Action {
         }
     }
 
-    fn spend_resources(
-        &self,
-        world: &mut World,
-        entity: Entity,
-        context: &ActionContext,
-        resource_cost: &ResourceAmountMap,
-    ) -> Result<ResourceAmountMap, ResourceError> {
-        let mut resource_cost = resource_cost.clone();
-        for effects in systems::effects::effects(world, entity).iter() {
-            (effects.on_resource_cost)(world, entity, context, &mut resource_cost);
-        }
-
-        systems::resources::spend(world, entity, &resource_cost)?;
-
-        Ok(resource_cost)
-    }
-
     pub fn id(&self) -> &ActionId {
         &self.id
     }
