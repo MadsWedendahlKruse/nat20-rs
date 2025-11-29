@@ -10,19 +10,9 @@
   "category": "martial",
   "kind": "melee",
   "properties": [],
-  "damage_roll": {
-    "primary": {
-      "dice_roll": "1d8",
-      "damage_type": "bludgeoning"
-    },
-    "bonus": [],
-    "source": {
-      "weapon": "melee"
-    }
-  },
-  "ability": "Strength",
-  "weapon_actions": [
-    "action.weapon.attack"
+  "damage": [
+    ["1d8", "bludgeoning"]
   ],
+  "extra_weapon_actions": [],
   "effects": []
 }

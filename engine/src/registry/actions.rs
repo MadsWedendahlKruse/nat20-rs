@@ -14,7 +14,7 @@ use crate::{
         },
         damage::{AttackRoll, DamageRoll},
         dice::{DiceSet, DiceSetRoll, DieSize},
-        id::{ActionId, ResourceId},
+        id::{ActionId, ClassId, ResourceId},
         items::equipment::loadout::Loadout,
         level::CharacterLevels,
         modifier::{ModifierSet, ModifierSource},
@@ -55,8 +55,8 @@ static ACTION_SURGE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(|
             },
             targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
             resource_cost: HashMap::from([(
-                registry::resources::ACTION_SURGE_ID.clone(),
-                registry::resources::ACTION_SURGE.build_amount(1),
+                ResourceId::from_str("resource.fighter.action_surge"),
+                ResourceAmount::Flat(1),
             )]),
             cooldown: Some(RechargeRule::Turn),
             reaction_trigger: None,
@@ -100,7 +100,7 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
                         systems::class::class_level(
                             &game_state.world,
                             reactor,
-                            &registry::classes::FIGHTER_ID,
+                            &ClassId::from_str("class.fighter"),
                         ),
                     );
 
@@ -112,12 +112,12 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
                             &reaction_context,
                             &ResourceAmountMap::from([
                                 (
-                                    registry::resources::INDOMITABLE_ID.clone(),
-                                    registry::resources::INDOMITABLE.build_amount(1),
+                                    ResourceId::from_str("resource.fighter.indomitable"),
+                                    ResourceAmount::Flat(1),
                                 ),
                                 (
-                                    registry::resources::REACTION_ID.clone(),
-                                    registry::resources::REACTION.build_amount(1),
+                                    ResourceId::from_str("resource.reaction"),
+                                    ResourceAmount::Flat(1),
                                 ),
                             ]),
                             reactor,
@@ -152,12 +152,12 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
             targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
             resource_cost: ResourceAmountMap::from([
                 (
-                    registry::resources::INDOMITABLE_ID.clone(),
-                    registry::resources::INDOMITABLE.build_amount(1),
+                    ResourceId::from_str("resource.fighter.indomitable"),
+                    ResourceAmount::Flat(1),
                 ),
                 (
-                    registry::resources::REACTION_ID.clone(),
-                    registry::resources::REACTION.build_amount(1),
+                    ResourceId::from_str("resource.reaction"),
+                    ResourceAmount::Flat(1),
                 ),
             ]),
             cooldown: Some(RechargeRule::LongRest),
@@ -190,9 +190,9 @@ static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(||
                 heal: Arc::new(|world, entity, _| {
                     let mut modifiers = ModifierSet::new();
                     modifiers.add_modifier(
-                        ModifierSource::ClassLevel(registry::classes::FIGHTER_ID.clone()),
+                        ModifierSource::ClassLevel(ClassId::from_str("class.fighter")),
                         systems::helpers::get_component::<CharacterLevels>(world, entity)
-                            .class_level(&registry::classes::FIGHTER_ID)
+                            .class_level(&ClassId::from_str("class.fighter"))
                             .unwrap()
                             .level() as i32,
                     );
@@ -206,10 +206,16 @@ static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(||
                 }),
             },
             targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
-            resource_cost: HashMap::from([(
-                registry::resources::BONUS_ACTION_ID.clone(),
-                registry::resources::BONUS_ACTION.build_amount(1),
-            )]),
+            resource_cost: HashMap::from([
+                (
+                    ResourceId::from_str("resource.fighter.second_wind"),
+                    ResourceAmount::Flat(1),
+                ),
+                (
+                    ResourceId::from_str("resource.bonus_action"),
+                    ResourceAmount::Flat(1),
+                ),
+            ]),
             cooldown: None,
             reaction_trigger: None,
         },
@@ -241,8 +247,8 @@ static TACTICAL_MIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(
                             &TACTICAL_MIND_ID.clone().into(),
                             &reaction_data.context,
                             &ResourceAmountMap::from([(
-                                registry::resources::SECOND_WIND_ID.clone(),
-                                registry::resources::SECOND_WIND.build_amount(1),
+                                ResourceId::from_str("resource.fighter.second_wind"),
+                                ResourceAmount::Flat(1),
                             )]),
                             reaction_data.reactor,
                             ActionKindResult::Reaction {
@@ -275,8 +281,8 @@ static TACTICAL_MIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(
             },
             targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
             resource_cost: HashMap::from([(
-                registry::resources::SECOND_WIND_ID.clone(),
-                registry::resources::SECOND_WIND.build_amount(1),
+                ResourceId::from_str("resource.fighter.second_wind"),
+                ResourceAmount::Flat(1),
             )]),
             cooldown: None,
             reaction_trigger: Some(Arc::new(|reactor, event| match &event.kind {
@@ -362,7 +368,7 @@ static WEAPON_TARGETING: LazyLock<
 pub static DEFAULT_RESOURCE_COST: LazyLock<HashMap<ResourceId, ResourceAmount>> =
     LazyLock::new(|| {
         HashMap::from([(
-            registry::resources::ACTION_ID.clone(),
-            registry::resources::ACTION.build_amount(1),
+            ResourceId::from_str("resource.action").clone(),
+            ResourceAmount::Flat(1),
         )])
     });

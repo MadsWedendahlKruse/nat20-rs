@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 #[derive(EnumIter, Hash, Eq, PartialEq, Debug, Clone, Copy, Display, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Ability {
     Strength = 0,
     Dexterity = 1,
@@ -94,7 +95,7 @@ impl fmt::Display for AbilityScore {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AbilityScoreDistribution {
     pub scores: HashMap<Ability, u8>,
     pub plus_2_bonus: Ability,

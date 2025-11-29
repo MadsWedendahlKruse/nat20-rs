@@ -30,7 +30,7 @@ use nat20_rs::{
         modifier::ModifierSet,
         proficiency::{Proficiency, ProficiencyLevel},
         race::{CreatureSize, CreatureType},
-        resource::{Resource, ResourceAmount, ResourceAmountMap, ResourceKind, ResourceMap},
+        resource::{Resource, ResourceAmount, ResourceAmountMap, ResourceBudgetKind, ResourceMap},
         saving_throw::{SavingThrowKind, SavingThrowSet},
         skill::{Skill, SkillSet, skill_ability},
         speed::Speed,
@@ -371,11 +371,11 @@ impl ImguiRenderable for ResourceMap {
         // Split resources into flat and tiered
         let flat_resources: Vec<(&ResourceId, &Resource)> = self
             .iter()
-            .filter(|(_, r)| matches!(r.kind(), ResourceKind::Flat(_)))
+            .filter(|(_, r)| matches!(r.kind(), ResourceBudgetKind::Flat(_)))
             .collect();
         let tiered_resources: Vec<(&ResourceId, &Resource)> = self
             .iter()
-            .filter(|(_, r)| matches!(r.kind(), ResourceKind::Tiered { .. }))
+            .filter(|(_, r)| matches!(r.kind(), ResourceBudgetKind::Tiered { .. }))
             .collect();
 
         if let Some(table) = table_with_columns!(ui, "Resources", "Resource", "Count", "Recharge") {
@@ -386,7 +386,7 @@ impl ImguiRenderable for ResourceMap {
                 // Resource count column
                 ui.table_next_column();
                 match resource.kind() {
-                    ResourceKind::Flat(budget) => {
+                    ResourceBudgetKind::Flat(budget) => {
                         ui.text(format!("{}/{}", budget.current_uses, budget.max_uses));
                     }
                     _ => {
@@ -414,7 +414,7 @@ impl ImguiRenderable for ResourceMap {
             if let Some(table) = table_with_columns!(ui, resource_id.to_string(), "Level", "Slots")
             {
                 match resource.kind() {
-                    ResourceKind::Tiered(budgets) => {
+                    ResourceBudgetKind::Tiered(budgets) => {
                         for (tier, budget) in budgets {
                             // Level column
                             ui.table_next_column();
@@ -531,7 +531,7 @@ fn render_spellbook_ui(
         let slots = resources
             .get(&registry::resources::SPELL_SLOT_ID)
             .and_then(|r| match r.kind() {
-                ResourceKind::Tiered(budgets) => Some(budgets),
+                ResourceBudgetKind::Tiered(budgets) => Some(budgets),
                 _ => panic!("Expected ResourceKind::Tiered for SPELL_SLOT"),
             })
             .unwrap();

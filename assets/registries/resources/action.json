@@ -1,0 +1,5 @@
+{
+    "id": "resource.action",
+    "kind": "flat",
+    "recharge": "turn"
+}

@@ -1,11 +1,9 @@
 pub mod actions;
 pub mod ai;
 pub mod backgrounds;
-pub mod classes;
 pub mod effects;
 pub mod factions;
 pub mod feats;
 pub mod races;
 pub mod registry;
-pub mod resources;
 pub mod spells;

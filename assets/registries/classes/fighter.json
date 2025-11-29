@@ -1,0 +1,226 @@
+{
+    "id": "class.fighter",
+    "hit_die": "d10",
+    "hp_per_level": 6,
+    "default_abilities": {
+        "scores": {
+            "wisdom": 10,
+            "charisma": 12,
+            "dexterity": 14,
+            "constitution": 13,
+            "intelligence": 8,
+            "strength": 15
+        },
+        "plus_2_bonus": "strength",
+        "plus_1_bonus": "constitution"
+    },
+    "saving_throw_proficiencies": [
+        "strength",
+        "constitution"
+    ],
+    "subclass_level": 3,
+    "subclasses": [
+        "subclass.fighter.champion"
+    ],
+    "feat_levels": [
+        4,
+        6,
+        8,
+        12,
+        14,
+        16
+    ],
+    "skill_proficiencies": [
+        "acrobatics",
+        "history",
+        "intimidation",
+        "perception",
+        "survival",
+        "animal_handling",
+        "athletics",
+        "insight"
+    ],
+    "skill_prompts": 2,
+    "armor_proficiencies": [
+        "medium",
+        "heavy",
+        "light"
+    ],
+    "weapon_proficiencies": [
+        "simple",
+        "martial"
+    ],
+    "spellcasting": "none",
+    "effects_by_level": {
+        "20": [
+            "effect.fighter.three_extra_attacks"
+        ],
+        "5": [
+            "effect.extra_attack"
+        ],
+        "11": [
+            "effect.fighter.two_extra_attacks"
+        ]
+    },
+    "resources_by_level": {
+        "9": [
+            [
+                "resource.fighter.indomitable",
+                {
+                    "flat": 1
+                }
+            ]
+        ],
+        "1": [
+            [
+                "resource.fighter.second_wind",
+                {
+                    "flat": 2
+                }
+            ]
+        ],
+        "2": [
+            [
+                "resource.fighter.action_surge",
+                {
+                    "flat": 1
+                }
+            ]
+        ],
+        "4": [
+            [
+                "resource.fighter.second_wind",
+                {
+                    "flat": 3
+                }
+            ]
+        ],
+        "10": [
+            [
+                "resource.fighter.second_wind",
+                {
+                    "flat": 4
+                }
+            ]
+        ],
+        "13": [
+            [
+                "resource.fighter.indomitable",
+                {
+                    "flat": 2
+                }
+            ]
+        ],
+        "17": [
+            [
+                "resource.fighter.action_surge",
+                {
+                    "flat": 2
+                }
+            ],
+            [
+                "resource.fighter.indomitable",
+                {
+                    "flat": 3
+                }
+            ]
+        ]
+    },
+    "prompts_by_level": {
+        "1": [
+            {
+                "Choice": {
+                    "id": "choice.fighting_style",
+                    "label": "Fighting Style",
+                    "options": [
+                        {
+                            "feat": "feat.fighting_style.archery"
+                        },
+                        {
+                            "feat": "feat.fighting_style.defense"
+                        },
+                        {
+                            "feat": "feat.fighting_style.great_weapon_fighting"
+                        }
+                    ],
+                    "picks": 1,
+                    "allow_duplicates": false
+                }
+            },
+            {
+                "Choice": {
+                    "id": "choice.starting_equipment.fighter",
+                    "label": "Fighter Starting Equipment",
+                    "options": [
+                        {
+                            "equipment": {
+                                "items": [
+                                    [
+                                        1,
+                                        "item.chainmail"
+                                    ],
+                                    [
+                                        1,
+                                        "item.greatsword"
+                                    ],
+                                    [
+                                        1,
+                                        "item.flail"
+                                    ],
+                                    [
+                                        8,
+                                        "item.javelin"
+                                    ]
+                                ],
+                                "money": "4 GP"
+                            }
+                        },
+                        {
+                            "equipment": {
+                                "items": [
+                                    [
+                                        1,
+                                        "item.studded_leather_armor"
+                                    ],
+                                    [
+                                        1,
+                                        "item.scimitar"
+                                    ],
+                                    [
+                                        1,
+                                        "item.shortsword"
+                                    ],
+                                    [
+                                        1,
+                                        "item.longbow"
+                                    ]
+                                ],
+                                "money": "11 GP"
+                            }
+                        },
+                        {
+                            "equipment": {
+                                "items": [],
+                                "money": "155 GP"
+                            }
+                        }
+                    ],
+                    "picks": 1,
+                    "allow_duplicates": false
+                }
+            }
+        ]
+    },
+    "actions_by_level": {
+        "9": [
+            "action.fighter.indomitable"
+        ],
+        "1": [
+            "action.fighter.second_wind"
+        ],
+        "2": [
+            "action.fighter.action_surge",
+            "action.fighter.tactical_mind"
+        ]
+    }
+}

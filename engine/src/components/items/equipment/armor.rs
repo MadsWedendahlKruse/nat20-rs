@@ -87,7 +87,6 @@ pub struct Armor {
     pub armor_type: ArmorType,
     pub armor_class: i32,
     pub dexterity_bonus: ArmorDexterityBonus,
-    pub stealth_disadvantage: bool,
     pub effects: Vec<EffectId>,
 }
 
@@ -109,7 +108,6 @@ impl Armor {
             armor_type,
             armor_class,
             dexterity_bonus,
-            stealth_disadvantage,
             effects,
         }
     }

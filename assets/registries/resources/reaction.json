@@ -1,0 +1,5 @@
+{
+    "id": "resource.reaction",
+    "kind": "flat",
+    "recharge": "turn"
+}

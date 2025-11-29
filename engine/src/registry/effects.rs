@@ -13,13 +13,13 @@ use crate::{
             effects::{Effect, EffectDuration},
             hooks::D20CheckHooks,
         },
-        id::{EffectId, ItemId},
+        id::{ClassId, EffectId, ItemId, ResourceId, SubclassId},
         items::{
             equipment::{armor::ArmorType, loadout, weapon::WeaponKind},
             item::Item,
         },
         modifier::ModifierSource,
-        resource::{RechargeRule, Resource, ResourceAmount, ResourceMap},
+        resource::{RechargeRule, ResourceAmount, ResourceMap},
         saving_throw::SavingThrowKind,
         skill::{Skill, SkillSet},
     },
@@ -114,13 +114,13 @@ static ACTION_SURGE: LazyLock<Effect> = LazyLock::new(|| {
     );
     effect.on_apply = Arc::new(|world, entity| {
         let _ = systems::helpers::get_component_mut::<ResourceMap>(world, entity)
-            .get_mut(&registry::resources::ACTION_ID)
+            .get_mut(&ResourceId::from_str("resource.action"))
             .unwrap()
             .add_uses(&ResourceAmount::Flat(1));
     });
     effect.on_unapply = Arc::new(|world, entity| {
         let _ = systems::helpers::get_component_mut::<ResourceMap>(world, entity)
-            .get_mut(&registry::resources::ACTION_ID)
+            .get_mut(&ResourceId::from_str("resource.action"))
             .unwrap()
             .remove_uses(&ResourceAmount::Flat(1));
     });
@@ -251,7 +251,7 @@ static EXTRA_ATTACK: LazyLock<Effect> = LazyLock::new(|| {
     helpers::extra_attack_effect(
         EXTRA_ATTACK_ID.clone(),
         // TODO: Other classes can get Extra Attack too
-        registry::classes::FIGHTER_ID.clone(),
+        ClassId::from_str("class.fighter"),
         1,
     )
 });
@@ -350,7 +350,7 @@ pub static IMPROVED_CRITICAL_ID: LazyLock<EffectId> =
 static IMPROVED_CRITICAL: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         IMPROVED_CRITICAL_ID.clone(),
-        ModifierSource::SubclassFeature(registry::classes::CHAMPION_ID.clone()),
+        ModifierSource::SubclassFeature(SubclassId::from_str("subclass.fighter.champion")),
         EffectDuration::Permanent,
     );
     effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
@@ -365,7 +365,7 @@ pub static REMARKABLE_ATHLETE_ID: LazyLock<EffectId> =
 static REMARKABLE_ATHLETE: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         REMARKABLE_ATHLETE_ID.clone(),
-        ModifierSource::SubclassFeature(registry::classes::CHAMPION_ID.clone()),
+        ModifierSource::SubclassFeature(SubclassId::from_str("subclass.fighter.champion")),
         EffectDuration::Permanent,
     );
 
@@ -409,7 +409,7 @@ pub static SUPERIOR_CRITICAL_ID: LazyLock<EffectId> =
 static SUPERIOR_CRITICAL: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         SUPERIOR_CRITICAL_ID.clone(),
-        ModifierSource::SubclassFeature(registry::classes::CHAMPION_ID.clone()),
+        ModifierSource::SubclassFeature(SubclassId::from_str("subclass.fighter.champion")),
         EffectDuration::Permanent,
     );
     effect.pre_attack_roll = Arc::new(|_, _, attack_roll| {
@@ -425,7 +425,7 @@ pub static THREE_EXTRA_ATTACKS_ID: LazyLock<EffectId> =
 static THREE_EXTRA_ATTACKS: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = helpers::extra_attack_effect(
         THREE_EXTRA_ATTACKS_ID.clone(),
-        registry::classes::FIGHTER_ID.clone(),
+        ClassId::from_str("class.fighter"),
         3,
     );
     effect.replaces = Some(TWO_EXTRA_ATTACKS_ID.clone());
@@ -438,7 +438,7 @@ pub static TWO_EXTRA_ATTACKS_ID: LazyLock<EffectId> =
 static TWO_EXTRA_ATTACKS: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = helpers::extra_attack_effect(
         TWO_EXTRA_ATTACKS_ID.clone(),
-        registry::classes::FIGHTER_ID.clone(),
+        ClassId::from_str("class.fighter"),
         2,
     );
     effect.replaces = Some(EXTRA_ATTACK_ID.clone());
@@ -449,6 +449,7 @@ mod helpers {
     use crate::components::{
         damage::{DamageMitigationEffect, DamageResistances, DamageType, MitigationOperation},
         id::ClassId,
+        resource::{ResourceBudget, ResourceBudgetKind},
     };
 
     use super::*;
@@ -470,7 +471,7 @@ mod helpers {
                 }
 
                 // If the Action doesn't cost an "Action" this effect is not relevant
-                if !resource_cost.contains_key(&registry::resources::ACTION_ID) {
+                if !resource_cost.contains_key(&ResourceId::from_str("resource.action")) {
                     return;
                 }
 
@@ -482,14 +483,15 @@ mod helpers {
                 let mut resources =
                     systems::helpers::get_component_mut::<ResourceMap>(world, performer);
                 if resources.can_afford(
-                    &registry::resources::EXTRA_ATTACK_ID.clone(),
-                    &registry::resources::EXTRA_ATTACK.build_amount(1),
+                    &ResourceId::from_str("resource.extra_attack"),
+                    &ResourceAmount::Flat(1),
                 ) {
                     return;
                 }
 
                 resources.add(
-                    registry::resources::EXTRA_ATTACK.build_resource(charges),
+                    ResourceId::from_str("resource.extra_attack"),
+                    ResourceBudgetKind::Flat(ResourceBudget::with_max_uses(charges).unwrap()),
                     true, // Set current uses to max uses
                 );
             }
@@ -502,7 +504,7 @@ mod helpers {
             }
 
             // If the Action doesn't cost an "Action" this effect is not relevant
-            if !resource_cost.contains_key(&registry::resources::ACTION_ID) {
+            if !resource_cost.contains_key(&ResourceId::from_str("resource.action")) {
                 return;
             }
 
@@ -510,13 +512,13 @@ mod helpers {
             // of the "Action" resource.
             let resources = systems::helpers::get_component::<ResourceMap>(world, performer);
             if resources.can_afford(
-                &registry::resources::EXTRA_ATTACK_ID.clone(),
-                &registry::resources::EXTRA_ATTACK.build_amount(1),
+                &ResourceId::from_str("resource.extra_attack"),
+                &ResourceAmount::Flat(1),
             ) {
-                resource_cost.remove(&registry::resources::ACTION_ID);
+                resource_cost.remove(&ResourceId::from_str("resource.action"));
                 resource_cost.insert(
-                    registry::resources::EXTRA_ATTACK_ID.clone(),
-                    registry::resources::EXTRA_ATTACK.build_amount(1),
+                    ResourceId::from_str("resource.extra_attack"),
+                    ResourceAmount::Flat(1),
                 );
             }
         });

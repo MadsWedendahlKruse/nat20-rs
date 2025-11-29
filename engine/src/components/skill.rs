@@ -10,9 +10,11 @@ use crate::{
 };
 
 use hecs::{Entity, World};
+use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
-#[derive(EnumIter, Debug, Hash, Eq, PartialEq, Clone, Copy)]
+#[derive(EnumIter, Debug, Hash, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Skill {
     // --- Strength ---
     Athletics,
@@ -100,21 +102,5 @@ pub fn get_skill_hooks(skill: Skill, world: &World, entity: Entity) -> Vec<D20Ch
 impl Default for SkillSet {
     fn default() -> Self {
         SkillSet::new(skill_ability, get_skill_hooks)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::components::ability::Ability;
-
-    use super::*;
-
-    #[test]
-    fn skill_ability_map() {
-        assert_eq!(skill_ability(Skill::Acrobatics), Some(Ability::Dexterity));
-        assert_eq!(skill_ability(Skill::Athletics), Some(Ability::Strength));
-        assert_eq!(skill_ability(Skill::Stealth), Some(Ability::Dexterity));
-        assert_eq!(skill_ability(Skill::Arcana), Some(Ability::Intelligence));
-        assert_eq!(skill_ability(Skill::History), Some(Ability::Intelligence));
     }
 }

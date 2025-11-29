@@ -195,9 +195,7 @@ impl LevelUpDecisionProgress {
                         let mut assignments = HashMap::new();
                         let mut plus_2_bonus = None;
                         let mut plus_1_bonus = None;
-                        if let Some(class) =
-                            registry::classes::CLASS_REGISTRY.get(levels.latest_class().unwrap())
-                        {
+                        if let Some(class) = ClassesRegistry::get(levels.latest_class().unwrap()) {
                             let default_abilities = &class.default_abilities;
                             // Reset assignments to class defaults
                             for (ability, score) in default_abilities.scores.iter() {
@@ -896,8 +894,8 @@ impl ImguiRenderable for LevelUpGains {
 
         if !self.resources.is_empty() {
             ui.separator();
-            for resource in &self.resources {
-                ui.bullet_text(format!("Resource: {}", resource.id()));
+            for (resource, amount) in &self.resources {
+                ui.bullet_text(format!("Resource: {}", resource));
             }
         }
     }

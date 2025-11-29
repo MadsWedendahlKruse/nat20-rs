@@ -49,9 +49,9 @@ pub struct DamageComponent {
 }
 
 impl DamageComponent {
-    pub fn new(num_dice: u32, die_size: DieSize, damage_type: DamageType) -> Self {
+    pub fn new(dice: DiceSet, damage_type: DamageType) -> Self {
         Self {
-            dice_roll: DiceSetRoll::new(DiceSet { num_dice, die_size }, ModifierSet::new()),
+            dice_roll: DiceSetRoll::new(dice, ModifierSet::new()),
             damage_type,
         }
     }
@@ -112,23 +112,16 @@ pub struct DamageRoll {
 }
 
 impl DamageRoll {
-    // TODO: There's too many labels everywhere
-    pub fn new(
-        num_dice: u32,
-        die_size: DieSize,
-        damage_type: DamageType,
-        source: DamageSource,
-    ) -> Self {
+    pub fn new(dice: DiceSet, damage_type: DamageType, source: DamageSource) -> Self {
         Self {
-            primary: DamageComponent::new(num_dice, die_size, damage_type),
+            primary: DamageComponent::new(dice, damage_type),
             bonus: Vec::new(),
             source,
         }
     }
 
-    pub fn add_bonus(&mut self, num_dice: u32, die_size: DieSize, damage_type: DamageType) {
-        self.bonus
-            .push(DamageComponent::new(num_dice, die_size, damage_type));
+    pub fn add_bonus(&mut self, dice: DiceSet, damage_type: DamageType) {
+        self.bonus.push(DamageComponent::new(dice, damage_type));
     }
 
     pub fn roll(&self) -> DamageRollResult {

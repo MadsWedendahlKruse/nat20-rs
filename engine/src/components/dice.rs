@@ -4,10 +4,12 @@ use std::{
 };
 
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 use crate::components::modifier::{ModifierSet, ModifierSource};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum DieSize {
     D4 = 4,
     D6 = 6,

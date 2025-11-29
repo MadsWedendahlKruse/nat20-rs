@@ -8,7 +8,7 @@ use crate::{
         resource::ResourceMap,
         saving_throw::SavingThrowKind,
     },
-    registry,
+    registry::{self, registry::ClassesRegistry},
 };
 use hecs::{Entity, World};
 
@@ -50,12 +50,10 @@ pub fn increment_class_level(
     entity: Entity,
     class_id: &ClassId,
 ) -> Vec<LevelUpPrompt> {
-    let class = registry::classes::CLASS_REGISTRY
-        .get(class_id)
-        .expect(&format!(
-            "Class with name `{}` not found in the registry",
-            class_id
-        ));
+    let class = ClassesRegistry::get(class_id).expect(&format!(
+        "Class with name `{}` not found in the registry",
+        class_id
+    ));
 
     let (new_level, subclass) = {
         let mut character_levels =
@@ -113,12 +111,10 @@ pub fn set_subclass(
     let class_name = subclass_id.as_str().split(".").collect::<Vec<_>>()[1];
     let class_id = &ClassId::from_str(format!("class.{}", class_name));
 
-    let class = registry::classes::CLASS_REGISTRY
-        .get(class_id)
-        .expect(&format!(
-            "Class with name `{}` not found in the registry",
-            class_id
-        ));
+    let class = ClassesRegistry::get(class_id).expect(&format!(
+        "Class with name `{}` not found in the registry",
+        class_id
+    ));
 
     let (subclass, level) = {
         let mut character_levels =
@@ -160,8 +156,8 @@ fn apply_class_base(
     {
         let mut resources = systems::helpers::get_component_mut::<ResourceMap>(world, entity);
         if let Some(resources_for_level) = class_base.resources_by_level.get(&level) {
-            for resource in resources_for_level {
-                resources.add(resource.clone(), false);
+            for (resource, amount) in resources_for_level {
+                resources.add(resource.clone(), amount.clone().into(), false);
             }
         }
     }

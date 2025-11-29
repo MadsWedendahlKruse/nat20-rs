@@ -57,13 +57,16 @@ pub mod creatures {
 
         use crate::{
             components::{
-                id::{EntityIdentifier, ItemId, Name},
+                id::{ClassId, EntityIdentifier, ItemId, Name, SubclassId},
                 level_up::ChoiceItem,
                 skill::SkillSet,
                 spells::spellbook::Spellbook,
             },
             entities::character::Character,
-            registry::{self, registry::ItemsRegistry},
+            registry::{
+                self,
+                registry::{ClassesRegistry, ItemsRegistry},
+            },
         };
 
         use super::*;
@@ -96,12 +99,11 @@ pub mod creatures {
                     LevelUpDecision::single_choice(ChoiceItem::Background(
                         registry::backgrounds::SOLDIER_ID.clone(),
                     )),
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::FIGHTER_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.fighter",
+                    ))),
                     LevelUpDecision::AbilityScores(
-                        registry::classes::CLASS_REGISTRY
-                            .get(&registry::classes::FIGHTER_ID.clone())
+                        ClassesRegistry::get(&ClassId::from_str("class.fighter"))
                             .unwrap()
                             .default_abilities
                             .clone(),
@@ -136,20 +138,20 @@ pub mod creatures {
                         },
                     ),
                     // Level 2
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::FIGHTER_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.fighter",
+                    ))),
                     // Level 3
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::FIGHTER_ID.clone(),
-                    )),
-                    LevelUpDecision::single_choice(ChoiceItem::Subclass(
-                        registry::classes::CHAMPION_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.fighter",
+                    ))),
+                    LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassId::from_str(
+                        "subclass.fighter.champion",
+                    ))),
                     // Level 4
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::FIGHTER_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.fighter",
+                    ))),
                     LevelUpDecision::single_choice(ChoiceItem::Feat(
                         registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
                     )),
@@ -158,13 +160,13 @@ pub mod creatures {
                         2,
                     )])),
                     // Level 5
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::FIGHTER_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.fighter",
+                    ))),
                     // Level 6
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::FIGHTER_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.fighter",
+                    ))),
                     LevelUpDecision::single_choice(ChoiceItem::Feat(
                         registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
                     )),
@@ -173,17 +175,17 @@ pub mod creatures {
                         (Ability::Dexterity, 1),
                     ])),
                     // Level 7
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::FIGHTER_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.fighter",
+                    ))),
                     LevelUpDecision::single_choice_with_id(
                         "choice.fighting_style",
                         ChoiceItem::Feat(registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone()),
                     ),
                     // Level 8
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::FIGHTER_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.fighter",
+                    ))),
                     LevelUpDecision::single_choice(ChoiceItem::Feat(
                         registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
                     )),
@@ -192,9 +194,9 @@ pub mod creatures {
                         2,
                     )])),
                     // Level 9
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::FIGHTER_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.fighter",
+                    ))),
                 ],
             );
 
@@ -230,12 +232,11 @@ pub mod creatures {
                     LevelUpDecision::single_choice(ChoiceItem::Background(
                         registry::backgrounds::SAGE_ID.clone(),
                     )),
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::WIZARD_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.wizard",
+                    ))),
                     LevelUpDecision::AbilityScores(
-                        registry::classes::CLASS_REGISTRY
-                            .get(&registry::classes::WIZARD_ID.clone())
+                        ClassesRegistry::get(&ClassId::from_str("class.wizard"))
                             .unwrap()
                             .default_abilities
                             .clone(),
@@ -255,20 +256,20 @@ pub mod creatures {
                         },
                     ),
                     // Level 2
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::WIZARD_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.wizard",
+                    ))),
                     // Level 3
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::WIZARD_ID.clone(),
-                    )),
-                    LevelUpDecision::single_choice(ChoiceItem::Subclass(
-                        registry::classes::EVOKER_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.wizard",
+                    ))),
+                    LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassId::from_str(
+                        "subclass.wizard.evoker",
+                    ))),
                     // Level 4
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::WIZARD_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.wizard",
+                    ))),
                     LevelUpDecision::single_choice(ChoiceItem::Feat(
                         registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
                     )),
@@ -277,9 +278,9 @@ pub mod creatures {
                         2,
                     )])),
                     // Level 5
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::WIZARD_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.wizard",
+                    ))),
                 ],
             );
 
@@ -314,12 +315,11 @@ pub mod creatures {
                     LevelUpDecision::single_choice(ChoiceItem::Background(
                         registry::backgrounds::ACOLYTE_ID.clone(),
                     )),
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::WARLOCK_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.warlock",
+                    ))),
                     LevelUpDecision::AbilityScores(
-                        registry::classes::CLASS_REGISTRY
-                            .get(&registry::classes::WARLOCK_ID)
+                        ClassesRegistry::get(&ClassId::from_str("class.warlock"))
                             .unwrap()
                             .default_abilities
                             .clone(),
@@ -336,20 +336,20 @@ pub mod creatures {
                         },
                     ),
                     // Level 2
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::WARLOCK_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.warlock",
+                    ))),
                     // Level 3
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::WARLOCK_ID.clone(),
-                    )),
-                    LevelUpDecision::single_choice(ChoiceItem::Subclass(
-                        registry::classes::FIEND_PATRON_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.warlock",
+                    ))),
+                    LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassId::from_str(
+                        "subclass.warlock.fiend_patron",
+                    ))),
                     // Level 4
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::WARLOCK_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.warlock",
+                    ))),
                     LevelUpDecision::single_choice(ChoiceItem::Feat(
                         registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
                     )),
@@ -358,9 +358,9 @@ pub mod creatures {
                         2,
                     )])),
                     // Level 5
-                    LevelUpDecision::single_choice(ChoiceItem::Class(
-                        registry::classes::WARLOCK_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                        "class.warlock",
+                    ))),
                 ],
             );
 

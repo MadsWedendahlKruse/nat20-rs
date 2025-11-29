@@ -13,19 +13,9 @@
     "Light",
     "Finesse"
   ],
-  "damage_roll": {
-    "primary": {
-      "dice_roll": "1d6",
-      "damage_type": "slashing"
-    },
-    "bonus": [],
-    "source": {
-      "weapon": "melee"
-    }
-  },
-  "ability": "Strength",
-  "weapon_actions": [
-    "action.weapon.attack"
+  "damage": [
+    ["1d6", "slashing"]
   ],
+  "extra_weapon_actions": [],
   "effects": []
 }

@@ -8,7 +8,7 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::Ability,
-            id::ItemId,
+            id::{ClassId, ItemId, SubclassId},
             level::CharacterLevels,
             level_up::ChoiceItem,
             proficiency::ProficiencyLevel,
@@ -16,7 +16,7 @@ mod tests {
             skill::{Skill, SkillSet},
         },
         entities::character::Character,
-        registry,
+        registry::{self, registry::ClassesRegistry},
         systems::{self, level_up::LevelUpDecision},
     };
 
@@ -41,12 +41,11 @@ mod tests {
                 LevelUpDecision::single_choice(ChoiceItem::Background(
                     registry::backgrounds::SOLDIER_ID.clone(),
                 )),
-                LevelUpDecision::single_choice(ChoiceItem::Class(
-                    registry::classes::FIGHTER_ID.clone(),
-                )),
+                LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                    "class.fighter",
+                ))),
                 LevelUpDecision::AbilityScores(
-                    registry::classes::CLASS_REGISTRY
-                        .get(&registry::classes::FIGHTER_ID)
+                    ClassesRegistry::get(&ClassId::from_str("class.fighter"))
                         .unwrap()
                         .default_abilities
                         .clone(),
@@ -81,16 +80,16 @@ mod tests {
                     },
                 ),
                 // Level 2
-                LevelUpDecision::single_choice(ChoiceItem::Class(
-                    registry::classes::FIGHTER_ID.clone(),
-                )),
+                LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                    "class.fighter",
+                ))),
                 // Level 3
-                LevelUpDecision::single_choice(ChoiceItem::Class(
-                    registry::classes::FIGHTER_ID.clone(),
-                )),
-                LevelUpDecision::single_choice(ChoiceItem::Subclass(
-                    registry::classes::CHAMPION_ID.clone(),
-                )),
+                LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                    "class.fighter",
+                ))),
+                LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassId::from_str(
+                    "subclass.fighter.champion",
+                ))),
             ],
         );
 
@@ -99,17 +98,17 @@ mod tests {
             assert_eq!(levels.total_level(), 3);
             assert_eq!(
                 levels
-                    .class_level(&registry::classes::FIGHTER_ID.clone())
+                    .class_level(&ClassId::from_str("class.fighter"))
                     .unwrap()
                     .level(),
                 3
             );
             assert_eq!(
                 levels
-                    .class_level(&registry::classes::FIGHTER_ID.clone())
+                    .class_level(&ClassId::from_str("class.fighter"))
                     .unwrap()
                     .subclass(),
-                Some(&registry::classes::CHAMPION_ID.clone())
+                Some(&SubclassId::from_str("subclass.fighter.champion"))
             );
         }
 

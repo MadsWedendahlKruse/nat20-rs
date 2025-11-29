@@ -13,19 +13,9 @@
     "Thrown",
     "Range (9.144 / 36.576 m)"
   ],
-  "damage_roll": {
-    "primary": {
-      "dice_roll": "1d6",
-      "damage_type": "piercing"
-    },
-    "bonus": [],
-    "source": {
-      "weapon": "melee"
-    }
-  },
-  "ability": "Strength",
-  "weapon_actions": [
-    "action.weapon.attack"
+  "damage": [
+    ["1d6", "piercing"]
   ],
+  "extra_weapon_actions": [],
   "effects": []
 }

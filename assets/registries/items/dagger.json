@@ -15,19 +15,9 @@
     "Range (6.096 / 18.288 m)",
     "Light"
   ],
-  "damage_roll": {
-    "primary": {
-      "dice_roll": "1d4",
-      "damage_type": "piercing"
-    },
-    "bonus": [],
-    "source": {
-      "weapon": "melee"
-    }
-  },
-  "ability": "Strength",
-  "weapon_actions": [
-    "action.weapon.attack"
+  "damage": [
+    ["1d4", "piercing"]
   ],
+  "extra_weapon_actions": [],
   "effects": []
 }

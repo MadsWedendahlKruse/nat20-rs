@@ -36,7 +36,7 @@ pub enum TryEquipError {
     WrongWeaponType,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum EquipmentInstance {
     Armor(Armor),

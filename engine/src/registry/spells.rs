@@ -15,11 +15,11 @@ use crate::{
         },
         d20::{D20Check, D20CheckDC},
         damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
-        dice::DieSize,
-        id::SpellId,
+        dice::{DiceSet, DieSize},
+        id::{ResourceId, SpellId},
         modifier::{ModifierSet, ModifierSource},
         proficiency::{Proficiency, ProficiencyLevel},
-        resource::ResourceAmountMap,
+        resource::{ResourceAmount, ResourceAmountMap},
         saving_throw::SavingThrowKind,
         spells::{
             spell::{MagicSchool, Spell},
@@ -100,10 +100,12 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
                                             // Spell slots are not consumed by Counterspell
                                             let mut resources_refunded = ResourceAmountMap::new();
                                             resources_refunded.insert(
-                                                registry::resources::SPELL_SLOT_ID.clone(),
+                                                ResourceId::from_str("resource.spell_slot"),
                                                 trigger_action
                                                     .resource_cost
-                                                    .get(&registry::resources::SPELL_SLOT_ID)
+                                                    .get(&ResourceId::from_str(
+                                                        "resource.spell_slot",
+                                                    ))
                                                     .cloned()
                                                     .unwrap(),
                                             );
@@ -120,8 +122,8 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
                                             &COUNTERSPELL_ID.clone().into(),
                                             &reaction_context,
                                             &ResourceAmountMap::from([(
-                                                registry::resources::REACTION_ID.clone(),
-                                                registry::resources::REACTION.build_amount(1),
+                                                ResourceId::from_str("resource.reaction"),
+                                                ResourceAmount::Flat(1),
                                             )]),
                                             trigger_action.actor,
                                             ActionKindResult::Reaction { result },
@@ -137,8 +139,8 @@ static COUNTERSPELL: LazyLock<Spell> = LazyLock::new(|| {
             }),
         },
         ResourceAmountMap::from([(
-            registry::resources::REACTION_ID.clone(),
-            registry::resources::REACTION.build_amount(1),
+            ResourceId::from_str("resource.reaction"),
+            ResourceAmount::Flat(1),
         )]),
         Arc::new(|_, _, _| TargetingContext {
             kind: TargetingKind::Single,
@@ -188,7 +190,11 @@ static ELDRITCH_BLAST: LazyLock<Spell> = LazyLock::new(|| {
                 spell_attack_roll(world, caster, &ELDRITCH_BLAST_ID)
             }),
             damage: Arc::new(|_, _, _| {
-                DamageRoll::new(1, DieSize::D10, DamageType::Force, DamageSource::Spell)
+                DamageRoll::new(
+                    "1d10".parse().unwrap(),
+                    DamageType::Force,
+                    DamageSource::Spell,
+                )
             }),
             damage_on_miss: None,
         },
@@ -242,8 +248,10 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
                     _ => panic!("Invalid action context"),
                 };
                 DamageRoll::new(
-                    8 + (spell_level as u32 - 3),
-                    DieSize::D6,
+                    DiceSet {
+                        num_dice: 8 + (spell_level as u32 - 3),
+                        die_size: DieSize::D6,
+                    },
                     DamageType::Fire,
                     DamageSource::Spell,
                 )
@@ -285,8 +293,11 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
         ActionKind::UnconditionalDamage {
             damage: Arc::new(|_, _, _| {
                 // TODO: Damage roll hooks? e.g. Empowered Evocation
-                let mut damage_roll =
-                    DamageRoll::new(1, DieSize::D4, DamageType::Force, DamageSource::Spell);
+                let mut damage_roll = DamageRoll::new(
+                    "1d4".parse().unwrap(),
+                    DamageType::Force,
+                    DamageSource::Spell,
+                );
                 damage_roll
                     .primary
                     .dice_roll

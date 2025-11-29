@@ -22,7 +22,7 @@ use crate::{
         game_state::GameState,
     },
     entities::{character::CharacterTag, monster::MonsterTag},
-    registry,
+    registry::{self, registry::ClassesRegistry},
     systems::{
         self,
         d20::{D20CheckDCKind, D20ResultKind},
@@ -494,7 +494,7 @@ pub fn update_hit_points(world: &mut World, entity: Entity) {
                     .total();
 
             for (class_id, class_level) in class_levels.all_classes() {
-                if let Some(class) = registry::classes::CLASS_REGISTRY.get(class_id) {
+                if let Some(class) = ClassesRegistry::get(class_id) {
                     for level in 1..=class_level.level() {
                         let hp_increase =
                             if class_id == class_levels.first_class().unwrap() && level == 1 {

@@ -11,16 +11,16 @@ use crate::{
     components::{
         ability::{Ability, AbilityScore, AbilityScoreDistribution, AbilityScoreMap},
         health::hit_points::HitPoints,
-        id::{ActionId, ClassId, EffectId, Name},
+        id::{ActionId, ClassId, EffectId, Name, ResourceId},
         items::{equipment::loadout::EquipmentInstance, money::MonetaryValue},
         level::CharacterLevels,
         level_up::{ChoiceItem, LevelUpPrompt},
         modifier::ModifierSource,
         proficiency::{Proficiency, ProficiencyLevel},
-        resource::Resource,
+        resource::ResourceAmount,
         skill::{Skill, SkillSet},
     },
-    registry::{self, registry::ItemsRegistry},
+    registry::registry::{ClassesRegistry, ItemsRegistry},
     systems,
 };
 
@@ -464,7 +464,7 @@ pub struct LevelUpGains {
     pub hit_points: HitPoints,
     pub actions: Vec<ActionId>,
     pub effects: Vec<EffectId>,
-    pub resources: Vec<Resource>,
+    pub resources: Vec<(ResourceId, ResourceAmount)>,
 }
 
 pub fn level_up_gains(
@@ -473,9 +473,7 @@ pub fn level_up_gains(
     class_id: &ClassId,
     level: u8,
 ) -> LevelUpGains {
-    let class = registry::classes::CLASS_REGISTRY
-        .get(class_id)
-        .expect("Class should exist in the registry");
+    let class = ClassesRegistry::get(class_id).expect("Class should exist in the registry");
 
     let hit_points = systems::helpers::get_component_clone::<HitPoints>(world, entity);
     let mut effects = class

@@ -8,7 +8,7 @@ use crate::components::items::{
     money::{MonetaryValue, MonetaryValueError},
 };
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum ItemInstance {
     Item(Item),

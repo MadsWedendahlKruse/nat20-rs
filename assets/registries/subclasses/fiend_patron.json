@@ -1,0 +1,16 @@
+{
+    "id": "subclass.warlock.fiend_patron",
+    "base": {
+        "skill_proficiencies": [],
+        "skill_prompts": 0,
+        "armor_proficiencies": [],
+        "weapon_proficiencies": [],
+        "spellcasting": "third",
+        "effects_by_level": {
+            "6": []
+        },
+        "resources_by_level": {},
+        "prompts_by_level": {},
+        "actions_by_level": {}
+    }
+}

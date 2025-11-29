@@ -1,0 +1,5 @@
+{
+    "id": "resource.fighter.action_surge",
+    "kind": "flat",
+    "recharge": "short_rest"
+}

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::components::id::{
@@ -9,7 +10,7 @@ use crate::components::id::{
 
 use super::{ability::Ability, proficiency::ProficiencyLevel};
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub enum ModifierSource {
     Base, // The base value, no specific source
     Background(BackgroundId),
@@ -51,7 +52,7 @@ impl fmt::Display for ModifierSource {
             }
             ModifierSource::Race(id) => write!(f, "Race: {}", id),
             ModifierSource::Subrace(id) => write!(f, "Subrace: {}", id),
-            ModifierSource::None => write!(f, "No Modifier"),
+            ModifierSource::None => write!(f, "None"),
         }
     }
 }

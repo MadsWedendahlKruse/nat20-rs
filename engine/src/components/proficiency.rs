@@ -1,8 +1,11 @@
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 use crate::components::modifier::ModifierSource;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ProficiencyLevel {
     None,
     Proficient,

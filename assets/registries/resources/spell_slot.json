@@ -1,0 +1,5 @@
+{
+    "id": "resource.spell_slot",
+    "kind": "tiered",
+    "recharge": "long_rest"
+}

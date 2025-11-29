@@ -10,8 +10,10 @@ use std::{
 use serde::de::DeserializeOwned;
 
 use crate::components::{
-    id::ItemId,
+    class::{Class, Subclass},
+    id::{ClassId, ItemId, ResourceId, SubclassId},
     items::inventory::{ItemContainer, ItemInstance},
+    resource::ResourceDefinition,
 };
 
 #[derive(Debug, Clone)]
@@ -29,18 +31,11 @@ pub trait RegistryEntry {
 pub enum RegistryError {
     DuplicateIdError(String),
     LoadError(std::io::Error),
-    JsonError(serde_json::Error),
 }
 
 impl From<std::io::Error> for RegistryError {
     fn from(err: std::io::Error) -> Self {
         RegistryError::LoadError(err)
-    }
-}
-
-impl From<serde_json::Error> for RegistryError {
-    fn from(err: serde_json::Error) -> Self {
-        RegistryError::JsonError(err)
     }
 }
 
@@ -52,8 +47,6 @@ where
     pub fn load_from_directory(directory: impl AsRef<Path>) -> Result<Self, RegistryError> {
         let mut entries = HashMap::new();
 
-        println!("Loading registry from directory: {:?}", directory.as_ref());
-
         for entry in fs::read_dir(directory)? {
             let entry = entry?;
             let path: PathBuf = entry.path();
@@ -63,9 +56,14 @@ where
             }
 
             let file_contents: String = fs::read_to_string(&path)?;
-            let value: V = serde_json::from_str(&file_contents)?;
+            let serde_result = serde_json::from_str::<V>(&file_contents);
+            if let Err(e) = serde_result {
+                eprintln!("Failed to deserialize file {:?}: {}", path, e.to_string());
+                continue;
+            }
+            let value = serde_result.unwrap();
 
-            let id: K = value.id().clone();
+            let id = value.id().clone();
 
             if let Some(_) = entries.insert(id.clone(), value) {
                 return Err(RegistryError::DuplicateIdError(format!(
@@ -88,11 +86,37 @@ impl RegistryEntry for ItemInstance {
     }
 }
 
+impl RegistryEntry for ResourceDefinition {
+    type Id = ResourceId;
+
+    fn id(&self) -> Self::Id {
+        self.id.clone()
+    }
+}
+
+impl RegistryEntry for Class {
+    type Id = ClassId;
+
+    fn id(&self) -> Self::Id {
+        self.id.clone()
+    }
+}
+
+impl RegistryEntry for Subclass {
+    type Id = SubclassId;
+
+    fn id(&self) -> Self::Id {
+        self.id.clone()
+    }
+}
+
 pub struct RegistrySet {
-    // pub actions: HashMap<ActionId, Action>,
-    // pub classes: HashMap<ClassId, Class>,
+    // pub actions: Registry<ActionId, Action>,
+    pub classes: Registry<ClassId, Class>,
+    pub subclasses: Registry<SubclassId, Subclass>,
     pub items: Registry<ItemId, ItemInstance>,
-    // pub spells: HashMap<SpellId, Spell>,
+    // pub spells: Registry<SpellId, Spell>,
+    pub resources: Registry<ResourceId, ResourceDefinition>,
 }
 
 impl RegistrySet {
@@ -101,28 +125,18 @@ impl RegistrySet {
     ) -> Result<Self, RegistryError> {
         let root_directory = root_directory.as_ref();
 
-        // let classes_directory = root_directory.join("classes");
+        let classes_directory = root_directory.join("classes");
+        let subclasses_directory = root_directory.join("subclasses");
         // let spells_directory  = root_directory.join("spells");
         let items_directory = root_directory.join("items");
-
-        // TODO: Some unit tests rely on the contents of the registries
-        // TODO: Load order matters if there are dependencies between registries
-        // OOOOORRRR since they're just usind IDs to reference each other, maybe it doesn't
-        // Probably something like:
-        // 1. Resources
-        // 2. Effects
-        // 3. Feats
-        // 4. Actions
-        // 5. Spells
-        // 6. Items
-        // 7. Classes
-        // 8. Backgrounds
-        // 9. Races
+        let resources_directory = root_directory.join("resources");
 
         Ok(Self {
-            // classes: Registry::load_from_directory(classes_directory)?,
+            classes: Registry::load_from_directory(classes_directory)?,
+            subclasses: Registry::load_from_directory(subclasses_directory)?,
             // spells: Registry::load_from_directory(spells_directory)?,
             items: Registry::load_from_directory(items_directory)?,
+            resources: Registry::load_from_directory(resources_directory)?,
         })
     }
 }
@@ -142,13 +156,40 @@ static REGISTRIES: LazyLock<RwLock<RegistrySet>> = LazyLock::new(|| {
 pub struct ItemsRegistry;
 pub struct SpellsRegistry;
 pub struct ClassesRegistry;
+pub struct SubclassesRegistry;
+pub struct ResourcesRegistry;
 
 pub fn registry() -> std::sync::RwLockReadGuard<'static, RegistrySet> {
     REGISTRIES.read().unwrap()
 }
 
+// TODO: Right now it's convenient to just clone everything, but we might want to
+// consider the performance implications of this later on.
+
 impl ItemsRegistry {
     pub fn get(id: &ItemId) -> Option<ItemInstance> {
         registry().items.entries.get(id).cloned()
+    }
+}
+
+impl ResourcesRegistry {
+    pub fn get(id: &ResourceId) -> Option<ResourceDefinition> {
+        registry().resources.entries.get(id).cloned()
+    }
+}
+
+impl ClassesRegistry {
+    pub fn get(id: &ClassId) -> Option<Class> {
+        registry().classes.entries.get(id).cloned()
+    }
+
+    pub fn keys() -> Vec<ClassId> {
+        registry().classes.entries.keys().cloned().collect()
+    }
+}
+
+impl SubclassesRegistry {
+    pub fn get(id: &SubclassId) -> Option<Subclass> {
+        registry().subclasses.entries.get(id).cloned()
     }
 }

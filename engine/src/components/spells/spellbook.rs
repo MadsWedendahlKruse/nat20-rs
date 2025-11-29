@@ -5,6 +5,7 @@ use crate::{
         ability::Ability,
         actions::action::{ActionContext, ActionMap, ActionProvider},
         id::{ActionId, ResourceId, SpellId},
+        resource::ResourceAmount,
     },
     registry, systems,
 };
@@ -133,8 +134,11 @@ impl ActionProvider for Spellbook {
 
                 let mut resource_cost = spell.action().resource_cost().clone();
                 resource_cost.insert(
-                    registry::resources::SPELL_SLOT_ID.clone(),
-                    registry::resources::SPELL_SLOT.build_cost(level, 1),
+                    ResourceId::from_str("resource.spell_slot"),
+                    ResourceAmount::Tiered {
+                        tier: level,
+                        amount: 1,
+                    },
                 );
 
                 actions

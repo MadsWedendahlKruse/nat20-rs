@@ -16,7 +16,7 @@ use crate::{
         actions::targeting::TargetingRange,
         d20::D20Check,
         damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
-        dice::{DiceSet, DieSize},
+        dice::DiceSet,
         id::{ActionId, EffectId},
         items::{
             equipment::slots::{EquipmentSlot, SlotProvider},
@@ -166,18 +166,31 @@ pub static MELEE_RANGE_DEFAULT: LazyLock<TargetingRange> =
 pub static MELEE_RANGE_REACH: LazyLock<TargetingRange> =
     LazyLock::new(|| TargetingRange::new::<foot>(10.0));
 
-#[serde_as]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(from = "WeaponDefinition")]
 pub struct Weapon {
     item: Item,
     category: WeaponCategory,
     kind: WeaponKind,
-    #[serde_as(as = "HashSet<DisplayFromStr>")]
     properties: HashSet<WeaponProperties>,
     damage_roll: DamageRoll,
     ability: Ability,
     weapon_actions: Vec<ActionId>,
     effects: Vec<EffectId>,
+}
+
+#[serde_as]
+#[derive(Deserialize)]
+pub struct WeaponDefinition {
+    pub item: Item,
+    pub kind: WeaponKind,
+    pub category: WeaponCategory,
+    #[serde_as(as = "HashSet<DisplayFromStr>")]
+    pub properties: HashSet<WeaponProperties>,
+    #[serde_as(as = "Vec<(DisplayFromStr, _)>")]
+    pub damage: Vec<(DiceSet, DamageType)>,
+    pub extra_weapon_actions: Vec<ActionId>,
+    pub effects: Vec<EffectId>,
 }
 
 impl Weapon {
@@ -186,7 +199,7 @@ impl Weapon {
         kind: WeaponKind,
         category: WeaponCategory,
         properties: HashSet<WeaponProperties>,
-        damage: Vec<(u32, DieSize, DamageType)>,
+        damage: Vec<(DiceSet, DamageType)>,
         extra_weapon_actions: Vec<ActionId>,
         effects: Vec<EffectId>,
     ) -> Self {
@@ -208,12 +221,12 @@ impl Weapon {
         if damage.is_empty() {
             panic!("Weapon must have at least one damage type");
         }
-        let (num_dice, die_size, damage_type) = damage[0];
+        let (dice, damage_type) = damage[0];
         let source = DamageSource::Weapon(kind.clone());
-        let mut damage_roll = DamageRoll::new(num_dice, die_size, damage_type, source.clone());
+        let mut damage_roll = DamageRoll::new(dice, damage_type, source.clone());
         for i in 1..damage.len() {
-            let (num_dice, die_size, damage_type) = damage[i];
-            damage_roll.add_bonus(num_dice, die_size, damage_type);
+            let (dice, damage_type) = damage[i];
+            damage_roll.add_bonus(dice, damage_type);
         }
 
         weapon_actions.extend(extra_weapon_actions);
@@ -389,6 +402,20 @@ impl SlotProvider for Weapon {
     }
 }
 
+impl From<WeaponDefinition> for Weapon {
+    fn from(def: WeaponDefinition) -> Self {
+        Weapon::new(
+            def.item,
+            def.kind,
+            def.category,
+            def.properties,
+            def.damage,
+            def.extra_weapon_actions,
+            def.effects,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -398,6 +425,7 @@ mod tests {
 
     use crate::components::{
         ability::AbilityScore,
+        dice::DieSize,
         id::ItemId,
         items::{inventory::ItemInstance, item::ItemRarity, money::MonetaryValue},
     };
@@ -419,7 +447,7 @@ mod tests {
             WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse, WeaponProperties::Enchantment(1)]),
-            vec![(1, DieSize::D8, DamageType::Slashing)],
+            vec![("1d8".parse().unwrap(), DamageType::Slashing)],
             vec![],
             vec![],
         );
@@ -452,7 +480,7 @@ mod tests {
             WeaponKind::Ranged,
             WeaponCategory::Simple,
             HashSet::new(),
-            vec![(1, DieSize::D6, DamageType::Piercing)],
+            vec![("1d6".parse().unwrap(), DamageType::Piercing)],
             vec![],
             vec![],
         );
@@ -473,7 +501,7 @@ mod tests {
             WeaponKind::Melee,
             WeaponCategory::Simple,
             HashSet::from([WeaponProperties::Finesse, WeaponProperties::Light]),
-            vec![(1, DieSize::D4, DamageType::Piercing)],
+            vec![("1d4".parse().unwrap(), DamageType::Piercing)],
             vec![],
             vec![],
         );
@@ -484,20 +512,20 @@ mod tests {
 
     #[test]
     fn weapon_enchantment_property() {
-        let item = Item::new(
-            ItemId::from_str("item.magic_sword"),
-            "Magic Sword".to_string(),
-            "A sword with enchantment".to_string(),
-            Mass::new::<pound>(3.0),
-            MonetaryValue::from_str("1 GP").unwrap(),
-            ItemRarity::Uncommon,
-        );
+        let item = Item {
+            id: ItemId::from_str("item.magic_sword"),
+            name: "Magic Sword".to_string(),
+            description: "A sword with enchantment".to_string(),
+            weight: Mass::new::<pound>(3.0),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
+            rarity: ItemRarity::Uncommon,
+        };
         let weapon = Weapon::new(
             item,
             WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Enchantment(2)]),
-            vec![(1, DieSize::D6, DamageType::Slashing)],
+            vec![("1d6".parse().unwrap(), DamageType::Slashing)],
             vec![],
             vec![],
         );
@@ -506,20 +534,20 @@ mod tests {
 
     #[test]
     fn weapon_determine_ability_finesse() {
-        let item = Item::new(
-            ItemId::from_str("item.rapier"),
-            "Rapier".to_string(),
-            "A finesse weapon".to_string(),
-            Mass::new::<pound>(2.5),
-            MonetaryValue::from_str("1 GP").unwrap(),
-            ItemRarity::Common,
-        );
+        let item = Item {
+            id: ItemId::from_str("item.rapier"),
+            name: "Rapier".to_string(),
+            description: "A finesse weapon".to_string(),
+            weight: Mass::new::<pound>(2.5),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
+            rarity: ItemRarity::Common,
+        };
         let weapon = Weapon::new(
             item,
             WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
-            vec![(1, DieSize::D8, DamageType::Piercing)],
+            vec![("1d8".parse().unwrap(), DamageType::Piercing)],
             vec![],
             vec![],
         );
@@ -537,20 +565,20 @@ mod tests {
 
     #[test]
     fn weapon_name_and_effects() {
-        let item = Item::new(
-            ItemId::from_str("item.warhammer"),
-            "Warhammer".to_string(),
-            "A heavy warhammer".to_string(),
-            Mass::new::<pound>(8.0),
-            MonetaryValue::from_str("1 GP").unwrap(),
-            ItemRarity::Rare,
-        );
+        let item = Item {
+            id: ItemId::from_str("item.warhammer"),
+            name: "Warhammer".to_string(),
+            description: "A heavy warhammer".to_string(),
+            weight: Mass::new::<pound>(8.0),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
+            rarity: ItemRarity::Rare,
+        };
         let weapon = Weapon::new(
             item,
             WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::new(),
-            vec![(1, DieSize::D10, DamageType::Bludgeoning)],
+            vec![("1d10".parse().unwrap(), DamageType::Bludgeoning)],
             vec![],
             vec![],
         );
@@ -560,14 +588,14 @@ mod tests {
 
     #[test]
     fn weapon_actions_exist() {
-        let item = Item::new(
-            ItemId::from_str("item.shortbow"),
-            "Shortbow".to_string(),
-            "A ranged weapon".to_string(),
-            Mass::new::<pound>(2.0),
-            MonetaryValue::from_str("1 GP").unwrap(),
-            ItemRarity::Common,
-        );
+        let item = Item {
+            id: ItemId::from_str("item.shortbow"),
+            name: "Shortbow".to_string(),
+            description: "A ranged weapon".to_string(),
+            weight: Mass::new::<pound>(2.0),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
+            rarity: ItemRarity::Common,
+        };
         let weapon = Weapon::new(
             item,
             WeaponKind::Ranged,
@@ -575,7 +603,7 @@ mod tests {
             HashSet::from([WeaponProperties::Range(TargetingRange::with_max::<foot>(
                 80.0, 320.0,
             ))]),
-            vec![(1, DieSize::D6, DamageType::Piercing)],
+            vec![("1d6".parse().unwrap(), DamageType::Piercing)],
             vec![],
             vec![],
         );
@@ -584,20 +612,20 @@ mod tests {
 
     #[test]
     fn weapon_range_melee_default() {
-        let item = Item::new(
-            ItemId::from_str("item.club"),
-            "Club".to_string(),
-            "A simple club".to_string(),
-            Mass::new::<pound>(2.0),
-            MonetaryValue::from_str("1 GP").unwrap(),
-            ItemRarity::Common,
-        );
+        let item = Item {
+            id: ItemId::from_str("item.club"),
+            name: "Club".to_string(),
+            description: "A simple club".to_string(),
+            weight: Mass::new::<pound>(2.0),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
+            rarity: ItemRarity::Common,
+        };
         let weapon = Weapon::new(
             item,
             WeaponKind::Melee,
             WeaponCategory::Simple,
             HashSet::new(),
-            vec![(1, DieSize::D4, DamageType::Bludgeoning)],
+            vec![("1d4".parse().unwrap(), DamageType::Bludgeoning)],
             vec![],
             vec![],
         );
@@ -606,20 +634,20 @@ mod tests {
 
     #[test]
     fn weapon_range_melee_reach() {
-        let item = Item::new(
-            ItemId::from_str("item.whip"),
-            "Whip".to_string(),
-            "A whip with reach".to_string(),
-            Mass::new::<pound>(3.0),
-            MonetaryValue::from_str("1 GP").unwrap(),
-            ItemRarity::Uncommon,
-        );
+        let item = Item {
+            id: ItemId::from_str("item.whip"),
+            name: "Whip".to_string(),
+            description: "A whip with reach".to_string(),
+            weight: Mass::new::<pound>(3.0),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
+            rarity: ItemRarity::Uncommon,
+        };
         let weapon = Weapon::new(
             item,
             WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Reach]),
-            vec![(1, DieSize::D4, DamageType::Slashing)],
+            vec![("1d4".parse().unwrap(), DamageType::Slashing)],
             vec![],
             vec![],
         );
@@ -628,14 +656,14 @@ mod tests {
 
     #[test]
     fn weapon_range_ranged() {
-        let item = Item::new(
-            ItemId::from_str("item.longbow"),
-            "Longbow".to_string(),
-            "A long ranged bow".to_string(),
-            Mass::new::<pound>(2.0),
-            MonetaryValue::from_str("1 GP").unwrap(),
-            ItemRarity::Rare,
-        );
+        let item = Item {
+            id: ItemId::from_str("item.longbow"),
+            name: "Longbow".to_string(),
+            description: "A long ranged bow".to_string(),
+            weight: Mass::new::<pound>(2.0),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
+            rarity: ItemRarity::Rare,
+        };
         let weapon = Weapon::new(
             item,
             WeaponKind::Ranged,
@@ -643,7 +671,7 @@ mod tests {
             HashSet::from([WeaponProperties::Range(TargetingRange::with_max::<foot>(
                 150.0, 600.0,
             ))]),
-            vec![(1, DieSize::D8, DamageType::Piercing)],
+            vec![("1d8".parse().unwrap(), DamageType::Piercing)],
             vec![],
             vec![],
         );
@@ -655,20 +683,20 @@ mod tests {
 
     #[test]
     fn slot_provider_valid_slots_melee() {
-        let item = Item::new(
-            ItemId::from_str("item.axe"),
-            "Axe".to_string(),
-            "A hand axe".to_string(),
-            Mass::new::<pound>(2.0),
-            MonetaryValue::from_str("1 GP").unwrap(),
-            ItemRarity::Common,
-        );
+        let item = Item {
+            id: ItemId::from_str("item.axe"),
+            name: "Axe".to_string(),
+            description: "A hand axe".to_string(),
+            weight: Mass::new::<pound>(2.0),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
+            rarity: ItemRarity::Common,
+        };
         let weapon = Weapon::new(
             item,
             WeaponKind::Melee,
             WeaponCategory::Simple,
             HashSet::new(),
-            vec![(1, DieSize::D6, DamageType::Slashing)],
+            vec![("1d6".parse().unwrap(), DamageType::Slashing)],
             vec![],
             vec![],
         );
@@ -679,14 +707,14 @@ mod tests {
 
     #[test]
     fn slot_provider_valid_slots_ranged() {
-        let item = Item::new(
-            ItemId::from_str("item.crossbow"),
-            "Crossbow".to_string(),
-            "A light crossbow".to_string(),
-            Mass::new::<pound>(3.0),
-            MonetaryValue::from_str("1 GP").unwrap(),
-            ItemRarity::Uncommon,
-        );
+        let item = Item {
+            id: ItemId::from_str("item.crossbow"),
+            name: "Crossbow".to_string(),
+            description: "A light crossbow".to_string(),
+            weight: Mass::new::<pound>(3.0),
+            value: MonetaryValue::from_str("1 GP").unwrap(),
+            rarity: ItemRarity::Uncommon,
+        };
         let weapon = Weapon::new(
             item,
             WeaponKind::Ranged,
@@ -694,7 +722,7 @@ mod tests {
             HashSet::from([WeaponProperties::Range(TargetingRange::with_max::<foot>(
                 80.0, 320.0,
             ))]),
-            vec![(1, DieSize::D8, DamageType::Piercing)],
+            vec![("1d8".parse().unwrap(), DamageType::Piercing)],
             vec![],
             vec![],
         );
@@ -703,40 +731,40 @@ mod tests {
         assert!(slots.contains(&EquipmentSlot::RangedOffHand));
     }
 
-    #[test]
-    fn serialize() {
-        let item = Item::new(
-            ItemId::from_str("item.spear"),
-            "Spear".to_string(),
-            "A simple spear".to_string(),
-            Mass::new::<pound>(3.0),
-            MonetaryValue::from_str("1 GP").unwrap(),
-            ItemRarity::Common,
-        );
-        let weapon = Weapon::new(
-            item,
-            WeaponKind::Melee,
-            WeaponCategory::Simple,
-            HashSet::from([
-                WeaponProperties::Thrown,
-                WeaponProperties::Range(TargetingRange::with_max::<foot>(20.0, 60.0)),
-            ]),
-            vec![(1, DieSize::D6, DamageType::Piercing)],
-            vec![],
-            vec![],
-        );
-        let serialized = serde_json::to_string_pretty(&weapon).unwrap();
-        println!("Weapon:\n{}\n", serialized);
-        let deserialized: Weapon = serde_json::from_str(&serialized).unwrap();
-        assert_eq!(weapon, deserialized);
+    // #[test]
+    // fn serialize() {
+    //     let item = Item {
+    //         id: ItemId::from_str("item.spear"),
+    //         name: "Spear".to_string(),
+    //         description: "A simple spear".to_string(),
+    //         weight: Mass::new::<pound>(3.0),
+    //         value: MonetaryValue::from_str("1 GP").unwrap(),
+    //         rarity: ItemRarity::Common,
+    //     };
+    //     let weapon = Weapon::new(
+    //         item,
+    //         WeaponKind::Melee,
+    //         WeaponCategory::Simple,
+    //         HashSet::from([
+    //             WeaponProperties::Thrown,
+    //             WeaponProperties::Range(TargetingRange::with_max::<foot>(20.0, 60.0)),
+    //         ]),
+    //         vec![("1d6".parse().unwrap(), DamageType::Piercing)],
+    //         vec![],
+    //         vec![],
+    //     );
+    //     let serialized = serde_json::to_string_pretty(&weapon).unwrap();
+    //     println!("Weapon:\n{}\n", serialized);
+    //     let deserialized: Weapon = serde_json::from_str(&serialized).unwrap();
+    //     assert_eq!(weapon, deserialized);
 
-        let item_instance = ItemInstance::Weapon(weapon);
-        let serialized_instance = serde_json::to_string_pretty(&item_instance).unwrap();
-        println!("ItemInstance::Weapon\n{}\n", serialized_instance);
-        let deserialized_instance: ItemInstance =
-            serde_json::from_str(&serialized_instance).unwrap();
-        assert_eq!(item_instance, deserialized_instance);
+    //     let item_instance = ItemInstance::Weapon(weapon);
+    //     let serialized_instance = serde_json::to_string_pretty(&item_instance).unwrap();
+    //     println!("ItemInstance::Weapon\n{}\n", serialized_instance);
+    //     let deserialized_instance: ItemInstance =
+    //         serde_json::from_str(&serialized_instance).unwrap();
+    //     assert_eq!(item_instance, deserialized_instance);
 
-        assert_eq!(serialized_instance, serialized);
-    }
+    //     assert_eq!(serialized_instance, serialized);
+    // }
 }

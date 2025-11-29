@@ -10,10 +10,9 @@ mod tests {
                 targeting::TargetInstance,
             },
             damage::{DamageRoll, DamageSource, DamageType},
-            dice::DieSize,
             health::hit_points::HitPoints,
-            id::ActionId,
-            resource::{RechargeRule, ResourceAmountMap, ResourceMap},
+            id::{ActionId, ResourceId},
+            resource::{RechargeRule, ResourceAmount, ResourceAmountMap, ResourceMap},
         },
         engine::event::{ActionData, ActionDecision, ActionDecisionKind},
         registry, systems,
@@ -39,13 +38,13 @@ mod tests {
                 systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter);
             // Check that the fighter has one charge of Action Surge
             assert!(resources.can_afford(
-                &registry::resources::ACTION_SURGE_ID,
-                &registry::resources::ACTION_SURGE.build_amount(1)
+                &ResourceId::from_str("resource.fighter.action_surge"),
+                &ResourceAmount::Flat(1),
             ));
             // Check that the fighter has one action before using Action Surge
             assert!(resources.can_afford(
-                &registry::resources::ACTION_ID,
-                &registry::resources::ACTION.build_amount(1)
+                &ResourceId::from_str("resource.action"),
+                &ResourceAmount::Flat(1),
             ));
         }
 
@@ -76,8 +75,8 @@ mod tests {
         // Check that the fighter has two actions after using Action Surge
         assert!(
             systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &registry::resources::ACTION_ID,
-                &registry::resources::ACTION.build_amount(2)
+                &ResourceId::from_str("resource.action"),
+                &ResourceAmount::Flat(2),
             ),
         );
 
@@ -101,18 +100,18 @@ mod tests {
         // Check that the fighter has one action after the turn starts
         assert!(
             !resources.can_afford(
-                &registry::resources::ACTION_ID,
-                &registry::resources::ACTION.build_amount(2)
+                &ResourceId::from_str("resource.action"),
+                &ResourceAmount::Flat(2),
             ) && resources.can_afford(
-                &registry::resources::ACTION_ID,
-                &registry::resources::ACTION.build_amount(1)
+                &ResourceId::from_str("resource.action"),
+                &ResourceAmount::Flat(1),
             )
         );
 
         // Check that the Action Surge action is out of charges
         assert!(!resources.can_afford(
-            &registry::resources::ACTION_SURGE_ID,
-            &registry::resources::ACTION_SURGE.build_amount(1)
+            &ResourceId::from_str("resource.fighter.action_surge"),
+            &ResourceAmount::Flat(1),
         ));
     }
 
@@ -133,15 +132,19 @@ mod tests {
         // Check that the fighter has two charges of Second Wind
         assert!(
             systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &registry::resources::SECOND_WIND_ID,
-                &registry::resources::SECOND_WIND.build_amount(2)
+                &ResourceId::from_str("resource.fighter.second_wind"),
+                &ResourceAmount::Flat(2),
             )
         );
 
         // Let the fighter take some damage
         let damage_source = ActionKind::UnconditionalDamage {
             damage: Arc::new(|_, _, _| {
-                DamageRoll::new(1, DieSize::D4, DamageType::Force, DamageSource::Spell)
+                DamageRoll::new(
+                    "1d4".parse().unwrap(),
+                    DamageType::Force,
+                    DamageSource::Spell,
+                )
             }),
         };
         systems::health::damage(
@@ -202,8 +205,8 @@ mod tests {
         // Check that the fighter has no stacks of Extra Attack (yet)
         assert!(
             !systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &registry::resources::EXTRA_ATTACK_ID,
-                &registry::resources::EXTRA_ATTACK.build_amount(1)
+                &ResourceId::from_str("resource.extra_attack"),
+                &ResourceAmount::Flat(1),
             ),
             "Fighter should have no stacks of Extra Attack"
         );
@@ -231,16 +234,16 @@ mod tests {
         // Check that the fighter has one stack of Extra Attack
         assert!(
             systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &registry::resources::EXTRA_ATTACK_ID,
-                &registry::resources::EXTRA_ATTACK.build_amount(1)
+                &ResourceId::from_str("resource.extra_attack"),
+                &ResourceAmount::Flat(1),
             ),
             "Fighter should have one stack of Extra Attack"
         );
         // Check that the fighter has no Actions left
         assert!(
             !systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &registry::resources::ACTION_ID,
-                &registry::resources::ACTION.build_amount(1)
+                &ResourceId::from_str("resource.action"),
+                &ResourceAmount::Flat(1),
             ),
             "Fighter should have no Actions left"
         );
@@ -263,8 +266,8 @@ mod tests {
         // Check that the fighter has no stacks of Extra Attack left
         assert!(
             !systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &registry::resources::EXTRA_ATTACK_ID,
-                &registry::resources::EXTRA_ATTACK.build_amount(1)
+                &ResourceId::from_str("resource.extra_attack"),
+                &ResourceAmount::Flat(1),
             ),
             "Fighter should have no stacks of Extra Attack left"
         );

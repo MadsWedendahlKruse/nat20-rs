@@ -1,19 +1,24 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::components::{
-    ability::{Ability, AbilityScoreDistribution},
-    dice::DieSize,
-    id::{ActionId, ClassId, EffectId, SubclassId},
-    items::equipment::{armor::ArmorType, weapon::WeaponCategory},
-    level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
-    modifier::ModifierSource,
-    resource::Resource,
-    skill::Skill,
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    components::{
+        ability::{Ability, AbilityScoreDistribution},
+        dice::DieSize,
+        id::{ActionId, ClassId, EffectId, ResourceId, SubclassId},
+        items::equipment::{armor::ArmorType, weapon::WeaponCategory},
+        level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
+        modifier::ModifierSource,
+        resource::ResourceAmount,
+        skill::Skill,
+    },
+    registry::registry::SubclassesRegistry,
 };
 
 /// Classes and subclasses share a lot of common properties, so we define a base struct
 // TODO: Better name
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClassBase {
     /// Skills that can be chosen from when gaining the (sub)class
     pub skill_proficiencies: HashSet<Skill>,
@@ -31,7 +36,7 @@ pub struct ClassBase {
     // pub features_by_level: HashMap<u8, Vec<ClassFeature>>,
     /// Passive effects that are always active for the class or subclass.
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
-    pub resources_by_level: HashMap<u8, Vec<Resource>>,
+    pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceAmount)>>,
     /// Class specific prompts that can be made at each level.
     /// For example, a Fighter might choose a fighting style at level 1.
     /// TODO: Include subclass prompts?
@@ -40,7 +45,8 @@ pub struct ClassBase {
     pub actions_by_level: HashMap<u8, Vec<ActionId>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SpellcastingProgression {
     /// Full spellcasting progression, e.g. Wizard.
     Full,
@@ -52,7 +58,8 @@ pub enum SpellcastingProgression {
     None,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(from = "ClassDefinition")]
 pub struct Class {
     pub id: ClassId,
     pub hit_die: DieSize,
@@ -63,9 +70,30 @@ pub struct Class {
     /// Saving throw proficiencies granted at level 1 (e.g. STR + CON for Fighter)
     pub saving_throw_proficiencies: [Ability; 2],
 
-    pub subclasses: HashMap<SubclassId, Subclass>,
+    pub subclasses: HashSet<SubclassId>,
 
     pub base: ClassBase,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ClassDefinition {
+    pub id: ClassId,
+    pub hit_die: DieSize,
+    pub hp_per_level: u8,
+    pub default_abilities: AbilityScoreDistribution,
+    pub saving_throw_proficiencies: [Ability; 2],
+    pub subclass_level: u8,
+    pub subclasses: HashSet<SubclassId>,
+    pub feat_levels: HashSet<u8>,
+    pub skill_proficiencies: HashSet<Skill>,
+    pub skill_prompts: u8,
+    pub armor_proficiencies: HashSet<ArmorType>,
+    pub weapon_proficiencies: HashSet<WeaponCategory>,
+    pub spellcasting: SpellcastingProgression,
+    pub effects_by_level: HashMap<u8, Vec<EffectId>>,
+    pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceAmount)>>,
+    pub prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
+    pub actions_by_level: HashMap<u8, Vec<ActionId>>,
 }
 
 impl Class {
@@ -76,7 +104,7 @@ impl Class {
         default_abilities: AbilityScoreDistribution,
         saving_throw_proficiencies: [Ability; 2],
         subclass_level: u8,
-        subclasses: HashMap<SubclassId, Subclass>,
+        subclasses: HashSet<SubclassId>,
         feat_levels: HashSet<u8>,
         skill_proficiencies: HashSet<Skill>,
         skill_prompts: u8,
@@ -84,7 +112,7 @@ impl Class {
         weapon_proficiencies: HashSet<WeaponCategory>,
         spellcasting: SpellcastingProgression,
         effects_by_level: HashMap<u8, Vec<EffectId>>,
-        resources_by_level: HashMap<u8, Vec<Resource>>,
+        resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceAmount)>>,
         mut prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
         actions_by_level: HashMap<u8, Vec<ActionId>>,
     ) -> Self {
@@ -108,8 +136,8 @@ impl Class {
             .push(LevelUpPrompt::Choice(ChoiceSpec::single(
                 "Subclass",
                 subclasses
-                    .keys()
-                    .cloned()
+                    .clone()
+                    .into_iter()
                     .map(ChoiceItem::Subclass)
                     .collect(),
             )));
@@ -146,8 +174,11 @@ impl Class {
         }
     }
 
-    pub fn subclass(&self, subclass_id: &SubclassId) -> Option<&Subclass> {
-        self.subclasses.get(subclass_id)
+    pub fn subclass(&self, subclass_id: &SubclassId) -> Option<Subclass> {
+        if !self.subclasses.contains(subclass_id) {
+            return None;
+        }
+        SubclassesRegistry::get(subclass_id)
     }
 
     pub fn spellcasting_progression(
@@ -168,7 +199,31 @@ impl Class {
     }
 }
 
-#[derive(Debug, Clone)]
+impl From<ClassDefinition> for Class {
+    fn from(def: ClassDefinition) -> Self {
+        Class::new(
+            def.id,
+            def.hit_die,
+            def.hp_per_level,
+            def.default_abilities,
+            def.saving_throw_proficiencies,
+            def.subclass_level,
+            def.subclasses,
+            def.feat_levels,
+            def.skill_proficiencies,
+            def.skill_prompts,
+            def.armor_proficiencies,
+            def.weapon_proficiencies,
+            def.spellcasting,
+            def.effects_by_level,
+            def.resources_by_level,
+            def.prompts_by_level,
+            def.actions_by_level,
+        )
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Subclass {
     pub id: SubclassId,
     pub base: ClassBase,

@@ -6,15 +6,20 @@ use crate::{
         id::ResourceId,
         resource::{RechargeRule, ResourceAmountMap, ResourceError, ResourceMap},
     },
+    registry::registry::ResourcesRegistry,
     systems,
 };
 
 // TODO: No idea where to put this
 pub fn recharge(world: &mut World, entity: Entity, rest_type: &RechargeRule) {
-    for (_, resource) in
+    for (resource_id, resource) in
         systems::helpers::get_component_mut::<ResourceMap>(world, entity).iter_mut()
     {
-        resource.recharge_full(rest_type);
+        if let Some(resource_definition) = ResourcesRegistry::get(&resource_id) {
+            if resource_definition.recharge.is_recharged_by(rest_type) {
+                resource.recharge_full();
+            }
+        }
     }
 
     systems::helpers::get_component_mut::<ActionCooldownMap>(world, entity)

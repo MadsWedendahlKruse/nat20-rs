@@ -8,11 +8,10 @@ use crate::{
             action::{Action, ActionContext, ActionKind},
             targeting::TargetingContext,
         },
-        id::SpellId,
+        id::{ResourceId, SpellId},
         resource::{ResourceAmount, ResourceAmountMap},
     },
     engine::event::Event,
-    registry,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -47,10 +46,12 @@ impl Spell {
     ) -> Self {
         let action_id = id.clone().into();
         let mut resource_cost = resource_cost;
-        if base_level > 0 && !resource_cost.contains_key(&registry::resources::SPELL_SLOT_ID) {
+        if base_level > 0
+            && !resource_cost.contains_key(&ResourceId::from_str("resource.spell_slot"))
+        {
             // Ensure the spell has a spell slot cost if it's not a cantrip
             resource_cost.insert(
-                registry::resources::SPELL_SLOT_ID.clone(),
+                ResourceId::from_str("resource.spell_slot"),
                 ResourceAmount::Tiered {
                     tier: base_level,
                     amount: 1,
@@ -79,7 +80,7 @@ impl Spell {
 
     pub fn base_level(&self) -> u8 {
         for (resource, cost) in self.action.resource_cost() {
-            if *resource == *registry::resources::SPELL_SLOT_ID {
+            if *resource == ResourceId::from_str("resource.spell_slot") {
                 match cost {
                     ResourceAmount::Tiered { tier, .. } => {
                         return *tier;

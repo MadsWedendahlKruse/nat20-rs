@@ -4,6 +4,8 @@ use std::{
     sync::LazyLock,
 };
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     components::{
         ability::Ability,
@@ -14,7 +16,7 @@ use crate::{
         modifier::ModifierSource,
         skill::Skill,
     },
-    registry,
+    registry::{self, registry::ClassesRegistry},
 };
 
 static ABILITY_SCORE_POINT_COST: LazyLock<HashMap<u8, u8>> = LazyLock::new(|| {
@@ -32,7 +34,8 @@ static ABILITY_SCORE_POINT_COST: LazyLock<HashMap<u8, u8>> = LazyLock::new(|| {
 
 static ABILITY_SCORE_POINTS: u8 = 27;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ChoiceItem {
     Action(ActionId),
     Background(BackgroundId),
@@ -106,7 +109,7 @@ impl std::fmt::Display for ChoiceItem {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChoiceSpec {
     pub id: String,
     pub label: String,
@@ -146,7 +149,7 @@ impl ChoiceSpec {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LevelUpPrompt {
     Choice(ChoiceSpec),
     AbilityScores(HashMap<u8, u8>, u8),
@@ -189,9 +192,8 @@ impl LevelUpPrompt {
     pub fn class() -> Self {
         LevelUpPrompt::Choice(ChoiceSpec::single(
             "Class",
-            registry::classes::CLASS_REGISTRY
-                .keys()
-                .cloned()
+            ClassesRegistry::keys()
+                .into_iter()
                 .map(ChoiceItem::Class)
                 .collect(),
         ))

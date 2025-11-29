@@ -185,7 +185,7 @@ mod tests {
             WeaponKind::Melee,
             WeaponCategory::Martial,
             HashSet::from([WeaponProperties::Finesse]),
-            vec![(1, DieSize::D8, DamageType::Slashing)],
+            vec![("1d8".parse().unwrap(), DamageType::Slashing)],
             vec![],
             vec![],
         );

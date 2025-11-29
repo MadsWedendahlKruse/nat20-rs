@@ -3,15 +3,20 @@ use std::{collections::HashMap, sync::LazyLock};
 use hecs::{Entity, World};
 
 use crate::{
-    components::{class::SpellcastingProgression, level::CharacterLevels, resource::ResourceMap},
-    registry,
+    components::{
+        class::SpellcastingProgression,
+        id::ResourceId,
+        level::CharacterLevels,
+        resource::{ResourceAmount, ResourceBudgetKind, ResourceMap},
+    },
+    registry::registry::ClassesRegistry,
 };
 
 pub fn spellcaster_levels(world: &World, entity: Entity) -> u8 {
     let mut spellcaster_levels = 0.0;
     if let Ok(class_levels) = world.get::<&CharacterLevels>(entity) {
         for (class_id, level_progression) in class_levels.all_classes() {
-            if let Some(class) = registry::classes::CLASS_REGISTRY.get(&class_id) {
+            if let Some(class) = ClassesRegistry::get(&class_id) {
                 let spellcasting_progression = class.spellcasting_progression(
                     // TODO: Not entirely sure why it's necessary to do it like this
                     level_progression.subclass(),
@@ -66,7 +71,11 @@ pub fn update_spell_slots(world: &mut World, entity: Entity) {
         for (level, &num_slots) in slots_vec.iter().enumerate() {
             let level = level as u8 + 1;
             resources.add(
-                registry::resources::SPELL_SLOT.build_resource(level, num_slots),
+                ResourceId::from_str("resource.spell_slot"),
+                ResourceBudgetKind::from(ResourceAmount::Tiered {
+                    tier: level,
+                    amount: num_slots,
+                }),
                 false,
             );
         }

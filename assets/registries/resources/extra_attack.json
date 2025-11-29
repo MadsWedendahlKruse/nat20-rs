@@ -1,0 +1,5 @@
+{
+    "id": "resource.extra_attack",
+    "kind": "flat",
+    "recharge": "never"
+}

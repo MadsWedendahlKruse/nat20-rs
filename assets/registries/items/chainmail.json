@@ -12,7 +12,6 @@
   "dexterity_bonus": {
     "limited": 0
   },
-  "stealth_disadvantage": true,
   "effects": [
     "effect.armor.stealth_disadvantage"
   ]

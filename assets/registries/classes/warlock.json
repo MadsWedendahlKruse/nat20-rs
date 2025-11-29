@@ -1,0 +1,53 @@
+{
+    "id": "class.warlock",
+    "hit_die": "d8",
+    "hp_per_level": 5,
+    "default_abilities": {
+        "scores": {
+            "intelligence": 12,
+            "strength": 8,
+            "dexterity": 14,
+            "wisdom": 10,
+            "charisma": 15,
+            "constitution": 13
+        },
+        "plus_2_bonus": "charisma",
+        "plus_1_bonus": "constitution"
+    },
+    "saving_throw_proficiencies": [
+        "wisdom",
+        "charisma"
+    ],
+    "subclass_level": 3,
+    "subclasses": [
+        "subclass.warlock.fiend_patron"
+    ],
+    "feat_levels": [
+        19,
+        8,
+        16,
+        4,
+        12
+    ],
+    "skill_proficiencies": [
+        "investigation",
+        "nature",
+        "deception",
+        "religion",
+        "intimidation",
+        "arcana",
+        "history"
+    ],
+    "skill_prompts": 2,
+    "armor_proficiencies": [
+        "light"
+    ],
+    "weapon_proficiencies": [
+        "simple"
+    ],
+    "spellcasting": "third",
+    "effects_by_level": {},
+    "resources_by_level": {},
+    "prompts_by_level": {},
+    "actions_by_level": {}
+}
