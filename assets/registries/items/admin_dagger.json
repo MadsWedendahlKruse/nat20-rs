@@ -22,15 +22,23 @@
     ],
     [
       "1d4",
+      "slashing"
+    ],
+    [
+      "1d4",
+      "bludgeoning"
+    ],
+    [
+      "1d4",
+      "force"
+    ],
+    [
+      "1d4",
       "fire"
     ],
     [
       "1d4",
-      "cold"
-    ],
-    [
-      "1d4",
-      "lightning"
+      "radiant"
     ],
     [
       "1d4",
@@ -42,11 +50,23 @@
     ],
     [
       "1d4",
+      "necrotic"
+    ],
+    [
+      "1d4",
+      "cold"
+    ],
+    [
+      "1d4",
+      "lightning"
+    ],
+    [
+      "1d4",
       "thunder"
     ],
     [
       "1d4",
-      "radiant"
+      "psychic"
     ]
   ],
   "extra_weapon_actions": [],
