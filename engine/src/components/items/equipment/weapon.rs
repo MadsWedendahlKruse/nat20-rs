@@ -8,7 +8,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 use strum::{Display, EnumIter};
-use uom::si::length::foot;
+use uom::si::{action::Action, length::foot};
 
 use crate::{
     components::{
@@ -216,7 +216,7 @@ impl Weapon {
             WeaponKind::Ranged => Ability::Dexterity,
         };
 
-        let mut weapon_actions = vec![registry::actions::WEAPON_ATTACK_ID.clone()];
+        let mut weapon_actions = vec![ActionId::from_str("action.weapon_attack")];
 
         if damage.is_empty() {
             panic!("Weapon must have at least one damage type");
@@ -273,12 +273,10 @@ impl Weapon {
         self.add_ability_modifier(ability_scores, &mut attack_roll.modifiers_mut());
 
         let enchantment = self.enchantment();
-        if enchantment > 0 {
-            attack_roll.add_modifier(
-                ModifierSource::Custom("Enchantment".to_string()),
-                enchantment as i32,
-            );
-        }
+        attack_roll.add_modifier(
+            ModifierSource::Custom("Enchantment".to_string()),
+            enchantment as i32,
+        );
 
         AttackRoll::new(attack_roll, DamageSource::from_weapon(self))
     }

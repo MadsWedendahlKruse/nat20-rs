@@ -4,15 +4,16 @@ use std::{
     fs,
     hash::Hash,
     path::{Path, PathBuf},
-    sync::{LazyLock, RwLock},
+    sync::LazyLock,
 };
 
 use serde::de::DeserializeOwned;
 
 use crate::components::{
+    actions::action::Action,
     background::Background,
     class::{Class, Subclass},
-    id::{BackgroundId, ClassId, ItemId, ResourceId, SubclassId},
+    id::{ActionId, BackgroundId, ClassId, ItemId, ResourceId, SubclassId},
     items::inventory::{ItemContainer, ItemInstance},
     resource::ResourceDefinition,
 };
@@ -25,7 +26,7 @@ pub struct Registry<K, V> {
 pub trait RegistryEntry {
     type Id: Eq + Hash + Clone + Debug;
 
-    fn id(&self) -> Self::Id;
+    fn id(&self) -> &Self::Id;
 }
 
 macro_rules! impl_registry_entry {
@@ -94,45 +95,13 @@ where
 impl RegistryEntry for ItemInstance {
     type Id = ItemId;
 
-    fn id(&self) -> Self::Id {
-        self.item().id.clone()
-    }
-}
-
-impl RegistryEntry for ResourceDefinition {
-    type Id = ResourceId;
-
-    fn id(&self) -> Self::Id {
-        self.id.clone()
-    }
-}
-
-impl RegistryEntry for Class {
-    type Id = ClassId;
-
-    fn id(&self) -> Self::Id {
-        self.id.clone()
-    }
-}
-
-impl RegistryEntry for Subclass {
-    type Id = SubclassId;
-
-    fn id(&self) -> Self::Id {
-        self.id.clone()
-    }
-}
-
-impl RegistryEntry for Background {
-    type Id = BackgroundId;
-
-    fn id(&self) -> Self::Id {
-        self.id.clone()
+    fn id(&self) -> &Self::Id {
+        &self.item().id
     }
 }
 
 pub struct RegistrySet {
-    // pub actions: Registry<ActionId, Action>,
+    pub actions: Registry<ActionId, Action>,
     pub backgrounds: Registry<BackgroundId, Background>,
     pub classes: Registry<ClassId, Class>,
     pub subclasses: Registry<SubclassId, Subclass>,
@@ -147,6 +116,7 @@ impl RegistrySet {
     ) -> Result<Self, RegistryError> {
         let root_directory = root_directory.as_ref();
 
+        let actions_directory = root_directory.join("actions");
         let backgrounds_directory = root_directory.join("backgrounds");
         let classes_directory = root_directory.join("classes");
         let subclasses_directory = root_directory.join("subclasses");
@@ -155,6 +125,7 @@ impl RegistrySet {
         let resources_directory = root_directory.join("resources");
 
         Ok(Self {
+            actions: Registry::load_from_directory(actions_directory)?,
             backgrounds: Registry::load_from_directory(backgrounds_directory)?,
             classes: Registry::load_from_directory(classes_directory)?,
             subclasses: Registry::load_from_directory(subclasses_directory)?,
@@ -165,50 +136,44 @@ impl RegistrySet {
     }
 }
 
-static REGISTRIES: LazyLock<RwLock<RegistrySet>> = LazyLock::new(|| {
+static REGISTRIES: LazyLock<RegistrySet> = LazyLock::new(|| {
     // TODO: Make this configurable
     // TODO: Temporary workaround for getting the correct path in tests
     let registry_root: PathBuf =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../assets/registries");
 
-    let set =
-        RegistrySet::load_from_root_directory(registry_root).expect("Failed to load registries");
-
-    RwLock::new(set)
+    RegistrySet::load_from_root_directory(registry_root).expect("Failed to load registries")
 });
-
-// pub struct ItemsRegistry;
-// pub struct SpellsRegistry;
-// pub struct ClassesRegistry;
-// pub struct SubclassesRegistry;
-// pub struct ResourcesRegistry;
-// pub struct BackgroundsRegistry;
-
-pub fn registry() -> std::sync::RwLockReadGuard<'static, RegistrySet> {
-    REGISTRIES.read().unwrap()
-}
-
-// TODO: Right now it's convenient to just clone everything, but we might want to
-// consider the performance implications of this later on.
 
 macro_rules! define_registry {
     ($registry_name:ident, $key_type:ty, $value_type:ty, $field:ident) => {
         pub struct $registry_name;
 
         impl $registry_name {
-            pub fn get(key: &$key_type) -> Option<$value_type> {
-                registry().$field.entries.get(key).cloned()
+            pub fn get(key: &$key_type) -> Option<&'static $value_type> {
+                REGISTRIES.$field.entries.get(key)
             }
 
-            pub fn keys() -> Vec<$key_type> {
-                registry().$field.entries.keys().cloned().collect()
+            pub fn keys() -> impl Iterator<Item = &'static $key_type> + 'static {
+                REGISTRIES.$field.entries.keys()
+            }
+
+            pub fn values() -> impl Iterator<Item = &'static $value_type> + 'static {
+                REGISTRIES.$field.entries.values()
             }
         }
     };
 }
 
-define_registry!(ItemsRegistry, ItemId, ItemInstance, items);
-define_registry!(ResourcesRegistry, ResourceId, ResourceDefinition, resources);
+impl_registry_entry!(Action, ActionId, id);
+impl_registry_entry!(Background, BackgroundId, id);
+impl_registry_entry!(Class, ClassId, id);
+impl_registry_entry!(Subclass, SubclassId, id);
+impl_registry_entry!(ResourceDefinition, ResourceId, id);
+
+define_registry!(ActionsRegistry, ActionId, Action, actions);
+define_registry!(BackgroundsRegistry, BackgroundId, Background, backgrounds);
 define_registry!(ClassesRegistry, ClassId, Class, classes);
 define_registry!(SubclassesRegistry, SubclassId, Subclass, subclasses);
-define_registry!(BackgroundsRegistry, BackgroundId, Background, backgrounds);
+define_registry!(ResourcesRegistry, ResourceId, ResourceDefinition, resources);
+define_registry!(ItemsRegistry, ItemId, ItemInstance, items);

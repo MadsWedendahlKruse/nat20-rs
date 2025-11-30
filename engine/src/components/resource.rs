@@ -351,7 +351,7 @@ pub struct ResourceDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(untagged, rename_all = "snake_case")]
 pub enum ResourceAmount {
     Flat(u8),
     Tiered { tier: u8, amount: u8 },

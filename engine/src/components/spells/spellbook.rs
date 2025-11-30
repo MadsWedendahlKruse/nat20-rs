@@ -4,7 +4,7 @@ use crate::{
     components::{
         ability::Ability,
         actions::action::{ActionContext, ActionMap, ActionProvider},
-        id::{ActionId, ResourceId, SpellId},
+        id::{ResourceId, SpellId},
         resource::ResourceAmount,
     },
     registry, systems,
@@ -116,7 +116,10 @@ impl ActionProvider for Spellbook {
                 .expect(format!("Missing spell in registry: {} ", spell_id).as_str());
 
             if spell.is_cantrip() {
-                let context = ActionContext::Spell { level: 0 };
+                let context = ActionContext::Spell {
+                    id: spell_id.clone(),
+                    level: 0,
+                };
                 actions.insert(
                     spell.action().id().clone(),
                     vec![(context, spell.action().resource_cost().clone())],
@@ -130,7 +133,10 @@ impl ActionProvider for Spellbook {
             }
 
             for level in spell.base_level()..=systems::spells::MAX_SPELL_LEVEL {
-                let context = ActionContext::Spell { level };
+                let context = ActionContext::Spell {
+                    id: spell_id.clone(),
+                    level,
+                };
 
                 let mut resource_cost = spell.action().resource_cost().clone();
                 resource_cost.insert(

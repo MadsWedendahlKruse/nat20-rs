@@ -21,19 +21,25 @@ use crate::{
         game_state::GameState,
         geometry::WorldGeometry,
     },
-    registry,
+    registry::{self, registry::ActionsRegistry},
     systems::{self, geometry::RaycastFilter},
 };
 
 pub fn get_action(action_id: &ActionId) -> Option<&Action> {
     // Start by checking if the action exists in the action registry
+    if let Some(action) = ActionsRegistry::get(action_id) {
+        return Some(action);
+    }
+
+    // TODO: Placeholder untill migrated fully to ActionsRegistry
     if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id) {
         return Some(action);
     }
+
     // If not found, check the spell registry
     let spell_id = action_id.into();
     if let Some(spell) = registry::spells::SPELL_REGISTRY.get(&spell_id) {
-        return Some(spell.action());
+        // return Some(spell.action());
     }
     None
 }

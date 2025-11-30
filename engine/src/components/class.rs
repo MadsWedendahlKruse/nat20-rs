@@ -176,7 +176,7 @@ impl Class {
         }
     }
 
-    pub fn subclass(&self, subclass_id: &SubclassId) -> Option<Subclass> {
+    pub fn subclass(&self, subclass_id: &SubclassId) -> Option<&Subclass> {
         if !self.subclasses.contains(subclass_id) {
             return None;
         }

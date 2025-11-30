@@ -5,6 +5,7 @@ use parry3d::{
     na::{Isometry3, Point3},
     shape::Shape,
 };
+use serde::{Deserialize, Serialize};
 use uom::{
     Conversion,
     si::{
@@ -34,7 +35,7 @@ pub enum TargetingKind {
 }
 
 // TODO: parry3d shapes?
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AreaShape {
     Arc { angle: Angle, length: Length },        // e.g. Cone of Cold
     Sphere { radius: Length },                   // e.g. Fireball

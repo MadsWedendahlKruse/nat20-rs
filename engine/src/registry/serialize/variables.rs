@@ -1,0 +1,32 @@
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+};
+
+use hecs::{Entity, World};
+
+use crate::{components::actions::action::ActionContext, systems};
+
+pub type VariableFunction = dyn Fn(&World, Entity, &ActionContext) -> i32 + Send + Sync;
+
+pub type VariableMap = HashMap<String, Arc<VariableFunction>>;
+
+pub static PARSER_VARIABLES: LazyLock<VariableMap> = LazyLock::new(|| {
+    HashMap::from([
+        (
+            "spell_level".to_string(),
+            Arc::new(|_world: &World, _entity: Entity, context: &ActionContext| {
+                if let ActionContext::Spell { level, .. } = context {
+                    return *level as i32;
+                }
+                0
+            }) as Arc<VariableFunction>,
+        ),
+        (
+            "caster_level".to_string(),
+            Arc::new(|world: &World, entity: Entity, _context: &ActionContext| {
+                systems::spells::spellcaster_levels(world, entity) as i32
+            }) as Arc<VariableFunction>,
+        ),
+    ])
+});

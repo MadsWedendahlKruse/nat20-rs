@@ -81,7 +81,11 @@ impl ModifierSet {
     where
         T: Into<i32>,
     {
-        self.modifiers.insert(source.clone(), value.into());
+        let value = value.into();
+        if value == 0 {
+            return;
+        }
+        self.modifiers.insert(source.clone(), value);
     }
 
     pub fn remove_modifier(&mut self, source: &ModifierSource) {

@@ -185,7 +185,7 @@ impl LevelUpPrompt {
         LevelUpPrompt::Choice(ChoiceSpec::single(
             "Background",
             BackgroundsRegistry::keys()
-                .into_iter()
+                .cloned()
                 .map(ChoiceItem::Background)
                 .collect(),
         ))
@@ -195,7 +195,7 @@ impl LevelUpPrompt {
         LevelUpPrompt::Choice(ChoiceSpec::single(
             "Class",
             ClassesRegistry::keys()
-                .into_iter()
+                .cloned()
                 .map(ChoiceItem::Class)
                 .collect(),
         ))

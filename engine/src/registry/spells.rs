@@ -244,7 +244,7 @@ static FIREBALL: LazyLock<Spell> = LazyLock::new(|| {
             half_damage_on_save: true,
             damage: Arc::new(|_, _, action_context| {
                 let spell_level = match action_context {
-                    ActionContext::Spell { level } => *level,
+                    ActionContext::Spell { level, .. } => *level,
                     _ => panic!("Invalid action context"),
                 };
                 DamageRoll::new(
@@ -310,7 +310,7 @@ static MAGIC_MISSILE: LazyLock<Spell> = LazyLock::new(|| {
         registry::actions::DEFAULT_RESOURCE_COST.clone(),
         Arc::new(|_, _, action_context| {
             let spell_level = match action_context {
-                ActionContext::Spell { level } => *level,
+                ActionContext::Spell { level, .. } => *level,
                 // TODO: Better error message? Replace other places too
                 _ => panic!("Invalid action context"),
             };

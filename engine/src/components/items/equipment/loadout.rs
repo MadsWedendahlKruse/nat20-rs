@@ -347,7 +347,7 @@ impl ActionProvider for Loadout {
             if let Some(weapon) = self.weapon_in_hand(slot) {
                 let weapon_actions = weapon.weapon_actions();
                 for action_id in weapon_actions {
-                    if let Some((action, _)) = registry::actions::ACTION_REGISTRY.get(action_id) {
+                    if let Some(action) = systems::actions::get_action(&action_id) {
                         let context = ActionContext::Weapon { slot: slot.clone() };
                         let resource_cost = &action.resource_cost().clone();
                         actions
@@ -367,6 +367,7 @@ impl ActionProvider for Loadout {
 
 #[cfg(test)]
 mod tests {
+    use crate::components::id::ActionId;
     use crate::registry;
     use crate::test_utils::fixtures;
 
@@ -592,7 +593,10 @@ mod tests {
         // Both melee and ranged attacks use the same ActionId, but their
         // contexts are different
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[&registry::actions::WEAPON_ATTACK_ID].len(), 2);
+        assert_eq!(
+            actions[&ActionId::from_str("action.weapon_attack")].len(),
+            2
+        );
         for (_, data) in actions {
             for (context, ..) in data {
                 match context {

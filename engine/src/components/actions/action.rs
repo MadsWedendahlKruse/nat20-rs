@@ -5,6 +5,7 @@ use std::{
 };
 
 use hecs::{Entity, World};
+use serde::Deserialize;
 
 use crate::{
     components::{
@@ -15,15 +16,16 @@ use crate::{
         },
         dice::{DiceSetRoll, DiceSetRollResult},
         health::life_state::LifeState,
-        id::{ActionId, EffectId, EntityIdentifier},
+        id::{ActionId, EffectId, EntityIdentifier, SpellId},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
-        resource::{RechargeRule, ResourceAmountMap, ResourceError},
+        resource::{RechargeRule, ResourceAmountMap},
         saving_throw::SavingThrowDC,
     },
     engine::{
         event::{Event, ReactionData},
         game_state::GameState,
     },
+    registry::serialize::action::ActionDefinition,
     systems::{self},
 };
 
@@ -39,35 +41,42 @@ pub enum ActionContext {
     /// most spells have different effects based on the level at which they are cast.
     /// For example, Fireball deals more damage when cast at a higher level.
     Spell {
+        /// Having the ID available here is useful for e.g. determining spell casting
+        /// ability for attack rolls and saving throw DCs.
+        id: SpellId,
         level: u8,
     },
     // TODO: Not sure if Other is needed
     Other,
 }
 
+pub type DamageFunction = dyn Fn(&World, Entity, &ActionContext) -> DamageRoll + Send + Sync;
+pub type AttackRollFunction = dyn Fn(&World, Entity, &ActionContext) -> AttackRoll + Send + Sync;
+pub type SavingThrowFunction =
+    dyn Fn(&World, Entity, &ActionContext) -> SavingThrowDC + Send + Sync;
+pub type HealFunction = dyn Fn(&World, Entity, &ActionContext) -> DiceSetRoll + Send + Sync;
+pub type ReactionFunction = dyn Fn(&mut GameState, &ReactionData) + Send + Sync;
+
 /// Represents the kind of action that can be performed.
 #[derive(Clone)]
 pub enum ActionKind {
     /// Actions that deal unconditional damage. Is this only Magic Missile?
-    UnconditionalDamage {
-        damage: Arc<dyn Fn(&World, Entity, &ActionContext) -> DamageRoll + Send + Sync>,
-    },
+    UnconditionalDamage { damage: Arc<DamageFunction> },
     /// Actions that require an attack roll to hit a target, and deal damage on hit.
     /// Some actions may have a damage roll on a failed attack roll (e.g. Acid Arrow)
     AttackRollDamage {
-        attack_roll: Arc<dyn Fn(&World, Entity, &ActionContext) -> AttackRoll + Send + Sync>,
-        damage: Arc<dyn Fn(&World, Entity, &ActionContext) -> DamageRoll + Send + Sync>,
-        damage_on_miss:
-            Option<Arc<dyn Fn(&World, Entity, &ActionContext) -> DamageRoll + Send + Sync>>,
+        attack_roll: Arc<AttackRollFunction>,
+        damage: Arc<DamageFunction>,
+        damage_on_miss: Option<Arc<DamageFunction>>,
     },
     /// Actions that require a saving throw to avoid or reduce damage.
     /// Most of the time, these actions will deal damage on a failed save,
     /// and half damage on a successful save.
     SavingThrowDamage {
         // TODO: Is action context ever relevant for saving throws?
-        saving_throw: Arc<dyn Fn(&World, Entity, &ActionContext) -> SavingThrowDC + Send + Sync>,
+        saving_throw: Arc<SavingThrowFunction>,
         half_damage_on_save: bool,
-        damage: Arc<dyn Fn(&World, Entity, &ActionContext) -> DamageRoll + Send + Sync>,
+        damage: Arc<DamageFunction>,
     },
     /// Actions that apply an effect to a target without requiring an attack roll or
     /// saving throw. TODO: Not sure if this is actually needed, since most effects
@@ -75,7 +84,7 @@ pub enum ActionKind {
     UnconditionalEffect { effect: EffectId },
     /// Actions that require a saving throw to avoid or reduce an effect.
     SavingThrowEffect {
-        saving_throw: Arc<dyn Fn(&World, Entity, &ActionContext) -> SavingThrowDC + Send + Sync>,
+        saving_throw: Arc<SavingThrowFunction>,
         effect: EffectId,
     },
     /// Actions that apply a beneficial effect to a target, and therefore do not require
@@ -83,9 +92,7 @@ pub enum ActionKind {
     BeneficialEffect { effect: EffectId },
     /// Actions that heal a target. These actions do not require an attack roll or saving throw.
     /// They simply heal the target for a certain amount of hit points.
-    Healing {
-        heal: Arc<dyn Fn(&World, Entity, &ActionContext) -> DiceSetRoll + Send + Sync>,
-    },
+    Healing { heal: Arc<HealFunction> },
     /// Utility actions that do not deal damage or heal, but have some other effect.
     /// These actions may include buffs, debuffs, or other effects that do not fit into the
     /// other categories (e.g. teleportation, Knock, etc.).
@@ -100,7 +107,7 @@ pub enum ActionKind {
 
     Reaction {
         // TODO: What should this return?
-        reaction: Arc<dyn Fn(&mut GameState, &ReactionData) + Send + Sync>,
+        reaction: Arc<ReactionFunction>,
     },
     /// Custom actions can have any kind of effect, including damage, healing, or utility.
     /// Please note that this should only be used for actions that don't fit into the
@@ -206,18 +213,23 @@ impl PartialEq for ReactionResult {
     }
 }
 
-#[derive(Clone)]
+pub type TargetingFunction =
+    dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync;
+pub type ReactionTriggerFunction = dyn Fn(Entity, &Event) -> bool + Send + Sync;
+
+#[derive(Clone, Deserialize)]
+#[serde(from = "ActionDefinition")]
 pub struct Action {
     pub id: ActionId,
     pub description: String,
     pub kind: ActionKind,
-    pub targeting: Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
+    pub targeting: Arc<TargetingFunction>,
     /// e.g. Action, Bonus Action, Reaction
     pub resource_cost: ResourceAmountMap,
     /// Optional cooldown for the action
     pub cooldown: Option<RechargeRule>,
     /// If the action is a reaction, this will describe what triggers the reaction.
-    pub reaction_trigger: Option<Arc<dyn Fn(Entity, &Event) -> bool + Send + Sync>>,
+    pub reaction_trigger: Option<Arc<ReactionTriggerFunction>>,
 }
 
 /// Represents the result of performing an action on a single target. For actions that affect multiple targets,

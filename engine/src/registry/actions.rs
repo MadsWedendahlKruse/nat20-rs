@@ -36,7 +36,6 @@ pub static ACTION_REGISTRY: LazyLock<HashMap<ActionId, (Action, Option<ActionCon
             (INDOMITABLE_ID.clone(), INDOMITABLE.to_owned()),
             (SECOND_WIND_ID.clone(), SECOND_WIND.to_owned()),
             (TACTICAL_MIND_ID.clone(), TACTICAL_MIND.to_owned()),
-            (WEAPON_ATTACK_ID.clone(), (WEAPON_ATTACK.to_owned(), None)),
         ])
     });
 
@@ -295,73 +294,6 @@ static TACTICAL_MIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(
             })),
         },
         Some(ActionContext::Other),
-    )
-});
-
-pub static WEAPON_ATTACK_ID: LazyLock<ActionId> =
-    LazyLock::new(|| ActionId::from_str("action.weapon.attack"));
-
-static WEAPON_ATTACK: LazyLock<Action> = LazyLock::new(|| Action {
-    id: registry::actions::WEAPON_ATTACK_ID.clone(),
-    description: "Make an attack with a weapon you are wielding.".to_string(),
-    kind: ActionKind::AttackRollDamage {
-        attack_roll: WEAPON_ATTACK_ROLL.clone(),
-        damage: WEAPON_DAMAGE_ROLL.clone(),
-        damage_on_miss: None,
-    },
-    targeting: WEAPON_TARGETING.clone(),
-    resource_cost: DEFAULT_RESOURCE_COST.clone(),
-    cooldown: None,
-    reaction_trigger: None,
-});
-
-// TODO: Some of this seems a bit circular?
-static WEAPON_ATTACK_ROLL: LazyLock<
-    Arc<dyn Fn(&World, Entity, &ActionContext) -> AttackRoll + Send + Sync>,
-> = LazyLock::new(|| {
-    Arc::new(
-        |world: &World, entity: Entity, action_context: &ActionContext| {
-            if let ActionContext::Weapon { slot } = action_context {
-                return systems::combat::attack_roll(world, entity, slot);
-            }
-            panic!("Action context must be Weapon");
-        },
-    )
-});
-
-static WEAPON_DAMAGE_ROLL: LazyLock<
-    Arc<dyn Fn(&World, Entity, &ActionContext) -> DamageRoll + Send + Sync>,
-> = LazyLock::new(|| {
-    Arc::new(
-        |world: &World, entity: Entity, action_context: &ActionContext| {
-            if let ActionContext::Weapon { slot } = action_context {
-                return systems::combat::damage_roll(world, entity, slot);
-            }
-            panic!("Action context must be Weapon");
-        },
-    )
-});
-
-static WEAPON_TARGETING: LazyLock<
-    Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
-> = LazyLock::new(|| {
-    Arc::new(
-        |world: &World, entity: Entity, action_context: &ActionContext| {
-            if let ActionContext::Weapon { slot } = action_context {
-                TargetingContext {
-                    kind: TargetingKind::Single,
-                    range: systems::helpers::get_component::<Loadout>(world, entity)
-                        .weapon_in_hand(slot)
-                        .unwrap()
-                        .range()
-                        .clone(),
-                    require_line_of_sight: true,
-                    allowed_targets: EntityFilter::not_dead(),
-                }
-            } else {
-                panic!("Action context must be Weapon");
-            }
-        },
     )
 });
 

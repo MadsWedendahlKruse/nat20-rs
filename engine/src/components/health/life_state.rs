@@ -1,6 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use crate::components::d20::D20CheckResult;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LifeState {
     // TODO: Conscious instead of 'Normal'?
     Normal,
@@ -20,7 +23,8 @@ pub static DEATH_SAVING_THROW_DC: u8 = 10;
 pub static DEATH_SAVING_THROW_SUCCESS_THRESHOLD: u8 = 3;
 pub static DEATH_SAVING_THROW_FAILURE_THRESHOLD: u8 = 3;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct DeathSavingThrows {
     successes: u8,
     failures: u8,

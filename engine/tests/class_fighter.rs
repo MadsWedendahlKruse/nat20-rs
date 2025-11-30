@@ -213,7 +213,7 @@ mod tests {
 
         // Fighter makes a weapon attack, which costs one Action and grants one stack of Extra Attack
         let available_actions = systems::actions::available_actions(&game_state.world, fighter);
-        let action_id = registry::actions::WEAPON_ATTACK_ID.clone();
+        let action_id = ActionId::from_str("action.weapon_attack");
         assert!(
             available_actions.contains_key(&action_id),
             "Fighter should have Weapon Attack action"
