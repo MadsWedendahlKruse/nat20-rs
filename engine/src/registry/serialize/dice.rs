@@ -10,10 +10,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     components::{
-        actions::action::{ActionContext, DamageFunction},
+        actions::action::{ActionContext, DamageFunction, HealFunction},
         damage::{DamageRoll, DamageSource, DamageType},
-        dice::DiceSet,
-        modifier::ModifierSource,
+        dice::{DiceSet, DiceSetRoll},
+        modifier::{ModifierSet, ModifierSource},
     },
     registry::serialize::{
         parser::{Evaluable, Parser},
@@ -116,6 +116,68 @@ impl TryFrom<String> for DamageEquation {
 
 impl From<DamageEquation> for String {
     fn from(equation: DamageEquation) -> Self {
+        equation.raw
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct HealEquation {
+    pub raw: String,
+    pub function: Arc<HealFunction>,
+}
+
+impl Display for HealEquation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.raw)
+    }
+}
+
+impl FromStr for HealEquation {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Example format: "(1d8 + spell_level)"
+
+        if let Ok(dice_expression) = Parser::new(s).parse_dice_expression() {
+            println!("Evaluating heal equation (raw): {}", s);
+            println!(
+                "Evaluating heal equation (dice_expression): {:?}",
+                dice_expression
+            );
+            let function = Arc::new(
+                move |world: &World, entity: Entity, action_context: &ActionContext| {
+                    let (num_dice, size, modifier) = dice_expression
+                        .evaluate(world, entity, action_context, &PARSER_VARIABLES)
+                        .unwrap();
+
+                    DiceSetRoll {
+                        dice: DiceSet::from_str(format!("{}d{}", num_dice, size).as_str()).unwrap(),
+                        modifiers: ModifierSet::from(ModifierSource::Base, modifier),
+                    }
+                },
+            );
+
+            return Ok(HealEquation {
+                raw: s.to_string(),
+                function,
+            });
+        }
+
+        Err(format!("Unknown heal formula: {}", s))
+    }
+}
+
+impl TryFrom<String> for HealEquation {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<HealEquation> for String {
+    fn from(equation: HealEquation) -> Self {
         equation.raw
     }
 }

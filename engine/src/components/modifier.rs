@@ -69,6 +69,12 @@ impl ModifierSet {
         }
     }
 
+    pub fn from(source: ModifierSource, value: i32) -> Self {
+        let mut modifiers = HashMap::new();
+        modifiers.insert(source, value);
+        Self { modifiers }
+    }
+
     pub fn from_iter<I>(iter: I) -> Self
     where
         I: IntoIterator<Item = (ModifierSource, i32)>,

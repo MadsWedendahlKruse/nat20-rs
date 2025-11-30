@@ -26,7 +26,7 @@ mod tests {
 
         // Check that the fighter has the Action Surge action
         let available_actions = systems::actions::available_actions(&game_state.world, fighter);
-        let action_id = registry::actions::ACTION_SURGE_ID.clone();
+        let action_id = ActionId::from_str("action.fighter.action_surge");
         assert!(
             available_actions.contains_key(&action_id),
             "Fighter should have Action Surge action"
@@ -122,7 +122,7 @@ mod tests {
 
         // Check that the fighter has the Second Wind action
         let available_actions = systems::actions::available_actions(&game_state.world, fighter);
-        let action_id = registry::actions::SECOND_WIND_ID.clone();
+        let action_id = ActionId::from_str("action.fighter.second_wind");
         assert!(
             available_actions.contains_key(&action_id),
             "Fighter should have Second Wind action"

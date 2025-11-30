@@ -26,33 +26,36 @@ use crate::{
     systems,
 };
 
-static WEAPON_TARGETING: LazyLock<Arc<TargetingFunction>> = LazyLock::new(|| {
-    Arc::new(
-        |world: &World, entity: Entity, action_context: &ActionContext| {
-            if let ActionContext::Weapon { slot } = action_context {
-                TargetingContext {
-                    kind: TargetingKind::Single,
-                    range: systems::helpers::get_component::<Loadout>(world, entity)
-                        .weapon_in_hand(slot)
-                        .unwrap()
-                        .range()
-                        .clone(),
-                    require_line_of_sight: true,
-                    allowed_targets: EntityFilter::not_dead(),
-                }
-            } else {
-                panic!("Action context must be Weapon");
-            }
-        },
-    )
-});
-
 static TARGETING_DEFAULTS: LazyLock<HashMap<String, Arc<TargetingFunction>>> =
     LazyLock::new(|| {
-        HashMap::from([(
-            "weapon_targeting".to_string(),
-            WEAPON_TARGETING.clone() as Arc<TargetingFunction>,
-        )])
+        HashMap::from([
+            (
+                "weapon_targeting".to_string(),
+                Arc::new(
+                    |world: &World, entity: Entity, action_context: &ActionContext| {
+                        if let ActionContext::Weapon { slot } = action_context {
+                            TargetingContext {
+                                kind: TargetingKind::Single,
+                                range: systems::helpers::get_component::<Loadout>(world, entity)
+                                    .weapon_in_hand(slot)
+                                    .unwrap()
+                                    .range()
+                                    .clone(),
+                                require_line_of_sight: true,
+                                allowed_targets: EntityFilter::not_dead(),
+                            }
+                        } else {
+                            panic!("Action context must be Weapon");
+                        }
+                    },
+                ) as Arc<TargetingFunction>,
+            ),
+            (
+                "self".to_string(),
+                Arc::new(|_: &World, _: Entity, _: &ActionContext| TargetingContext::self_target())
+                    as Arc<TargetingFunction>,
+            ),
+        ])
     });
 
 // TODO: Should this live somewhere else?

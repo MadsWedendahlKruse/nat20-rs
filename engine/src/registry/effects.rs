@@ -13,7 +13,7 @@ use crate::{
             effects::{Effect, EffectDuration},
             hooks::D20CheckHooks,
         },
-        id::{ClassId, EffectId, ItemId, ResourceId, SubclassId},
+        id::{ActionId, ClassId, EffectId, ItemId, ResourceId, SubclassId},
         items::{
             equipment::{armor::ArmorType, loadout, weapon::WeaponKind},
             item::Item,
@@ -109,7 +109,7 @@ pub static ACTION_SURGE_ID: LazyLock<EffectId> =
 static ACTION_SURGE: LazyLock<Effect> = LazyLock::new(|| {
     let mut effect = Effect::new(
         ACTION_SURGE_ID.clone(),
-        ModifierSource::Action(registry::actions::ACTION_SURGE_ID.clone()),
+        ModifierSource::Action(ActionId::from_str("action.fighter.action_surge")),
         EffectDuration::temporary(1),
     );
     effect.on_apply = Arc::new(|world, entity| {

@@ -2,7 +2,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use hecs::{Entity, World};
 
-use crate::components::actions::action::ActionContext;
+use crate::{
+    components::actions::action::ActionContext, registry::serialize::variables::VariableFunction,
+};
 
 #[derive(Debug, Clone)]
 pub enum IntExpression {
@@ -29,10 +31,7 @@ pub trait Evaluable {
         world: &World,
         entity: Entity,
         action_context: &ActionContext,
-        variables: &HashMap<
-            String,
-            Arc<dyn Fn(&World, Entity, &ActionContext) -> i32 + Send + Sync>,
-        >,
+        variables: &HashMap<String, Arc<VariableFunction>>,
     ) -> Result<Self::Output, EvaluationError>;
 }
 
@@ -44,10 +43,7 @@ impl Evaluable for IntExpression {
         world: &World,
         entity: Entity,
         action_context: &ActionContext,
-        variables: &HashMap<
-            String,
-            Arc<dyn Fn(&World, Entity, &ActionContext) -> i32 + Send + Sync>,
-        >,
+        variables: &HashMap<String, Arc<VariableFunction>>,
     ) -> Result<i32, EvaluationError> {
         match self {
             IntExpression::Literal(value) => Ok(*value),
@@ -163,22 +159,22 @@ impl<'a> Parser<'a> {
     fn is_at_end(&self) -> bool {
         self.position >= self.input.len()
     }
-}
 
-impl<'a> Parser<'a> {
     fn parse_identifier(&mut self) -> Result<String, String> {
         self.consume_whitespace();
         let mut identifier = String::new();
 
         match self.peek_char() {
-            Some(character) if character.is_ascii_alphabetic() || character == '_' => {
+            Some(character)
+                if character.is_ascii_alphabetic() || character == '_' || character == '.' =>
+            {
                 identifier.push(self.next_char().unwrap());
             }
             _ => return Err("Expected identifier".to_string()),
         }
 
         while let Some(character) = self.peek_char() {
-            if character.is_ascii_alphanumeric() || character == '_' {
+            if character.is_ascii_alphanumeric() || character == '_' || character == '.' {
                 identifier.push(self.next_char().unwrap());
             } else {
                 break;
@@ -317,7 +313,9 @@ impl<'a> Parser<'a> {
                 let value = self.parse_integer()?;
                 Ok(IntExpression::Literal(value))
             }
-            Some(character) if character.is_ascii_alphabetic() || character == '_' => {
+            Some(character)
+                if character.is_ascii_alphabetic() || character == '_' || character == '.' =>
+            {
                 // Single variable name
                 let name = self.parse_identifier()?;
                 Ok(IntExpression::Variable(name))
@@ -349,7 +347,8 @@ impl<'a> Parser<'a> {
         let size_expression = self.parse_dice_size()?;
         self.consume_whitespace();
 
-        // 4) Optional flat modifier, e.g. "+ 1" in "1d4 + 1"
+        // 4) Optional flat modifier, e.g. "+ 1" in "1d4 + 1" or variables like
+        // "1d10 + class.fighter.level"
         let modifier_expression = match self.peek_char() {
             Some('+') | Some('-') => {
                 let operator = self.next_char().unwrap(); // consume '+' or '-'
@@ -522,12 +521,13 @@ mod tests {
         > = HashMap::new();
         vars.insert("spell_level".to_string(), Arc::new(|_, _, _| 3));
         vars.insert("caster_level".to_string(), Arc::new(|_, _, _| 5));
+        vars.insert("character_level".to_string(), Arc::new(|_, _, _| 7));
         vars
     }
 
     #[test]
     fn evaluates_dice_equation_with_variables() {
-        let mut parser = Parser::new("(spell_level + 2) d (caster_level * 2)");
+        let mut parser = Parser::new("(spell_level + 2) d (caster_level * 2) + character_level");
         let dice_expression = parser.parse_dice_expression().expect("failed to parse");
 
         let variables = variables();
@@ -541,6 +541,6 @@ mod tests {
 
         assert_eq!(count, 5); // spell_level (3) + 2
         assert_eq!(size, 10); // caster_level (5) * 2
-        assert_eq!(modifier, 0);
+        assert_eq!(modifier, 7); // character_level (7)
     }
 }

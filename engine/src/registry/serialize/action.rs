@@ -7,10 +7,9 @@ use crate::{
         resource::{RechargeRule, ResourceAmountMap},
     },
     registry::serialize::{
-        attack_roll::AttackRollProvider,
-        damage::DamageEquation,
-        saving_throw::SavingThrowProvider,
-        targeting::{TargetingContextDefinition, TargetingDefinition},
+        d20::{AttackRollProvider, SavingThrowProvider},
+        dice::{DamageEquation, HealEquation},
+        targeting::TargetingDefinition,
     },
 };
 
@@ -47,11 +46,10 @@ pub enum ActionKindDefinition {
         effect: EffectId,
     },
 
-    // Healing {
-    //     // You can define a HealingEquation similar to DamageEquation,
-    //     // or re-use DiceExpression + variables and return DiceSetRoll instead.
-    //     heal: HealingProvider,
-    // },
+    Healing {
+        heal: HealEquation,
+    },
+
     // Utility {
     //     // most likely non-data / hand-written only,
     //     // you can keep this variant out of the serializable enum if you want
@@ -110,9 +108,10 @@ impl From<ActionKindDefinition> for ActionKind {
                 ActionKind::BeneficialEffect { effect }
             }
 
-            // ActionKindSpec::Healing { heal } => ActionKind::Healing {
-            //     heal: heal.function,
-            // },
+            ActionKindDefinition::Healing { heal } => ActionKind::Healing {
+                heal: heal.function,
+            },
+
             ActionKindDefinition::Composite { actions } => ActionKind::Composite {
                 actions: actions.into_iter().map(ActionKind::from).collect(),
             }, // Utility / Reaction / Custom are intentionally not in ActionKindSpec.

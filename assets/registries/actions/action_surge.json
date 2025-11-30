@@ -1,0 +1,13 @@
+{
+    "id": "action.fighter.action_surge",
+    "description": "You can push yourself beyond your normal limits for a moment. On your turn, you can take one additional action.",
+    "kind": {
+        "beneficial_effect": {
+            "effect": "effect.fighter.action_surge"
+        }
+    },
+    "targeting": "self",
+    "resource_cost": {
+        "resource.fighter.action_surge": 1
+    }
+}

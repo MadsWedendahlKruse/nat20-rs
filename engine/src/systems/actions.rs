@@ -39,7 +39,7 @@ pub fn get_action(action_id: &ActionId) -> Option<&Action> {
     // If not found, check the spell registry
     let spell_id = action_id.into();
     if let Some(spell) = registry::spells::SPELL_REGISTRY.get(&spell_id) {
-        // return Some(spell.action());
+        return Some(spell.action());
     }
     None
 }
@@ -47,8 +47,9 @@ pub fn get_action(action_id: &ActionId) -> Option<&Action> {
 pub fn add_actions(world: &mut World, entity: Entity, actions: &[ActionId]) {
     let mut action_map = systems::helpers::get_component_mut::<ActionMap>(world, entity);
     for action_id in actions {
-        if let Some((action, context)) = registry::actions::ACTION_REGISTRY.get(action_id) {
-            add_action_to_map(&mut action_map, action_id, action, context.clone());
+        if let Some(action) = systems::actions::get_action(action_id) {
+            // TODO: Just assume the context is Other for now
+            add_action_to_map(&mut action_map, action_id, action, ActionContext::Other);
         } else {
             panic!("Action {} not found in registry", action_id);
         }
@@ -59,15 +60,15 @@ fn add_action_to_map(
     action_map: &mut ActionMap,
     action_id: &ActionId,
     action: &Action,
-    context: Option<ActionContext>,
+    context: ActionContext,
 ) {
     let resource_cost = &action.resource_cost().clone();
     action_map
         .entry(action_id.clone())
         .and_modify(|action_data| {
-            action_data.push((context.clone().unwrap(), resource_cost.clone()));
+            action_data.push((context.clone(), resource_cost.clone()));
         })
-        .or_insert(vec![(context.clone().unwrap(), resource_cost.clone())]);
+        .or_insert(vec![(context, resource_cost.clone())]);
 }
 
 pub fn on_cooldown(world: &World, entity: Entity, action_id: &ActionId) -> Option<RechargeRule> {

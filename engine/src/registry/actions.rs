@@ -32,37 +32,10 @@ use crate::{
 pub static ACTION_REGISTRY: LazyLock<HashMap<ActionId, (Action, Option<ActionContext>)>> =
     LazyLock::new(|| {
         HashMap::from([
-            (ACTION_SURGE_ID.clone(), ACTION_SURGE.to_owned()),
             (INDOMITABLE_ID.clone(), INDOMITABLE.to_owned()),
-            (SECOND_WIND_ID.clone(), SECOND_WIND.to_owned()),
             (TACTICAL_MIND_ID.clone(), TACTICAL_MIND.to_owned()),
         ])
     });
-
-pub static ACTION_SURGE_ID: LazyLock<ActionId> =
-    LazyLock::new(|| ActionId::from_str("action.fighter.action_surge"));
-
-static ACTION_SURGE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(|| {
-    (
-        Action {
-            id: ACTION_SURGE_ID.clone(),
-            description: "You can push yourself beyond your normal limits for a \
-                moment. On your turn, you can take one additional action."
-                .to_string(),
-            kind: ActionKind::BeneficialEffect {
-                effect: registry::effects::ACTION_SURGE_ID.clone(),
-            },
-            targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
-            resource_cost: HashMap::from([(
-                ResourceId::from_str("resource.fighter.action_surge"),
-                ResourceAmount::Flat(1),
-            )]),
-            cooldown: Some(RechargeRule::Turn),
-            reaction_trigger: None,
-        },
-        Some(ActionContext::Other),
-    )
-});
 
 pub static INDOMITABLE_ID: LazyLock<ActionId> =
     LazyLock::new(|| ActionId::from_str("action.fighter.indomitable"));
@@ -168,55 +141,6 @@ pub static INDOMITABLE: LazyLock<(Action, Option<ActionContext>)> = LazyLock::ne
                 }
                 _ => false,
             })),
-        },
-        Some(ActionContext::Other),
-    )
-});
-
-pub static SECOND_WIND_ID: LazyLock<ActionId> =
-    LazyLock::new(|| ActionId::from_str("action.fighter.second_wind"));
-
-static SECOND_WIND: LazyLock<(Action, Option<ActionContext>)> = LazyLock::new(|| {
-    (
-        Action {
-            id: SECOND_WIND_ID.clone(),
-            description: "You have a limited well of physical and mental \
-                stamina that you can draw on. As a Bonus Action, \
-                you can use it to regain Hit Points equal to 1d10 \
-                plus your Fighter level."
-                .to_string(),
-            kind: ActionKind::Healing {
-                heal: Arc::new(|world, entity, _| {
-                    let mut modifiers = ModifierSet::new();
-                    modifiers.add_modifier(
-                        ModifierSource::ClassLevel(ClassId::from_str("class.fighter")),
-                        systems::helpers::get_component::<CharacterLevels>(world, entity)
-                            .class_level(&ClassId::from_str("class.fighter"))
-                            .unwrap()
-                            .level() as i32,
-                    );
-                    DiceSetRoll::new(
-                        DiceSet {
-                            num_dice: 1,
-                            die_size: DieSize::D10,
-                        },
-                        modifiers,
-                    )
-                }),
-            },
-            targeting: Arc::new(|_, _, _| TargetingContext::self_target()),
-            resource_cost: HashMap::from([
-                (
-                    ResourceId::from_str("resource.fighter.second_wind"),
-                    ResourceAmount::Flat(1),
-                ),
-                (
-                    ResourceId::from_str("resource.bonus_action"),
-                    ResourceAmount::Flat(1),
-                ),
-            ]),
-            cooldown: None,
-            reaction_trigger: None,
         },
         Some(ActionContext::Other),
     )
