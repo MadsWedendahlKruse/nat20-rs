@@ -1,6 +1,7 @@
 use std::{hash::Hash, sync::Arc};
 
 use hecs::{Entity, World};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     components::{
@@ -8,13 +9,15 @@ use crate::{
             action::{Action, ActionContext, ActionKind},
             targeting::TargetingContext,
         },
-        id::{ResourceId, SpellId},
+        id::{IdProvider, ResourceId, SpellId},
         resource::{ResourceAmount, ResourceAmountMap},
     },
     engine::event::Event,
+    registry::serialize::spell::SpellDefinition,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum MagicSchool {
     Abjuration,
     Conjuration,
@@ -26,7 +29,8 @@ pub enum MagicSchool {
     Transmutation,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(from = "SpellDefinition")]
 pub struct Spell {
     id: SpellId,
     school: MagicSchool,
@@ -49,6 +53,7 @@ impl Spell {
         if base_level > 0
             && !resource_cost.contains_key(&ResourceId::from_str("resource.spell_slot"))
         {
+            // TODO: Not sure if this is a good crutch to lean on?
             // Ensure the spell has a spell slot cost if it's not a cantrip
             resource_cost.insert(
                 ResourceId::from_str("resource.spell_slot"),
@@ -105,6 +110,14 @@ impl Spell {
 
     pub fn action(&self) -> &Action {
         &self.action
+    }
+}
+
+impl IdProvider for Spell {
+    type Id = SpellId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
     }
 }
 

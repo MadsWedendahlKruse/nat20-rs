@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::components::modifier::{ModifierSet, ModifierSource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum DieSize {
     D4 = 4,
     D6 = 6,
@@ -20,7 +20,7 @@ pub enum DieSize {
     D100 = 100,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DiceSet {
     pub num_dice: u32,
     pub die_size: DieSize,
@@ -61,7 +61,22 @@ impl FromStr for DiceSet {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl TryFrom<String> for DiceSet {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<DiceSet> for String {
+    fn from(spec: DiceSet) -> Self {
+        spec.to_string()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct DiceSetRoll {
     pub dice: DiceSet,
     pub modifiers: ModifierSet,
@@ -139,6 +154,20 @@ impl FromStr for DiceSetRoll {
             dice: dice_set,
             modifiers,
         })
+    }
+}
+
+impl TryFrom<String> for DiceSetRoll {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<DiceSetRoll> for String {
+    fn from(spec: DiceSetRoll) -> Self {
+        spec.to_string()
     }
 }
 

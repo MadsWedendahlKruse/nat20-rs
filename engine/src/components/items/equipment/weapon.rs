@@ -6,11 +6,10 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use serde_with::{DisplayFromStr, serde_as};
 use strum::{Display, EnumIter};
-use uom::si::{action::Action, length::foot};
+use uom::si::length::foot;
 
-use crate::{
+use crate::
     components::{
         ability::{Ability, AbilityScoreMap},
         actions::targeting::TargetingRange,
@@ -24,9 +23,8 @@ use crate::{
         },
         modifier::{ModifierSet, ModifierSource},
         proficiency::{Proficiency, ProficiencyLevel},
-    },
-    registry,
-};
+    }
+;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -42,10 +40,11 @@ pub enum WeaponKind {
     Ranged,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WeaponProperties {
     // TODO: Ammunition,
     Finesse,
+    // TODO: Actually implement Heavy and Light
     Heavy,
     Light,
     // TODO: Loading,
@@ -179,15 +178,12 @@ pub struct Weapon {
     effects: Vec<EffectId>,
 }
 
-#[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct WeaponDefinition {
     pub item: Item,
     pub kind: WeaponKind,
     pub category: WeaponCategory,
-    #[serde_as(as = "HashSet<DisplayFromStr>")]
     pub properties: HashSet<WeaponProperties>,
-    #[serde_as(as = "Vec<(DisplayFromStr, _)>")]
     pub damage: Vec<(DiceSet, DamageType)>,
     pub extra_weapon_actions: Vec<ActionId>,
     pub effects: Vec<EffectId>,
@@ -425,7 +421,7 @@ mod tests {
         ability::AbilityScore,
         dice::DieSize,
         id::ItemId,
-        items::{inventory::ItemInstance, item::ItemRarity, money::MonetaryValue},
+        items::{item::ItemRarity, money::MonetaryValue},
     };
 
     use super::*;

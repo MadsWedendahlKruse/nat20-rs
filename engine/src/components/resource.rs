@@ -6,12 +6,10 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use serde_with::{DisplayFromStr, serde_as};
 
-use crate::{
-    components::id::ResourceId,
-    registry::{self},
-};
+use crate::
+    components::id::{IdProvider, ResourceId}
+;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -42,7 +40,8 @@ impl Display for RechargeRule {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct ResourceBudget {
     pub current_uses: u8,
     pub max_uses: u8,
@@ -190,12 +189,25 @@ impl FromStr for ResourceBudget {
     }
 }
 
-#[serde_as]
+impl TryFrom<String> for ResourceBudget {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<ResourceBudget> for String {
+    fn from(spec: ResourceBudget) -> Self {
+        spec.to_string()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ResourceBudgetKind {
-    Flat(#[serde_as(as = "DisplayFromStr")] ResourceBudget),
-    Tiered(#[serde_as(as = "BTreeMap<_, DisplayFromStr>")] BTreeMap<u8, ResourceBudget>),
+    Flat(ResourceBudget),
+    Tiered(BTreeMap<u8, ResourceBudget>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -348,6 +360,14 @@ pub struct ResourceDefinition {
     pub id: ResourceId,
     pub kind: ResourceDefinitionKind,
     pub recharge: RechargeRule,
+}
+
+impl IdProvider for ResourceDefinition {
+    type Id = ResourceId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -57,7 +57,7 @@ pub mod creatures {
 
         use crate::{
             components::{
-                id::{BackgroundId, ClassId, EntityIdentifier, ItemId, Name, SubclassId},
+                id::{BackgroundId, ClassId, EntityIdentifier, ItemId, Name, SpellId, SubclassId},
                 level_up::ChoiceItem,
                 skill::SkillSet,
                 spells::spellbook::Spellbook,
@@ -295,8 +295,11 @@ pub mod creatures {
             let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
             // TODO: This should be set automatically based on class
             spellbook.set_max_prepared_spells(5);
-            spellbook.add_spell(&registry::spells::MAGIC_MISSILE_ID, Ability::Intelligence);
-            spellbook.add_spell(&registry::spells::FIREBALL_ID, Ability::Intelligence);
+            spellbook.add_spell(
+                &SpellId::from_str("spell.magic_missile"),
+                Ability::Intelligence,
+            );
+            spellbook.add_spell(&SpellId::from_str("spell.fireball"), Ability::Intelligence);
             spellbook.add_spell(&registry::spells::COUNTERSPELL_ID, Ability::Intelligence);
 
             EntityIdentifier::new(entity, name)
@@ -372,7 +375,10 @@ pub mod creatures {
             );
 
             let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
-            spellbook.add_spell(&registry::spells::ELDRITCH_BLAST_ID, Ability::Charisma);
+            spellbook.add_spell(
+                &SpellId::from_str("spell.eldritch_blast"),
+                Ability::Charisma,
+            );
 
             EntityIdentifier::new(entity, name)
         }

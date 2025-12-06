@@ -4,6 +4,8 @@ use std::{
     str::FromStr,
 };
 
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Currency {
     Copper,
@@ -53,7 +55,8 @@ impl FromStr for Currency {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct MonetaryValue {
     pub values: HashMap<Currency, u32>,
 }
@@ -138,6 +141,20 @@ impl FromStr for MonetaryValue {
             values.insert(currency, amount);
         }
         Ok(Self { values })
+    }
+}
+
+impl TryFrom<String> for MonetaryValue {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<MonetaryValue> for String {
+    fn from(spec: MonetaryValue) -> Self {
+        spec.to_string()
     }
 }
 

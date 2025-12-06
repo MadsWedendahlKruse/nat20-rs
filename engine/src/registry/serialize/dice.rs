@@ -67,8 +67,7 @@ impl FromStr for DamageEquation {
             return Err(format!("Invalid damage formula: {}", s));
         }
         let dice_part = parts[0];
-        // TODO: More elegant solution?
-        let damage_type: DamageType = serde_json::from_str(parts[1]).unwrap();
+        let damage_type: DamageType = serde_plain::from_str(parts[1]).unwrap();
 
         if let Ok(dice_expression) = Parser::new(dice_part).parse_dice_expression() {
             let function = Arc::new(
@@ -140,11 +139,6 @@ impl FromStr for HealEquation {
         // Example format: "(1d8 + spell_level)"
 
         if let Ok(dice_expression) = Parser::new(s).parse_dice_expression() {
-            println!("Evaluating heal equation (raw): {}", s);
-            println!(
-                "Evaluating heal equation (dice_expression): {:?}",
-                dice_expression
-            );
             let function = Arc::new(
                 move |world: &World, entity: Entity, action_context: &ActionContext| {
                     let (num_dice, size, modifier) = dice_expression

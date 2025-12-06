@@ -36,7 +36,7 @@ impl Spellbook {
 
     pub fn add_spell(&mut self, spell_id: &SpellId, spellcasting_ability: Ability) {
         // TODO: Handle missing spells
-        let spell = registry::spells::SPELL_REGISTRY.get(spell_id).unwrap();
+        let spell = systems::spells::get_spell(spell_id).expect("Missing spell in registry");
         self.spells.insert(spell_id.clone());
         self.spellcasting_ability
             .insert(spell_id.clone(), spellcasting_ability);
@@ -111,8 +111,7 @@ impl ActionProvider for Spellbook {
         let mut actions = ActionMap::new();
 
         for spell_id in &self.spells {
-            let spell = registry::spells::SPELL_REGISTRY
-                .get(spell_id)
+            let spell = systems::spells::get_spell(spell_id)
                 .expect(format!("Missing spell in registry: {} ", spell_id).as_str());
 
             if spell.is_cantrip() {
@@ -164,7 +163,7 @@ mod tests {
 
     #[test]
     fn add_and_has_spell() {
-        let spell_id = &registry::spells::MAGIC_MISSILE_ID;
+        let spell_id = &SpellId::from_str("spell.magic_missile");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id, Ability::Intelligence);
@@ -178,7 +177,7 @@ mod tests {
 
     #[test]
     fn remove_spell() {
-        let spell_id = &registry::spells::MAGIC_MISSILE_ID;
+        let spell_id = &SpellId::from_str("spell.magic_missile");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id, Ability::Wisdom);
@@ -191,7 +190,7 @@ mod tests {
 
     #[test]
     fn prepare_and_unprepare_spell() {
-        let spell_id = &registry::spells::MAGIC_MISSILE_ID;
+        let spell_id = &SpellId::from_str("spell.magic_missile");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id, Ability::Charisma);
@@ -207,8 +206,8 @@ mod tests {
 
     #[test]
     fn all_spells_and_prepared_spells() {
-        let spell_id1 = &registry::spells::MAGIC_MISSILE_ID;
-        let spell_id2 = &registry::spells::FIREBALL_ID;
+        let spell_id1 = &SpellId::from_str("spell.magic_missile");
+        let spell_id2 = &SpellId::from_str("spell.fireball");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id1, Ability::Intelligence);

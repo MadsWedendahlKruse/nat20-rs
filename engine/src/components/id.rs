@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use hecs::Entity;
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::{fmt, fmt::Debug, hash::Hash};
 
 macro_rules! id_newtypes {
     ($($name:ident),+) => {
@@ -67,6 +67,12 @@ impl Into<SpellId> for &ActionId {
     fn into(self) -> SpellId {
         SpellId(self.0.clone())
     }
+}
+
+pub trait IdProvider {
+    type Id: Eq + Hash + Clone + Debug;
+
+    fn id(&self) -> &Self::Id;
 }
 
 // TODO: Not sure if this is the best place for this

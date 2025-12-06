@@ -6,7 +6,7 @@ use crate::{
     components::{
         ability::{Ability, AbilityScoreDistribution},
         dice::DieSize,
-        id::{ActionId, ClassId, EffectId, ResourceId, SubclassId},
+        id::{ActionId, ClassId, EffectId, IdProvider, ResourceId, SubclassId},
         items::equipment::{armor::ArmorType, weapon::WeaponCategory},
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         modifier::ModifierSource,
@@ -75,7 +75,6 @@ pub struct Class {
     pub base: ClassBase,
 }
 
-// #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct ClassDefinition {
     pub id: ClassId,
@@ -92,7 +91,6 @@ pub struct ClassDefinition {
     pub weapon_proficiencies: HashSet<WeaponCategory>,
     pub spellcasting: SpellcastingProgression,
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
-    // #[serde_as(as = "HashMap<_, Vec<(_, DisplayFromStr)>>")]
     pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
     pub prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
     pub actions_by_level: HashMap<u8, Vec<ActionId>>,
@@ -225,6 +223,14 @@ impl From<ClassDefinition> for Class {
     }
 }
 
+impl IdProvider for Class {
+    type Id = ClassId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Subclass {
     pub id: SubclassId,
@@ -234,5 +240,13 @@ pub struct Subclass {
 impl Subclass {
     pub fn base(&self) -> &ClassBase {
         &self.base
+    }
+}
+
+impl IdProvider for Subclass {
+    type Id = SubclassId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
     }
 }

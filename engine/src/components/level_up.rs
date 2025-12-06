@@ -38,7 +38,7 @@ static ABILITY_SCORE_POINT_COST: LazyLock<HashMap<u8, u8>> = LazyLock::new(|| {
 static ABILITY_SCORE_POINTS: u8 = 27;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum ChoiceItem {
     Action(ActionId),
     Background(BackgroundId),

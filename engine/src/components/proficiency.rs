@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::components::modifier::ModifierSource;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum ProficiencyLevel {
     None,
     Proficient,

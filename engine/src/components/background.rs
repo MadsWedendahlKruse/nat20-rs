@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::components::{
     ability::Ability,
-    id::{BackgroundId, FeatId},
+    id::{BackgroundId, FeatId, IdProvider},
     level_up::ChoiceSpec,
     skill::Skill,
 };
@@ -17,4 +17,12 @@ pub struct Background {
     // TODO: Not sure what to do with these yet
     // tool_proficiencies
     pub equipment: ChoiceSpec,
+}
+
+impl IdProvider for Background {
+    type Id = BackgroundId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
+    }
 }

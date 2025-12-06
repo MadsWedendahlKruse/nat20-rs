@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use serde_with::{DisplayFromStr, serde_as};
 use strum::Display;
 use uom::si::{f32::Mass, mass::kilogram};
 
@@ -17,14 +16,12 @@ pub enum ItemRarity {
     Legendary,
 }
 
-#[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
     pub id: ItemId,
     pub name: String,
     pub description: String,
     pub weight: Mass,
-    #[serde_as(as = "DisplayFromStr")]
     pub value: MonetaryValue,
     pub rarity: ItemRarity,
 }

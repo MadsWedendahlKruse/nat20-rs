@@ -1,0 +1,24 @@
+{
+    "id": "spell.magic_missile",
+    "description": "You create three glowing darts of magical force. Each dart strikes a creature of your choice that you can see within range. A dart deals 1d4 + 1 Force damage to its target. The darts all strike simultaneously,and you can direct them to hit one creature or several. The spell creates one more dart for each spell slot level above 1",
+    "base_level": 1,
+    "school": "evocation",
+    "kind": {
+        "unconditional_damage": {
+            "damage": "1d4 + 1;force"
+        }
+    },
+    "resource_cost": {
+        "resource.action": 1
+    },
+    "targeting": {
+        "kind": {
+            "multiple": {
+                "max_targets": "3 + spell_level - 1"
+            }
+        },
+        "range": "120 feet",
+        "require_line_of_sight": true,
+        "allowed_targets": "not_dead"
+    }
+}

@@ -181,7 +181,8 @@ pub enum TargetingError {
 /// a `TargetingRange`, and `f32` does not implement `Hash` (as a consequence neither
 /// does `uom::si::Length`), we store the range values as `u32` internally. For
 /// the sake of accuracy, these `u32` values represent the range in millimeters.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct TargetingRange {
     /// Normal range of the action. Attacks made outside the normal range have
     /// disadvantage on their attack rolls
@@ -271,6 +272,20 @@ impl FromStr for TargetingRange {
         } else {
             Err(format!("Invalid range format: {}", s))
         }
+    }
+}
+
+impl TryFrom<String> for TargetingRange {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<TargetingRange> for String {
+    fn from(spec: TargetingRange) -> Self {
+        spec.to_string()
     }
 }
 

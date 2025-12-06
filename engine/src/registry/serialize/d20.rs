@@ -137,7 +137,7 @@ impl FromStr for SavingThrowProvider {
             return Err(format!("Invalid SavingThrowProvider format: {}", s));
         }
 
-        let ability: Ability = serde_json::from_str(parts[1]).unwrap();
+        let ability: Ability = serde_plain::from_str(parts[1]).unwrap();
 
         let function = match parts[0] {
             "weapon_save_dc" => Arc::new(

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 #[derive(EnumIter, Hash, Eq, PartialEq, Debug, Clone, Copy, Display, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum Ability {
     Strength = 0,
     Dexterity = 1,

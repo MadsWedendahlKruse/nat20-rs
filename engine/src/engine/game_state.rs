@@ -1,14 +1,7 @@
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    fs::File,
-    io::BufReader,
-    path::Path,
-};
+use std::collections::{HashMap, HashSet};
 
 use hecs::{Entity, World};
-use obj::Obj;
 use parry3d::{na::Point3, shape::Ball};
-use uom::si::f32::Length;
 
 use crate::{
     components::actions::{
@@ -179,8 +172,7 @@ impl GameState {
     }
 
     pub fn next_prompt_entity(&self, entity: Entity) -> Option<&ActionPrompt> {
-        let scope = self.scope_for_entity(entity);
-        self.next_prompt(scope)
+        self.next_prompt(self.scope_for_entity(entity))
     }
 
     pub fn submit_decision(&mut self, mut decision: ActionDecision) -> Result<(), ActionError> {

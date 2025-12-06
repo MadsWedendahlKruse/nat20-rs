@@ -1,11 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-use crate::components::items::{
-    equipment::{
-        armor::Armor, equipment::EquipmentItem, loadout::EquipmentInstance, weapon::Weapon,
+use crate::components::{
+    id::{IdProvider, ItemId},
+    items::{
+        equipment::{
+            armor::Armor, equipment::EquipmentItem, loadout::EquipmentInstance, weapon::Weapon,
+        },
+        item::Item,
+        money::{MonetaryValue, MonetaryValueError},
     },
-    item::Item,
-    money::{MonetaryValue, MonetaryValueError},
 };
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -23,6 +26,19 @@ impl ItemInstance {
             self,
             ItemInstance::Armor(_) | ItemInstance::Weapon(_) | ItemInstance::Equipment(_)
         )
+    }
+}
+
+impl IdProvider for ItemInstance {
+    type Id = ItemId;
+
+    fn id(&self) -> &Self::Id {
+        match self {
+            ItemInstance::Item(item) => &item.id,
+            ItemInstance::Armor(armor) => &armor.item.id,
+            ItemInstance::Weapon(weapon) => &weapon.item().id,
+            ItemInstance::Equipment(equipment) => &equipment.item.id,
+        }
     }
 }
 

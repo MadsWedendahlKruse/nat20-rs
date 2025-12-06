@@ -1,0 +1,25 @@
+{
+    "id": "spell.eldritch_blast",
+    "description": "You hurl a beam of crackling energy. Make a ranged spell attack against one creature or object in range. On a hit, the target takes 1d10 Force damage. The spell creates two beams at level 5, three beams at level 11, and four beams at level 17. You can direct the beams at the same target or at different ones. Make a separate attack roll for each beam.",
+    "base_level": 0,
+    "school": "evocation",
+    "kind": {
+        "attack_roll_damage": {
+            "attack_roll": "spell_attack_roll",
+            "damage": "1d10;force"
+        }
+    },
+    "resource_cost": {
+        "resource.action": 1
+    },
+    "targeting": {
+        "kind": {
+            "multiple": {
+                "max_targets": "1 + (character_level + 1) / 6"
+            }
+        },
+        "range": "120 feet",
+        "require_line_of_sight": true,
+        "allowed_targets": "not_dead"
+    }
+}

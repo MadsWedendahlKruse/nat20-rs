@@ -16,7 +16,7 @@ use crate::{
         },
         dice::{DiceSetRoll, DiceSetRollResult},
         health::life_state::LifeState,
-        id::{ActionId, EffectId, EntityIdentifier, SpellId},
+        id::{ActionId, EffectId, EntityIdentifier, IdProvider, SpellId},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
         resource::{RechargeRule, ResourceAmountMap},
         saving_throw::SavingThrowDC,
@@ -468,6 +468,14 @@ impl Action {
 
     pub fn resource_cost_mut(&mut self) -> &mut ResourceAmountMap {
         &mut self.resource_cost
+    }
+}
+
+impl IdProvider for Action {
+    type Id = ActionId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
     }
 }
 

@@ -13,32 +13,15 @@ use crate::components::{
     actions::action::Action,
     background::Background,
     class::{Class, Subclass},
-    id::{ActionId, BackgroundId, ClassId, ItemId, ResourceId, SubclassId},
-    items::inventory::{ItemContainer, ItemInstance},
+    id::{ActionId, BackgroundId, ClassId, IdProvider, ItemId, ResourceId, SpellId, SubclassId},
+    items::inventory::ItemInstance,
     resource::ResourceDefinition,
+    spells::spell::Spell,
 };
 
 #[derive(Debug, Clone)]
 pub struct Registry<K, V> {
     pub entries: HashMap<K, V>,
-}
-
-pub trait RegistryEntry {
-    type Id: Eq + Hash + Clone + Debug;
-
-    fn id(&self) -> &Self::Id;
-}
-
-macro_rules! impl_registry_entry {
-    ($type:ty, $id_type:ty, $field:ident) => {
-        impl RegistryEntry for $type {
-            type Id = $id_type;
-
-            fn id(&self) -> &Self::Id {
-                &self.$field
-            }
-        }
-    };
 }
 
 #[derive(Debug)]
@@ -56,7 +39,7 @@ impl From<std::io::Error> for RegistryError {
 impl<K, V> Registry<K, V>
 where
     K: Eq + Hash + Clone + Debug,
-    V: RegistryEntry<Id = K> + DeserializeOwned,
+    V: IdProvider<Id = K> + DeserializeOwned,
 {
     pub fn load_from_directory(directory: impl AsRef<Path>) -> Result<Self, RegistryError> {
         let mut entries = HashMap::new();
@@ -91,22 +74,13 @@ where
     }
 }
 
-// TODO: Not sure where this belongs best
-impl RegistryEntry for ItemInstance {
-    type Id = ItemId;
-
-    fn id(&self) -> &Self::Id {
-        &self.item().id
-    }
-}
-
 pub struct RegistrySet {
     pub actions: Registry<ActionId, Action>,
+    pub spells: Registry<SpellId, Spell>,
     pub backgrounds: Registry<BackgroundId, Background>,
     pub classes: Registry<ClassId, Class>,
     pub subclasses: Registry<SubclassId, Subclass>,
     pub items: Registry<ItemId, ItemInstance>,
-    // pub spells: Registry<SpellId, Spell>,
     pub resources: Registry<ResourceId, ResourceDefinition>,
 }
 
@@ -117,19 +91,19 @@ impl RegistrySet {
         let root_directory = root_directory.as_ref();
 
         let actions_directory = root_directory.join("actions");
+        let spells_directory = root_directory.join("spells");
         let backgrounds_directory = root_directory.join("backgrounds");
         let classes_directory = root_directory.join("classes");
         let subclasses_directory = root_directory.join("subclasses");
-        // let spells_directory  = root_directory.join("spells");
         let items_directory = root_directory.join("items");
         let resources_directory = root_directory.join("resources");
 
         Ok(Self {
             actions: Registry::load_from_directory(actions_directory)?,
+            spells: Registry::load_from_directory(spells_directory)?,
             backgrounds: Registry::load_from_directory(backgrounds_directory)?,
             classes: Registry::load_from_directory(classes_directory)?,
             subclasses: Registry::load_from_directory(subclasses_directory)?,
-            // spells: Registry::load_from_directory(spells_directory)?,
             items: Registry::load_from_directory(items_directory)?,
             resources: Registry::load_from_directory(resources_directory)?,
         })
@@ -165,13 +139,8 @@ macro_rules! define_registry {
     };
 }
 
-impl_registry_entry!(Action, ActionId, id);
-impl_registry_entry!(Background, BackgroundId, id);
-impl_registry_entry!(Class, ClassId, id);
-impl_registry_entry!(Subclass, SubclassId, id);
-impl_registry_entry!(ResourceDefinition, ResourceId, id);
-
 define_registry!(ActionsRegistry, ActionId, Action, actions);
+define_registry!(SpellsRegistry, SpellId, Spell, spells);
 define_registry!(BackgroundsRegistry, BackgroundId, Background, backgrounds);
 define_registry!(ClassesRegistry, ClassId, Class, classes);
 define_registry!(SubclassesRegistry, SubclassId, Subclass, subclasses);

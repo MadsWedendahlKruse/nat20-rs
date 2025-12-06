@@ -2,7 +2,6 @@ use std::{collections::HashMap, fmt};
 
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
-use serde_with::{DisplayFromStr, serde_as};
 
 use crate::{
     components::{
@@ -40,10 +39,8 @@ impl fmt::Display for DamageType {
 
 /// --- DAMAGE APPLICATION ---
 
-#[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DamageComponent {
-    #[serde_as(as = "DisplayFromStr")]
     pub dice_roll: DiceSetRoll,
     pub damage_type: DamageType,
 }

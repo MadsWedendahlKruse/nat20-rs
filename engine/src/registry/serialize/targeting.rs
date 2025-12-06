@@ -100,7 +100,7 @@ impl Display for IntExpressionDefinition {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "shape", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum AreaShapeDefinition {
     Sphere {
         radius: LengthExpressionDefinition,
