@@ -5,7 +5,10 @@ use std::{
 
 use strum::EnumIter;
 
-use crate::components::id::{IdProvider, ScriptId};
+use crate::{
+    components::id::{IdProvider, ScriptId},
+    registry::registry::{REGISTRIES_FOLDER, REGISTRY_ROOT},
+};
 
 #[derive(Debug)]
 pub enum ScriptError {
@@ -55,34 +58,45 @@ impl TryFrom<DirEntry> for Script {
     type Error = ScriptError;
 
     fn try_from(value: DirEntry) -> Result<Self, Self::Error> {
-        let file_path = value.path();
-        let file_name = file_path
+        let full_file_path = value.path();
+        let file_name = full_file_path
             .file_stem()
             .and_then(|s| s.to_str())
             .ok_or_else(|| ScriptError::LoadError("Invalid file name".to_string()))?;
-        let content = fs::read_to_string(&file_path).map_err(|e| {
-            ScriptError::LoadError(format!("Failed to read script file {:?}: {}", file_path, e))
+        let content = fs::read_to_string(&full_file_path).map_err(|e| {
+            ScriptError::LoadError(format!(
+                "Failed to read script file {:?}: {}",
+                full_file_path, e
+            ))
         })?;
 
         let language = ScriptLanguage::from_str(
-            file_path
+            full_file_path
                 .extension()
                 .and_then(|s| s.to_str())
                 .ok_or_else(|| ScriptError::LoadError("Missing file extension".to_string()))?,
         )?;
 
-        let folder = file_path
-            .parent()
-            .and_then(|p| p.file_name())
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| ScriptError::LoadError("Invalid parent folder".to_string()))?;
-        // If folder is "spells" convert to singular "spell"
-        let id = format!("script.{}.{}", folder.trim_end_matches('s'), file_name);
-        let id = ScriptId::from_str(id);
+        // Keep visiting parent folders until we reach the registry root
+        let mut script_id = file_name.to_string();
+        let mut file_path = full_file_path.clone();
+        while let Some(parent) = file_path.parent() {
+            println!("Parent: {:?}", parent);
+            if let Some(folder_name) = parent.file_name().and_then(|s| s.to_str()) {
+                if folder_name == REGISTRIES_FOLDER {
+                    break;
+                }
+                // Convert plural folder names to singular for script IDs
+                let folder_name = folder_name.trim_end_matches('s');
+                script_id = format!("{}.{}", folder_name, script_id);
+            }
+            file_path = parent.to_path_buf();
+        }
+        let id = ScriptId::from_str(format!("script.{}", script_id));
 
         Ok(Script {
             id,
-            file_path: file_path.to_string_lossy().to_string(),
+            file_path: full_file_path.to_string_lossy().to_string(),
             content,
             language,
         })

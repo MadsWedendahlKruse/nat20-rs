@@ -25,6 +25,13 @@ use crate::{
     scripts::script::Script,
 };
 
+pub static REGISTRIES_FOLDER: &str = "registries";
+
+// TODO: Make this configurable?
+pub static REGISTRY_ROOT: LazyLock<PathBuf> = LazyLock::new(|| {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../assets/{}", REGISTRIES_FOLDER))
+});
+
 #[derive(Debug, Clone)]
 pub struct Registry<K, V> {
     pub entries: HashMap<K, V>,
@@ -49,23 +56,28 @@ where
 {
     pub fn load_from_directory(directory: impl AsRef<Path>) -> Result<Self, RegistryError> {
         let mut entries = HashMap::new();
+        Self::load_directory_recursive(directory.as_ref(), &mut entries)?;
+        Ok(Self { entries })
+    }
 
+    fn load_directory_recursive(
+        directory: &Path,
+        entries: &mut HashMap<K, V>,
+    ) -> Result<(), RegistryError> {
         for entry in fs::read_dir(directory)? {
             let entry = entry?;
-            let path: PathBuf = entry.path();
+            let path = entry.path();
+
+            if path.is_dir() {
+                Self::load_directory_recursive(&path, entries)?;
+                continue;
+            }
 
             if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
                 continue;
             }
 
-            let file_contents: String = fs::read_to_string(&path)?;
-            let serde_result = serde_json::from_str::<V>(&file_contents);
-            if let Err(e) = serde_result {
-                eprintln!("Failed to deserialize file {:?}: {}", path, e.to_string());
-                continue;
-            }
-            let value = serde_result.unwrap();
-
+            let value = Self::load_file(&path)?;
             let id = value.id().clone();
 
             if let Some(_) = entries.insert(id.clone(), value) {
@@ -76,7 +88,19 @@ where
             }
         }
 
-        Ok(Self { entries })
+        Ok(())
+    }
+
+    fn load_file(path: &Path) -> Result<V, RegistryError> {
+        let file_contents = fs::read_to_string(path)?;
+        let value = serde_json::from_str::<V>(&file_contents).map_err(|e| {
+            RegistryError::LoadError(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Failed to deserialize file {:?}: {}", path, e),
+            ))
+        })?;
+
+        Ok(value)
     }
 }
 
@@ -118,25 +142,36 @@ impl RegistrySet {
 
         let mut scripts = HashMap::new();
         for directory in all_directories {
-            for entry in fs::read_dir(directory)? {
-                let entry = entry?;
-                // Don't bother with JSON files
-                if entry.path().extension().and_then(|ext| ext.to_str()) == Some("json") {
-                    continue;
-                }
-                let result = Script::try_from(entry);
-                if result.is_err() {
-                    eprintln!("Failed to load script: {:?}", result.err().unwrap());
-                    continue;
-                }
-                if let Ok(script) = result {
-                    let id = script.id.clone();
-                    println!("Loaded script: {:?}", script.clone());
-                    if let Some(_) = scripts.insert(id.clone(), script) {
-                        return Err(RegistryError::DuplicateIdError(format!(
-                            "Duplicate Script ID found: {:?}",
-                            id
-                        )));
+            if !directory.exists() {
+                continue;
+            }
+
+            let mut stack = vec![directory.to_path_buf()];
+            while let Some(dir) = stack.pop() {
+                for entry in fs::read_dir(&dir)? {
+                    let entry = entry?;
+                    let path = entry.path();
+
+                    if path.is_dir() {
+                        stack.push(path);
+                        continue;
+                    }
+
+                    if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                        continue;
+                    }
+
+                    match Script::try_from(entry) {
+                        Ok(script) => {
+                            let id = script.id.clone();
+                            if scripts.insert(id.clone(), script).is_some() {
+                                return Err(RegistryError::DuplicateIdError(format!(
+                                    "Duplicate Script ID found: {:?}",
+                                    id
+                                )));
+                            }
+                        }
+                        Err(err) => eprintln!("Failed to load script: {:?}", err),
                     }
                 }
             }
@@ -156,12 +191,7 @@ impl RegistrySet {
 }
 
 static REGISTRIES: LazyLock<RegistrySet> = LazyLock::new(|| {
-    // TODO: Make this configurable
-    // TODO: Temporary workaround for getting the correct path in tests
-    let registry_root: PathBuf =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../assets/registries");
-
-    RegistrySet::load_from_root_directory(registry_root).expect("Failed to load registries")
+    RegistrySet::load_from_root_directory(&*REGISTRY_ROOT).expect("Failed to load registries")
 });
 
 macro_rules! define_registry {

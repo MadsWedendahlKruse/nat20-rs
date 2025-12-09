@@ -58,7 +58,13 @@ impl Event {
             // TODO: What to do here? Multiple reactors?
             EventKind::ReactionTriggered { reactors, .. } => Some(*reactors.iter().next()?),
             EventKind::ReactionRequested { reaction } => Some(reaction.reactor),
-            EventKind::LifeStateChanged { actor, .. } => *actor,
+            EventKind::LifeStateChanged { entity, actor, .. } => {
+                if let Some(actor) = actor {
+                    Some(*actor)
+                } else {
+                    Some(*entity)
+                }
+            }
             EventKind::D20CheckPerformed(entity, _, _) => Some(*entity),
             EventKind::D20CheckResolved(entity, _, _) => Some(*entity),
             EventKind::DamageRollPerformed(entity, _) => Some(*entity),
