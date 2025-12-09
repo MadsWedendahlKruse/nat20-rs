@@ -16,19 +16,6 @@ use crate::{
     },
 };
 
-// Temporary until all spells have been migrated to the registry loading system
-pub fn get_spell(spell_id: &SpellId) -> Option<&Spell> {
-    if let Some(spell) = registry::spells::SPELL_REGISTRY.get(spell_id) {
-        return Some(spell);
-    }
-
-    if let Some(spell) = SpellsRegistry::get(spell_id) {
-        return Some(spell);
-    }
-
-    None
-}
-
 pub fn spellcaster_levels(world: &World, entity: Entity) -> u8 {
     let mut spellcaster_levels = 0.0;
     if let Ok(class_levels) = world.get::<&CharacterLevels>(entity) {

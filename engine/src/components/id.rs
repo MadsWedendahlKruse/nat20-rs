@@ -42,7 +42,8 @@ id_newtypes!(
     RaceId,
     SubraceId,
     AIControllerId,
-    FactionId
+    FactionId,
+    ScriptId
 );
 
 impl Into<ActionId> for SpellId {

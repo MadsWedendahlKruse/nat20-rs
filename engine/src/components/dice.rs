@@ -21,6 +21,7 @@ pub enum DieSize {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct DiceSet {
     pub num_dice: u32,
     pub die_size: DieSize,

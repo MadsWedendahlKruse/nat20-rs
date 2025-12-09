@@ -36,7 +36,7 @@ use nat20_rs::{
         speed::Speed,
         spells::spellbook::Spellbook,
     },
-    registry::{self},
+    registry::{self, registry::SpellsRegistry},
     systems::{
         self,
         d20::{D20CheckDCKind, D20ResultKind},
@@ -480,7 +480,7 @@ fn render_spellbook_ui(
     // --- Cantrips ---
     ui.separator_with_text("Cantrips");
     for spell_id in spellbook.all_spells() {
-        let spell = systems::spells::get_spell(spell_id).unwrap();
+        let spell = SpellsRegistry::get(spell_id).unwrap();
         if spell.is_cantrip() {
             let _disabled = match mode {
                 RenderMode::ReadOnly => Some(ui.begin_disabled(true)),
@@ -497,7 +497,7 @@ fn render_spellbook_ui(
     let prepared_spells: HashSet<SpellId> = spellbook.prepared_spells().clone();
     let mut rendered = 0;
     for spell_id in &prepared_spells {
-        let spell = systems::spells::get_spell(spell_id).unwrap();
+        let spell = SpellsRegistry::get(spell_id).unwrap();
         let label = format!("{} ({})", spell_id, roman_numeral(spell.base_level()));
 
         let _disabled = match mode {
@@ -523,7 +523,7 @@ fn render_spellbook_ui(
         let mut spells_by_level: HashMap<u8, Vec<&SpellId>> = HashMap::new();
         let all_spells = spellbook.all_spells().clone();
         for spell_id in &all_spells {
-            let spell = systems::spells::get_spell(spell_id).unwrap();
+            let spell = SpellsRegistry::get(spell_id).unwrap();
             spells_by_level
                 .entry(spell.base_level())
                 .or_default()

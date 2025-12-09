@@ -9,22 +9,20 @@ use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter};
 use uom::si::length::foot;
 
-use crate::
-    components::{
-        ability::{Ability, AbilityScoreMap},
-        actions::targeting::TargetingRange,
-        d20::D20Check,
-        damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
-        dice::DiceSet,
-        id::{ActionId, EffectId},
-        items::{
-            equipment::slots::{EquipmentSlot, SlotProvider},
-            item::Item,
-        },
-        modifier::{ModifierSet, ModifierSource},
-        proficiency::{Proficiency, ProficiencyLevel},
-    }
-;
+use crate::components::{
+    ability::{Ability, AbilityScoreMap},
+    actions::targeting::TargetingRange,
+    d20::D20Check,
+    damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
+    dice::DiceSet,
+    id::{ActionId, EffectId},
+    items::{
+        equipment::slots::{EquipmentSlot, SlotProvider},
+        item::Item,
+    },
+    modifier::{ModifierSet, ModifierSource},
+    proficiency::{Proficiency, ProficiencyLevel},
+};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -41,6 +39,7 @@ pub enum WeaponKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub enum WeaponProperties {
     // TODO: Ammunition,
     Finesse,
@@ -120,6 +119,20 @@ impl FromStr for WeaponProperties {
         } else {
             Err(format!("Invalid weapon property: {}", s))
         }
+    }
+}
+
+impl TryFrom<String> for WeaponProperties {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        WeaponProperties::from_str(&value)
+    }
+}
+
+impl Into<String> for WeaponProperties {
+    fn into(self) -> String {
+        self.to_string()
     }
 }
 

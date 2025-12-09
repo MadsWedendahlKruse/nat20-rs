@@ -300,7 +300,10 @@ pub mod creatures {
                 Ability::Intelligence,
             );
             spellbook.add_spell(&SpellId::from_str("spell.fireball"), Ability::Intelligence);
-            spellbook.add_spell(&registry::spells::COUNTERSPELL_ID, Ability::Intelligence);
+            spellbook.add_spell(
+                &SpellId::from_str("spell.counterspell"),
+                Ability::Intelligence,
+            );
 
             EntityIdentifier::new(entity, name)
         }

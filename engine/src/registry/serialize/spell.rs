@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     components::{
-        id::SpellId,
+        id::{ScriptId, SpellId},
         resource::ResourceAmountMap,
         spells::spell::{MagicSchool, Spell},
     },
@@ -18,8 +18,8 @@ pub struct SpellDefinition {
     pub kind: ActionKindDefinition,
     pub resource_cost: ResourceAmountMap,
     pub targeting: TargetingDefinition,
-    // TODO: How to handle reaction triggers in serialization?
-    // pub reaction_trigger: Option<Arc<dyn Fn(Entity, &Event) -> bool + Send + Sync>>,
+    #[serde(default)]
+    pub reaction_trigger: Option<ScriptId>,
 }
 
 impl From<SpellDefinition> for Spell {
@@ -32,7 +32,7 @@ impl From<SpellDefinition> for Spell {
             value.kind.into(),
             value.resource_cost,
             value.targeting.function(),
-            None,
+            value.reaction_trigger,
         )
     }
 }

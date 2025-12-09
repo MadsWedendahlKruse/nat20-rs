@@ -7,7 +7,8 @@ use crate::{
         id::{ResourceId, SpellId},
         resource::ResourceAmount,
     },
-    registry, systems,
+    registry::{self, registry::SpellsRegistry},
+    systems,
 };
 
 #[derive(Debug, Clone)]
@@ -36,7 +37,8 @@ impl Spellbook {
 
     pub fn add_spell(&mut self, spell_id: &SpellId, spellcasting_ability: Ability) {
         // TODO: Handle missing spells
-        let spell = systems::spells::get_spell(spell_id).expect("Missing spell in registry");
+        let spell = SpellsRegistry::get(spell_id)
+            .expect(format!("Missing spell in registry: {} ", spell_id).as_str());
         self.spells.insert(spell_id.clone());
         self.spellcasting_ability
             .insert(spell_id.clone(), spellcasting_ability);
@@ -111,7 +113,7 @@ impl ActionProvider for Spellbook {
         let mut actions = ActionMap::new();
 
         for spell_id in &self.spells {
-            let spell = systems::spells::get_spell(spell_id)
+            let spell = SpellsRegistry::get(spell_id)
                 .expect(format!("Missing spell in registry: {} ", spell_id).as_str());
 
             if spell.is_cantrip() {

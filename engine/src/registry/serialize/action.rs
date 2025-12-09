@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
     components::{
         actions::action::{Action, ActionKind},
-        id::{ActionId, EffectId},
+        id::{ActionId, EffectId, ScriptId},
         resource::{RechargeRule, ResourceAmountMap},
     },
     registry::serialize::{
@@ -59,8 +61,9 @@ pub enum ActionKindDefinition {
     },
     // Same story here: you probably will not serialize these directly
     // for now, so they can live only on the runtime enum.
-    // Reaction { ... }
-    // Custom(...)
+    Reaction {
+        script: ScriptId,
+    }, // Custom(...)
 }
 
 impl From<ActionKindDefinition> for ActionKind {
@@ -114,7 +117,9 @@ impl From<ActionKindDefinition> for ActionKind {
 
             ActionKindDefinition::Composite { actions } => ActionKind::Composite {
                 actions: actions.into_iter().map(ActionKind::from).collect(),
-            }, // Utility / Reaction / Custom are intentionally not in ActionKindSpec.
+            },
+
+            ActionKindDefinition::Reaction { script } => ActionKind::Reaction { reaction: script },
         }
     }
 }
@@ -131,7 +136,8 @@ pub struct ActionDefinition {
     #[serde(default)]
     pub cooldown: Option<RechargeRule>,
     // TODO: How to handle reaction triggers in serialization?
-    // pub reaction_trigger: Option<Arc<dyn Fn(Entity, &Event) -> bool + Send + Sync>>,
+    #[serde(default)]
+    pub reaction_trigger: Option<ScriptId>,
 }
 
 impl From<ActionDefinition> for Action {
@@ -143,7 +149,7 @@ impl From<ActionDefinition> for Action {
             resource_cost: value.resource_cost,
             targeting: value.targeting.function(),
             cooldown: value.cooldown,
-            reaction_trigger: None,
+            reaction_trigger: value.reaction_trigger,
         }
     }
 }

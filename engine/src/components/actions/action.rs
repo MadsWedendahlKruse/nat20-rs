@@ -16,7 +16,7 @@ use crate::{
         },
         dice::{DiceSetRoll, DiceSetRollResult},
         health::life_state::LifeState,
-        id::{ActionId, EffectId, EntityIdentifier, IdProvider, SpellId},
+        id::{ActionId, EffectId, EntityIdentifier, IdProvider, ScriptId, SpellId},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
         resource::{RechargeRule, ResourceAmountMap},
         saving_throw::SavingThrowDC,
@@ -55,13 +55,14 @@ pub type AttackRollFunction = dyn Fn(&World, Entity, &ActionContext) -> AttackRo
 pub type SavingThrowFunction =
     dyn Fn(&World, Entity, &ActionContext) -> SavingThrowDC + Send + Sync;
 pub type HealFunction = dyn Fn(&World, Entity, &ActionContext) -> DiceSetRoll + Send + Sync;
-pub type ReactionFunction = dyn Fn(&mut GameState, &ReactionData) + Send + Sync;
 
 /// Represents the kind of action that can be performed.
 #[derive(Clone)]
 pub enum ActionKind {
     /// Actions that deal unconditional damage. Is this only Magic Missile?
-    UnconditionalDamage { damage: Arc<DamageFunction> },
+    UnconditionalDamage {
+        damage: Arc<DamageFunction>,
+    },
     /// Actions that require an attack roll to hit a target, and deal damage on hit.
     /// Some actions may have a damage roll on a failed attack roll (e.g. Acid Arrow)
     AttackRollDamage {
@@ -81,7 +82,9 @@ pub enum ActionKind {
     /// Actions that apply an effect to a target without requiring an attack roll or
     /// saving throw. TODO: Not sure if this is actually needed, since most effects
     /// will require either an attack roll or a saving throw.
-    UnconditionalEffect { effect: EffectId },
+    UnconditionalEffect {
+        effect: EffectId,
+    },
     /// Actions that require a saving throw to avoid or reduce an effect.
     SavingThrowEffect {
         saving_throw: Arc<SavingThrowFunction>,
@@ -89,10 +92,14 @@ pub enum ActionKind {
     },
     /// Actions that apply a beneficial effect to a target, and therefore do not require
     /// an attack roll or saving throw (e.g. Bless, Shield of Faith).
-    BeneficialEffect { effect: EffectId },
+    BeneficialEffect {
+        effect: EffectId,
+    },
     /// Actions that heal a target. These actions do not require an attack roll or saving throw.
     /// They simply heal the target for a certain amount of hit points.
-    Healing { heal: Arc<HealFunction> },
+    Healing {
+        heal: Arc<HealFunction>,
+    },
     /// Utility actions that do not deal damage or heal, but have some other effect.
     /// These actions may include buffs, debuffs, or other effects that do not fit into the
     /// other categories (e.g. teleportation, Knock, etc.).
@@ -103,11 +110,12 @@ pub enum ActionKind {
     /// A composite action that combines multiple actions into one.
     /// This can be used for actions that have multiple effects, such as a spell
     /// that deals damage and applies a beneficial effect.
-    Composite { actions: Vec<ActionKind> },
+    Composite {
+        actions: Vec<ActionKind>,
+    },
 
     Reaction {
-        // TODO: What should this return?
-        reaction: Arc<ReactionFunction>,
+        reaction: ScriptId,
     },
     /// Custom actions can have any kind of effect, including damage, healing, or utility.
     /// Please note that this should only be used for actions that don't fit into the
@@ -215,7 +223,6 @@ impl PartialEq for ReactionResult {
 
 pub type TargetingFunction =
     dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync;
-pub type ReactionTriggerFunction = dyn Fn(Entity, &Event) -> bool + Send + Sync;
 
 #[derive(Clone, Deserialize)]
 #[serde(from = "ActionDefinition")]
@@ -229,7 +236,7 @@ pub struct Action {
     /// Optional cooldown for the action
     pub cooldown: Option<RechargeRule>,
     /// If the action is a reaction, this will describe what triggers the reaction.
-    pub reaction_trigger: Option<Arc<ReactionTriggerFunction>>,
+    pub reaction_trigger: Option<ScriptId>,
 }
 
 /// Represents the result of performing an action on a single target. For actions that affect multiple targets,

@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     components::{
         actions::{
-            action::{Action, ActionContext, ActionKind},
+            action::{Action, ActionContext, ActionKind, TargetingFunction},
             targeting::TargetingContext,
         },
-        id::{IdProvider, ResourceId, SpellId},
+        id::{IdProvider, ResourceId, ScriptId, SpellId},
         resource::{ResourceAmount, ResourceAmountMap},
     },
     engine::event::Event,
@@ -45,8 +45,9 @@ impl Spell {
         school: MagicSchool,
         kind: ActionKind,
         resource_cost: ResourceAmountMap,
-        targeting: Arc<dyn Fn(&World, Entity, &ActionContext) -> TargetingContext + Send + Sync>,
-        reaction_trigger: Option<Arc<dyn Fn(Entity, &Event) -> bool + Send + Sync>>,
+        targeting: Arc<TargetingFunction>,
+        // reaction_trigger: Option<Arc<ReactionTriggerFunction>>,
+        reaction_trigger: Option<ScriptId>,
     ) -> Self {
         let action_id = id.clone().into();
         let mut resource_cost = resource_cost;

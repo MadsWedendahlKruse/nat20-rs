@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use hecs::{Entity, World};
 use parry3d::{na::Point3, shape::Ball};
+use strum::IntoEnumIterator;
 
 use crate::{
     components::actions::{
@@ -17,6 +18,9 @@ use crate::{
         },
         geometry::WorldGeometry,
         interaction::{InteractionEngine, InteractionScopeId, InteractionSession},
+    },
+    scripts::{
+        rhai::rhai_engine::RhaiScriptEngine, script::ScriptLanguage, script_engine::ScriptEngine,
     },
     systems::{
         self,
@@ -34,10 +38,25 @@ pub struct GameState {
     pub interaction_engine: InteractionEngine,
     pub event_log: EventLog,
     event_listeners: HashMap<EventId, EventListener>,
+
+    // TODO: Not sure where this guy should live
+    pub script_engines: HashMap<ScriptLanguage, Box<dyn ScriptEngine>>,
 }
 
 impl GameState {
     pub fn new(geometry: WorldGeometry) -> Self {
+        let mut script_engines: HashMap<ScriptLanguage, Box<dyn ScriptEngine>> = HashMap::new();
+        for language in ScriptLanguage::iter() {
+            match language {
+                // ScriptLanguage::Lua => {
+                //     script_engines.insert(language, Box::new(LuaScriptEngine::new()));
+                // }
+                ScriptLanguage::Rhai => {
+                    script_engines.insert(language, Box::new(RhaiScriptEngine::new()));
+                }
+            }
+        }
+
         Self {
             world: World::new(),
             encounters: HashMap::new(),
@@ -46,6 +65,7 @@ impl GameState {
             event_log: EventLog::new(),
             event_listeners: HashMap::new(),
             geometry,
+            script_engines,
         }
     }
 
@@ -346,7 +366,7 @@ impl GameState {
         }
 
         // No reaction window → advance now
-        self.advance_event(event);
+        self.advance_event(event, false);
         Ok(())
     }
 
@@ -365,6 +385,7 @@ impl GameState {
                             &self.geometry,
                             *reactor,
                             event,
+                            &mut self.script_engines,
                         );
                         if !reactions.is_empty() {
                             new_options.insert(*reactor, reactions);
@@ -423,17 +444,13 @@ impl GameState {
             }
         };
 
-        // TODO: Avoid clone
-        let mut pending_events = session.pending_events().clone();
-        if ready_to_resume {
-            while let Some(event) = pending_events.pop_front() {
-                self.advance_event(event);
-            }
+        if ready_to_resume && let Some(event) = session.pending_events_mut().pop_front() {
+            self.advance_event(event, true);
         }
     }
 
     fn collect_reactions(
-        &self,
+        &mut self,
         actor: Entity,
         event: &Event,
     ) -> Option<HashMap<Entity, Vec<ReactionData>>> {
@@ -471,6 +488,7 @@ impl GameState {
                 &self.geometry,
                 *reactor,
                 event,
+                &mut self.script_engines,
             );
 
             if !reactions.is_empty() {
@@ -525,7 +543,7 @@ impl GameState {
     }
 
     // TODO: I guess this is where the event actually "does" something? New name?
-    fn advance_event(&mut self, event: Event) {
+    fn advance_event(&mut self, event: Event, process_pending_events: bool) {
         match &event.kind {
             EventKind::ActionRequested { action } => {
                 systems::actions::perform_action(self, action);
@@ -550,6 +568,12 @@ impl GameState {
                                     event,
                                     resources_refunded,
                                 } => {
+                                    println!(
+                                        "[GameState] Cancelling event {:?} due to reaction by {:?}",
+                                        event.id,
+                                        action_result.performer.id()
+                                    );
+
                                     if let Some(actor) =
                                         session.pending_events().iter().find_map(|e| {
                                             if e.id == event.id { e.actor() } else { None }
@@ -604,6 +628,16 @@ impl GameState {
             }
 
             _ => {} // No follow-up event
+        }
+
+        if process_pending_events {
+            self.resume_pending_events_if_ready(
+                self.scope_for_entity(
+                    event
+                        .actor()
+                        .expect("Event must have an actor to resume pending events"),
+                ),
+            );
         }
     }
 

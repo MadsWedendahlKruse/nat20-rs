@@ -9,14 +9,20 @@ use std::{
 
 use serde::de::DeserializeOwned;
 
-use crate::components::{
-    actions::action::Action,
-    background::Background,
-    class::{Class, Subclass},
-    id::{ActionId, BackgroundId, ClassId, IdProvider, ItemId, ResourceId, SpellId, SubclassId},
-    items::inventory::ItemInstance,
-    resource::ResourceDefinition,
-    spells::spell::Spell,
+use crate::{
+    components::{
+        actions::action::Action,
+        background::Background,
+        class::{Class, Subclass},
+        id::{
+            ActionId, BackgroundId, ClassId, IdProvider, ItemId, ResourceId, ScriptId, SpellId,
+            SubclassId,
+        },
+        items::inventory::ItemInstance,
+        resource::ResourceDefinition,
+        spells::spell::Spell,
+    },
+    scripts::script::Script,
 };
 
 #[derive(Debug, Clone)]
@@ -82,6 +88,7 @@ pub struct RegistrySet {
     pub subclasses: Registry<SubclassId, Subclass>,
     pub items: Registry<ItemId, ItemInstance>,
     pub resources: Registry<ResourceId, ResourceDefinition>,
+    pub scripts: Registry<ScriptId, Script>,
 }
 
 impl RegistrySet {
@@ -98,6 +105,43 @@ impl RegistrySet {
         let items_directory = root_directory.join("items");
         let resources_directory = root_directory.join("resources");
 
+        // Scripts can be in all directories, so we load them separately
+        let all_directories = vec![
+            actions_directory.as_path(),
+            spells_directory.as_path(),
+            backgrounds_directory.as_path(),
+            classes_directory.as_path(),
+            subclasses_directory.as_path(),
+            items_directory.as_path(),
+            resources_directory.as_path(),
+        ];
+
+        let mut scripts = HashMap::new();
+        for directory in all_directories {
+            for entry in fs::read_dir(directory)? {
+                let entry = entry?;
+                // Don't bother with JSON files
+                if entry.path().extension().and_then(|ext| ext.to_str()) == Some("json") {
+                    continue;
+                }
+                let result = Script::try_from(entry);
+                if result.is_err() {
+                    eprintln!("Failed to load script: {:?}", result.err().unwrap());
+                    continue;
+                }
+                if let Ok(script) = result {
+                    let id = script.id.clone();
+                    println!("Loaded script: {:?}", script.clone());
+                    if let Some(_) = scripts.insert(id.clone(), script) {
+                        return Err(RegistryError::DuplicateIdError(format!(
+                            "Duplicate Script ID found: {:?}",
+                            id
+                        )));
+                    }
+                }
+            }
+        }
+
         Ok(Self {
             actions: Registry::load_from_directory(actions_directory)?,
             spells: Registry::load_from_directory(spells_directory)?,
@@ -106,6 +150,7 @@ impl RegistrySet {
             subclasses: Registry::load_from_directory(subclasses_directory)?,
             items: Registry::load_from_directory(items_directory)?,
             resources: Registry::load_from_directory(resources_directory)?,
+            scripts: Registry { entries: scripts },
         })
     }
 }
@@ -146,3 +191,4 @@ define_registry!(ClassesRegistry, ClassId, Class, classes);
 define_registry!(SubclassesRegistry, SubclassId, Subclass, subclasses);
 define_registry!(ResourcesRegistry, ResourceId, ResourceDefinition, resources);
 define_registry!(ItemsRegistry, ItemId, ItemInstance, items);
+define_registry!(ScriptsRegistry, ScriptId, Script, scripts);
