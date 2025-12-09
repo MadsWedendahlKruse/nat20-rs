@@ -181,7 +181,7 @@ pub enum ActionKindResult {
 #[derive(Clone)]
 pub enum ReactionResult {
     ModifyEvent {
-        modification: Arc<dyn Fn(&mut Event) + Send + Sync>,
+        modification: Arc<dyn Fn(&World, &mut Event) + Send + Sync>,
     },
     CancelEvent {
         event: Arc<Event>,

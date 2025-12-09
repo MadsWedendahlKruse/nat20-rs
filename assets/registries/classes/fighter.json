@@ -196,15 +196,15 @@
         ]
     },
     "actions_by_level": {
-        "9": [
-            "action.fighter.indomitable"
-        ],
         "1": [
             "action.fighter.second_wind"
         ],
         "2": [
             "action.fighter.action_surge",
             "action.fighter.tactical_mind"
+        ],
+        "9": [
+            "action.fighter.indomitable"
         ]
     }
 }

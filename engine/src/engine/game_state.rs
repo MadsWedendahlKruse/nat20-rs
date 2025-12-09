@@ -595,6 +595,7 @@ impl GameState {
 
                                 // TODO: How to handle this properly?
                                 ReactionResult::ModifyEvent { modification } => (modification)(
+                                    &self.world,
                                     &mut session.pending_events_mut().front_mut().unwrap(),
                                 ),
 

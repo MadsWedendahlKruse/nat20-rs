@@ -52,7 +52,7 @@ impl RhaiD20CheckPerformedView {
     fn build_extra(builder: &mut TypeBuilder<Self>) {
         builder
             .with_get("performer", |s: &mut Self| {
-                u64::from(s.inner.performer.to_bits())
+                RhaiD20CheckPerformedView::performer(s)
             })
             .with_get("result", |s: &mut Self| RhaiD20Result {
                 inner: s.inner.result.clone(),
@@ -60,6 +60,10 @@ impl RhaiD20CheckPerformedView {
             .with_get("dc_kind", |s: &mut Self| RhaiD20CheckDCKind {
                 inner: s.inner.dc_kind.clone(),
             });
+    }
+
+    pub fn performer(&self) -> u64 {
+        u64::from(self.inner.performer.to_bits())
     }
 }
 
@@ -129,6 +133,18 @@ impl RhaiEventView {
                 "as_d20_check_performed",
                 RhaiEventView::as_d20_check_performed,
             )
+            .with_fn(
+                "is_own_failed_d20_check",
+                |s: &mut Self, context: RhaiTriggerContext, kind: String| {
+                    if !s.is_d20_check_performed() {
+                        return false;
+                    }
+                    let d20_check = s.as_d20_check_performed();
+                    return d20_check.performer() == context.reactor_id
+                        && !d20_check.inner.result.is_success
+                        && d20_check.inner.dc_kind.label == kind;
+                },
+            )
             .with_fn("is_action", RhaiEventView::is_action)
             .with_fn("as_action", RhaiEventView::as_action);
     }
@@ -195,9 +211,9 @@ pub struct RhaiReactionPlan {
 
 #[export_module]
 pub mod reaction_plan_module {
-    use super::*;
+    use crate::{registry::serialize::parser::Parser, scripts::script_api::ScriptD20Bonus};
 
-    use rhai::INT;
+    use super::*;
 
     pub fn none() -> RhaiReactionPlan {
         RhaiReactionPlan {
@@ -216,10 +232,34 @@ pub mod reaction_plan_module {
         }
     }
 
-    pub fn modify_d20_result(bonus: INT) -> RhaiReactionPlan {
+    fn parse_d20_bonus(bonus: String) -> ScriptD20Bonus {
+        if let Ok(flat) = Parser::new(&bonus).parse_int_expression() {
+            ScriptD20Bonus::Flat(flat)
+        } else if let Ok(expr) = Parser::new(&bonus).parse_dice_expression() {
+            ScriptD20Bonus::Dice(expr)
+        } else {
+            panic!("Failed to parse bonus expression: {}", bonus);
+        }
+    }
+
+    pub fn modify_d20_result(bonus: String) -> RhaiReactionPlan {
         RhaiReactionPlan {
             inner: ScriptReactionPlan::ModifyD20Result {
-                bonus: bonus as i32,
+                bonus: parse_d20_bonus(bonus),
+            },
+        }
+    }
+
+    pub fn reroll_d20_result(bonus: String, force_use_new: bool) -> RhaiReactionPlan {
+        let bonus = if bonus.is_empty() {
+            None
+        } else {
+            Some(parse_d20_bonus(bonus))
+        };
+        RhaiReactionPlan {
+            inner: ScriptReactionPlan::RerollD20Result {
+                bonus,
+                force_use_new,
             },
         }
     }

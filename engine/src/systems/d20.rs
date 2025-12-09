@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use hecs::Entity;
+use hecs::{Entity, World};
 
 use crate::{
     components::{
@@ -72,12 +72,18 @@ impl D20ResultKind {
             D20ResultKind::AttackRoll { result } => &result.roll_result,
         }
     }
+
+    pub fn d20_result_mut(&mut self) -> &mut D20CheckResult {
+        match self {
+            D20ResultKind::SavingThrow { result, .. } => result,
+            D20ResultKind::Skill { result, .. } => result,
+            D20ResultKind::AttackRoll { result } => &mut result.roll_result,
+        }
+    }
 }
 
-#[must_use]
-pub fn check(game_state: &mut GameState, entity: Entity, dc: &D20CheckDCKind) -> Event {
-    let world = &game_state.world;
-    let result = match dc {
+pub fn check_no_event(world: &World, entity: Entity, dc: &D20CheckDCKind) -> D20ResultKind {
+    match dc {
         D20CheckDCKind::SavingThrow(dc) => D20ResultKind::SavingThrow {
             kind: dc.key,
             result: systems::helpers::get_component::<SavingThrowSet>(world, entity)
@@ -94,18 +100,14 @@ pub fn check(game_state: &mut GameState, entity: Entity, dc: &D20CheckDCKind) ->
         D20CheckDCKind::AttackRoll(_, _) => {
             todo!("systems::d20 attack roll checks are not yet implemented");
         }
-    };
-    Event::new(EventKind::D20CheckPerformed(entity, result, dc.clone()))
+    }
 }
 
-// fn process_event(
-//     game_state: &mut GameState,
-//     entity: Entity,
-//     result: D20ResultKind,
-//     dc: Option<D20CheckDCKind>,
-// ) -> EventId {
-//     let event = Event::new(EventKind::D20CheckPerformed(entity, result.clone(), dc));
-//     let event_id = event.id;
-//     game_state.process_event(event);
-//     event_id
-// }
+#[must_use]
+pub fn check(game_state: &mut GameState, entity: Entity, dc: &D20CheckDCKind) -> Event {
+    Event::new(EventKind::D20CheckPerformed(
+        entity,
+        check_no_event(&game_state.world, entity, dc),
+        dc.clone(),
+    ))
+}

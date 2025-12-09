@@ -1,4 +1,3 @@
-// context: TriggerContext
 fn reaction_trigger(context) {
     let event = context.event;
 

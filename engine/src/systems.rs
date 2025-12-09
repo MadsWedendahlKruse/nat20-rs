@@ -16,5 +16,6 @@ pub mod loadout;
 pub mod movement;
 pub mod race;
 pub mod resources;
+pub mod scripts;
 pub mod spells;
 pub mod time;

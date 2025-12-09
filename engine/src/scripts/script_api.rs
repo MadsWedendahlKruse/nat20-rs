@@ -1,9 +1,17 @@
+use std::str::FromStr;
+
 use hecs::Entity;
 
-use crate::components::actions::action::ActionContext;
-use crate::components::id::ResourceId;
+use crate::components::dice::{DiceSet, DiceSetRoll};
+use crate::components::modifier::{ModifierSet, ModifierSource};
+use crate::components::{actions::action::ActionContext, id::ResourceId};
 use crate::engine::event::{ActionData, Event, EventKind, ReactionData};
-use crate::registry::serialize::d20::SavingThrowProvider;
+use crate::registry::serialize::parser::Evaluable;
+use crate::registry::serialize::{
+    d20::SavingThrowProvider,
+    parser::{DiceExpression, IntExpression},
+    variables::PARSER_VARIABLES,
+};
 use crate::systems::d20::{D20CheckDCKind, D20ResultKind};
 
 // Internally we keep using hecs::Entity in the API layer.
@@ -167,6 +175,40 @@ pub struct ScriptSavingThrowSpec {
     pub saving_throw: SavingThrowProvider,
 }
 
+/// Bonus to apply to a D20 roll.
+#[derive(Clone)]
+pub enum ScriptD20Bonus {
+    Flat(IntExpression),
+    Dice(DiceExpression),
+}
+
+impl ScriptD20Bonus {
+    pub fn evaluate(
+        &self,
+        world: &hecs::World,
+        entity: Entity,
+        action_context: &ActionContext,
+    ) -> i32 {
+        match self {
+            ScriptD20Bonus::Flat(expr) => expr
+                .evaluate(world, entity, action_context, &PARSER_VARIABLES)
+                .unwrap(),
+            ScriptD20Bonus::Dice(expr) => {
+                let (num_dice, size, modifier) = expr
+                    .evaluate(world, entity, action_context, &PARSER_VARIABLES)
+                    .unwrap();
+
+                DiceSetRoll {
+                    dice: DiceSet::from_str(format!("{}d{}", num_dice, size).as_str()).unwrap(),
+                    modifiers: ModifierSet::from(ModifierSource::Base, modifier),
+                }
+                .roll()
+                .subtotal
+            }
+        }
+    }
+}
+
 /// Plan/description of what the reaction actually does.
 /// This is interpreted by Rust; scripts only *describe* the behaviour.
 #[derive(Clone)]
@@ -178,7 +220,14 @@ pub enum ScriptReactionPlan {
     Sequence(Vec<ScriptReactionPlan>),
 
     /// Add a flat modifier to the most recent D20 roll for this event.
-    ModifyD20Result { bonus: i32 },
+    ModifyD20Result { bonus: ScriptD20Bonus },
+
+    /// Reroll the most recent D20 roll for this event with an optional modifier.
+    /// Can also be set to force using the new roll.
+    RerollD20Result {
+        bonus: Option<ScriptD20Bonus>,
+        force_use_new: bool,
+    },
 
     /// Ask an entity to make a saving throw against a DC.
     /// Then branch into `on_success` or `on_failure`.
