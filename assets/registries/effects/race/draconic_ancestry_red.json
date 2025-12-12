@@ -1,0 +1,10 @@
+{
+    "id": "effect.dragonborn.draconic_ancestry_red",
+    "description": "Your lineage stems from a dragon progenitor. You have resistance to fire damage.",
+    "duration": "permanent",
+    "modifiers": [
+        {
+            "resistance": "fire resistance"
+        }
+    ]
+}

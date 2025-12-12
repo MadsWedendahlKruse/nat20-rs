@@ -81,7 +81,6 @@ impl TryFrom<DirEntry> for Script {
         let mut script_id = file_name.to_string();
         let mut file_path = full_file_path.clone();
         while let Some(parent) = file_path.parent() {
-            println!("Parent: {:?}", parent);
             if let Some(folder_name) = parent.file_name().and_then(|s| s.to_str()) {
                 if folder_name == REGISTRIES_FOLDER {
                     break;

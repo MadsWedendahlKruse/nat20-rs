@@ -1,0 +1,10 @@
+{
+    "id": "effect.item.armor_stealth_disadvantage",
+    "description": "The weight and bulk of your armor imposes disadvantage on Stealth checks.",
+    "duration": "permanent",
+    "modifiers": [
+        {
+            "skill": "stealth disadvantage"
+        }
+    ]
+}

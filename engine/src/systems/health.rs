@@ -13,7 +13,7 @@ use crate::{
         health::{hit_points::HitPoints, life_state::LifeState},
         id::ActionId,
         level::CharacterLevels,
-        modifier::ModifierSource,
+        modifier::{Modifiable, ModifierSource},
         resource::ResourceAmountMap,
         saving_throw::SavingThrowKind,
     },
@@ -154,7 +154,7 @@ pub fn damage(
     let (event, callback) = match action_kind {
         ActionKind::UnconditionalDamage { damage } => {
             // Create the damage roll event
-            let damage_roll = damage(&game_state.world, performer, context).roll();
+            let damage_roll = damage(&game_state.world, performer, context).roll_raw(false);
             let event = Event::new(EventKind::DamageRollPerformed(
                 performer,
                 damage_roll.clone(),
@@ -208,9 +208,17 @@ pub fn damage(
             // TODO: The attack roll obtained here doesn't actually correctly reflect
             // whether the attack hits or not, because it doesn't take into account
             // the target's AC
-            let attack_roll = attack_roll(&game_state.world, performer, context)
-                .roll(&game_state.world, performer);
-            let armor_class = systems::loadout::armor_class(&game_state.world, target);
+            let attack_roll = systems::damage::attack_roll_fn(
+                attack_roll.as_ref(),
+                game_state,
+                performer,
+                context,
+            );
+            let armor_class = systems::loadout::armor_class(
+                &game_state.world,
+                target,
+                &mut game_state.script_engines,
+            );
 
             // Create an event to represent the attack roll being made
             let event = Event::new(EventKind::D20CheckPerformed(
@@ -237,19 +245,13 @@ pub fn damage(
                     EventKind::D20CheckResolved(performer, result, dc) => {
                         // Determine the damage to apply based on whether the attack hits or misses
                         let (damage_roll, is_crit) = if result.is_success(dc) {
-                            (
-                                damage(&game_state.world, *performer, &context),
-                                result.d20_result().is_crit,
-                            )
+                            (&damage, result.d20_result().is_crit)
                         } else if let Some(damage_on_miss) = &damage_on_miss {
-                            (
-                                damage_on_miss(&game_state.world, *performer, &context),
-                                false,
-                            )
+                            (damage_on_miss, false)
                         } else {
                             // If the attack misses and there's no damage on miss, no damage is dealt
                             return CallbackResult::Event(Event::action_performed_event(
-                                &game_state,
+                                game_state,
                                 *performer,
                                 &action_id,
                                 &context,
@@ -266,10 +268,15 @@ pub fn damage(
                         };
 
                         // Create the damage roll event
-                        let damage_roll = damage_roll.roll_crit_damage(is_crit);
                         let event = Event::new(EventKind::DamageRollPerformed(
                             *performer,
-                            damage_roll.clone(),
+                            systems::damage::damage_roll_fn(
+                                damage_roll.as_ref(),
+                                game_state,
+                                *performer,
+                                &context,
+                                is_crit,
+                            ),
                         ));
 
                         // Create an event listener to handle the result of the damage roll
@@ -307,7 +314,7 @@ pub fn damage(
                                                 ActionKindResult::AttackRollDamage {
                                                     attack_roll: attack_roll.clone(),
                                                     armor_class: armor_class.clone(),
-                                                    damage_roll: Some(damage_roll.clone()),
+                                                    damage_roll: Some(damage_roll_result.clone()),
                                                     damage_taken,
                                                     new_life_state,
                                                 },
@@ -341,7 +348,13 @@ pub fn damage(
         } => {
             let saving_throw_dc = saving_throw(&game_state.world, performer, context);
 
-            let damage_roll = damage(&game_state.world, performer, context).roll();
+            let damage_roll = systems::damage::damage_roll_fn(
+                damage.as_ref(),
+                game_state,
+                performer,
+                context,
+                false,
+            );
             let event = Event::new(EventKind::DamageRollPerformed(
                 performer,
                 damage_roll.clone(),

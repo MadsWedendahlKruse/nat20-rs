@@ -14,9 +14,10 @@ use crate::{
         actions::action::Action,
         background::Background,
         class::{Class, Subclass},
+        effects::effects::Effect,
         id::{
-            ActionId, BackgroundId, ClassId, IdProvider, ItemId, ResourceId, ScriptId, SpellId,
-            SubclassId,
+            ActionId, BackgroundId, ClassId, EffectId, IdProvider, ItemId, ResourceId, ScriptId,
+            SpellId, SubclassId,
         },
         items::inventory::ItemInstance,
         resource::ResourceDefinition,
@@ -107,6 +108,7 @@ where
 pub struct RegistrySet {
     pub actions: Registry<ActionId, Action>,
     pub spells: Registry<SpellId, Spell>,
+    pub effects: Registry<EffectId, Effect>,
     pub backgrounds: Registry<BackgroundId, Background>,
     pub classes: Registry<ClassId, Class>,
     pub subclasses: Registry<SubclassId, Subclass>,
@@ -123,6 +125,7 @@ impl RegistrySet {
 
         let actions_directory = root_directory.join("actions");
         let spells_directory = root_directory.join("spells");
+        let effects_directory = root_directory.join("effects");
         let backgrounds_directory = root_directory.join("backgrounds");
         let classes_directory = root_directory.join("classes");
         let subclasses_directory = root_directory.join("subclasses");
@@ -133,6 +136,7 @@ impl RegistrySet {
         let all_directories = vec![
             actions_directory.as_path(),
             spells_directory.as_path(),
+            effects_directory.as_path(),
             backgrounds_directory.as_path(),
             classes_directory.as_path(),
             subclasses_directory.as_path(),
@@ -164,6 +168,7 @@ impl RegistrySet {
                     match Script::try_from(entry) {
                         Ok(script) => {
                             let id = script.id.clone();
+                            println!("Loaded script: {:?}", id);
                             if scripts.insert(id.clone(), script).is_some() {
                                 return Err(RegistryError::DuplicateIdError(format!(
                                     "Duplicate Script ID found: {:?}",
@@ -180,6 +185,7 @@ impl RegistrySet {
         Ok(Self {
             actions: Registry::load_from_directory(actions_directory)?,
             spells: Registry::load_from_directory(spells_directory)?,
+            effects: Registry::load_from_directory(effects_directory)?,
             backgrounds: Registry::load_from_directory(backgrounds_directory)?,
             classes: Registry::load_from_directory(classes_directory)?,
             subclasses: Registry::load_from_directory(subclasses_directory)?,
@@ -216,6 +222,7 @@ macro_rules! define_registry {
 
 define_registry!(ActionsRegistry, ActionId, Action, actions);
 define_registry!(SpellsRegistry, SpellId, Spell, spells);
+define_registry!(EffectsRegistry, EffectId, Effect, effects);
 define_registry!(BackgroundsRegistry, BackgroundId, Background, backgrounds);
 define_registry!(ClassesRegistry, ClassId, Class, classes);
 define_registry!(SubclassesRegistry, SubclassId, Subclass, subclasses);

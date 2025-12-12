@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::HashMap,
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
@@ -86,7 +90,7 @@ impl fmt::Display for DamageComponentResult {
 /// This is used in the attack roll hook so we e.g. only apply Fighting Style
 /// Archery when making a ranged attack
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(try_from = "String", into = "String")]
 pub enum DamageSource {
     // TODO: Could also just use the entire weapon instead? Would be a lot of cloning unless
     // we introduce a lifetime for a reference
@@ -97,6 +101,30 @@ pub enum DamageSource {
 impl DamageSource {
     pub fn from_weapon(weapon: &Weapon) -> Self {
         Self::Weapon(weapon.kind().clone())
+    }
+}
+
+impl TryFrom<String> for DamageSource {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value == "spell" {
+            return Ok(DamageSource::Spell);
+        }
+        match value.to_ascii_lowercase().as_str() {
+            "melee" => Ok(DamageSource::Weapon(WeaponKind::Melee)),
+            "ranged" => Ok(DamageSource::Weapon(WeaponKind::Ranged)),
+            _ => Err(format!("Unknown DamageSource: {}", value)),
+        }
+    }
+}
+
+impl Into<String> for DamageSource {
+    fn into(self) -> String {
+        match self {
+            DamageSource::Weapon(kind) => format!("{:?}", kind),
+            DamageSource::Spell => "spell".to_string(),
+        }
     }
 }
 
@@ -121,11 +149,7 @@ impl DamageRoll {
         self.bonus.push(DamageComponent::new(dice, damage_type));
     }
 
-    pub fn roll(&self) -> DamageRollResult {
-        self.roll_internal(1)
-    }
-
-    pub fn roll_crit_damage(&self, crit: bool) -> DamageRollResult {
+    pub(crate) fn roll_raw(&self, crit: bool) -> DamageRollResult {
         if crit {
             self.roll_internal(2)
         } else {
@@ -193,6 +217,19 @@ pub struct DamageRollResult {
     pub source: DamageSource,
 }
 
+impl DamageRollResult {
+    pub fn recalculate_total(&mut self) {
+        self.total = self
+            .components
+            .iter_mut()
+            .map(|c| {
+                c.result.recalculate_total();
+                c.result.subtotal
+            })
+            .sum();
+    }
+}
+
 impl fmt::Display for DamageRollResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.components[0])?;
@@ -205,7 +242,8 @@ impl fmt::Display for DamageRollResult {
 
 /// --- DAMAGE MITIGATION ---
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub enum MitigationOperation {
     Resistance,         // divide by 2
     Vulnerability,      // multiply by 2
@@ -244,6 +282,53 @@ impl fmt::Display for MitigationOperation {
     }
 }
 
+impl FromStr for MitigationOperation {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "resistance" => Ok(MitigationOperation::Resistance),
+            "vulnerability" => Ok(MitigationOperation::Vulnerability),
+            "immunity" => Ok(MitigationOperation::Immunity),
+            _ if s.starts_with("flat_reduction") => {
+                let start = s
+                    .find('(')
+                    .ok_or_else(|| format!("Invalid FlatReduction format, missing '(': {}", s))?;
+                let end = s
+                    .find(')')
+                    .ok_or_else(|| format!("Invalid FlatReduction format, missing ')': {}", s))?;
+                let amount_str = &s[start + 1..end];
+                let amount: i32 = amount_str
+                    .parse()
+                    .map_err(|_| format!("Invalid FlatReduction amount '{}'", amount_str))?;
+                Ok(MitigationOperation::FlatReduction(amount))
+            }
+            _ => Err(format!("Unknown MitigationOperation: {}", s)),
+        }
+    }
+}
+
+impl TryFrom<String> for MitigationOperation {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<MitigationOperation> for String {
+    fn from(op: MitigationOperation) -> Self {
+        match op {
+            MitigationOperation::Resistance => "resistance".to_string(),
+            MitigationOperation::Vulnerability => "vulnerability".to_string(),
+            MitigationOperation::Immunity => "immunity".to_string(),
+            MitigationOperation::FlatReduction(amount) => {
+                format!("flat_reduction({})", amount)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DamageMitigationEffect {
     pub source: ModifierSource,
@@ -262,24 +347,24 @@ impl DamageResistances {
         }
     }
 
-    pub fn add_effect(&mut self, dtype: DamageType, effect: DamageMitigationEffect) {
+    pub fn add_effect(&mut self, damage_type: DamageType, effect: DamageMitigationEffect) {
         self.effects
-            .entry(dtype)
+            .entry(damage_type)
             .or_insert_with(Vec::new)
             .push(effect);
     }
 
-    pub fn remove_effect(&mut self, dtype: DamageType, effect: &DamageMitigationEffect) {
-        if let Some(effects) = self.effects.get_mut(&dtype) {
+    pub fn remove_effect(&mut self, damage_type: DamageType, effect: &DamageMitigationEffect) {
+        if let Some(effects) = self.effects.get_mut(&damage_type) {
             effects.retain(|e| e != effect);
             if effects.is_empty() {
-                self.effects.remove(&dtype);
+                self.effects.remove(&damage_type);
             }
         }
     }
 
-    pub fn effective_resistance(&self, dtype: DamageType) -> Option<DamageMitigationEffect> {
-        self.effects.get(&dtype).and_then(|effects| {
+    pub fn effective_resistance(&self, damage_type: DamageType) -> Option<DamageMitigationEffect> {
+        self.effects.get(&damage_type).and_then(|effects| {
             effects
                 .iter()
                 .min_by_key(|e| e.operation.priority())
@@ -292,11 +377,11 @@ impl DamageResistances {
         let mut total = 0;
 
         for comp in &roll.components {
-            let dtype = comp.damage_type;
+            let damage_type = comp.damage_type;
             let mut value = comp.result.subtotal;
             let mut applied_mods = Vec::new();
 
-            if let Some(effects) = self.effects.get(&dtype) {
+            if let Some(effects) = self.effects.get(&damage_type) {
                 // Sort by priority
                 let mut sorted_effects = effects.clone();
                 sorted_effects.sort_by_key(|e| e.operation.priority());
@@ -312,7 +397,7 @@ impl DamageResistances {
 
             total += value;
             components.push(DamageComponentMitigation {
-                damage_type: dtype,
+                damage_type,
                 original: comp.result.clone(),
                 after_mods: value,
                 modifiers: applied_mods,
@@ -338,8 +423,8 @@ impl fmt::Display for DamageResistances {
         if self.effects.is_empty() {
             return write!(f, "No resistances");
         }
-        for (dtype, effects) in &self.effects {
-            write!(f, "{}: ", dtype)?;
+        for (damage_type, effects) in &self.effects {
+            write!(f, "{}: ", damage_type)?;
             for effect in effects {
                 write!(f, "{}, ", effect.operation)?;
             }
@@ -428,6 +513,7 @@ impl AttackRoll {
         }
     }
 
+    // TODO: Track the source of the crit threshold reduction?
     pub fn reduce_crit_threshold(&mut self, amount: u8) {
         if amount > self.crit_threshold {
             self.crit_threshold = 1; // Minimum crit threshold is 1
@@ -436,30 +522,16 @@ impl AttackRoll {
         }
     }
 
-    pub fn roll(&self, world: &World, entity: Entity) -> AttackRollResult {
-        let mut attack_roll = self.clone();
-
-        for effect in systems::effects::effects(world, entity).iter() {
-            (effect.pre_attack_roll)(world, entity, &mut attack_roll);
-        }
-
-        let level =
-            systems::helpers::level(world, entity).expect("Entity must have a level component");
-        let mut roll_result = attack_roll.d20_check.roll(level.proficiency_bonus());
-        if roll_result.selected_roll >= attack_roll.crit_threshold {
+    pub fn roll_raw(&self, proficiency_bonus: u8) -> AttackRollResult {
+        let mut roll_result = self.d20_check.roll(proficiency_bonus);
+        if roll_result.selected_roll >= self.crit_threshold {
             roll_result.is_crit = true;
         }
 
-        let mut result = AttackRollResult {
+        AttackRollResult {
             roll_result,
             source: self.source.clone(),
-        };
-
-        for effect in systems::effects::effects(world, entity).iter() {
-            (effect.post_attack_roll)(world, entity, &mut result);
         }
-
-        result
     }
 
     pub fn hit_chance(&self, world: &World, entity: Entity, target_ac: u32) -> f64 {
@@ -482,7 +554,7 @@ mod tests {
             actions::action::{ActionContext, ActionKind, ActionProvider},
             id::{EffectId, ItemId, SpellId},
             items::item::Item,
-            modifier::{ModifierSet, ModifierSource},
+            modifier::{Modifiable, ModifierSet, ModifierSource},
         },
         test_utils::fixtures,
     };
@@ -492,7 +564,7 @@ mod tests {
     #[rstest]
     fn damage_roll_values(damage_roll: DamageRoll) {
         println!("Roll: {}", damage_roll);
-        let result = damage_roll.roll();
+        let result = damage_roll.roll_raw(false);
         assert_eq!(result.components.len(), 2);
         // 2d6 + 1d4 + 2 (str mod)
         // Min roll: 2 + 1 + 2 = 5
@@ -504,7 +576,7 @@ mod tests {
     #[rstest]
     fn damage_roll_crit(damage_roll: DamageRoll) {
         println!("Roll: {}", damage_roll);
-        let result = damage_roll.roll_crit_damage(true);
+        let result = damage_roll.roll_raw(true);
         assert_eq!(result.components.len(), 2);
         // 4d6 (2 * 2d6) + 2d4 (2 * 1d4) + 2 (str mod)
         // Min roll: 4 + 2 + 2 = 8

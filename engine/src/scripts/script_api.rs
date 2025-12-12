@@ -1,35 +1,45 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
-use hecs::Entity;
+use hecs::{Entity, World};
 
-use crate::components::dice::{DiceSet, DiceSetRoll};
-use crate::components::modifier::{ModifierSet, ModifierSource};
-use crate::components::{actions::action::ActionContext, id::ResourceId};
-use crate::engine::event::{ActionData, Event, EventKind, ReactionData};
-use crate::registry::serialize::parser::Evaluable;
-use crate::registry::serialize::{
-    d20::SavingThrowProvider,
-    parser::{DiceExpression, IntExpression},
-    variables::PARSER_VARIABLES,
+use crate::{
+    components::{
+        actions::action::ActionContext,
+        dice::{DiceSet, DiceSetRoll},
+        id::{ActionId, ResourceId},
+        items::equipment::{armor::ArmorType, loadout::Loadout, weapon::WeaponKind},
+        modifier::{ModifierSet, ModifierSource},
+        resource::{ResourceAmount, ResourceAmountMap, ResourceBudgetKind, ResourceMap},
+    },
+    engine::event::{ActionData, Event, EventKind, ReactionData},
+    registry::serialize::{
+        d20::SavingThrowProvider,
+        parser::{DiceExpression, Evaluable, IntExpression, Parser},
+        variables::PARSER_VARIABLES,
+    },
+    systems::{
+        self,
+        d20::{D20CheckDCKind, D20ResultKind},
+    },
 };
-use crate::systems::d20::{D20CheckDCKind, D20ResultKind};
 
-// Internally we keep using hecs::Entity in the API layer.
-// Each backend (Rhai, Lua...) can decide how to represent it (e.g. integer).
-pub type ScriptEntity = Entity;
-
-/// What the trigger function logically receives.
-#[derive(Clone)]
-pub struct ReactionTriggerContext {
-    pub reactor: ScriptEntity,
-    pub event: Event,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptEntity {
+    pub id: u64,
 }
 
-/// What the body function logically receives (you can extend later).
-#[derive(Clone)]
-pub struct ReactionBodyContext {
-    // pub reactor: ScriptEntity,
-    pub reaction_data: ReactionData,
+impl From<Entity> for ScriptEntity {
+    fn from(entity: Entity) -> Self {
+        ScriptEntity {
+            id: u64::from(entity.to_bits()),
+        }
+    }
+}
+
+impl Into<Entity> for ScriptEntity {
+    fn into(self) -> Entity {
+        Entity::from_bits(self.id).unwrap()
+    }
 }
 
 #[derive(Clone)]
@@ -73,10 +83,21 @@ impl ScriptD20Result {
     }
 }
 
+// TODO
+pub struct ScriptDiceRollResult {
+    pub subtotal: i32,
+    pub die_results: Vec<u32>,
+}
+
+pub struct ScriptDamageRollResult {
+    pub total_damage: i32,
+    // add more fields as needed
+}
+
 /// High-level event view that scripts can work with.
 #[derive(Clone)]
 pub enum ScriptEventView {
-    D20CheckPerformed(D20CheckPerformedView),
+    D20CheckPerformed(ScriptD20CheckPerformedView),
     ActionRequested(ScriptActionView),
     // later:
     // DamageRollPerformed(DamageView),
@@ -88,46 +109,142 @@ impl ScriptEventView {
         match &event.kind {
             EventKind::D20CheckPerformed(performer, result_kind, dc_kind) => {
                 Some(ScriptEventView::D20CheckPerformed(
-                    D20CheckPerformedView::from_parts(*performer, result_kind, dc_kind),
+                    ScriptD20CheckPerformedView::from_parts(*performer, result_kind, dc_kind),
                 ))
             }
 
             // A direct action request
             EventKind::ActionRequested { action } => Some(ScriptEventView::ActionRequested(
-                ScriptActionView::from_action_data(action),
+                ScriptActionView::from(action),
             )),
 
             // A reaction request that is itself an action (e.g. reaction spell)
             EventKind::ReactionRequested { reaction } => {
                 let action = ActionData::from(reaction);
-                Some(ScriptEventView::ActionRequested(
-                    ScriptActionView::from_action_data(&action),
-                ))
+                Some(ScriptEventView::ActionRequested(ScriptActionView::from(
+                    &action,
+                )))
             }
 
             _ => None, // extend with more variants as needed
+        }
+    }
+
+    pub fn is_d20_check_performed(&self) -> bool {
+        matches!(self, ScriptEventView::D20CheckPerformed(_))
+    }
+
+    pub fn as_d20_check_performed(&self) -> &ScriptD20CheckPerformedView {
+        if let ScriptEventView::D20CheckPerformed(view) = self {
+            view
+        } else {
+            panic!("Not a D20CheckPerformed event view");
+        }
+    }
+
+    pub fn is_action(&self) -> bool {
+        matches!(self, ScriptEventView::ActionRequested(_))
+    }
+
+    pub fn as_action(&self) -> &ScriptActionView {
+        if let ScriptEventView::ActionRequested(view) = self {
+            view
+        } else {
+            panic!("Not an ActionRequested event view");
         }
     }
 }
 
 /// View of a "D20CheckPerformed" event.
 #[derive(Clone)]
-pub struct D20CheckPerformedView {
+pub struct ScriptD20CheckPerformedView {
     pub performer: ScriptEntity,
     pub result: ScriptD20Result,
     pub dc_kind: ScriptD20CheckDCKind,
 }
 
-impl D20CheckPerformedView {
+impl ScriptD20CheckPerformedView {
     pub fn from_parts(
         performer: Entity,
         result_kind: &D20ResultKind,
         dc_kind: &D20CheckDCKind,
     ) -> Self {
-        D20CheckPerformedView {
-            performer,
+        ScriptD20CheckPerformedView {
+            performer: ScriptEntity::from(performer),
             result: ScriptD20Result::from(result_kind, dc_kind),
             dc_kind: ScriptD20CheckDCKind::from(dc_kind),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ScriptActionContext {
+    pub inner: ActionContext,
+}
+
+impl ScriptActionContext {
+    pub fn is_spell(&self) -> bool {
+        matches!(self.inner, ActionContext::Spell { .. })
+    }
+
+    pub fn is_weapon_attack(&self) -> bool {
+        matches!(self.inner, ActionContext::Weapon { .. })
+    }
+}
+
+impl From<&ActionContext> for ScriptActionContext {
+    fn from(context: &ActionContext) -> Self {
+        ScriptActionContext {
+            inner: context.clone(),
+        }
+    }
+}
+
+/// Resource cost passed to/from scripts.
+/// Tracks if it was modified inside the script, so we know whether to update the
+/// original cost outside the script.
+#[derive(Clone)]
+pub struct ScriptResourceCost {
+    pub inner: ResourceAmountMap,
+    pub modified: bool,
+}
+
+impl ScriptResourceCost {
+    pub fn costs_resource(&self, resource_id: &ResourceId) -> bool {
+        self.inner.contains_key(resource_id)
+    }
+
+    pub fn replace_resource(&mut self, from: &ResourceId, to: &ResourceId, amount: ResourceAmount) {
+        if let Some(from_amount) = self.inner.get(from) {
+            if &amount >= from_amount {
+                self.inner.remove(from);
+            } else {
+                self.inner
+                    .entry(from.clone())
+                    .and_modify(|e| *e -= amount.clone());
+            }
+        }
+
+        self.inner
+            .entry(to.clone())
+            .and_modify(|e| *e += amount.clone())
+            .or_insert(amount);
+
+        self.modified = true;
+    }
+
+    pub fn apply_modifications(&self, cost: &mut ResourceAmountMap) {
+        if self.modified {
+            *cost = self.inner.clone();
+        }
+    }
+}
+
+impl From<&ResourceAmountMap> for ScriptResourceCost {
+    fn from(cost: &ResourceAmountMap) -> Self {
+        ScriptResourceCost {
+            inner: cost.clone(),
+            modified: false,
         }
     }
 }
@@ -136,17 +253,35 @@ impl D20CheckPerformedView {
 #[derive(Clone)]
 pub struct ScriptActionView {
     pub action_id: String,
-    pub actor: ScriptEntity,
-    pub is_spell: bool,
+    pub actor: Entity,
+    pub action_context: ScriptActionContext,
+    pub resource_cost: ScriptResourceCost,
     // later: spell_id, spell_level, school, tags, etc.
 }
 
 impl ScriptActionView {
-    pub fn from_action_data(action: &ActionData) -> Self {
+    pub fn new(
+        action_id: &ActionId,
+        actor: Entity,
+        action_context: &ActionContext,
+        resource_cost: &ResourceAmountMap,
+    ) -> Self {
+        ScriptActionView {
+            action_id: action_id.to_string(),
+            actor,
+            action_context: ScriptActionContext::from(action_context),
+            resource_cost: ScriptResourceCost::from(resource_cost),
+        }
+    }
+}
+
+impl From<&ActionData> for ScriptActionView {
+    fn from(action: &ActionData) -> Self {
         ScriptActionView {
             action_id: action.action_id.to_string(),
             actor: action.actor,
-            is_spell: matches!(action.context, ActionContext::Spell { .. }),
+            action_context: ScriptActionContext::from(&action.context),
+            resource_cost: ScriptResourceCost::from(&action.resource_cost),
         }
     }
 }
@@ -155,9 +290,26 @@ impl ScriptActionView {
 /// not need entity IDs, only roles.
 #[derive(Clone)]
 pub enum ScriptEntityRole {
-    Reactor, // the creature using the reaction
-    TriggerActor, // the actor of the triggering action
-             // later: Specific(Entity), Target, etc.
+    /// The entity performing the action. For a reaction, this would be the
+    /// entity which performed the event that triggered the reaction.
+    Actor,
+    /// The entity reacting to the event (only for reactions).
+    Reactor,
+    /// The target of the action/event.
+    Target,
+}
+
+impl FromStr for ScriptEntityRole {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "actor" => Ok(ScriptEntityRole::Actor),
+            "reactor" => Ok(ScriptEntityRole::Reactor),
+            "target" => Ok(ScriptEntityRole::Target),
+            _ => Err(format!("Unknown ScriptEntityRole: {}", s)),
+        }
+    }
 }
 
 /// Which event are we referring to?
@@ -169,7 +321,7 @@ pub enum ScriptEventRef {
 
 /// How to compute a saving throw DC.
 #[derive(Clone)]
-pub struct ScriptSavingThrowSpec {
+pub struct ScriptSavingThrow {
     /// Entity role where the saving throw originates
     pub entity: ScriptEntityRole,
     pub saving_throw: SavingThrowProvider,
@@ -209,6 +361,20 @@ impl ScriptD20Bonus {
     }
 }
 
+impl FromStr for ScriptD20Bonus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(flat) = Parser::new(s).parse_int_expression() {
+            Ok(ScriptD20Bonus::Flat(flat))
+        } else if let Ok(expr) = Parser::new(s).parse_dice_expression() {
+            Ok(ScriptD20Bonus::Dice(expr))
+        } else {
+            Err(format!("Invalid ScriptD20Bonus expression: {}", s))
+        }
+    }
+}
+
 /// Plan/description of what the reaction actually does.
 /// This is interpreted by Rust; scripts only *describe* the behaviour.
 #[derive(Clone)]
@@ -233,7 +399,7 @@ pub enum ScriptReactionPlan {
     /// Then branch into `on_success` or `on_failure`.
     RequireSavingThrow {
         target: ScriptEntityRole,
-        dc: ScriptSavingThrowSpec,
+        dc: ScriptSavingThrow,
         on_success: Box<ScriptReactionPlan>,
         on_failure: Box<ScriptReactionPlan>,
     },
@@ -243,4 +409,99 @@ pub enum ScriptReactionPlan {
         event: ScriptEventRef,
         resources_to_refund: Vec<ResourceId>, // e.g. spell slots
     },
+}
+
+/// Snapshot of a loadout for scripts to inspect.
+#[derive(Debug, Clone)]
+pub struct ScriptLoadoutView {
+    pub loadout: Loadout,
+}
+
+impl From<&Loadout> for ScriptLoadoutView {
+    fn from(loadout: &Loadout) -> Self {
+        ScriptLoadoutView {
+            loadout: loadout.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ScriptResourceView {
+    pub modified: bool,
+    pub resources: ResourceMap,
+}
+
+impl From<&ResourceMap> for ScriptResourceView {
+    fn from(resources: &ResourceMap) -> Self {
+        ScriptResourceView {
+            modified: false,
+            resources: resources.clone(),
+        }
+    }
+}
+
+impl ScriptResourceView {
+    pub fn can_afford_resource(&self, resource_id: &ResourceId, amount: &ResourceAmount) -> bool {
+        return self.resources.can_afford(resource_id, amount);
+    }
+
+    pub fn add_resource(&mut self, resource_id: &ResourceId, amount: &ResourceAmount) {
+        self.resources.add(
+            resource_id.clone(),
+            ResourceBudgetKind::from(amount.clone()),
+            true,
+        );
+        self.modified = true;
+    }
+
+    pub fn apply_modifications(&self, resources: &mut ResourceMap) {
+        if self.modified {
+            *resources = self.resources.clone();
+        }
+    }
+}
+
+/// Snapshot of an entity for scripts to inspect.
+#[derive(Debug, Clone)]
+pub struct ScriptEntityView {
+    // pub modified: bool,
+    pub entity: ScriptEntity,
+    pub resources: ScriptResourceView,
+    pub loadout: ScriptLoadoutView,
+    // Add more fields as needed
+}
+
+impl ScriptEntityView {
+    pub fn from_world(world: &World, entity: Entity) -> Self {
+        let resources = systems::helpers::get_component::<ResourceMap>(world, entity);
+        let loadout = systems::loadout::loadout(world, entity);
+
+        ScriptEntityView {
+            // modified: false,
+            entity: ScriptEntity::from(entity),
+            resources: ScriptResourceView::from(&*resources),
+            loadout: ScriptLoadoutView::from(&*loadout),
+        }
+    }
+
+    pub fn apply_modifications(&self, world: &mut World) {
+        let entity: Entity = self.entity.clone().into();
+        self.resources.apply_modifications(
+            &mut systems::helpers::get_component_mut::<ResourceMap>(world, entity),
+        );
+    }
+}
+
+/// What the trigger function logically receives.
+#[derive(Clone)]
+pub struct ScriptReactionTriggerContext {
+    pub reactor: ScriptEntity,
+    pub event: ScriptEventView,
+}
+
+/// What the body function logically receives (you can extend later).
+/// TODO: Implement this properly - if it's even need at all?
+#[derive(Clone)]
+pub struct ScriptReactionBodyContext {
+    pub reaction_data: ReactionData,
 }

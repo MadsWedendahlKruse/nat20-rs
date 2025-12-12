@@ -2,27 +2,38 @@ use std::{fmt, sync::Arc};
 
 use hecs::{Entity, World};
 
-use crate::components::{
-    actions::action::{Action, ActionContext},
-    d20::{D20Check, D20CheckResult},
-    damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
-    items::equipment::armor::ArmorClass,
-    resource::ResourceAmountMap,
+use crate::{
+    components::{
+        actions::action::{Action, ActionContext},
+        d20::{D20Check, D20CheckResult},
+        damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
+        id::ActionId,
+        items::equipment::armor::ArmorClass,
+        resource::ResourceAmountMap,
+    },
+    scripts::script_engine::ScriptEngineMap,
 };
 
 pub type EffectHook = Arc<dyn Fn(&mut World, Entity) + Send + Sync>;
 pub type AttackRollHook = Arc<dyn Fn(&World, Entity, &mut AttackRoll) + Send + Sync>;
 pub type AttackRollResultHook = Arc<dyn Fn(&World, Entity, &mut AttackRollResult) + Send + Sync>;
-pub type ArmorClassHook = Arc<dyn Fn(&World, Entity, &mut ArmorClass) + Send + Sync>;
+pub type ArmorClassHook =
+    Arc<dyn Fn(&mut ScriptEngineMap, &World, Entity, &mut ArmorClass) + Send + Sync>;
 pub type D20CheckHook = Arc<dyn Fn(&World, Entity, &mut D20Check) + Send + Sync>;
 pub type D20CheckResultHook = Arc<dyn Fn(&World, Entity, &mut D20CheckResult) + Send + Sync>;
 pub type DamageRollHook = Arc<dyn Fn(&World, Entity, &mut DamageRoll) + Send + Sync>;
-pub type DamageRollResultHook = Arc<dyn Fn(&World, Entity, &mut DamageRollResult) + Send + Sync>;
-pub type ActionHook =
-    Arc<dyn Fn(&mut World, Entity, &Action, &ActionContext, &ResourceAmountMap) + Send + Sync>;
-// TODO: Struct or type alias for the resource map?
-pub type ResourceCostHook =
-    Arc<dyn Fn(&World, Entity, &ActionContext, &mut ResourceAmountMap) + Send + Sync>;
+pub type DamageRollResultHook =
+    Arc<dyn Fn(&mut ScriptEngineMap, &World, Entity, &mut DamageRollResult) + Send + Sync>;
+pub type ActionHook = Arc<
+    dyn Fn(&mut ScriptEngineMap, &mut World, Entity, &Action, &ActionContext, &ResourceAmountMap)
+        + Send
+        + Sync,
+>;
+pub type ResourceCostHook = Arc<
+    dyn Fn(&mut ScriptEngineMap, &World, Entity, &ActionId, &ActionContext, &mut ResourceAmountMap)
+        + Send
+        + Sync,
+>;
 
 #[derive(Clone)]
 pub struct D20CheckHooks {

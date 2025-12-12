@@ -10,7 +10,7 @@ use crate::{
         d20::{D20Check, D20CheckDC},
         damage::{AttackRoll, DamageSource},
         id::SpellId,
-        modifier::{ModifierSet, ModifierSource},
+        modifier::{Modifiable, ModifierSet, ModifierSource},
         proficiency::{Proficiency, ProficiencyLevel},
         saving_throw::{SavingThrowDC, SavingThrowKind},
         spells::spellbook::Spellbook,
@@ -79,7 +79,7 @@ impl From<AttackRollProvider> for String {
 
 fn weapon_attack_roll(world: &World, entity: Entity, action_context: &ActionContext) -> AttackRoll {
     if let ActionContext::Weapon { slot } = action_context {
-        return systems::combat::attack_roll(world, entity, slot);
+        return systems::loadout::weapon_attack_roll(world, entity, slot);
     }
     panic!("Action context must be Weapon");
 }

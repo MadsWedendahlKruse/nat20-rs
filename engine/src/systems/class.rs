@@ -148,7 +148,7 @@ fn apply_class_base(
     // Effect
     if let Some(effects_for_level) = class_base.effects_by_level.get(&level) {
         for effect in effects_for_level {
-            systems::effects::add_effect(world, entity, effect);
+            systems::effects::add_effect(world, entity, effect, &id.modifier_source());
         }
     }
 

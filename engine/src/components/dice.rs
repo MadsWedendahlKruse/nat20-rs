@@ -6,7 +6,7 @@ use std::{
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::components::modifier::{ModifierSet, ModifierSource};
+use crate::components::modifier::{Modifiable, ModifierSet, ModifierSource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -116,6 +116,23 @@ impl DiceSetRoll {
     }
 }
 
+impl Modifiable for DiceSetRoll {
+    fn add_modifier<T>(&mut self, source: ModifierSource, value: T)
+    where
+        T: Into<i32>,
+    {
+        self.modifiers.add_modifier(source, value);
+    }
+
+    fn remove_modifier(&mut self, source: &ModifierSource) {
+        self.modifiers.remove_modifier(source);
+    }
+
+    fn total(&self) -> i32 {
+        self.dice.num_dice as i32 + self.modifiers.total()
+    }
+}
+
 impl fmt::Display for DiceSetRoll {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.modifiers.is_empty() {
@@ -178,6 +195,12 @@ pub struct DiceSetRollResult {
     pub rolls: Vec<u32>,
     pub modifiers: ModifierSet,
     pub subtotal: i32,
+}
+
+impl DiceSetRollResult {
+    pub fn recalculate_total(&mut self) {
+        self.subtotal = self.rolls.iter().sum::<u32>() as i32 + self.modifiers.total();
+    }
 }
 
 impl fmt::Display for DiceSetRollResult {

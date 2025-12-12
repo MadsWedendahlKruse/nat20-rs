@@ -59,6 +59,7 @@ pub mod creatures {
             components::{
                 id::{BackgroundId, ClassId, EntityIdentifier, ItemId, Name, SpellId, SubclassId},
                 level_up::ChoiceItem,
+                modifier::KeyedModifiable,
                 skill::SkillSet,
                 spells::spellbook::Spellbook,
             },

@@ -2,14 +2,13 @@ use std::{
     collections::{BTreeMap, HashMap},
     fmt::{Debug, Display},
     hash::Hash,
+    ops::{Add, AddAssign, Sub, SubAssign},
     str::FromStr,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::
-    components::id::{IdProvider, ResourceId}
-;
+use crate::components::id::{IdProvider, ResourceId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -370,11 +369,143 @@ impl IdProvider for ResourceDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged, rename_all = "snake_case")]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(into = "String")]
 pub enum ResourceAmount {
     Flat(u8),
     Tiered { tier: u8, amount: u8 },
+}
+
+impl Add for ResourceAmount {
+    type Output = ResourceAmount;
+
+    fn add(self, other: ResourceAmount) -> ResourceAmount {
+        match (self, other) {
+            (ResourceAmount::Flat(a), ResourceAmount::Flat(b)) => ResourceAmount::Flat(a + b),
+            (
+                ResourceAmount::Tiered {
+                    tier: t1,
+                    amount: a,
+                },
+                ResourceAmount::Tiered {
+                    tier: t2,
+                    amount: b,
+                },
+            ) if t1 == t2 => ResourceAmount::Tiered {
+                tier: t1,
+                amount: a + b,
+            },
+            _ => panic!("Cannot add ResourceAmounts of different kinds or tiers"),
+        }
+    }
+}
+
+impl Sub for ResourceAmount {
+    type Output = ResourceAmount;
+
+    fn sub(self, other: ResourceAmount) -> ResourceAmount {
+        match (self, other) {
+            (ResourceAmount::Flat(a), ResourceAmount::Flat(b)) => ResourceAmount::Flat(a - b),
+            (
+                ResourceAmount::Tiered {
+                    tier: t1,
+                    amount: a,
+                },
+                ResourceAmount::Tiered {
+                    tier: t2,
+                    amount: b,
+                },
+            ) if t1 == t2 => ResourceAmount::Tiered {
+                tier: t1,
+                amount: a - b,
+            },
+            _ => panic!("Cannot subtract ResourceAmounts of different kinds or tiers"),
+        }
+    }
+}
+
+impl AddAssign for ResourceAmount {
+    fn add_assign(&mut self, other: ResourceAmount) {
+        *self = self.clone() + other;
+    }
+}
+
+impl SubAssign for ResourceAmount {
+    fn sub_assign(&mut self, other: ResourceAmount) {
+        *self = self.clone() - other;
+    }
+}
+
+impl PartialOrd for ResourceAmount {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (ResourceAmount::Flat(a), ResourceAmount::Flat(b)) => a.partial_cmp(b),
+            (
+                ResourceAmount::Tiered {
+                    tier: t1,
+                    amount: a,
+                },
+                ResourceAmount::Tiered {
+                    tier: t2,
+                    amount: b,
+                },
+            ) if t1 == t2 => a.partial_cmp(b),
+            _ => None,
+        }
+    }
+}
+
+impl FromStr for ResourceAmount {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() == 1 {
+            let amount = parts[0]
+                .parse::<u8>()
+                .map_err(|_| format!("Invalid ResourceAmount format: {}", s))?;
+            Ok(ResourceAmount::Flat(amount))
+        } else if parts.len() == 2 {
+            let tier = parts[0]
+                .parse::<u8>()
+                .map_err(|_| format!("Invalid ResourceAmount format: {}", s))?;
+            let amount = parts[1]
+                .parse::<u8>()
+                .map_err(|_| format!("Invalid ResourceAmount format: {}", s))?;
+            Ok(ResourceAmount::Tiered { tier, amount })
+        } else {
+            Err(format!("Invalid ResourceAmount format: {}", s))
+        }
+    }
+}
+
+// Manual deserialization to support both integer and string formats
+impl<'de> Deserialize<'de> for ResourceAmount {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Helper {
+            Int(u8),
+            Str(String),
+        }
+
+        match Helper::deserialize(deserializer)? {
+            Helper::Int(value) => Ok(ResourceAmount::Flat(value)),
+            Helper::Str(s) => s.parse().map_err(serde::de::Error::custom),
+        }
+    }
+}
+
+impl From<ResourceAmount> for String {
+    fn from(amount: ResourceAmount) -> Self {
+        match amount {
+            ResourceAmount::Flat(amt) => amt.to_string(),
+            ResourceAmount::Tiered { tier, amount } => format!("{}:{}", tier, amount),
+        }
+    }
 }
 
 pub type ResourceAmountMap = HashMap<ResourceId, ResourceAmount>;
@@ -437,6 +568,36 @@ impl ResourceMap {
                 }
             })
             .or_insert(budget);
+    }
+
+    pub fn add_uses(
+        &mut self,
+        resource: &ResourceId,
+        amount: &ResourceAmount,
+    ) -> Result<(), ResourceError> {
+        if let Some(budget) = self.resources.get_mut(resource) {
+            budget.add_uses(amount)
+        } else {
+            Err(ResourceError::InvalidResourceKind(format!(
+                "Resource with id {} not found",
+                resource
+            )))
+        }
+    }
+
+    pub fn remove_uses(
+        &mut self,
+        resource: &ResourceId,
+        amount: &ResourceAmount,
+    ) -> Result<(), ResourceError> {
+        if let Some(budget) = self.resources.get_mut(resource) {
+            budget.remove_uses(amount)
+        } else {
+            Err(ResourceError::InvalidResourceKind(format!(
+                "Resource with id {} not found",
+                resource
+            )))
+        }
     }
 
     pub fn get(&self, id: &ResourceId) -> Option<&ResourceBudgetKind> {

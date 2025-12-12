@@ -9,5 +9,6 @@
     "targeting": "self",
     "resource_cost": {
         "resource.fighter.action_surge": 1
-    }
+    },
+    "cooldown": "short_rest"
 }

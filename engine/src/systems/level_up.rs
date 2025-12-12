@@ -15,7 +15,7 @@ use crate::{
         items::{equipment::loadout::EquipmentInstance, money::MonetaryValue},
         level::CharacterLevels,
         level_up::{ChoiceItem, LevelUpPrompt},
-        modifier::ModifierSource,
+        modifier::{KeyedModifiable, ModifierSource},
         proficiency::{Proficiency, ProficiencyLevel},
         resource::ResourceBudgetKind,
         skill::{Skill, SkillSet},
@@ -209,7 +209,13 @@ fn resolve_level_up_prompt(
             for item in selected {
                 match item {
                     ChoiceItem::Effect(effect_id) => {
-                        systems::effects::add_effect(world, entity, effect_id);
+                        systems::effects::add_effect(
+                            world,
+                            entity,
+                            effect_id,
+                            // TODO: Determine proper source
+                            &ModifierSource::Base,
+                        );
                     }
 
                     ChoiceItem::Feat(feat_id) => {

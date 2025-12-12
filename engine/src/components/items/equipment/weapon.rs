@@ -20,7 +20,7 @@ use crate::components::{
         equipment::slots::{EquipmentSlot, SlotProvider},
         item::Item,
     },
-    modifier::{ModifierSet, ModifierSource},
+    modifier::{KeyedModifiable, Modifiable, ModifierSet, ModifierSource},
     proficiency::{Proficiency, ProficiencyLevel},
 };
 

@@ -11,7 +11,7 @@ mod tests {
             },
             damage::{DamageRoll, DamageSource, DamageType},
             health::hit_points::HitPoints,
-            id::{ActionId, ResourceId},
+            id::{ActionId, EffectId, ResourceId},
             resource::{RechargeRule, ResourceAmount, ResourceAmountMap, ResourceMap},
         },
         engine::event::{ActionData, ActionDecision, ActionDecisionKind},
@@ -25,7 +25,11 @@ mod tests {
         let fighter = fixtures::creatures::heroes::fighter(&mut game_state.world).id();
 
         // Check that the fighter has the Action Surge action
-        let available_actions = systems::actions::available_actions(&game_state.world, fighter);
+        let available_actions = systems::actions::available_actions(
+            &game_state.world,
+            fighter,
+            &mut game_state.script_engines,
+        );
         let action_id = ActionId::from_str("action.fighter.action_surge");
         assert!(
             available_actions.contains_key(&action_id),
@@ -65,7 +69,7 @@ mod tests {
             let effects = systems::effects::effects(&game_state.world, fighter);
             let action_surge_effect = effects
                 .iter()
-                .find(|e| *e.id() == *registry::effects::ACTION_SURGE_ID);
+                .find(|e| *e.id() == EffectId::from_str("effect.fighter.action_surge"));
             assert!(
                 action_surge_effect.is_some(),
                 "Action Surge effect should be applied"
@@ -90,7 +94,7 @@ mod tests {
         let effects = systems::effects::effects(&game_state.world, fighter);
         let action_surge_effect = effects
             .iter()
-            .find(|e| *e.id() == *registry::effects::ACTION_SURGE_ID);
+            .find(|e| *e.id() == EffectId::from_str("effect.fighter.action_surge"));
         assert!(
             action_surge_effect.is_none(),
             "Action Surge effect should be removed"
@@ -121,7 +125,11 @@ mod tests {
         let fighter = fixtures::creatures::heroes::fighter(&mut game_state.world).id();
 
         // Check that the fighter has the Second Wind action
-        let available_actions = systems::actions::available_actions(&game_state.world, fighter);
+        let available_actions = systems::actions::available_actions(
+            &game_state.world,
+            fighter,
+            &mut game_state.script_engines,
+        );
         let action_id = ActionId::from_str("action.fighter.second_wind");
         assert!(
             available_actions.contains_key(&action_id),
@@ -195,7 +203,7 @@ mod tests {
             let effects = systems::effects::effects(&game_state.world, fighter);
             let extra_attack_effect = effects
                 .iter()
-                .find(|e| *e.id() == *registry::effects::EXTRA_ATTACK_ID);
+                .find(|e| *e.id() == EffectId::from_str("effect.extra_attack"));
             assert!(
                 extra_attack_effect.is_some(),
                 "Fighter should have Extra Attack effect"
@@ -212,7 +220,11 @@ mod tests {
         );
 
         // Fighter makes a weapon attack, which costs one Action and grants one stack of Extra Attack
-        let available_actions = systems::actions::available_actions(&game_state.world, fighter);
+        let available_actions = systems::actions::available_actions(
+            &game_state.world,
+            fighter,
+            &mut game_state.script_engines,
+        );
         let action_id = ActionId::from_str("action.weapon_attack");
         assert!(
             available_actions.contains_key(&action_id),
@@ -249,7 +261,11 @@ mod tests {
         );
 
         // Fighter makes another attack, which should consume the Extra Attack stack
-        let available_actions = systems::actions::available_actions(&game_state.world, fighter);
+        let available_actions = systems::actions::available_actions(
+            &game_state.world,
+            fighter,
+            &mut game_state.script_engines,
+        );
         let contexts_and_costs = available_actions.get(&action_id).unwrap();
         let _ = game_state.submit_decision(ActionDecision::without_response_to(
             ActionDecisionKind::Action {

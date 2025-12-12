@@ -13,6 +13,6 @@
     "limited": 0
   },
   "effects": [
-    "effect.armor.stealth_disadvantage"
+    "effect.item.armor_stealth_disadvantage"
   ]
 }

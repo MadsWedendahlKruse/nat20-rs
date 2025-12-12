@@ -13,7 +13,7 @@ use crate::{
         actions::action::{ActionContext, DamageFunction, HealFunction},
         damage::{DamageRoll, DamageSource, DamageType},
         dice::{DiceSet, DiceSetRoll},
-        modifier::{ModifierSet, ModifierSource},
+        modifier::{Modifiable, ModifierSet, ModifierSource},
     },
     registry::serialize::{
         parser::{Evaluable, Parser},
@@ -28,7 +28,7 @@ static DAMAGE_DEFAULTS: LazyLock<HashMap<String, Arc<DamageFunction>>> = LazyLoc
         Arc::new(
             |world: &World, entity: Entity, action_context: &ActionContext| {
                 if let ActionContext::Weapon { slot } = action_context {
-                    return systems::combat::damage_roll(world, entity, slot);
+                    return systems::loadout::weapon_damage_roll(world, entity, slot);
                 }
                 panic!("Action context must be Weapon");
             },
@@ -89,7 +89,6 @@ impl FromStr for DamageEquation {
                     damage_roll
                         .primary
                         .dice_roll
-                        .modifiers
                         .add_modifier(ModifierSource::Base, modifier);
                     damage_roll
                 },

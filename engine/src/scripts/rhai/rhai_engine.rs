@@ -1,16 +1,24 @@
 use std::collections::HashMap;
 
-use rhai::{AST, Engine, Scope, exported_module};
+use rhai::{AST, Engine, Scope, exported_module, module_resolvers::FileModuleResolver};
 
 use crate::{
-    components::id::ScriptId,
+    components::{
+        damage::{DamageComponentResult, DamageRollResult, DamageSource},
+        dice::DiceSetRollResult,
+        id::ScriptId,
+    },
+    registry::registry::REGISTRY_ROOT,
     scripts::{
-        rhai::rhai_types::{
-            self, RhaiActionView, RhaiD20CheckDCKind, RhaiD20CheckPerformedView, RhaiD20Result,
-            RhaiEventView, RhaiReactionPlan, RhaiSavingThrow, RhaiTriggerContext,
-        },
+        rhai::rhai_types,
         script::{Script, ScriptError},
-        script_api::{ReactionBodyContext, ReactionTriggerContext, ScriptReactionPlan},
+        script_api::{
+            ScriptActionContext, ScriptActionView, ScriptD20CheckDCKind,
+            ScriptD20CheckPerformedView, ScriptD20Result, ScriptEntity, ScriptEntityView,
+            ScriptEventView, ScriptLoadoutView, ScriptReactionBodyContext, ScriptReactionPlan,
+            ScriptReactionTriggerContext, ScriptResourceCost, ScriptResourceView,
+            ScriptSavingThrow,
+        },
         script_engine::ScriptEngine,
     },
 };
@@ -25,14 +33,26 @@ impl RhaiScriptEngine {
         let mut engine = Engine::new();
 
         engine
-            .build_type::<RhaiTriggerContext>()
-            .build_type::<RhaiEventView>()
-            .build_type::<RhaiD20CheckPerformedView>()
-            .build_type::<RhaiD20Result>()
-            .build_type::<RhaiD20CheckDCKind>()
-            .build_type::<RhaiSavingThrow>()
-            .build_type::<RhaiReactionPlan>()
-            .build_type::<RhaiActionView>();
+            // --- Might not work? ---
+            .build_type::<DiceSetRollResult>()
+            .build_type::<DamageComponentResult>()
+            .build_type::<DamageSource>()
+            .build_type::<DamageRollResult>()
+            // --- Script API Types ---
+            .build_type::<ScriptActionContext>()
+            .build_type::<ScriptActionView>()
+            .build_type::<ScriptD20CheckDCKind>()
+            .build_type::<ScriptD20CheckPerformedView>()
+            .build_type::<ScriptD20Result>()
+            .build_type::<ScriptEntity>()
+            .build_type::<ScriptEntityView>()
+            .build_type::<ScriptEventView>()
+            .build_type::<ScriptLoadoutView>()
+            .build_type::<ScriptReactionPlan>()
+            .build_type::<ScriptReactionTriggerContext>()
+            .build_type::<ScriptResourceCost>()
+            .build_type::<ScriptResourceView>()
+            .build_type::<ScriptSavingThrow>();
 
         engine.register_static_module(
             "ReactionPlan",
@@ -43,17 +63,23 @@ impl RhaiScriptEngine {
             exported_module!(rhai_types::saving_throw_module).into(),
         );
 
+        let resolver = FileModuleResolver::new_with_path(&*REGISTRY_ROOT);
+        engine.set_module_resolver(resolver);
+
         RhaiScriptEngine {
             engine,
             ast_cache: HashMap::new(),
         }
     }
 
-    fn cache_script(&mut self, script: &Script) -> Result<(), ScriptError> {
-        let ast = self
-            .engine
+    fn compile_script(&self, script: &Script) -> Result<AST, ScriptError> {
+        self.engine
             .compile(&script.content)
-            .map_err(|e| ScriptError::LoadError(format!("Failed to compile Rhai script: {}", e)))?;
+            .map_err(|e| ScriptError::LoadError(format!("Failed to compile Rhai script: {}", e)))
+    }
+
+    fn cache_script(&mut self, script: &Script) -> Result<(), ScriptError> {
+        let ast = self.compile_script(script)?;
         self.ast_cache.insert(script.id.clone(), ast);
         Ok(())
     }
@@ -73,47 +99,113 @@ impl ScriptEngine for RhaiScriptEngine {
     fn evaluate_reaction_trigger(
         &mut self,
         script: &Script,
-        context: &ReactionTriggerContext,
+        // TODO: Maybe not references for the contexts if they're getting cloned anyways?
+        context: &ScriptReactionTriggerContext,
     ) -> Result<bool, ScriptError> {
-        if let Some(rhai_context) = RhaiTriggerContext::from_api(context) {
-            // TODO: Don't clone AST every time (if it's actually a performance issue)
-            let ast = self.get_ast(script).cloned()?;
+        // TODO: Don't clone AST every time (if it's actually a performance issue)
+        let ast = self.get_ast(script).cloned()?;
 
-            let mut scope = Scope::new();
-            self.engine
-                .call_fn::<bool>(&mut scope, &ast, "reaction_trigger", (rhai_context,))
-                .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))
-        } else {
-            Err(ScriptError::RuntimeError(
-                "Failed to build RhaiTriggerContext".to_string(),
-            ))
-        }
+        let mut scope = Scope::new();
+        self.engine
+            .call_fn::<bool>(&mut scope, &ast, "reaction_trigger", (context.clone(),))
+            .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))
     }
 
     fn evaluate_reaction_body(
         &mut self,
         script: &Script,
-        context: &ReactionBodyContext,
+        context: &ScriptReactionBodyContext,
     ) -> Result<ScriptReactionPlan, ScriptError> {
-        // TODO: For now body only needs reactor + event; reuse same wrapper
-        if let Some(rhai_context) = RhaiTriggerContext::from_api(&ReactionTriggerContext {
-            reactor: context.reaction_data.reactor,
-            event: context.reaction_data.event.as_ref().clone(),
-        }) {
-            // TODO: Don't clone AST every time (if it's actually a performance issue)
-            let ast = self.get_ast(script).cloned()?;
+        // TODO: Don't clone AST every time (if it's actually a performance issue)
+        let ast = self.get_ast(script).cloned()?;
 
-            let mut scope = Scope::new();
-            let plan = self
-                .engine
-                .call_fn::<RhaiReactionPlan>(&mut scope, &ast, "reaction_body", (rhai_context,))
-                .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
+        let mut scope = Scope::new();
+        let plan = self
+            .engine
+            .call_fn::<ScriptReactionPlan>(&mut scope, &ast, "reaction_body", (context.clone(),))
+            .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
 
-            Ok(plan.inner)
-        } else {
-            Err(ScriptError::RuntimeError(
-                "Failed to build RhaiTriggerContext".to_string(),
-            ))
-        }
+        Ok(plan)
+    }
+
+    fn evaluate_resource_cost_hook(
+        &mut self,
+        script: &Script,
+        action: &ScriptActionView,
+        entity: &ScriptEntityView,
+    ) -> Result<ScriptResourceCost, ScriptError> {
+        let ast = self.get_ast(script).cloned()?;
+        let mut scope = Scope::new();
+        let cost = self
+            .engine
+            .call_fn::<ScriptResourceCost>(
+                &mut scope,
+                &ast,
+                "resource_cost_hook",
+                (action.clone(), entity.clone()),
+            )
+            .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
+
+        Ok(cost)
+    }
+
+    fn evaluate_action_hook(
+        &mut self,
+        script: &Script,
+        context: &ScriptActionView,
+        entity: &ScriptEntityView,
+    ) -> Result<ScriptEntityView, ScriptError> {
+        let ast = self.get_ast(script).cloned()?;
+        let mut scope = Scope::new();
+        let modified_entity = self
+            .engine
+            .call_fn::<ScriptEntityView>(
+                &mut scope,
+                &ast,
+                "action_hook",
+                (context.clone(), entity.clone()),
+            )
+            .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
+
+        Ok(modified_entity)
+    }
+
+    fn evaluate_armor_class_hook(
+        &mut self,
+        script: &Script,
+        entity: &ScriptEntityView,
+    ) -> Result<i32, ScriptError> {
+        let ast = self.get_ast(script).cloned()?;
+        let mut scope = Scope::new();
+        let modifier = self
+            .engine
+            .call_fn::<i64>(&mut scope, &ast, "armor_class_hook", (entity.clone(),))
+            .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
+
+        // Rhai’s default integer type is i64. Apparently there's a "significant
+        // runtime performance hit", so might be worth investigating this later?
+        // https://rhai.rs/book/language/values-and-types.html
+        Ok(modifier as i32)
+    }
+
+    fn evaluate_damage_roll_result_hook(
+        &mut self,
+        script: &Script,
+        entity: &ScriptEntityView,
+        damage_roll_result: &DamageRollResult,
+    ) -> Result<DamageRollResult, ScriptError> {
+        let ast = self.get_ast(script).cloned()?;
+        let mut scope = Scope::new();
+        let modified_damage_roll_result = self
+            .engine
+            .call_fn::<DamageRollResult>(
+                &mut scope,
+                &ast,
+                "damage_roll_result_hook",
+                (entity.clone(), damage_roll_result.clone()),
+            )
+            .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
+
+        Ok(modified_damage_roll_result)
     }
 }

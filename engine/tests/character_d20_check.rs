@@ -8,7 +8,7 @@ mod tests {
             ability::{Ability, AbilityScore, AbilityScoreMap},
             d20::RollMode,
             id::ItemId,
-            modifier::ModifierSource,
+            modifier::{KeyedModifiable, Modifiable, ModifierSource},
             proficiency::{Proficiency, ProficiencyLevel},
             saving_throw::{SavingThrowKind, SavingThrowSet},
             skill::{Skill, SkillSet},

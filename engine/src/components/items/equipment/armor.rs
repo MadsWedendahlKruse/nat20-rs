@@ -11,7 +11,7 @@ use crate::{
             equipment::slots::{EquipmentSlot, SlotProvider},
             item::Item,
         },
-        modifier::{ModifierSet, ModifierSource},
+        modifier::{Modifiable, ModifierSet, ModifierSource},
     },
     registry,
 };
@@ -60,12 +60,14 @@ impl ArmorClass {
             modifiers: ModifierSet::new(),
         }
     }
+}
 
-    pub fn total(&self) -> i32 {
-        self.base.0 + self.modifiers.total()
-    }
-
-    pub fn add_modifier(&mut self, source: ModifierSource, mut value: i32) {
+impl Modifiable for ArmorClass {
+    fn add_modifier<T>(&mut self, source: ModifierSource, value: T)
+    where
+        T: Into<i32>,
+    {
+        let mut value = value.into();
         if source == ModifierSource::Ability(Ability::Dexterity) {
             // Ensure that Dexterity bonus does not exceed max dexterity bonus
             let max_dexterity_bonus = self.dexterity_bonus.max_bonus() as i32;
@@ -76,8 +78,12 @@ impl ArmorClass {
         self.modifiers.add_modifier(source, value);
     }
 
-    pub fn remove_modifier(&mut self, source: &ModifierSource) {
+    fn remove_modifier(&mut self, source: &ModifierSource) {
         self.modifiers.remove_modifier(source);
+    }
+
+    fn total(&self) -> i32 {
+        self.base.0 + self.modifiers.total()
     }
 }
 
@@ -100,7 +106,7 @@ impl Armor {
         mut effects: Vec<EffectId>,
     ) -> Armor {
         if stealth_disadvantage {
-            effects.push(registry::effects::ARMOR_STEALTH_DISADVANTAGE_ID.clone());
+            effects.push(EffectId::from_str("effect.item.armor_stealth_disadvantage"));
         }
 
         Armor {

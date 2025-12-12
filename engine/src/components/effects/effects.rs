@@ -5,20 +5,25 @@ use std::{
 };
 
 use hecs::{Entity, World};
+use serde::{Deserialize, Serialize};
 
-use crate::components::{
-    actions::action::{Action, ActionContext},
-    damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
-    effects::hooks::{
-        ActionHook, ArmorClassHook, AttackRollHook, AttackRollResultHook, D20CheckHooks,
-        DamageRollHook, DamageRollResultHook, ResourceCostHook,
+use crate::{
+    components::{
+        actions::action::{Action, ActionContext},
+        damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
+        effects::hooks::{
+            ActionHook, ArmorClassHook, AttackRollHook, AttackRollResultHook, D20CheckHooks,
+            DamageRollHook, DamageRollResultHook, ResourceCostHook,
+        },
+        id::{ActionId, EffectId, IdProvider},
+        items::equipment::armor::ArmorClass,
+        modifier::ModifierSource,
+        resource::ResourceAmountMap,
+        saving_throw::SavingThrowKind,
+        skill::Skill,
     },
-    id::EffectId,
-    items::equipment::armor::ArmorClass,
-    modifier::ModifierSource,
-    resource::ResourceAmountMap,
-    saving_throw::SavingThrowKind,
-    skill::Skill,
+    registry::serialize::effect::EffectDefinition,
+    scripts::script_engine::ScriptEngineMap,
 };
 
 use super::hooks::EffectHook;
@@ -65,11 +70,14 @@ impl Display for EffectDuration {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize)]
+#[serde(from = "EffectDefinition")]
 pub struct Effect {
-    id: EffectId,
-    source: ModifierSource,
-    duration: EffectDuration,
+    pub id: EffectId,
+    pub description: String,
+    pub source: ModifierSource,
+    pub duration: EffectDuration,
+    pub replaces: Option<EffectId>,
     // TODO: description?
     pub on_apply: EffectHook,
     // on_turn_start: EffectHook,
@@ -86,16 +94,16 @@ pub struct Effect {
     pub post_damage_roll: DamageRollResultHook,
     pub on_action: ActionHook,
     pub on_resource_cost: ResourceCostHook,
-    pub replaces: Option<EffectId>,
 }
 
 impl Effect {
-    pub fn new(id: EffectId, source: ModifierSource, duration: EffectDuration) -> Self {
+    pub fn new(id: EffectId, description: String, duration: EffectDuration) -> Self {
         let noop = Arc::new(|_: &mut World, _: Entity| {}) as EffectHook;
 
         Self {
             id,
-            source,
+            description,
+            source: ModifierSource::None,
             duration,
             on_apply: noop.clone(),
             on_unapply: noop.clone(),
@@ -105,17 +113,29 @@ impl Effect {
                 as AttackRollHook,
             post_attack_roll: Arc::new(|_: &World, _: Entity, _: &mut AttackRollResult| {})
                 as AttackRollResultHook,
-            on_armor_class: Arc::new(|_: &World, _: Entity, _: &mut ArmorClass| {})
-                as ArmorClassHook,
+            on_armor_class: Arc::new(
+                |_: &mut ScriptEngineMap, _: &World, _: Entity, _: &mut ArmorClass| {},
+            ) as ArmorClassHook,
             pre_damage_roll: Arc::new(|_: &World, _: Entity, _: &mut DamageRoll| {})
                 as DamageRollHook,
-            post_damage_roll: Arc::new(|_: &World, _: Entity, _: &mut DamageRollResult| {})
-                as DamageRollResultHook,
+            post_damage_roll: Arc::new(
+                |_: &mut ScriptEngineMap, _: &World, _: Entity, _: &mut DamageRollResult| {},
+            ) as DamageRollResultHook,
             on_action: Arc::new(
-                |_: &mut World, _: Entity, _: &Action, _: &ActionContext, _: &ResourceAmountMap| {},
+                |_: &mut ScriptEngineMap,
+                 _: &mut World,
+                 _: Entity,
+                 _: &Action,
+                 _: &ActionContext,
+                 _: &ResourceAmountMap| {},
             ) as ActionHook,
             on_resource_cost: Arc::new(
-                |_: &World, _: Entity, _: &ActionContext, _: &mut ResourceAmountMap| {},
+                |_: &mut ScriptEngineMap,
+                 _: &World,
+                 _: Entity,
+                 _: &ActionId,
+                 _: &ActionContext,
+                 _: &mut ResourceAmountMap| {},
             ) as ResourceCostHook,
             replaces: None,
         }
@@ -172,5 +192,13 @@ impl PartialEq for Effect {
     // or even a good idea.
     fn eq(&self, other: &Self) -> bool {
         self.source == other.source && self.duration == other.duration
+    }
+}
+
+impl IdProvider for Effect {
+    type Id = EffectId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
     }
 }

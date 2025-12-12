@@ -167,7 +167,7 @@ impl MainMenuWindow {
                     if (action_bar.is_some() && action_bar.as_ref().unwrap().entity != entity)
                         || action_bar.is_none()
                     {
-                        action_bar.replace(ActionBarWindow::new(&game_state.world, entity));
+                        action_bar.replace(ActionBarWindow::new(game_state, entity));
                     }
 
                     if !reactions.is_active()
@@ -325,7 +325,10 @@ impl MainMenuWindow {
                         format!("{}##{:?}", name.as_str(), entity),
                         imgui::TreeNodeFlags::FRAMED,
                     ) {
-                        entity.render_mut_with_context(ui, &mut game_state.world);
+                        entity.render_mut_with_context(
+                            ui,
+                            (&mut game_state.world, &mut game_state.script_engines),
+                        );
                         ui.separator();
 
                         if ui.button(format!("Debug##{:?}", entity)) {

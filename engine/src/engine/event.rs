@@ -73,6 +73,26 @@ impl Event {
         }
     }
 
+    pub fn target(&self) -> Option<Entity> {
+        match &self.kind {
+            EventKind::ActionRequested { action } => {
+                if let Some(TargetInstance::Entity(target)) = action.targets.first() {
+                    Some(*target)
+                } else {
+                    None
+                }
+            }
+            EventKind::ActionPerformed { action, .. } => {
+                if let Some(TargetInstance::Entity(target)) = action.targets.first() {
+                    Some(*target)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
     pub fn action_performed_event(
         game_state: &GameState,
         performer: Entity,

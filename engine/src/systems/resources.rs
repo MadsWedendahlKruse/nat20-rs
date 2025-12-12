@@ -11,8 +11,10 @@ use crate::{
 };
 
 // TODO: No idea where to put this
-pub fn recharge_rule(resource: &ResourceId) -> Option<RechargeRule> {
-    ResourcesRegistry::get(resource).map(|res_def| res_def.recharge.clone())
+pub fn recharge_rule(resource: &ResourceId) -> RechargeRule {
+    ResourcesRegistry::get(resource)
+        .map(|res_def| res_def.recharge.clone())
+        .expect(format!("Missing resource definition for resource ID `{}`", resource).as_str())
 }
 
 pub fn recharge(world: &mut World, entity: Entity, rest_type: &RechargeRule) {

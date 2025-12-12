@@ -1,11 +1,20 @@
 use hecs::{Entity, Ref, World};
 
 use crate::{
-    components::items::equipment::{
-        armor::ArmorClass,
-        loadout::{EquipmentInstance, Loadout, TryEquipError},
-        slots::EquipmentSlot,
+    components::{
+        damage::{AttackRoll, DamageRoll},
+        id::EffectId,
+        items::{
+            equipment::{
+                armor::ArmorClass,
+                loadout::{EquipmentInstance, Loadout, TryEquipError},
+                slots::EquipmentSlot,
+            },
+            inventory::ItemContainer,
+        },
+        modifier::ModifierSource,
     },
+    scripts::script_engine::ScriptEngineMap,
     systems,
 };
 
@@ -27,6 +36,7 @@ where
     T: Into<EquipmentInstance>,
 {
     let equipment = equipment.into();
+    let item_id = equipment.item().id.clone();
     let unequipped_items = loadout_mut(world, entity).equip_in_slot(slot, equipment)?;
     for item in &unequipped_items {
         systems::effects::remove_effects(world, entity, item.effects());
@@ -36,7 +46,7 @@ where
         .unwrap()
         .effects()
         .clone();
-    systems::effects::add_effects(world, entity, &effects);
+    systems::effects::add_effects(world, entity, &effects, &ModifierSource::Item(item_id));
     Ok(unequipped_items)
 }
 
@@ -49,13 +59,14 @@ where
     T: Into<EquipmentInstance>,
 {
     let equipment = equipment.into();
+    let item_id = equipment.item().id.clone();
     // TODO: Slightly less performant than calling `equip_in_slot` directly
     let effects = equipment.effects().clone();
     let unequipped_items = loadout_mut(world, entity).equip(equipment)?;
     for item in &unequipped_items {
         systems::effects::remove_effects(world, entity, item.effects());
     }
-    systems::effects::add_effects(world, entity, &effects);
+    systems::effects::add_effects(world, entity, &effects, &ModifierSource::Item(item_id));
     Ok(unequipped_items)
 }
 
@@ -71,10 +82,22 @@ pub fn unequip(
     unequipped_item
 }
 
-pub fn armor_class(world: &World, entity: Entity) -> ArmorClass {
-    loadout(world, entity).armor_class(world, entity)
+pub fn armor_class(
+    world: &World,
+    entity: Entity,
+    script_engines: &mut ScriptEngineMap,
+) -> ArmorClass {
+    loadout(world, entity).armor_class(world, entity, script_engines)
 }
 
 pub fn can_equip(world: &World, entity: Entity, equipment: &EquipmentInstance) -> bool {
     loadout(world, entity).can_equip(equipment)
+}
+
+pub fn weapon_damage_roll(world: &World, entity: Entity, slot: &EquipmentSlot) -> DamageRoll {
+    loadout(world, entity).damage_roll(world, entity, slot)
+}
+
+pub fn weapon_attack_roll(world: &World, entity: Entity, slot: &EquipmentSlot) -> AttackRoll {
+    loadout(world, entity).attack_roll(world, entity, slot)
 }

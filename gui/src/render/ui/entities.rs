@@ -13,6 +13,7 @@ use nat20_rs::{
         speed::Speed,
         spells::spellbook::Spellbook,
     },
+    scripts::script_engine::ScriptEngineMap,
     systems,
 };
 use strum::{Display, EnumIter};
@@ -43,10 +44,12 @@ impl From<usize> for CreatureRenderMode {
     }
 }
 
-impl ImguiRenderableWithContext<(&World, &CreatureRenderMode)> for Entity {
-    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, &CreatureRenderMode)) {
-        let (world, mode) = context;
-
+impl ImguiRenderableWithContext<(&World, &CreatureRenderMode, &mut ScriptEngineMap)> for Entity {
+    fn render_with_context(
+        &self,
+        ui: &imgui::Ui,
+        (world, mode, script_engines): (&World, &CreatureRenderMode, &mut ScriptEngineMap),
+    ) {
         match mode {
             CreatureRenderMode::Full => {
                 let entity = *self;
@@ -54,26 +57,7 @@ impl ImguiRenderableWithContext<(&World, &CreatureRenderMode)> for Entity {
 
                 if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
                     if let Some(tab) = ui.tab_item("Overview") {
-                        render_race_if_present(ui, world, entity);
-
-                        render_if_present::<CreatureSize>(ui, world, entity);
-                        ui.same_line();
-                        render_if_present::<CreatureType>(ui, world, entity);
-
-                        // render_if_present::<Name>(ui, world, *self);
-                        render_if_present::<CharacterLevels>(ui, world, entity);
-                        render_if_present::<ChallengeRating>(ui, world, entity);
-                        render_if_present::<LifeState>(ui, world, entity);
-                        render_if_present::<HitPoints>(ui, world, entity);
-
-                        render_if_present::<Speed>(ui, world, entity);
-
-                        ui.separator_with_text("Armor Class");
-                        systems::loadout::armor_class(world, entity).render(ui);
-                        systems::helpers::get_component::<AbilityScoreMap>(world, entity)
-                            .render_with_context(ui, (world, entity));
-                        render_if_present::<DamageResistances>(ui, world, entity);
-
+                        render_overview(ui, world, entity, mode, script_engines);
                         tab.end();
                     }
 
@@ -118,25 +102,7 @@ impl ImguiRenderableWithContext<(&World, &CreatureRenderMode)> for Entity {
 
                 if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
                     if let Some(tab) = ui.tab_item("Overview") {
-                        render_race_if_present(ui, world, entity);
-
-                        render_if_present::<CreatureSize>(ui, world, entity);
-                        ui.same_line();
-                        render_if_present::<CreatureType>(ui, world, entity);
-
-                        render_if_present::<CharacterLevels>(ui, world, entity);
-                        render_if_present::<ChallengeRating>(ui, world, entity);
-                        render_if_present::<LifeState>(ui, world, entity);
-                        render_if_present::<HitPoints>(ui, world, entity);
-
-                        render_if_present::<Speed>(ui, world, entity);
-
-                        ui.separator_with_text("Armor Class");
-                        systems::loadout::armor_class(world, entity).render(ui);
-                        systems::helpers::get_component::<AbilityScoreMap>(world, entity)
-                            .render_with_context(ui, (world, entity));
-                        render_if_present::<DamageResistances>(ui, world, entity);
-
+                        render_overview(ui, world, entity, mode, script_engines);
                         tab.end();
                     }
 
@@ -182,6 +148,38 @@ pub fn render_race_if_present(ui: &imgui::Ui, world: &World, entity: Entity) {
     }
 }
 
+fn render_overview(
+    ui: &imgui::Ui,
+    world: &World,
+    entity: Entity,
+    mode: &CreatureRenderMode,
+    script_engines: &mut ScriptEngineMap,
+) {
+    match mode {
+        CreatureRenderMode::Full | CreatureRenderMode::Inspect => {
+            render_race_if_present(ui, world, entity);
+
+            render_if_present::<CreatureSize>(ui, world, entity);
+            ui.same_line();
+            render_if_present::<CreatureType>(ui, world, entity);
+
+            render_if_present::<CharacterLevels>(ui, world, entity);
+            render_if_present::<ChallengeRating>(ui, world, entity);
+            render_if_present::<LifeState>(ui, world, entity);
+            render_if_present::<HitPoints>(ui, world, entity);
+
+            render_if_present::<Speed>(ui, world, entity);
+
+            ui.separator_with_text("Armor Class");
+            systems::loadout::armor_class(world, entity, script_engines).render(ui);
+            systems::helpers::get_component::<AbilityScoreMap>(world, entity)
+                .render_with_context(ui, (world, entity));
+            render_if_present::<DamageResistances>(ui, world, entity);
+        }
+        _ => {}
+    }
+}
+
 fn render_effects_compact(ui: &imgui::Ui, effects: &[Effect]) {
     let conditions = effects
         .iter()
@@ -208,31 +206,18 @@ fn render_effects_compact(ui: &imgui::Ui, effects: &[Effect]) {
     }
 }
 
-impl ImguiRenderableMutWithContext<(&mut World)> for Entity {
-    fn render_mut_with_context(&mut self, ui: &imgui::Ui, world: &mut World) {
+impl ImguiRenderableMutWithContext<(&mut World, &mut ScriptEngineMap)> for Entity {
+    fn render_mut_with_context(
+        &mut self,
+        ui: &imgui::Ui,
+        (world, script_engines): (&mut World, &mut ScriptEngineMap),
+    ) {
         let entity = *self;
         ui.text(format!("ID: {:?}", entity));
 
         if let Some(tab_bar) = ui.tab_bar(format!("CharacterTabs{:?}", entity)) {
             if let Some(tab) = ui.tab_item("Overview") {
-                render_race_if_present(ui, world, entity);
-
-                render_if_present::<CreatureSize>(ui, world, entity);
-                ui.same_line();
-                render_if_present::<CreatureType>(ui, world, entity);
-
-                // render_if_present::<Name>(ui, world, *self);
-                render_if_present::<CharacterLevels>(ui, world, *self);
-                render_if_present::<ChallengeRating>(ui, world, *self);
-                render_if_present::<LifeState>(ui, world, entity);
-                render_if_present::<HitPoints>(ui, world, *self);
-
-                render_if_present::<Speed>(ui, world, entity);
-
-                systems::helpers::get_component::<AbilityScoreMap>(world, entity)
-                    .render_with_context(ui, (world, entity));
-                render_if_present::<DamageResistances>(ui, world, entity);
-
+                render_overview(ui, world, entity, &CreatureRenderMode::Full, script_engines);
                 tab.end();
             }
 

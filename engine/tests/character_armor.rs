@@ -5,51 +5,58 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::{Ability, AbilityScore, AbilityScoreMap},
-            id::ItemId,
+            id::{EffectId, ItemId},
             items::equipment::slots::EquipmentSlot,
-            modifier::ModifierSource,
+            modifier::{KeyedModifiable, Modifiable, ModifierSource},
         },
         entities::character::Character,
-        registry::{self, registry::ItemsRegistry},
+        registry::registry::ItemsRegistry,
         systems,
+        test_utils::fixtures,
     };
 
     #[test]
     fn character_armor_class_no_dex() {
-        let mut world = World::new();
-        let character = world.spawn(Character::default());
+        let mut game_state = fixtures::engine::game_state();
+        let character = game_state.world.spawn(Character::default());
 
         let _ = systems::loadout::equip(
-            &mut world,
+            &mut game_state.world,
             character,
             ItemsRegistry::get(&ItemId::from_str("item.chainmail"))
                 .unwrap()
                 .clone(),
         );
 
-        let armor_class = systems::loadout::armor_class(&world, character);
+        let armor_class = systems::loadout::armor_class(
+            &game_state.world,
+            character,
+            &mut game_state.script_engines,
+        );
         assert_eq!(16, armor_class.total());
         println!("{:?}", armor_class);
 
         // Check that the heavy armor gives stealth disadvantage
-        let effects = systems::effects::effects(&world, character);
+        let effects = systems::effects::effects(&game_state.world, character);
         assert!(!effects.is_empty());
         assert!(
-            effects
-                .iter()
-                .any(|e| { *e.id() == *registry::effects::ARMOR_STEALTH_DISADVANTAGE_ID })
+            effects.iter().any(|e| {
+                *e.id() == EffectId::from_str("effect.item.armor_stealth_disadvantage")
+            })
         );
     }
 
     #[test]
     fn character_armor_class_dex_and_bonus() {
         // Create a character with a Dexterity modifier of +3
-        let mut world = World::new();
-        let character = world.spawn(Character::default());
+        let mut game_state = fixtures::engine::game_state();
+        let character = game_state.world.spawn(Character::default());
 
         {
-            let mut ability_scores =
-                systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, character);
+            let mut ability_scores = systems::helpers::get_component_mut::<AbilityScoreMap>(
+                &mut game_state.world,
+                character,
+            );
             ability_scores.set(
                 Ability::Dexterity,
                 AbilityScore::new(Ability::Dexterity, 15),
@@ -62,7 +69,7 @@ mod tests {
         }
 
         let _ = systems::loadout::equip(
-            &mut world,
+            &mut game_state.world,
             character,
             ItemsRegistry::get(&ItemId::from_str("item.studded_leather_armor"))
                 .unwrap()
@@ -70,7 +77,11 @@ mod tests {
         );
 
         {
-            let armor_class = systems::loadout::armor_class(&world, character);
+            let armor_class = systems::loadout::armor_class(
+                &game_state.world,
+                character,
+                &mut game_state.script_engines,
+            );
             // Armour Class
             // Dex: 15 + 2 (item) = 17
             // 12 (armor) + 3 (Dex mod) = 15
@@ -80,8 +91,13 @@ mod tests {
 
         // Un-equip the armor
         let armor =
-            systems::loadout::unequip(&mut world, character, &EquipmentSlot::Armor).unwrap();
-        let armor_class = systems::loadout::armor_class(&world, character);
+            systems::loadout::unequip(&mut game_state.world, character, &EquipmentSlot::Armor)
+                .unwrap();
+        let armor_class = systems::loadout::armor_class(
+            &game_state.world,
+            character,
+            &mut game_state.script_engines,
+        );
         println!("Un-equipped {:?}", armor);
         // Check if the armor class is updated
         println!("{:?}", armor_class);

@@ -27,7 +27,7 @@ use nat20_rs::{
             money::MonetaryValue,
         },
         level::{ChallengeRating, CharacterLevels, Level},
-        modifier::ModifierSet,
+        modifier::{Modifiable, ModifierSet},
         proficiency::{Proficiency, ProficiencyLevel},
         race::{CreatureSize, CreatureType},
         resource::{ResourceAmount, ResourceAmountMap, ResourceBudgetKind, ResourceMap},
@@ -406,7 +406,7 @@ impl ImguiRenderable for ResourceMap {
                 ui.table_next_column();
                 ui.text(format!(
                     "{}",
-                    systems::resources::recharge_rule(resource_id).unwrap()
+                    systems::resources::recharge_rule(resource_id)
                 ));
             }
             table.end();
@@ -772,7 +772,7 @@ impl ImguiRenderable for ArmorClass {
             ui.tooltip(|| {
                 ui.text(format!("Total AC: {}", self.total()));
                 TextSegments::new(vec![
-                    (format!("{} (Base)", self.base.0), TextKind::Normal),
+                    (format!("{}", self.base.0), TextKind::Normal),
                     (format!("({})", self.base.1), TextKind::Details),
                 ])
                 .render(ui);

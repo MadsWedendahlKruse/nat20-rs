@@ -2,13 +2,28 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        id::{RaceId, SubraceId},
+        id::{EffectId, RaceId, SubraceId},
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
+        modifier::ModifierSource,
         race::{CreatureSize, CreatureType, RaceBase},
         speed::Speed,
     },
     registry, systems,
 };
+
+pub enum RaceIdentifier {
+    Race(RaceId),
+    Subrace(SubraceId),
+}
+
+impl RaceIdentifier {
+    pub fn modifier_source(&self) -> ModifierSource {
+        match self {
+            RaceIdentifier::Race(id) => ModifierSource::Race(id.clone()),
+            RaceIdentifier::Subrace(id) => ModifierSource::Subrace(id.clone()),
+        }
+    }
+}
 
 pub fn set_race(world: &mut World, entity: Entity, race: &RaceId) -> Vec<LevelUpPrompt> {
     let mut prompts = Vec::new();
@@ -21,7 +36,13 @@ pub fn set_race(world: &mut World, entity: Entity, race: &RaceId) -> Vec<LevelUp
     systems::helpers::set_component::<RaceId>(world, entity, race.id.clone());
 
     // TODO: The race is presumably always set at level 1?
-    apply_race_base(world, entity, &race.base, 1);
+    apply_race_base(
+        world,
+        entity,
+        &race.base,
+        RaceIdentifier::Race(race.id.clone()),
+        1,
+    );
 
     if !race.subraces.is_empty() {
         prompts.push(LevelUpPrompt::Choice(ChoiceSpec::single(
@@ -59,12 +80,24 @@ pub fn set_subrace(world: &mut World, entity: Entity, subrace: &SubraceId) {
     systems::helpers::set_component::<Option<SubraceId>>(world, entity, Some(subrace.id.clone()));
 
     // TODO: Always level 1?
-    apply_race_base(world, entity, &subrace.base, 1);
+    apply_race_base(
+        world,
+        entity,
+        &subrace.base,
+        RaceIdentifier::Subrace(subrace.id.clone()),
+        1,
+    );
 }
 
-fn apply_race_base(world: &mut World, entity: Entity, base: &RaceBase, level: u8) {
+fn apply_race_base(
+    world: &mut World,
+    entity: Entity,
+    base: &RaceBase,
+    id: RaceIdentifier,
+    level: u8,
+) {
     if let Some(effects) = base.effects_by_level.get(&level) {
-        systems::effects::add_effects(world, entity, effects);
+        systems::effects::add_effects(world, entity, effects, &id.modifier_source());
     }
     if let Some(actions) = base.actions_by_level.get(&level) {
         systems::actions::add_actions(world, entity, actions);

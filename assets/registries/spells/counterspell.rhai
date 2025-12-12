@@ -14,7 +14,7 @@ fn reaction_trigger(context) {
     }
 
     // Only react to spells (for now any spell; you can refine later)
-    if !action.is_spell() {
+    if !action.action_context.is_spell() {
         return false;
     }
 
@@ -34,7 +34,7 @@ fn reaction_body(context) {
     // Combine into a saving throw reaction plan where the actor which triggered
     // the reaction is the one making the saving throw.
     ReactionPlan::require_saving_throw(
-        "trigger_actor",
+        "actor",
         dc,
         on_success,
         on_failure,

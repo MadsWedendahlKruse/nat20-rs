@@ -5,7 +5,11 @@ use std::{
 
 use crate::{
     components::{
-        ability::Ability, feat::Feat, id::FeatId, level::CharacterLevels, level_up::LevelUpPrompt,
+        ability::Ability,
+        feat::Feat,
+        id::{EffectId, FeatId},
+        level::CharacterLevels,
+        level_up::LevelUpPrompt,
     },
     registry, systems,
 };
@@ -58,7 +62,7 @@ pub static FIGHTING_STYLE_ARCHERY: LazyLock<Feat> = LazyLock::new(|| {
     Feat::new(
         FIGHTING_STYLE_ARCHERY_ID.clone(),
         None,
-        vec![registry::effects::FIGHTING_STYLE_ARCHERY_ID.clone()],
+        vec![EffectId::from_str("effect.fighting_style.archery")],
         vec![],
         false,
     )
@@ -71,7 +75,7 @@ pub static FIGHTING_STYLE_DEFENSE: LazyLock<Feat> = LazyLock::new(|| {
     Feat::new(
         FIGHTING_STYLE_DEFENSE_ID.clone(),
         None,
-        vec![registry::effects::FIGHTING_STYLE_DEFENSE_ID.clone()],
+        vec![EffectId::from_str("effect.fighting_style.defense")],
         vec![],
         false,
     )
@@ -84,7 +88,9 @@ pub static FIGHTING_STYLE_GREAT_WEAPON_FIGHTING: LazyLock<Feat> = LazyLock::new(
     Feat::new(
         FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
         None,
-        vec![registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone()],
+        vec![EffectId::from_str(
+            "effect.fighting_style.great_weapon_fighting",
+        )],
         vec![],
         false,
     )

@@ -18,13 +18,11 @@ use crate::{
         health::life_state::LifeState,
         id::{ActionId, EffectId, EntityIdentifier, IdProvider, ScriptId, SpellId},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
+        modifier::ModifierSource,
         resource::{RechargeRule, ResourceAmountMap},
         saving_throw::SavingThrowDC,
     },
-    engine::{
-        event::{Event, ReactionData},
-        game_state::GameState,
-    },
+    engine::{event::Event, game_state::GameState},
     registry::serialize::action::ActionDefinition,
     systems::{self},
 };
@@ -286,7 +284,12 @@ impl ActionKind {
             ),
 
             ActionKind::UnconditionalEffect { effect } => {
-                systems::effects::add_effect(&mut game_state.world, target, effect);
+                systems::effects::add_effect(
+                    &mut game_state.world,
+                    target,
+                    effect,
+                    &ModifierSource::Action(action_id.clone()),
+                );
                 let _ = game_state.process_event(Event::action_performed_event(
                     &game_state,
                     performer,
@@ -320,7 +323,12 @@ impl ActionKind {
             }
 
             ActionKind::BeneficialEffect { effect } => {
-                systems::effects::add_effect(&mut game_state.world, target, effect);
+                systems::effects::add_effect(
+                    &mut game_state.world,
+                    target,
+                    effect,
+                    &ModifierSource::Action(action_id.clone()),
+                );
                 let _ = game_state.process_event(Event::action_performed_event(
                     &game_state,
                     performer,
@@ -434,6 +442,7 @@ impl Action {
 
         for hook in hooks {
             hook(
+                &mut game_state.script_engines,
                 &mut game_state.world,
                 performer,
                 self,

@@ -26,7 +26,7 @@ use crate::{
         registry::{ActionsRegistry, SpellsRegistry},
     },
     scripts::{
-        script_api::{ReactionBodyContext, ReactionTriggerContext},
+        script_api::{ScriptEventView, ScriptReactionBodyContext, ScriptReactionTriggerContext},
         script_engine::ScriptEngineMap,
     },
     systems::{self, geometry::RaycastFilter},
@@ -159,23 +159,26 @@ pub fn action_usable_on_targets(
     Ok(())
 }
 
-pub fn available_actions(world: &World, entity: Entity) -> ActionMap {
-    let mut actions = systems::helpers::get_component_clone::<ActionMap>(world, entity);
-
-    actions.extend(systems::helpers::get_component::<Spellbook>(world, entity).actions());
-
-    actions.extend(systems::helpers::get_component::<Loadout>(world, entity).actions());
+pub fn available_actions(
+    world: &World,
+    entity: Entity,
+    script_engines: &mut ScriptEngineMap,
+) -> ActionMap {
+    let mut actions = all_actions(world, entity);
 
     actions.retain(|action_id, action_data| {
         action_data.retain_mut(|(action_context, resource_cost)| {
             for effect in systems::effects::effects(world, entity).iter() {
-                (effect.on_resource_cost)(world, entity, action_context, resource_cost);
+                (effect.on_resource_cost)(
+                    script_engines,
+                    world,
+                    entity,
+                    action_id,
+                    action_context,
+                    resource_cost,
+                );
             }
-
-            if action_usable(world, entity, action_id, &action_context, resource_cost).is_err() {
-                return false;
-            }
-            true
+            action_usable(world, entity, action_id, &action_context, resource_cost).is_ok()
         });
 
         !action_data.is_empty() // Keep the action if there's at least one usable context
@@ -305,13 +308,14 @@ fn filter_reactions(actions: &ActionMap) -> ReactionSet {
         .collect()
 }
 
-pub fn all_reactions(world: &World, entity: Entity) -> ReactionSet {
-    filter_reactions(&all_actions(world, entity))
-}
+// TODO: Unused?
+// pub fn all_reactions(world: &World, entity: Entity) -> ReactionSet {
+//     filter_reactions(&all_actions(world, entity))
+// }
 
-pub fn available_reactions(world: &World, entity: Entity) -> ReactionSet {
-    filter_reactions(&available_actions(world, entity))
-}
+// pub fn available_reactions(world: &World, entity: Entity) -> ReactionSet {
+//     filter_reactions(&available_actions(world, entity))
+// }
 
 pub fn available_reactions_to_event(
     world: &World,
@@ -322,7 +326,9 @@ pub fn available_reactions_to_event(
 ) -> Vec<ReactionData> {
     let mut reactions = Vec::new();
 
-    for (reaction_id, contexts_and_costs) in systems::actions::available_actions(world, reactor) {
+    for (reaction_id, contexts_and_costs) in
+        systems::actions::available_actions(world, reactor, script_engines)
+    {
         let reaction = systems::actions::get_action(&reaction_id);
         if reaction.is_none() {
             continue;
@@ -330,11 +336,19 @@ pub fn available_reactions_to_event(
         let reaction = reaction.unwrap();
 
         if let Some(trigger) = &reaction.reaction_trigger {
-            let context = ReactionTriggerContext {
-                reactor,
-                event: event.clone().into(),
+            let Some(script_event) = ScriptEventView::from_event(event) else {
+                eprintln!(
+                    "Event {:?} could not be converted to ScriptEventView for reaction trigger {:?}",
+                    event.kind.name(),
+                    reaction_id
+                );
+                continue;
             };
-            if systems::scripts::run_reaction_trigger(trigger, &context, script_engines) {
+            let context = ScriptReactionTriggerContext {
+                reactor: reactor.into(),
+                event: script_event,
+            };
+            if systems::scripts::evaluate_reaction_trigger(script_engines, trigger, &context) {
                 for (context, resource_cost) in &contexts_and_costs {
                     if action_usable_on_targets(
                         world,
@@ -369,13 +383,13 @@ pub fn perform_reaction(game_state: &mut GameState, reaction_data: &ReactionData
 
     match &action.kind {
         ActionKind::Reaction { reaction } => {
-            let context = ReactionBodyContext {
+            let context = ScriptReactionBodyContext {
                 reaction_data: reaction_data.clone(),
             };
-            let plan = systems::scripts::run_reaction_body(
+            let plan = systems::scripts::evaluate_reaction_body(
+                &mut game_state.script_engines,
                 reaction,
                 &context,
-                &mut game_state.script_engines,
             );
             systems::scripts::apply_reaction_plan(game_state, &context, plan);
         }

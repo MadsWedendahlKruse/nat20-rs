@@ -1,0 +1,10 @@
+{
+    "id": "effect.item.armor_of_constitution_saving_throws",
+    "description": "While wearing this armor, you have advantage on Constitution saving throws.",
+    "duration": "conditional",
+    "modifiers": [
+        {
+            "saving_throw": "con advantage"
+        }
+    ]
+}

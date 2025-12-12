@@ -7,6 +7,7 @@ use crate::{
         d20::{D20CheckDC, D20CheckResult},
         damage::AttackRollResult,
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
+        modifier::Modifiable,
         saving_throw::{SavingThrowKind, SavingThrowSet},
         skill::{Skill, SkillSet},
     },

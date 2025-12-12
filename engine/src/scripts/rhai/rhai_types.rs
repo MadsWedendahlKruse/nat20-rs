@@ -1,302 +1,365 @@
 use rhai::{Array, CustomType, TypeBuilder, plugin::*};
 
 use crate::{
-    components::id::ResourceId,
-    engine::event::Event,
+    components::{
+        damage::{DamageComponentResult, DamageRollResult, DamageSource},
+        dice::DiceSetRollResult,
+        id::ResourceId,
+        items::equipment::weapon::WeaponKind,
+    },
     scripts::script_api::{
-        D20CheckPerformedView, ReactionTriggerContext, ScriptActionView, ScriptD20CheckDCKind,
-        ScriptD20Result, ScriptEntityRole, ScriptEventRef, ScriptEventView, ScriptReactionPlan,
-        ScriptSavingThrowSpec,
+        ScriptActionContext, ScriptActionView, ScriptD20CheckDCKind, ScriptD20CheckPerformedView,
+        ScriptD20Result, ScriptEntity, ScriptEntityView, ScriptEventRef, ScriptEventView,
+        ScriptLoadoutView, ScriptReactionBodyContext, ScriptReactionPlan,
+        ScriptReactionTriggerContext, ScriptResourceCost, ScriptResourceView, ScriptSavingThrow,
     },
 };
 
-#[derive(Clone, CustomType)]
-#[rhai_type(name = "D20CheckDC", extra = Self::build_extra)]
-pub struct RhaiD20CheckDCKind {
-    #[rhai_type(skip)]
-    inner: ScriptD20CheckDCKind,
+impl CustomType for ScriptEntity {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("Entity")
+            .with_get("id", |s: &mut Self| s.id);
+    }
 }
-
-impl RhaiD20CheckDCKind {
-    fn build_extra(builder: &mut TypeBuilder<Self>) {
-        builder.with_get("label", |s: &mut Self| s.inner.label.clone());
+/// === Trying something out here ===
+impl CustomType for DiceSetRollResult {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder.with_name("DiceSetRollResult").with_get_set(
+            "rolls",
+            |s: &mut Self| {
+                Array::from(
+                    s.rolls
+                        .iter()
+                        .map(|&v| Dynamic::from(v as i64))
+                        .collect::<Vec<Dynamic>>(),
+                )
+            },
+            |s: &mut Self, v: Array| {
+                s.rolls = v.into_iter().map(|d| d.cast::<i64>() as u32).collect();
+            },
+        );
     }
 }
 
-#[derive(Clone, CustomType)]
-#[rhai_type(name = "D20Result", extra = Self::build_extra)]
-pub struct RhaiD20Result {
-    #[rhai_type(skip)]
-    inner: ScriptD20Result,
-}
-
-impl RhaiD20Result {
-    fn build_extra(builder: &mut TypeBuilder<Self>) {
-        builder
-            .with_get("total", |s: &mut Self| s.inner.total)
-            .with_get("kind", |s: &mut Self| RhaiD20CheckDCKind {
-                inner: s.inner.kind.clone(),
-            })
-            .with_fn("is_success", |s: &mut Self| s.inner.is_success);
+impl CustomType for DamageComponentResult {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder.with_name("DamageComponentResult").with_get_set(
+            "result",
+            |s: &mut Self| s.result.clone(),
+            |s: &mut Self, v: DiceSetRollResult| s.result = v,
+        );
     }
 }
 
-#[derive(Clone, CustomType)]
-#[rhai_type(name = "D20CheckPerformed", extra = Self::build_extra)]
-pub struct RhaiD20CheckPerformedView {
-    #[rhai_type(skip)]
-    inner: D20CheckPerformedView,
-}
-
-impl RhaiD20CheckPerformedView {
-    fn build_extra(builder: &mut TypeBuilder<Self>) {
+impl CustomType for DamageSource {
+    fn build(mut builder: TypeBuilder<Self>) {
         builder
-            .with_get("performer", |s: &mut Self| {
-                RhaiD20CheckPerformedView::performer(s)
-            })
-            .with_get("result", |s: &mut Self| RhaiD20Result {
-                inner: s.inner.result.clone(),
-            })
-            .with_get("dc_kind", |s: &mut Self| RhaiD20CheckDCKind {
-                inner: s.inner.dc_kind.clone(),
+            .with_name("DamageSource")
+            .with_get("kind", |s: &mut Self| match s {
+                DamageSource::Weapon(weapon_kind) => weapon_kind.to_string(),
+                DamageSource::Spell => "Spell".to_string(),
             });
     }
+}
 
-    pub fn performer(&self) -> u64 {
-        u64::from(self.inner.performer.to_bits())
+impl CustomType for DamageRollResult {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("DamageRollResult")
+            .with_get("total", |s: &mut Self| s.total)
+            .with_get_set(
+                "components",
+                |s: &mut Self| {
+                    Array::from(
+                        s.components
+                            .iter()
+                            .map(|c| Dynamic::from(c.clone()))
+                            .collect::<Vec<Dynamic>>(),
+                    )
+                },
+                |s: &mut Self, v: Array| {
+                    s.components = v
+                        .into_iter()
+                        .map(|d| d.cast::<DamageComponentResult>())
+                        .collect();
+                    s.recalculate_total();
+                },
+            )
+            .with_get("source", |s: &mut Self| s.source.clone());
+    }
+}
+/// === End trying something out ===
+
+impl CustomType for ScriptD20CheckDCKind {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("D20CheckDCKind")
+            .with_get("label", |s: &mut Self| s.label.clone());
     }
 }
 
-// TODO: Kind of similar to RhaiD20CheckDCKind??
-#[derive(Clone, CustomType)]
-#[rhai_type(name = "SavingThrow")]
-pub struct RhaiSavingThrow {
-    #[rhai_type(skip)]
-    pub inner: ScriptSavingThrowSpec,
+impl CustomType for ScriptD20Result {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("D20Result")
+            .with_get("total", |s: &mut Self| s.total)
+            .with_get("kind", |s: &mut Self| s.kind.clone())
+            .with_get("is_success", |s: &mut Self| s.is_success);
+    }
+}
+
+impl CustomType for ScriptD20CheckPerformedView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("D20CheckPerformedView")
+            .with_get("performer", |s: &mut Self| s.performer.clone())
+            .with_get("result", |s: &mut Self| s.result.clone())
+            .with_get("dc_kind", |s: &mut Self| s.dc_kind.clone());
+    }
+}
+
+impl CustomType for ScriptSavingThrow {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder.with_name("SavingThrow");
+    }
 }
 
 #[export_module]
 pub mod saving_throw_module {
     use super::*;
 
-    pub fn dc(entity_role: String, saving_throw: String) -> RhaiSavingThrow {
-        let role = match entity_role.as_str() {
-            "reactor" => ScriptEntityRole::Reactor,
-            "trigger_actor" => ScriptEntityRole::TriggerActor,
-            other => panic!("Unknown entity role in ReactionDC::spell_save: {}", other),
-        };
+    pub fn dc(entity_role: String, saving_throw: String) -> ScriptSavingThrow {
+        let role = entity_role
+            .parse()
+            .expect(format!("Failed to parse ScriptEntityRole: {}", entity_role).as_str());
 
-        RhaiSavingThrow {
-            inner: ScriptSavingThrowSpec {
-                entity: role,
-                saving_throw: saving_throw
-                    .parse()
-                    .expect("Failed to parse SavingThrowProvider"),
-            },
+        ScriptSavingThrow {
+            entity: role,
+            saving_throw: saving_throw
+                .parse()
+                .expect("Failed to parse SavingThrowProvider"),
         }
     }
 }
 
-#[derive(Clone, CustomType)]
-#[rhai_type(name = "ActionView", extra = Self::build_extra)]
-pub struct RhaiActionView {
-    #[rhai_type(skip)]
-    inner: ScriptActionView,
-}
-
-impl RhaiActionView {
-    fn build_extra(builder: &mut TypeBuilder<Self>) {
+impl CustomType for ScriptActionContext {
+    fn build(mut builder: TypeBuilder<Self>) {
         builder
-            .with_get("action_id", |s: &mut Self| s.inner.action_id.clone())
-            // Expose the actor as a numeric entity id
-            .with_get("actor", |s: &mut Self| u64::from(s.inner.actor.to_bits()))
-            // Expose a convenience predicate
-            .with_fn("is_spell", |s: &mut Self| s.inner.is_spell);
+            .with_name("ActionContext")
+            .with_fn("is_spell", |s: &mut Self| s.is_spell())
+            .with_fn("is_weapon_attack", |s: &mut Self| s.is_weapon_attack());
     }
 }
 
-#[derive(Clone, CustomType)]
-#[rhai_type(name = "Event", extra = Self::build_extra)]
-pub struct RhaiEventView {
-    #[rhai_type(skip)]
-    inner: ScriptEventView,
-}
-
-impl RhaiEventView {
-    fn build_extra(builder: &mut TypeBuilder<Self>) {
+impl CustomType for ScriptResourceCost {
+    fn build(mut builder: TypeBuilder<Self>) {
         builder
+            .with_name("ResourceCost")
+            .with_fn("costs_resource", |s: &mut Self, resource_id: String| {
+                s.costs_resource(&ResourceId::from_str(&resource_id))
+            })
             .with_fn(
-                "is_d20_check_performed",
-                RhaiEventView::is_d20_check_performed,
-            )
-            .with_fn(
-                "as_d20_check_performed",
-                RhaiEventView::as_d20_check_performed,
-            )
-            .with_fn(
-                "is_own_failed_d20_check",
-                |s: &mut Self, context: RhaiTriggerContext, kind: String| {
-                    if !s.is_d20_check_performed() {
-                        return false;
-                    }
-                    let d20_check = s.as_d20_check_performed();
-                    return d20_check.performer() == context.reactor_id
-                        && !d20_check.inner.result.is_success
-                        && d20_check.inner.dc_kind.label == kind;
+                "replace_resource",
+                |s: &mut Self, from: String, to: String, new_amount: String| {
+                    s.replace_resource(
+                        &ResourceId::from_str(&from),
+                        &ResourceId::from_str(&to),
+                        serde_plain::from_str(&new_amount).expect("Failed to parse ResourceAmount"),
+                    )
                 },
-            )
-            .with_fn("is_action", RhaiEventView::is_action)
-            .with_fn("as_action", RhaiEventView::as_action);
-    }
-
-    pub fn from_api(event: &Event) -> Option<Self> {
-        let view = ScriptEventView::from_event(event)?;
-        Some(RhaiEventView { inner: view })
-    }
-
-    pub fn is_d20_check_performed(&mut self) -> bool {
-        matches!(self.inner, ScriptEventView::D20CheckPerformed(_))
-    }
-
-    pub fn as_d20_check_performed(&mut self) -> RhaiD20CheckPerformedView {
-        if let ScriptEventView::D20CheckPerformed(v) = &self.inner {
-            RhaiD20CheckPerformedView { inner: v.clone() }
-        } else {
-            panic!("as_d20_check_performed called on non-D20CheckPerformed event");
-        }
-    }
-
-    pub fn is_action(&mut self) -> bool {
-        matches!(self.inner, ScriptEventView::ActionRequested(_))
-    }
-
-    pub fn as_action(&mut self) -> RhaiActionView {
-        if let ScriptEventView::ActionRequested(v) = &self.inner {
-            RhaiActionView { inner: v.clone() }
-        } else {
-            panic!("as_action called on non-action event");
-        }
+            );
     }
 }
 
-#[derive(Clone, CustomType)]
-#[rhai_type(name = "TriggerContext", extra = Self::build_extra)]
-pub struct RhaiTriggerContext {
-    pub reactor_id: u64,
-    pub event: RhaiEventView,
-}
-
-impl RhaiTriggerContext {
-    fn build_extra(builder: &mut TypeBuilder<Self>) {
+impl CustomType for ScriptActionView {
+    fn build(mut builder: TypeBuilder<Self>) {
         builder
-            .with_get("reactor", |s: &mut Self| s.reactor_id)
-            .with_get("event", |s: &mut Self| s.event.clone());
-    }
-
-    pub fn from_api(context: &ReactionTriggerContext) -> Option<Self> {
-        let event = RhaiEventView::from_api(&context.event)?;
-        Some(RhaiTriggerContext {
-            reactor_id: u64::from(context.reactor.to_bits()),
-            event,
-        })
+            .with_name("ActionView")
+            .with_get("action_id", |s: &mut Self| s.action_id.clone())
+            // Expose the actor as a numeric entity id
+            .with_get("actor", |s: &mut Self| u64::from(s.actor.to_bits()))
+            .with_get("action_context", |s: &mut Self| s.action_context.clone())
+            .with_get("resource_cost", |s: &mut Self| s.resource_cost.clone());
     }
 }
 
-#[derive(Clone, CustomType)]
-#[rhai_type(name = "ReactionPlan")]
-pub struct RhaiReactionPlan {
-    #[rhai_type(skip)]
-    pub inner: ScriptReactionPlan,
+impl CustomType for ScriptEventView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("EventView")
+            .with_fn("is_d20_check_performed", |s: &mut Self| {
+                s.is_d20_check_performed()
+            })
+            .with_fn("as_d20_check_performed", |s: &mut Self| {
+                s.as_d20_check_performed().clone()
+            })
+            .with_fn("is_action", |s: &mut Self| s.is_action())
+            .with_fn("as_action", |s: &mut Self| s.as_action().clone());
+    }
+}
+
+impl CustomType for ScriptReactionPlan {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder.with_name("ReactionPlan");
+    }
 }
 
 #[export_module]
 pub mod reaction_plan_module {
-    use crate::{registry::serialize::parser::Parser, scripts::script_api::ScriptD20Bonus};
-
     use super::*;
 
-    pub fn none() -> RhaiReactionPlan {
-        RhaiReactionPlan {
-            inner: ScriptReactionPlan::None,
-        }
+    pub fn none() -> ScriptReactionPlan {
+        ScriptReactionPlan::None
     }
 
-    pub fn sequence(plans: Array) -> RhaiReactionPlan {
-        let inner_plans = plans
+    pub fn sequence(plans: Array) -> ScriptReactionPlan {
+        let inner_plans: Vec<ScriptReactionPlan> = plans
             .into_iter()
-            .map(|v| v.cast::<RhaiReactionPlan>().inner)
+            .map(|v| v.cast::<ScriptReactionPlan>())
             .collect();
+        ScriptReactionPlan::Sequence(inner_plans)
+    }
 
-        RhaiReactionPlan {
-            inner: ScriptReactionPlan::Sequence(inner_plans),
+    pub fn modify_d20_result(bonus: String) -> ScriptReactionPlan {
+        ScriptReactionPlan::ModifyD20Result {
+            bonus: bonus.parse().unwrap(),
         }
     }
 
-    fn parse_d20_bonus(bonus: String) -> ScriptD20Bonus {
-        if let Ok(flat) = Parser::new(&bonus).parse_int_expression() {
-            ScriptD20Bonus::Flat(flat)
-        } else if let Ok(expr) = Parser::new(&bonus).parse_dice_expression() {
-            ScriptD20Bonus::Dice(expr)
-        } else {
-            panic!("Failed to parse bonus expression: {}", bonus);
-        }
-    }
-
-    pub fn modify_d20_result(bonus: String) -> RhaiReactionPlan {
-        RhaiReactionPlan {
-            inner: ScriptReactionPlan::ModifyD20Result {
-                bonus: parse_d20_bonus(bonus),
-            },
-        }
-    }
-
-    pub fn reroll_d20_result(bonus: String, force_use_new: bool) -> RhaiReactionPlan {
+    pub fn reroll_d20_result(bonus: String, force_use_new: bool) -> ScriptReactionPlan {
         let bonus = if bonus.is_empty() {
             None
         } else {
-            Some(parse_d20_bonus(bonus))
+            bonus.parse().ok()
         };
-        RhaiReactionPlan {
-            inner: ScriptReactionPlan::RerollD20Result {
-                bonus,
-                force_use_new,
-            },
+        ScriptReactionPlan::RerollD20Result {
+            bonus,
+            force_use_new,
         }
     }
 
     pub fn require_saving_throw(
         target_role: ImmutableString,
-        dc: RhaiSavingThrow,
-        on_success: RhaiReactionPlan,
-        on_failure: RhaiReactionPlan,
-    ) -> RhaiReactionPlan {
-        let target = match target_role.as_str() {
-            "reactor" => ScriptEntityRole::Reactor,
-            "trigger_actor" => ScriptEntityRole::TriggerActor,
-            other => panic!("Unknown entity role in require_saving_throw: {}", other),
-        };
+        dc: ScriptSavingThrow,
+        on_success: ScriptReactionPlan,
+        on_failure: ScriptReactionPlan,
+    ) -> ScriptReactionPlan {
+        let target = target_role
+            .parse()
+            .expect(format!("Failed to parse ScriptEntityRole: {}", target_role).as_str());
 
-        RhaiReactionPlan {
-            inner: ScriptReactionPlan::RequireSavingThrow {
-                target,
-                dc: dc.inner,
-                on_success: Box::new(on_success.inner),
-                on_failure: Box::new(on_failure.inner),
-            },
+        ScriptReactionPlan::RequireSavingThrow {
+            target,
+            dc,
+            on_success: Box::new(on_success),
+            on_failure: Box::new(on_failure),
         }
     }
 
-    pub fn cancel_trigger_event(resources_to_refund: Array) -> RhaiReactionPlan {
+    pub fn cancel_trigger_event(resources_to_refund: Array) -> ScriptReactionPlan {
         let resources: Vec<ResourceId> = resources_to_refund
             .into_iter()
             .map(|v| ResourceId::from_str(v.cast::<String>()))
             .collect();
 
-        RhaiReactionPlan {
-            inner: ScriptReactionPlan::CancelEvent {
-                event: ScriptEventRef::TriggerEvent,
-                resources_to_refund: resources,
-            },
+        ScriptReactionPlan::CancelEvent {
+            event: ScriptEventRef::TriggerEvent,
+            resources_to_refund: resources,
         }
+    }
+}
+
+impl CustomType for ScriptLoadoutView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("LoadoutView")
+            .with_get("armor_type", |s: &mut Self| match &s.loadout.armor() {
+                Some(armor) => armor.armor_type.to_string(),
+                None => "None".to_string(),
+            })
+            .with_fn(
+                "wielding_with_both_hands",
+                |s: &mut Self, weapon_kind: String| {
+                    let kind = serde_plain::from_str(&weapon_kind.to_lowercase())
+                        .expect("Failed to parse WeaponKind");
+                    s.loadout.is_wielding_weapon_with_both_hands(&kind)
+                },
+            );
+    }
+}
+
+impl CustomType for ScriptResourceView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("ResourceView")
+            .with_fn(
+                "can_afford_resource",
+                |s: &mut Self, resource_id: String, amount: String| {
+                    s.can_afford_resource(
+                        &ResourceId::from_str(&resource_id),
+                        &serde_plain::from_str(&amount).expect("Failed to parse ResourceAmount"),
+                    )
+                },
+            )
+            .with_fn(
+                "add_resource",
+                |s: &mut Self, resource_id: String, amount: Dynamic| {
+                    let amount = if amount.is::<String>() {
+                        amount.cast::<String>()
+                    } else if amount.is::<i64>() {
+                        amount.cast::<i64>().to_string()
+                    } else {
+                        panic!("Unexpected type for amount: {:?}", amount.type_name());
+                    };
+                    s.add_resource(
+                        &ResourceId::from_str(&resource_id),
+                        &serde_plain::from_str(&amount).expect("Failed to parse ResourceAmount"),
+                    )
+                },
+            );
+    }
+}
+
+impl CustomType for ScriptEntityView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("EntityView")
+            .with_get("entity", |s: &mut Self| s.entity.clone())
+            .with_get("loadout", |s: &mut Self| s.loadout.clone())
+            .with_get_set(
+                "resources",
+                |s: &mut Self| s.resources.clone(),
+                |s: &mut Self, v: ScriptResourceView| s.resources = v,
+            );
+    }
+}
+
+impl CustomType for ScriptReactionTriggerContext {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("ReactionTriggerContext")
+            .with_get("reactor", |s: &mut Self| s.reactor.clone())
+            .with_get("event", |s: &mut Self| s.event.clone())
+            .with_fn(
+                "is_own_failed_d20_check",
+                |s: &mut Self, dc_kind: String| {
+                    if !s.event.is_d20_check_performed() {
+                        return false;
+                    }
+                    let d20_check = s.event.as_d20_check_performed();
+                    return d20_check.performer == s.reactor
+                        && !d20_check.result.is_success
+                        && d20_check.dc_kind.label == dc_kind;
+                },
+            );
+    }
+}
+
+impl CustomType for ScriptReactionBodyContext {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("ReactionBodyContext")
+            .with_get("reaction_data", |s: &mut Self| s.reaction_data.clone());
     }
 }

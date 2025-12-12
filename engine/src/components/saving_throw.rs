@@ -1,6 +1,7 @@
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 use hecs::{Entity, World};
+use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -12,10 +13,17 @@ use crate::{
     systems::{self},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub enum SavingThrowKind {
     Ability(Ability),
     Death, // sounds a bit edgy lol
+}
+
+impl Default for SavingThrowKind {
+    fn default() -> Self {
+        SavingThrowKind::Ability(Ability::Strength)
+    }
 }
 
 impl IntoEnumIterator for SavingThrowKind {
@@ -35,6 +43,38 @@ impl Display for SavingThrowKind {
             SavingThrowKind::Ability(ability) => write!(f, "{}", ability),
             SavingThrowKind::Death => write!(f, "Death"),
         }
+    }
+}
+
+impl FromStr for SavingThrowKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("death") {
+            return Ok(SavingThrowKind::Death);
+        }
+        for ability in Ability::iter() {
+            if let Ok(parsed_ability) = s.parse::<Ability>() {
+                if parsed_ability == ability {
+                    return Ok(SavingThrowKind::Ability(ability));
+                }
+            }
+        }
+        Err(format!("Unknown saving throw kind: {}", s))
+    }
+}
+
+impl TryFrom<String> for SavingThrowKind {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<SavingThrowKind> for String {
+    fn from(kind: SavingThrowKind) -> Self {
+        kind.to_string()
     }
 }
 

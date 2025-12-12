@@ -62,6 +62,14 @@ pub struct ModifierSet {
     modifiers: HashMap<ModifierSource, i32>,
 }
 
+pub trait Modifiable {
+    fn add_modifier<T>(&mut self, source: ModifierSource, value: T)
+    where
+        T: Into<i32>;
+    fn remove_modifier(&mut self, source: &ModifierSource);
+    fn total(&self) -> i32;
+}
+
 impl ModifierSet {
     pub fn new() -> Self {
         Self {
@@ -81,21 +89,6 @@ impl ModifierSet {
     {
         let modifiers = iter.into_iter().collect();
         Self { modifiers }
-    }
-
-    pub fn add_modifier<T>(&mut self, source: ModifierSource, value: T)
-    where
-        T: Into<i32>,
-    {
-        let value = value.into();
-        if value == 0 {
-            return;
-        }
-        self.modifiers.insert(source.clone(), value);
-    }
-
-    pub fn remove_modifier(&mut self, source: &ModifierSource) {
-        self.modifiers.remove(source);
     }
 
     pub fn add_modifier_set(&mut self, other: &ModifierSet) {
@@ -120,10 +113,6 @@ impl ModifierSet {
         }
     }
 
-    pub fn total(&self) -> i32 {
-        self.modifiers.values().map(|m| m).sum()
-    }
-
     pub fn is_empty(&self) -> bool {
         if self.modifiers.is_empty() {
             return true;
@@ -139,6 +128,35 @@ impl ModifierSet {
     pub fn iter(&self) -> impl Iterator<Item = (&ModifierSource, &i32)> {
         self.modifiers.iter()
     }
+}
+
+impl Modifiable for ModifierSet {
+    fn add_modifier<T>(&mut self, source: ModifierSource, value: T)
+    where
+        T: Into<i32>,
+    {
+        let value = value.into();
+        if value == 0 {
+            return;
+        }
+        self.modifiers.insert(source.clone(), value);
+    }
+
+    fn remove_modifier(&mut self, source: &ModifierSource) {
+        self.modifiers.remove(source);
+    }
+
+    fn total(&self) -> i32 {
+        self.modifiers.values().map(|m| m).sum()
+    }
+}
+
+pub trait KeyedModifiable<K> {
+    fn add_modifier<T>(&mut self, key: K, source: ModifierSource, value: T)
+    where
+        T: Into<i32>;
+    fn remove_modifier(&mut self, key: K, source: &ModifierSource);
+    fn total(&self, key: K) -> i32;
 }
 
 impl fmt::Display for ModifierSet {

@@ -8,7 +8,7 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::Ability,
-            id::{BackgroundId, ClassId, ItemId, SubclassId},
+            id::{BackgroundId, ClassId, EffectId, ItemId, SubclassId},
             level::CharacterLevels,
             level_up::ChoiceItem,
             proficiency::ProficiencyLevel,
@@ -114,13 +114,16 @@ mod tests {
 
         {
             let effects = systems::effects::effects(&mut world, character);
-            assert_eq!(effects.len(), 6);
+            let effect_ids: HashSet<&EffectId> = effects.iter().map(|e| e.id()).collect();
             for effect_id in [
-                &registry::effects::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID,
-                &registry::effects::IMPROVED_CRITICAL_ID,
+                EffectId::from_str("effect.fighting_style.great_weapon_fighting"),
+                EffectId::from_str("effect.fighter.champion.improved_critical"),
             ] {
                 assert!(
-                    effects.contains(&registry::effects::EFFECT_REGISTRY.get(&effect_id).unwrap())
+                    effect_ids.contains(&effect_id),
+                    "Effect {:?} not found in character effects: {:?}",
+                    effect_id,
+                    effect_ids
                 );
             }
         }

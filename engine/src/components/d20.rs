@@ -4,13 +4,14 @@ use std::{cmp::max, collections::HashMap, fmt, hash::Hash};
 
 use hecs::{Entity, World};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
         effects::hooks::D20CheckHooks,
-        modifier::{ModifierSet, ModifierSource},
+        modifier::{KeyedModifiable, Modifiable, ModifierSet, ModifierSource},
         proficiency::{Proficiency, ProficiencyLevel},
     },
     systems,
@@ -23,7 +24,8 @@ pub enum RollMode {
     Disadvantage,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AdvantageType {
     Advantage,
     Disadvantage,
@@ -108,14 +110,6 @@ impl D20Check {
         &mut self.modifiers
     }
 
-    pub fn add_modifier(&mut self, source: ModifierSource, value: i32) {
-        self.modifiers.add_modifier(source, value);
-    }
-
-    pub fn remove_modifier(&mut self, source: &ModifierSource) {
-        self.modifiers.remove_modifier(source);
-    }
-
     pub fn proficiency(&self) -> &Proficiency {
         &self.proficiency
     }
@@ -176,11 +170,10 @@ impl D20Check {
             (hook.check_hook)(world, entity, &mut check);
         }
 
-        let mut result = check.roll(
-            systems::helpers::level(world, entity)
-                .unwrap()
-                .proficiency_bonus(),
-        );
+        let proficiency_bonus = systems::helpers::level(world, entity)
+            .unwrap()
+            .proficiency_bonus();
+        let mut result = check.roll(proficiency_bonus);
 
         for hook in hooks {
             (hook.result_hook)(world, entity, &mut result);
@@ -205,6 +198,23 @@ impl D20Check {
             RollMode::Advantage => 1.0 - (1.0 - single_roll_p).powi(2),
             RollMode::Disadvantage => single_roll_p.powi(2),
         }
+    }
+}
+
+impl Modifiable for D20Check {
+    fn add_modifier<T>(&mut self, source: ModifierSource, value: T)
+    where
+        T: Into<i32>,
+    {
+        self.modifiers.add_modifier(source, value.into());
+    }
+
+    fn remove_modifier(&mut self, source: &ModifierSource) {
+        self.modifiers.remove_modifier(source);
+    }
+
+    fn total(&self) -> i32 {
+        self.modifiers.total()
     }
 }
 
@@ -280,10 +290,14 @@ impl fmt::Display for D20CheckResult {
     }
 }
 
+pub trait D20CheckKey: Eq + Hash + IntoEnumIterator + Copy {}
+
+impl<T: Eq + Hash + IntoEnumIterator + Copy> D20CheckKey for T {}
+
 #[derive(Debug, Clone)]
 pub struct D20CheckSet<K>
 where
-    K: Eq + Hash + IntoEnumIterator + Copy,
+    K: D20CheckKey,
 {
     checks: HashMap<K, D20Check>,
     ability_mapper: fn(K) -> Option<Ability>,
@@ -292,7 +306,7 @@ where
 
 impl<K> D20CheckSet<K>
 where
-    K: Eq + Hash + IntoEnumIterator + Copy,
+    K: D20CheckKey,
 {
     pub fn new(
         ability_mapper: fn(K) -> Option<Ability>,
@@ -328,12 +342,12 @@ where
         self.get_mut(key).set_proficiency(proficiency);
     }
 
-    pub fn add_modifier(&mut self, key: K, source: ModifierSource, value: i32) {
-        self.get_mut(key).add_modifier(source, value);
+    pub fn add_advantage(&mut self, key: K, kind: AdvantageType, source: ModifierSource) {
+        self.get_mut(key).advantage_tracker_mut().add(kind, source);
     }
 
-    pub fn remove_modifier(&mut self, key: K, source: &ModifierSource) {
-        self.get_mut(key).remove_modifier(source);
+    pub fn remove_advantage(&mut self, key: K, source: &ModifierSource) {
+        self.get_mut(key).advantage_tracker_mut().remove(source);
     }
 
     pub fn check(&self, key: K, world: &World, entity: Entity) -> D20CheckResult {
@@ -355,6 +369,26 @@ where
         result.success &= !result.is_crit_fail; // Critical failure cannot be a success
 
         result
+    }
+}
+
+impl<K> KeyedModifiable<K> for D20CheckSet<K>
+where
+    K: D20CheckKey,
+{
+    fn add_modifier<T>(&mut self, key: K, source: ModifierSource, value: T)
+    where
+        T: Into<i32>,
+    {
+        self.get_mut(key).add_modifier(source, value.into());
+    }
+
+    fn remove_modifier(&mut self, key: K, source: &ModifierSource) {
+        self.get_mut(key).remove_modifier(source);
+    }
+
+    fn total(&self, key: K) -> i32 {
+        self.get(key).modifiers().total()
     }
 }
 

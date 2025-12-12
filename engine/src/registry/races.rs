@@ -12,7 +12,7 @@ use crate::{
         race::{CreatureSize, CreatureType, Race, RaceBase, Subrace},
         speed::Speed,
     },
-    registry,
+    registry::{self, registry::EffectsRegistry},
 };
 
 pub static RACE_REGISTRY: LazyLock<HashMap<RaceId, Race>> =
@@ -46,7 +46,7 @@ static DRAGONBORN: LazyLock<Race> = LazyLock::new(|| Race {
 });
 
 macro_rules! dragonborn_subraces {
-    ($( $Name:ident => $slug:literal => [ $( $effect_id:path ),+ $(,)? ] ),+ $(,)?) => {
+    ($( $Name:ident => $slug:literal => [ $( $effect_id:literal ),+ $(,)? ] ),+ $(,)?) => {
         use paste::paste;
         paste! {
             $(
@@ -58,7 +58,7 @@ macro_rules! dragonborn_subraces {
                     base: RaceBase {
                         effects_by_level: {
                             let mut m: HashMap<u8, Vec<EffectId>> = HashMap::new();
-                            m.insert(1, vec![ $( $effect_id.clone() ),+ ]);
+                            m.insert(1, vec![ $( EffectId::from_str($effect_id.clone()) ),+ ]);
                             m
                         },
                         actions_by_level: HashMap::new(),
@@ -70,16 +70,16 @@ macro_rules! dragonborn_subraces {
 }
 
 dragonborn_subraces!(
-    DRAGONBORN_BLACK  => "black"  => [registry::effects::DRACONIC_ANCESTRY_BLACK_ID],
-    DRAGONBORN_BLUE   => "blue"   => [registry::effects::DRACONIC_ANCESTRY_BLUE_ID],
-    DRAGONBORN_BRASS  => "brass"  => [registry::effects::DRACONIC_ANCESTRY_BRASS_ID],
-    DRAGONBORN_BRONZE => "bronze" => [registry::effects::DRACONIC_ANCESTRY_BRONZE_ID],
-    DRAGONBORN_COPPER => "copper" => [registry::effects::DRACONIC_ANCESTRY_COPPER_ID],
-    DRAGONBORN_GOLD   => "gold"   => [registry::effects::DRACONIC_ANCESTRY_GOLD_ID],
-    DRAGONBORN_GREEN  => "green"  => [registry::effects::DRACONIC_ANCESTRY_GREEN_ID],
-    DRAGONBORN_RED    => "red"    => [registry::effects::DRACONIC_ANCESTRY_RED_ID],
-    DRAGONBORN_SILVER => "silver" => [registry::effects::DRACONIC_ANCESTRY_SILVER_ID],
-    DRAGONBORN_WHITE  => "white"  => [registry::effects::DRACONIC_ANCESTRY_WHITE_ID],
+    DRAGONBORN_BLACK  => "black"  => ["effect.dragonborn.draconic_ancestry_black"],
+    DRAGONBORN_BLUE   => "blue"   => ["effect.dragonborn.draconic_ancestry_blue"],
+    DRAGONBORN_BRASS  => "brass"  => ["effect.dragonborn.draconic_ancestry_brass"],
+    DRAGONBORN_BRONZE => "bronze" => ["effect.dragonborn.draconic_ancestry_bronze"],
+    DRAGONBORN_COPPER => "copper" => ["effect.dragonborn.draconic_ancestry_copper"],
+    DRAGONBORN_GOLD   => "gold"   => ["effect.dragonborn.draconic_ancestry_gold"],
+    DRAGONBORN_GREEN  => "green"  => ["effect.dragonborn.draconic_ancestry_green"],
+    DRAGONBORN_RED    => "red"    => ["effect.dragonborn.draconic_ancestry_red"],
+    DRAGONBORN_SILVER => "silver" => ["effect.dragonborn.draconic_ancestry_silver"],
+    DRAGONBORN_WHITE  => "white"  => ["effect.dragonborn.draconic_ancestry_white"],
 );
 
 pub static DWARF_ID: LazyLock<RaceId> = LazyLock::new(|| RaceId::from_str("race.dwarf"));

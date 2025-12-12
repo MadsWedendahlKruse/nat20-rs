@@ -1,6 +1,8 @@
 pub mod action;
 pub mod d20;
 pub mod dice;
+pub mod effect;
+pub mod modifier;
 pub mod parser;
 pub mod quantity;
 pub mod spell;

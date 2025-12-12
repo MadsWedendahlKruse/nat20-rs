@@ -1,4 +1,4 @@
-use hecs::{Entity, World};
+use hecs::Entity;
 use imgui::{ChildFlags, MouseButton};
 use nat20_rs::{
     components::{
@@ -8,6 +8,7 @@ use nat20_rs::{
         },
         d20::RollMode,
         id::{ActionId, Name},
+        modifier::Modifiable,
         resource::{ResourceAmountMap, ResourceMap},
         speed::Speed,
     },
@@ -15,7 +16,6 @@ use nat20_rs::{
         event::{ActionData, ActionDecision, ActionDecisionKind, ActionPromptKind},
         game_state::GameState,
     },
-    registry,
     systems::{
         self,
         geometry::{RaycastHit, RaycastHitKind},
@@ -68,10 +68,10 @@ pub struct ActionBarWindow {
 }
 
 impl ActionBarWindow {
-    pub fn new(world: &World, entity: Entity) -> Self {
+    pub fn new(game_state: &mut GameState, entity: Entity) -> Self {
         Self {
             state: ActionBarState::Action {
-                actions: systems::actions::available_actions(world, entity),
+                actions: systems::actions::all_actions(&game_state.world, entity),
             },
             entity,
             reaction_window: None,
@@ -200,6 +200,37 @@ fn render_actions(
                     continue;
                 }
 
+                let mut action_usable = false;
+                for (context, cost) in contexts_and_costs.iter_mut() {
+                    for effect in systems::effects::effects(&game_state.world, entity).iter() {
+                        (effect.on_resource_cost)(
+                            &mut game_state.script_engines,
+                            &game_state.world,
+                            entity,
+                            action_id,
+                            context,
+                            cost,
+                        );
+                    }
+                    if systems::actions::action_usable(
+                        &game_state.world,
+                        entity,
+                        action_id,
+                        context,
+                        cost,
+                    )
+                    .is_ok()
+                    {
+                        // Note to self: *don't* break here! We need to update
+                        // the costs for all contexts even if one is usable
+                        action_usable = true;
+                    } else {
+                        continue;
+                    }
+                }
+
+                let disabled_token = ui.begin_disabled(!action_usable);
+
                 if ui.button(&action_id.to_string()) {
                     if contexts_and_costs.len() == 1 {
                         *new_state = Some(ActionBarState::Targets {
@@ -219,6 +250,8 @@ fn render_actions(
                         });
                     }
                 }
+
+                disabled_token.end();
 
                 if ui.is_item_hovered() {
                     ui.tooltip(|| {
@@ -319,7 +352,7 @@ fn render_context_selection(
 
     if ui.button("Cancel") || right_click_cancel {
         *new_state = Some(ActionBarState::Action {
-            actions: systems::actions::available_actions(&game_state.world, actor),
+            actions: systems::actions::all_actions(&game_state.world, actor),
         });
     }
 }
@@ -388,7 +421,11 @@ fn render_target_selection(
                     && let TargetInstance::Entity(target) = potential_target
                 {
                     let attack_roll = attack_roll(&game_state.world, action.actor, &action.context);
-                    let target_ac = systems::loadout::armor_class(&game_state.world, *target);
+                    let target_ac = systems::loadout::armor_class(
+                        &game_state.world,
+                        *target,
+                        &mut game_state.script_engines,
+                    );
                     ui.tooltip(|| {
                         ui.separator();
 
@@ -574,7 +611,7 @@ fn render_target_selection(
 
     if ui.button("Cancel") || right_click_cancel || submit_action {
         *new_state = Some(ActionBarState::Action {
-            actions: systems::actions::available_actions(&game_state.world, action.actor),
+            actions: systems::actions::all_actions(&game_state.world, action.actor),
         });
     }
 }

@@ -1,7 +1,7 @@
 use hecs::{Entity, World};
 
 use crate::{
-    components::{id::FeatId, level_up::LevelUpPrompt},
+    components::{id::FeatId, level_up::LevelUpPrompt, modifier::ModifierSource},
     registry, systems,
 };
 
@@ -49,7 +49,12 @@ pub fn add_feat(
     }
 
     for effect in feat.effects() {
-        systems::effects::add_effect(world, entity, effect);
+        systems::effects::add_effect(
+            world,
+            entity,
+            effect,
+            &ModifierSource::Feat(feat.id().clone()),
+        );
     }
 
     prompts.extend(feat.prompts().iter().cloned());

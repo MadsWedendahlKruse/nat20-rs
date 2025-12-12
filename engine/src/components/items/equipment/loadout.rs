@@ -19,9 +19,11 @@ use crate::{
             inventory::{ItemContainer, ItemInstance},
             item::Item,
         },
-        modifier::{ModifierSet, ModifierSource},
+        modifier::{Modifiable, ModifierSet, ModifierSource},
     },
+    engine::game_state::GameState,
     registry::{self, registry::ItemsRegistry},
+    scripts::script_engine::ScriptEngineMap,
     systems::{self},
 };
 
@@ -248,18 +250,23 @@ impl Loadout {
         }
     }
 
-    pub fn armor_class(&self, world: &World, entity: Entity) -> ArmorClass {
+    pub fn armor_class(
+        &self,
+        world: &World,
+        entity: Entity,
+        script_engines: &mut ScriptEngineMap,
+    ) -> ArmorClass {
         if let Some(armor) = &self.armor() {
             let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, entity);
             let mut armor_class = armor.armor_class(&ability_scores);
             for effect in systems::effects::effects(world, entity).iter() {
-                (effect.on_armor_class)(world, entity, &mut armor_class);
+                (effect.on_armor_class)(script_engines, world, entity, &mut armor_class);
             }
             armor_class
         } else {
             // TODO: Not sure if this is the right way to handle unarmored characters
             ArmorClass {
-                base: (10, ModifierSource::None),
+                base: (10, ModifierSource::Base),
                 dexterity_bonus: ArmorDexterityBonus::Unlimited,
                 modifiers: ModifierSet::new(),
             }
@@ -271,8 +278,9 @@ impl Loadout {
         world: &World,
         entity: Entity,
         attack_roll_result: &AttackRollResult,
+        script_engines: &mut ScriptEngineMap,
     ) -> bool {
-        let armor_class = self.armor_class(world, entity);
+        let armor_class = self.armor_class(world, entity, script_engines);
         if attack_roll_result.roll_result.is_crit_fail {
             return false;
         }

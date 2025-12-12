@@ -49,6 +49,12 @@ impl fmt::Display for Skill {
     }
 }
 
+impl Default for Skill {
+    fn default() -> Self {
+        Skill::Athletics
+    }
+}
+
 #[macro_export]
 macro_rules! skill_ability_map {
     ( $( $skill:ident => $ability:ident ),* $(,)? ) => {

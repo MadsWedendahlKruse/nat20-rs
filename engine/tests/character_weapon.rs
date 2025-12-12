@@ -24,19 +24,21 @@ mod tests {
             proficiency::ProficiencyLevel,
         },
         entities::character::Character,
-        registry::{self, registry::ItemsRegistry},
+        registry::registry::ItemsRegistry,
         systems::{self, helpers},
+        test_utils::fixtures,
     };
     use uom::si::{f32::Mass, mass::pound};
 
     #[test]
     fn character_weapon_finesse_modifier() {
-        let mut world = World::new();
-        let entity = world.spawn(Character::default());
+        let mut game_state = fixtures::engine::game_state();
+        let entity = game_state.world.spawn(Character::default());
 
         // Set Strength 14, Dexterity 16
         {
-            let mut scores = helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity);
+            let mut scores =
+                helpers::get_component_mut::<AbilityScoreMap>(&mut game_state.world, entity);
             scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 14));
             scores.set(
                 Ability::Dexterity,
@@ -52,28 +54,30 @@ mod tests {
             _ => panic!("Expected a weapon item"),
         };
 
-        let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(&world, entity);
-        assert_eq!(
-            weapon.determine_ability(&ability_scores),
-            Ability::Dexterity
-        );
+        let damage_roll = {
+            let ability_scores =
+                systems::helpers::get_component::<AbilityScoreMap>(&game_state.world, entity);
+            assert_eq!(
+                weapon.determine_ability(&ability_scores),
+                Ability::Dexterity
+            );
+            weapon.damage_roll(
+                &ability_scores,
+                false, // not wielding with both hands
+            )
+        };
+        let damage_result =
+            systems::damage::damage_roll(damage_roll, &mut game_state, entity, false);
 
-        let damage_roll = weapon.damage_roll(
-            &ability_scores,
-            false, // not wielding with both hands
-        );
-        let result = damage_roll.roll();
-
-        println!("{:?}", result);
+        println!("{:?}", damage_result);
         assert!(
-            (4..=11).contains(&result.total),
+            (4..=11).contains(&damage_result.total),
             "Damage roll out of bounds: {}",
-            result.total
+            damage_result.total
         );
         assert!(
-            damage_roll
-                .primary
-                .dice_roll
+            damage_result.components[0]
+                .result
                 .modifiers
                 .get(&ModifierSource::Ability(Ability::Dexterity))
                 .is_some()
@@ -82,22 +86,26 @@ mod tests {
 
     #[test]
     fn character_versatile_weapon() {
-        let mut world = World::new();
-        let entity = world.spawn(Character::default());
+        let mut game_state = fixtures::engine::game_state();
+        let entity = game_state.world.spawn(Character::default());
 
         // Equip longsword
         let longsword = ItemsRegistry::get(&ItemId::from_str("item.longsword"))
             .unwrap()
             .clone();
-        let _ = systems::loadout::equip(&mut world, entity, longsword);
+        let _ = systems::loadout::equip(&mut game_state.world, entity, longsword);
 
         // Longsword used with two hands
-        let roll = systems::combat::damage_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
+        let roll = systems::loadout::weapon_damage_roll(
+            &mut game_state.world,
+            entity,
+            &EquipmentSlot::MeleeMainHand,
+        );
         assert_eq!(roll.primary.dice_roll.dice.num_dice, 1);
         assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D10);
 
         systems::loadout::equip_in_slot(
-            &mut world,
+            &mut game_state.world,
             entity,
             &EquipmentSlot::MeleeOffHand,
             ItemsRegistry::get(&ItemId::from_str("item.dagger"))
@@ -107,16 +115,25 @@ mod tests {
         .unwrap();
 
         // Longsword now used one-handed
-        let roll = systems::combat::damage_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
+        let roll = systems::loadout::weapon_damage_roll(
+            &game_state.world,
+            entity,
+            &EquipmentSlot::MeleeMainHand,
+        );
         assert_eq!(roll.primary.dice_roll.dice.num_dice, 1);
         assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D8);
 
         // Unequip dagger
         let _ =
-            systems::loadout::unequip(&mut world, entity, &EquipmentSlot::MeleeOffHand).unwrap();
+            systems::loadout::unequip(&mut game_state.world, entity, &EquipmentSlot::MeleeOffHand)
+                .unwrap();
 
         // Longsword used with two hands again
-        let roll = systems::combat::damage_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
+        let roll = systems::loadout::weapon_damage_roll(
+            &game_state.world,
+            entity,
+            &EquipmentSlot::MeleeMainHand,
+        );
         assert_eq!(roll.primary.dice_roll.dice.die_size, DieSize::D10);
     }
 
@@ -192,7 +209,8 @@ mod tests {
 
         systems::loadout::equip(&mut world, entity, longsword).unwrap();
 
-        let roll = systems::combat::attack_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
+        let roll =
+            systems::loadout::weapon_attack_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
 
         println!("{:?}", roll);
         assert!(

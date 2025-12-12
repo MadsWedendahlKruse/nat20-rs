@@ -9,7 +9,7 @@ mod tests {
         components::{
             ability::Ability,
             d20::RollMode,
-            id::ItemId,
+            id::{EffectId, ItemId},
             items::{
                 equipment::{
                     armor::Armor,
@@ -23,15 +23,16 @@ mod tests {
             skill::{Skill, SkillSet},
         },
         entities::character::Character,
-        registry::{self, registry::ItemsRegistry},
+        registry::registry::ItemsRegistry,
         systems,
+        test_utils::fixtures,
     };
     use uom::si::{f32::Mass, mass::pound};
 
     #[test]
     fn character_pre_attack_roll_effect() {
-        let mut world = World::new();
-        let entity = world.spawn(Character::default());
+        let mut game_state = fixtures::engine::game_state();
+        let entity = game_state.world.spawn(Character::default());
 
         let ring = EquipmentItem {
             item: Item {
@@ -43,11 +44,11 @@ mod tests {
                 rarity: ItemRarity::Rare,
             },
             kind: EquipmentKind::Ring,
-            effects: vec![registry::effects::RING_OF_ATTACKING_ID.clone()],
+            effects: vec![EffectId::from_str("effect.item.ring_of_attacking")],
         };
 
         let _ = systems::loadout::equip(
-            &mut world,
+            &mut game_state.world,
             entity,
             ItemsRegistry::get(&ItemId::from_str("item.dagger"))
                 .unwrap()
@@ -55,26 +56,40 @@ mod tests {
         );
 
         // Before equipping the ring
-        let roll = systems::combat::attack_roll(&world, entity, &EquipmentSlot::MeleeMainHand)
-            .roll(&world, entity);
+        let roll = systems::damage::attack_roll_weapon(
+            &mut game_state,
+            entity,
+            &EquipmentSlot::MeleeMainHand,
+        );
         assert_eq!(
             roll.roll_result.advantage_tracker.roll_mode(),
             RollMode::Normal
         );
 
         // Equip the ring
-        let _ = systems::loadout::equip_in_slot(&mut world, entity, &EquipmentSlot::Ring1, ring);
-        let roll = systems::combat::attack_roll(&world, entity, &EquipmentSlot::MeleeMainHand)
-            .roll(&world, entity);
+        let _ = systems::loadout::equip_in_slot(
+            &mut game_state.world,
+            entity,
+            &EquipmentSlot::Ring1,
+            ring,
+        );
+        let roll = systems::damage::attack_roll_weapon(
+            &mut game_state,
+            entity,
+            &EquipmentSlot::MeleeMainHand,
+        );
         assert_eq!(
             roll.roll_result.advantage_tracker.roll_mode(),
             RollMode::Advantage
         );
 
         // Unequip the ring
-        systems::loadout::unequip(&mut world, entity, &EquipmentSlot::Ring1);
-        let roll = systems::combat::attack_roll(&world, entity, &EquipmentSlot::MeleeMainHand)
-            .roll(&world, entity);
+        systems::loadout::unequip(&mut game_state.world, entity, &EquipmentSlot::Ring1);
+        let roll = systems::damage::attack_roll_weapon(
+            &mut game_state,
+            entity,
+            &EquipmentSlot::MeleeMainHand,
+        );
         assert_eq!(
             roll.roll_result.advantage_tracker.roll_mode(),
             RollMode::Normal
@@ -96,7 +111,7 @@ mod tests {
                 rarity: ItemRarity::Rare,
             },
             12,
-            vec![registry::effects::ARMOR_OF_SNEAKING_ID.clone()],
+            vec![EffectId::from_str("effect.item.armor_of_sneaking")],
         );
         let _ = systems::loadout::equip(&mut world, entity, armor);
 
@@ -134,7 +149,9 @@ mod tests {
                 rarity: ItemRarity::VeryRare,
             },
             18,
-            vec![registry::effects::ARMOR_OF_CONSTITUTION_SAVING_THROWS_ID.clone()],
+            vec![EffectId::from_str(
+                "effect.item.armor_of_constitution_saving_throws",
+            )],
         );
         let _ = systems::loadout::equip(&mut world, entity, armor);
 

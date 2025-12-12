@@ -1,0 +1,10 @@
+{
+    "id": "effect.item.ring_of_attacking",
+    "description": "While wearing this armor, you have advantage on Constitution saving throws.",
+    "duration": "conditional",
+    "pre_attack_roll": [
+        {
+            "modifier": "advantage"
+        }
+    ]
+}

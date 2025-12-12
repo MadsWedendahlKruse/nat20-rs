@@ -1,0 +1,15 @@
+{
+    "id": "effect.extra_attack",
+    "description": "You can attack twice, instead of once, whenever you take the Attack action on your turn.",
+    "duration": "permanent",
+    "on_action": [
+        {
+            "script": "script.effect.extra_attack"
+        }
+    ],
+    "on_resource_cost": [
+        {
+            "script": "script.effect.extra_attack"
+        }
+    ]
+}

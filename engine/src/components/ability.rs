@@ -2,7 +2,10 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     hash::Hash,
+    str::FromStr,
 };
+
+use crate::components::modifier::{KeyedModifiable, Modifiable};
 
 use super::modifier::{ModifierSet, ModifierSource};
 
@@ -10,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 #[derive(EnumIter, Hash, Eq, PartialEq, Debug, Clone, Copy, Display, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(try_from = "String", into = "String")]
 pub enum Ability {
     Strength = 0,
     Dexterity = 1,
@@ -21,7 +24,6 @@ pub enum Ability {
 }
 
 impl Ability {
-    // TODO: Support for parsing acronyms?
     pub fn acronym(&self) -> &'static str {
         match self {
             Ability::Strength => "STR",
@@ -35,6 +37,36 @@ impl Ability {
 
     pub fn set() -> HashSet<Ability> {
         Ability::iter().collect()
+    }
+}
+
+impl FromStr for Ability {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "strength" | "str" => Ok(Ability::Strength),
+            "dexterity" | "dex" => Ok(Ability::Dexterity),
+            "constitution" | "con" => Ok(Ability::Constitution),
+            "intelligence" | "int" => Ok(Ability::Intelligence),
+            "wisdom" | "wis" => Ok(Ability::Wisdom),
+            "charisma" | "cha" => Ok(Ability::Charisma),
+            _ => Err(format!("Unknown ability: {}", s)),
+        }
+    }
+}
+
+impl TryFrom<String> for Ability {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Ability::from_str(&value)
+    }
+}
+
+impl From<Ability> for String {
+    fn from(ability: Ability) -> Self {
+        ability.to_string()
     }
 }
 
@@ -131,17 +163,22 @@ impl AbilityScoreMap {
     pub fn ability_modifier(&self, ability: Ability) -> ModifierSet {
         self.get(ability).ability_modifier()
     }
+}
 
-    pub fn total(&self, ability: Ability) -> i32 {
-        self.get(ability).total()
-    }
-
-    pub fn add_modifier(&mut self, ability: Ability, source: ModifierSource, value: i32) {
+impl KeyedModifiable<Ability> for AbilityScoreMap {
+    fn add_modifier<T>(&mut self, ability: Ability, source: ModifierSource, value: T)
+    where
+        T: Into<i32>,
+    {
         self.get_mut(ability).modifiers.add_modifier(source, value);
     }
 
-    pub fn remove_modifier(&mut self, ability: Ability, source: &ModifierSource) {
+    fn remove_modifier(&mut self, ability: Ability, source: &ModifierSource) {
         self.get_mut(ability).modifiers.remove_modifier(source);
+    }
+
+    fn total(&self, ability: Ability) -> i32 {
+        self.get(ability).total()
     }
 }
 

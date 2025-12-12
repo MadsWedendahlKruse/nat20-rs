@@ -5,6 +5,7 @@ use hecs::World;
 use crate::{
     components::{
         actions::action::{ActionKindResult, ReactionResult},
+        damage::DamageRollResult,
         id::ScriptId,
         modifier::ModifierSource,
         resource::ResourceAmountMap,
@@ -16,8 +17,9 @@ use crate::{
     registry::registry::ScriptsRegistry,
     scripts::{
         script_api::{
-            ReactionBodyContext, ReactionTriggerContext, ScriptEntityRole, ScriptEventRef,
-            ScriptReactionPlan,
+            ScriptActionView, ScriptEntityRole, ScriptEntityView, ScriptEventRef,
+            ScriptReactionBodyContext, ScriptReactionPlan, ScriptReactionTriggerContext,
+            ScriptResourceCost,
         },
         script_engine::ScriptEngineMap,
     },
@@ -27,10 +29,10 @@ use crate::{
     },
 };
 
-pub fn run_reaction_trigger(
-    reaction_trigger: &ScriptId,
-    context: &ReactionTriggerContext,
+pub fn evaluate_reaction_trigger(
     script_engines: &mut ScriptEngineMap,
+    reaction_trigger: &ScriptId,
+    context: &ScriptReactionTriggerContext,
 ) -> bool {
     let script = ScriptsRegistry::get(reaction_trigger).expect(
         format!(
@@ -54,10 +56,10 @@ pub fn run_reaction_trigger(
     }
 }
 
-pub fn run_reaction_body(
-    reaction_body: &ScriptId,
-    context: &ReactionBodyContext,
+pub fn evaluate_reaction_body(
     script_engines: &mut ScriptEngineMap,
+    reaction_body: &ScriptId,
+    context: &ScriptReactionBodyContext,
 ) -> ScriptReactionPlan {
     let script = ScriptsRegistry::get(reaction_body)
         .expect(format!("Reaction script not found in registry: {:?}", reaction_body).as_str());
@@ -76,9 +78,121 @@ pub fn run_reaction_body(
     }
 }
 
+pub fn evaluate_resource_cost_hook(
+    script_engines: &mut ScriptEngineMap,
+    resource_cost_hook: &ScriptId,
+    action_view: &ScriptActionView,
+    entity_view: &ScriptEntityView,
+) -> ScriptResourceCost {
+    let script = ScriptsRegistry::get(resource_cost_hook).expect(
+        format!(
+            "Resource cost hook script not found in registry: {:?}",
+            resource_cost_hook
+        )
+        .as_str(),
+    );
+    let engine = script_engines
+        .get_mut(&script.language)
+        .expect(format!("No script engine found for language: {:?}", script.language).as_str());
+    match engine.evaluate_resource_cost_hook(script, action_view, entity_view) {
+        Ok(resource_cost) => resource_cost,
+        Err(err) => {
+            println!(
+                "Error evaluating resource cost hook script {:?} for entity {:?}: {:?}",
+                resource_cost_hook, entity_view.entity, err
+            );
+            // I guess we can just return the original cost if there's an error
+            action_view.resource_cost.clone()
+        }
+    }
+}
+
+pub fn evalute_action_hook(
+    script_engines: &mut ScriptEngineMap,
+    action_hook: &ScriptId,
+    action_view: &ScriptActionView,
+    entity_view: &ScriptEntityView,
+) -> ScriptEntityView {
+    let script = ScriptsRegistry::get(action_hook).expect(
+        format!(
+            "Action hook script not found in registry: {:?}",
+            action_hook
+        )
+        .as_str(),
+    );
+    let engine = script_engines
+        .get_mut(&script.language)
+        .expect(format!("No script engine found for language: {:?}", script.language).as_str());
+    match engine.evaluate_action_hook(script, action_view, entity_view) {
+        Ok(modified_entity_view) => modified_entity_view,
+        Err(err) => {
+            println!(
+                "Error evaluating action hook script {:?} for entity {:?}: {:?}",
+                action_hook, entity_view.entity, err
+            );
+            entity_view.clone()
+        }
+    }
+}
+
+pub fn evaluate_armor_class_hook(
+    script_engines: &mut ScriptEngineMap,
+    armor_class_hook: &ScriptId,
+    entity_view: &ScriptEntityView,
+) -> i32 {
+    let script = ScriptsRegistry::get(armor_class_hook).expect(
+        format!(
+            "Armor class hook script not found in registry: {:?}",
+            armor_class_hook
+        )
+        .as_str(),
+    );
+    let engine = script_engines
+        .get_mut(&script.language)
+        .expect(format!("No script engine found for language: {:?}", script.language).as_str());
+    match engine.evaluate_armor_class_hook(script, entity_view) {
+        Ok(modifier) => modifier,
+        Err(err) => {
+            println!(
+                "Error evaluating armor class hook script {:?} for entity {:?}: {:?}",
+                armor_class_hook, entity_view.entity, err
+            );
+            0
+        }
+    }
+}
+
+pub fn evaluate_damage_roll_result_hook(
+    script_engines: &mut ScriptEngineMap,
+    damage_roll_result_hook: &ScriptId,
+    entity_view: &ScriptEntityView,
+    damage_roll_result: &DamageRollResult,
+) -> DamageRollResult {
+    let script = ScriptsRegistry::get(damage_roll_result_hook).expect(
+        format!(
+            "Damage roll result hook script not found in registry: {:?}",
+            damage_roll_result_hook
+        )
+        .as_str(),
+    );
+    let engine = script_engines
+        .get_mut(&script.language)
+        .expect(format!("No script engine found for language: {:?}", script.language).as_str());
+    match engine.evaluate_damage_roll_result_hook(script, entity_view, damage_roll_result) {
+        Ok(modified_damage_roll_result) => modified_damage_roll_result,
+        Err(err) => {
+            println!(
+                "Error evaluating damage roll result hook script {:?} for entity {:?}: {:?}",
+                damage_roll_result_hook, entity_view.entity, err
+            );
+            damage_roll_result.clone()
+        }
+    }
+}
+
 pub fn apply_reaction_plan(
     game_state: &mut GameState,
-    context: &ReactionBodyContext,
+    context: &ScriptReactionBodyContext,
     plan: ScriptReactionPlan,
 ) {
     let reaction_data = &context.reaction_data;
@@ -271,11 +385,14 @@ pub fn apply_reaction_plan(
             // Resolve the target entity
             let target_entity = match target {
                 ScriptEntityRole::Reactor => reaction_data.reactor,
-                ScriptEntityRole::TriggerActor => context
+                ScriptEntityRole::Actor => context
                     .reaction_data
                     .event
                     .actor()
                     .expect("Trigger event has no actor"),
+                ScriptEntityRole::Target => context.reaction_data.event.target().expect(
+                    "RequireSavingThrow reaction target role 'Target' but trigger event has no target",
+                ),
             };
 
             // Resolve the DC spec to a real D20CheckDCKind

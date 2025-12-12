@@ -1,0 +1,10 @@
+{
+    "id": "effect.item.armor_of_sneaking",
+    "description": "While wearing this armor, you gain a +2 bonus to Stealth checks.",
+    "duration": "conditional",
+    "modifiers": [
+        {
+            "skill": "stealth +2"
+        }
+    ]
+}
