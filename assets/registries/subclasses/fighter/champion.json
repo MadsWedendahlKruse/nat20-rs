@@ -1,44 +1,44 @@
 {
     "id": "subclass.fighter.champion",
     "base": {
-    "skill_proficiencies": [],
-    "skill_prompts": 0,
-    "armor_proficiencies": [],
-    "weapon_proficiencies": [],
-    "spellcasting": "none",
-    "effects_by_level": {
-        "15": [
-        "effect.fighter.champion.superior_critical"
-        ],
-        "3": [
-        "effect.fighter.champion.improved_critical",
-        "effect.fighter.champion.remarkable_athlete"
-        ]
-    },
-    "resources_by_level": {},
-    "prompts_by_level": {
-        "7": [
-        {
-            "Choice": {
-            "id": "choice.fighting_style",
-            "label": "Fighting Style",
-            "options": [
-                {
-                "feat": "feat.fighting_style.archery"
-                },
-                {
-                "feat": "feat.fighting_style.defense"
-                },
-                {
-                "feat": "feat.fighting_style.great_weapon_fighting"
-                }
+        "skill_proficiencies": [],
+        "skill_prompts": 0,
+        "armor_proficiencies": [],
+        "weapon_proficiencies": [],
+        "spellcasting": "none",
+        "effects_by_level": {
+            "15": [
+                "effect.fighter.champion.superior_critical"
             ],
-            "picks": 1,
-            "allow_duplicates": false
-            }
-        }
-        ]
-    },
-    "actions_by_level": {}
+            "3": [
+                "effect.fighter.champion.improved_critical",
+                "effect.fighter.champion.remarkable_athlete"
+            ]
+        },
+        "resources_by_level": {},
+        "prompts_by_level": {
+            "7": [
+                {
+                    "choice": {
+                        "id": "choice.fighting_style",
+                        "label": "Fighting Style",
+                        "options": [
+                            {
+                                "feat": "feat.fighting_style.archery"
+                            },
+                            {
+                                "feat": "feat.fighting_style.defense"
+                            },
+                            {
+                                "feat": "feat.fighting_style.great_weapon_fighting"
+                            }
+                        ],
+                        "picks": 1,
+                        "allow_duplicates": false
+                    }
+                }
+            ]
+        },
+        "actions_by_level": {}
     }
 }

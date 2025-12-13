@@ -8,7 +8,10 @@ use crate::{
         resource::ResourceMap,
         saving_throw::SavingThrowKind,
     },
-    registry::{self, registry::ClassesRegistry},
+    registry::{
+        self,
+        registry::{ClassesRegistry, FeatsRegistry},
+    },
 };
 use hecs::{Entity, World};
 
@@ -100,6 +103,13 @@ pub fn increment_class_level(
             new_level,
         ));
     }
+
+    // Feats need special handling since they can have prerequisites and
+    // can (or can't) be repeatable.
+    if class.feat_levels.contains(&new_level) {
+        prompts.push(LevelUpPrompt::feats(world, entity));
+    }
+
     prompts
 }
 
@@ -196,32 +206,6 @@ fn apply_class_base(
         .get(&level)
         .cloned()
         .unwrap_or_default();
-
-    // Some prompts have to be filtered based on the current state of the character
-    for prompt in new_prompts.iter_mut() {
-        match prompt {
-            // Feats need special handling since they can have prerequisites and
-            // can (or can't) be repeatable.
-            LevelUpPrompt::Choice(choice_spec) => {
-                choice_spec.options.retain(|item| match item {
-                    ChoiceItem::Feat(feat_id) => {
-                        let feat = registry::feats::FEAT_REGISTRY.get(feat_id).unwrap();
-                        if !feat.meets_prerequisite(world, entity) {
-                            return false;
-                        }
-                        if feat.is_repeatable() {
-                            return true;
-                        }
-                        !systems::helpers::get_component::<Vec<FeatId>>(world, entity)
-                            .contains(feat_id)
-                    }
-                    _ => true,
-                });
-            }
-
-            _ => {}
-        }
-    }
 
     new_prompts
 }

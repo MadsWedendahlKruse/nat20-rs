@@ -1,16 +1,24 @@
 use std::sync::Arc;
 
 use hecs::{Entity, World};
+use serde::Deserialize;
 
-use crate::components::{
-    id::{EffectId, FeatId},
-    level_up::LevelUpPrompt,
+use crate::{
+    components::{
+        id::{EffectId, FeatId, IdProvider},
+        level_up::LevelUpPrompt,
+    },
+    registry::serialize::feat::FeatDefinition,
 };
 
-#[derive(Clone)]
+pub type FeatPrerequisite = dyn Fn(&World, Entity) -> bool + Send + Sync;
+
+#[derive(Clone, Deserialize)]
+#[serde(from = "FeatDefinition")]
 pub struct Feat {
     id: FeatId,
-    prerequisite: Option<Arc<dyn Fn(&World, Entity) -> bool + Send + Sync>>,
+    description: String,
+    prerequisite: Option<Arc<FeatPrerequisite>>,
     effects: Vec<EffectId>,
     /// Some feats might require a choice to be made when selected.
     /// In most cases this will be some kind of ability score increase, but could
@@ -25,13 +33,15 @@ pub struct Feat {
 impl Feat {
     pub fn new(
         id: FeatId,
-        prerequisite: Option<Arc<dyn Fn(&World, Entity) -> bool + Send + Sync>>,
+        description: String,
+        prerequisite: Option<Arc<FeatPrerequisite>>,
         effects: Vec<EffectId>,
         prompts: Vec<LevelUpPrompt>,
         repeatable: bool,
     ) -> Self {
         Self {
             id,
+            description,
             prerequisite,
             effects,
             prompts,
@@ -61,5 +71,13 @@ impl Feat {
 
     pub fn is_repeatable(&self) -> bool {
         self.repeatable
+    }
+}
+
+impl IdProvider for Feat {
+    type Id = FeatId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
     }
 }

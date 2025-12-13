@@ -4,6 +4,7 @@ use std::{
     sync::LazyLock,
 };
 
+use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -18,8 +19,9 @@ use crate::{
     },
     registry::{
         self,
-        registry::{BackgroundsRegistry, ClassesRegistry},
+        registry::{BackgroundsRegistry, ClassesRegistry, FeatsRegistry},
     },
+    systems::{self},
 };
 
 static ABILITY_SCORE_POINT_COST: LazyLock<HashMap<u8, u8>> = LazyLock::new(|| {
@@ -153,6 +155,7 @@ impl ChoiceSpec {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LevelUpPrompt {
     Choice(ChoiceSpec),
     AbilityScores(HashMap<u8, u8>, u8),
@@ -201,13 +204,30 @@ impl LevelUpPrompt {
         ))
     }
 
-    pub fn feats() -> Self {
-        let mut feats: Vec<_> = registry::feats::FEAT_REGISTRY.keys().cloned().collect();
-        // TODO: Bit of a dirty hack to remove fighting styles from the list of feats.
-        feats.retain(|feat_id| !feat_id.to_string().starts_with("feat.fighting_style."));
+    pub fn feats(world: &World, entity: Entity) -> Self {
+        // Feats need special handling since they can have prerequisites and
+        // can (or can't) be repeatable.
         LevelUpPrompt::Choice(ChoiceSpec::single(
             "Feat",
-            feats.into_iter().map(ChoiceItem::Feat).collect(),
+            FeatsRegistry::keys()
+                .filter_map(|feat_id| {
+                    let feat = FeatsRegistry::get(&feat_id).unwrap();
+                    if !feat.meets_prerequisite(world, entity) {
+                        return None;
+                    }
+                    if !feat.is_repeatable()
+                        && systems::helpers::get_component::<Vec<FeatId>>(world, entity)
+                            .contains(&feat_id)
+                    {
+                        return None;
+                    }
+                    // TODO: Bit of a dirty hack to remove fighting styles from the list of feats.
+                    if feat_id.to_string().starts_with("feat.fighting_style.") {
+                        return None;
+                    }
+                    Some(ChoiceItem::Feat(feat_id.clone()))
+                })
+                .collect(),
         ))
     }
 
@@ -222,9 +242,9 @@ impl LevelUpPrompt {
         ))
     }
 
-    pub fn subrace(race: RaceId) -> Self {
+    pub fn subrace(race: &RaceId) -> Self {
         let subraces = registry::races::RACE_REGISTRY
-            .get(&race)
+            .get(race)
             .map_or_else(Vec::new, |r| r.subraces.keys().cloned().collect());
         LevelUpPrompt::Choice(ChoiceSpec::single(
             "Subrace",

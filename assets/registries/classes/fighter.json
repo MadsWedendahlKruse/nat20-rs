@@ -113,7 +113,7 @@
     "prompts_by_level": {
         "1": [
             {
-                "Choice": {
+                "choice": {
                     "id": "choice.fighting_style",
                     "label": "Fighting Style",
                     "options": [
@@ -132,7 +132,7 @@
                 }
             },
             {
-                "Choice": {
+                "choice": {
                     "id": "choice.starting_equipment.fighter",
                     "label": "Fighter Starting Equipment",
                     "options": [

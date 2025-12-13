@@ -10,6 +10,3 @@ pub mod registry;
 pub mod scripts;
 pub mod systems;
 pub mod test_utils;
-
-#[macro_use]
-pub mod macros;

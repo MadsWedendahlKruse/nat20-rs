@@ -72,6 +72,9 @@ pub struct Class {
 
     pub subclasses: HashSet<SubclassId>,
 
+    /// The levels at which the class can pick a new feat.
+    pub feat_levels: HashSet<u8>,
+
     pub base: ClassBase,
 }
 
@@ -142,15 +145,6 @@ impl Class {
                     .collect(),
             )));
 
-        // Add feat decisions
-        for level in feat_levels.iter() {
-            prompts_by_level
-                .entry(*level)
-                .or_default()
-                // TODO: Don't use *all* feats in the future
-                .push(LevelUpPrompt::feats());
-        }
-
         // TODO: What if the subclass triggers its own prompts?
 
         Self {
@@ -160,6 +154,7 @@ impl Class {
             default_abilities,
             saving_throw_proficiencies,
             subclasses,
+            feat_levels,
             base: ClassBase {
                 skill_proficiencies,
                 skill_prompts,

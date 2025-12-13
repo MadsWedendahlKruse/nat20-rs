@@ -1,0 +1,7 @@
+{
+    "id": "feat.fighting_style.defense",
+    "description": "While you’re wearing Light, Medium, or Heavy armor, you gain a +1 bonus to Armor Class.",
+    "effects": [
+        "effect.fighting_style.defense"
+    ]
+}

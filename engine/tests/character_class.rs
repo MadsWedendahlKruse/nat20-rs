@@ -8,7 +8,7 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::Ability,
-            id::{BackgroundId, ClassId, EffectId, ItemId, SubclassId},
+            id::{BackgroundId, ClassId, EffectId, FeatId, ItemId, SubclassId},
             level::CharacterLevels,
             level_up::ChoiceItem,
             proficiency::ProficiencyLevel,
@@ -52,9 +52,9 @@ mod tests {
                 ),
                 LevelUpDecision::single_choice_with_id(
                     "choice.fighting_style",
-                    ChoiceItem::Feat(
-                        registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
-                    ),
+                    ChoiceItem::Feat(FeatId::from_str(
+                        "feat.fighting_style.great_weapon_fighting",
+                    )),
                 ),
                 LevelUpDecision::SkillProficiency(HashSet::from([
                     Skill::Acrobatics,

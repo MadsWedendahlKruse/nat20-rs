@@ -57,7 +57,10 @@ pub mod creatures {
 
         use crate::{
             components::{
-                id::{BackgroundId, ClassId, EntityIdentifier, ItemId, Name, SpellId, SubclassId},
+                id::{
+                    BackgroundId, ClassId, EntityIdentifier, FeatId, ItemId, Name, SpellId,
+                    SubclassId,
+                },
                 level_up::ChoiceItem,
                 modifier::KeyedModifiable,
                 skill::SkillSet,
@@ -111,9 +114,9 @@ pub mod creatures {
                     ),
                     LevelUpDecision::single_choice_with_id(
                         "choice.fighting_style",
-                        ChoiceItem::Feat(
-                            registry::feats::FIGHTING_STYLE_GREAT_WEAPON_FIGHTING_ID.clone(),
-                        ),
+                        ChoiceItem::Feat(FeatId::from_str(
+                            "feat.fighting_style.great_weapon_fighting",
+                        )),
                     ),
                     LevelUpDecision::SkillProficiency(HashSet::from([
                         Skill::Acrobatics,
@@ -153,9 +156,9 @@ pub mod creatures {
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
                         "class.fighter",
                     ))),
-                    LevelUpDecision::single_choice(ChoiceItem::Feat(
-                        registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Feat(FeatId::from_str(
+                        "feat.ability_score_improvement",
+                    ))),
                     LevelUpDecision::AbilityScoreImprovement(HashMap::from([(
                         Ability::Strength,
                         2,
@@ -168,9 +171,9 @@ pub mod creatures {
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
                         "class.fighter",
                     ))),
-                    LevelUpDecision::single_choice(ChoiceItem::Feat(
-                        registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Feat(FeatId::from_str(
+                        "feat.ability_score_improvement",
+                    ))),
                     LevelUpDecision::AbilityScoreImprovement(HashMap::from([
                         (Ability::Strength, 1),
                         (Ability::Dexterity, 1),
@@ -181,15 +184,15 @@ pub mod creatures {
                     ))),
                     LevelUpDecision::single_choice_with_id(
                         "choice.fighting_style",
-                        ChoiceItem::Feat(registry::feats::FIGHTING_STYLE_DEFENSE_ID.clone()),
+                        ChoiceItem::Feat(FeatId::from_str("feat.fighting_style.defense")),
                     ),
                     // Level 8
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
                         "class.fighter",
                     ))),
-                    LevelUpDecision::single_choice(ChoiceItem::Feat(
-                        registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Feat(FeatId::from_str(
+                        "feat.ability_score_improvement",
+                    ))),
                     LevelUpDecision::AbilityScoreImprovement(HashMap::from([(
                         Ability::Dexterity,
                         2,
@@ -278,9 +281,9 @@ pub mod creatures {
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
                         "class.wizard",
                     ))),
-                    LevelUpDecision::single_choice(ChoiceItem::Feat(
-                        registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Feat(FeatId::from_str(
+                        "feat.ability_score_improvement",
+                    ))),
                     LevelUpDecision::AbilityScoreImprovement(HashMap::from([(
                         Ability::Intelligence,
                         2,
@@ -364,9 +367,9 @@ pub mod creatures {
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
                         "class.warlock",
                     ))),
-                    LevelUpDecision::single_choice(ChoiceItem::Feat(
-                        registry::feats::ABILITY_SCORE_IMPROVEMENT_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Feat(FeatId::from_str(
+                        "feat.ability_score_improvement",
+                    ))),
                     LevelUpDecision::AbilityScoreImprovement(HashMap::from([(
                         Ability::Charisma,
                         2,

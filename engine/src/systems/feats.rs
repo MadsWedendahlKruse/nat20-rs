@@ -2,7 +2,8 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{id::FeatId, level_up::LevelUpPrompt, modifier::ModifierSource},
-    registry, systems,
+    registry::{self, registry::FeatsRegistry},
+    systems,
 };
 
 #[derive(Debug, Clone)]
@@ -27,7 +28,7 @@ pub fn add_feat(
 ) -> Result<Vec<LevelUpPrompt>, FeatError> {
     let mut prompts = Vec::new();
 
-    let feat = registry::feats::FEAT_REGISTRY.get(feat_id);
+    let feat = FeatsRegistry::get(feat_id);
     if feat.is_none() {
         return Err(FeatError::RegistryMissing(feat_id.to_string()));
     }

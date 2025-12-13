@@ -15,9 +15,10 @@ use crate::{
         background::Background,
         class::{Class, Subclass},
         effects::effects::Effect,
+        feat::Feat,
         id::{
-            ActionId, BackgroundId, ClassId, EffectId, IdProvider, ItemId, ResourceId, ScriptId,
-            SpellId, SubclassId,
+            ActionId, BackgroundId, ClassId, EffectId, FeatId, IdProvider, ItemId, ResourceId,
+            ScriptId, SpellId, SubclassId,
         },
         items::inventory::ItemInstance,
         resource::ResourceDefinition,
@@ -31,6 +32,10 @@ pub static REGISTRIES_FOLDER: &str = "registries";
 // TODO: Make this configurable?
 pub static REGISTRY_ROOT: LazyLock<PathBuf> = LazyLock::new(|| {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../assets/{}", REGISTRIES_FOLDER))
+});
+
+static REGISTRIES: LazyLock<RegistrySet> = LazyLock::new(|| {
+    RegistrySet::load_from_root_directory(&*REGISTRY_ROOT).expect("Failed to load registries")
 });
 
 #[derive(Debug, Clone)]
@@ -57,6 +62,7 @@ where
 {
     pub fn load_from_directory(directory: impl AsRef<Path>) -> Result<Self, RegistryError> {
         let mut entries = HashMap::new();
+        println!("Loading registry from directory: {:?}", directory.as_ref());
         Self::load_directory_recursive(directory.as_ref(), &mut entries)?;
         Ok(Self { entries })
     }
@@ -78,8 +84,10 @@ where
                 continue;
             }
 
+            print!("Loading file: {:?}", path);
             let value = Self::load_file(&path)?;
             let id = value.id().clone();
+            print!("\rLoaded entry: {:?} from file {:?}\n", id, path);
 
             if let Some(_) = entries.insert(id.clone(), value) {
                 return Err(RegistryError::DuplicateIdError(format!(
@@ -107,14 +115,15 @@ where
 
 pub struct RegistrySet {
     pub actions: Registry<ActionId, Action>,
-    pub spells: Registry<SpellId, Spell>,
-    pub effects: Registry<EffectId, Effect>,
     pub backgrounds: Registry<BackgroundId, Background>,
     pub classes: Registry<ClassId, Class>,
-    pub subclasses: Registry<SubclassId, Subclass>,
+    pub effects: Registry<EffectId, Effect>,
+    pub feats: Registry<FeatId, Feat>,
     pub items: Registry<ItemId, ItemInstance>,
     pub resources: Registry<ResourceId, ResourceDefinition>,
     pub scripts: Registry<ScriptId, Script>,
+    pub spells: Registry<SpellId, Spell>,
+    pub subclasses: Registry<SubclassId, Subclass>,
 }
 
 impl RegistrySet {
@@ -124,24 +133,26 @@ impl RegistrySet {
         let root_directory = root_directory.as_ref();
 
         let actions_directory = root_directory.join("actions");
-        let spells_directory = root_directory.join("spells");
-        let effects_directory = root_directory.join("effects");
         let backgrounds_directory = root_directory.join("backgrounds");
         let classes_directory = root_directory.join("classes");
-        let subclasses_directory = root_directory.join("subclasses");
+        let effects_directory = root_directory.join("effects");
+        let feats_directory = root_directory.join("feats");
         let items_directory = root_directory.join("items");
         let resources_directory = root_directory.join("resources");
+        let spells_directory = root_directory.join("spells");
+        let subclasses_directory = root_directory.join("subclasses");
 
         // Scripts can be in all directories, so we load them separately
         let all_directories = vec![
             actions_directory.as_path(),
-            spells_directory.as_path(),
-            effects_directory.as_path(),
             backgrounds_directory.as_path(),
             classes_directory.as_path(),
-            subclasses_directory.as_path(),
+            effects_directory.as_path(),
+            feats_directory.as_path(),
             items_directory.as_path(),
             resources_directory.as_path(),
+            spells_directory.as_path(),
+            subclasses_directory.as_path(),
         ];
 
         let mut scripts = HashMap::new();
@@ -152,6 +163,7 @@ impl RegistrySet {
 
             let mut stack = vec![directory.to_path_buf()];
             while let Some(dir) = stack.pop() {
+                println!("Stack: {:?}", stack);
                 for entry in fs::read_dir(&dir)? {
                     let entry = entry?;
                     let path = entry.path();
@@ -182,23 +194,26 @@ impl RegistrySet {
             }
         }
 
+        println!("Loaded {} scripts", scripts.len());
+
+        // The order which the registries are loaded in is *not* irrelevant!
+        // If classes are loaded before feats we'll get stuck in an infinite loop
+        // when the class tries to fetch all the feats for its level up prompts
+        // before the feats registry is fully initialized.
         Ok(Self {
             actions: Registry::load_from_directory(actions_directory)?,
             spells: Registry::load_from_directory(spells_directory)?,
             effects: Registry::load_from_directory(effects_directory)?,
             backgrounds: Registry::load_from_directory(backgrounds_directory)?,
-            classes: Registry::load_from_directory(classes_directory)?,
             subclasses: Registry::load_from_directory(subclasses_directory)?,
             items: Registry::load_from_directory(items_directory)?,
             resources: Registry::load_from_directory(resources_directory)?,
+            feats: Registry::load_from_directory(feats_directory)?,
+            classes: Registry::load_from_directory(classes_directory)?,
             scripts: Registry { entries: scripts },
         })
     }
 }
-
-static REGISTRIES: LazyLock<RegistrySet> = LazyLock::new(|| {
-    RegistrySet::load_from_root_directory(&*REGISTRY_ROOT).expect("Failed to load registries")
-});
 
 macro_rules! define_registry {
     ($registry_name:ident, $key_type:ty, $value_type:ty, $field:ident) => {
@@ -221,11 +236,12 @@ macro_rules! define_registry {
 }
 
 define_registry!(ActionsRegistry, ActionId, Action, actions);
-define_registry!(SpellsRegistry, SpellId, Spell, spells);
-define_registry!(EffectsRegistry, EffectId, Effect, effects);
 define_registry!(BackgroundsRegistry, BackgroundId, Background, backgrounds);
 define_registry!(ClassesRegistry, ClassId, Class, classes);
-define_registry!(SubclassesRegistry, SubclassId, Subclass, subclasses);
-define_registry!(ResourcesRegistry, ResourceId, ResourceDefinition, resources);
+define_registry!(EffectsRegistry, EffectId, Effect, effects);
+define_registry!(FeatsRegistry, FeatId, Feat, feats);
 define_registry!(ItemsRegistry, ItemId, ItemInstance, items);
+define_registry!(ResourcesRegistry, ResourceId, ResourceDefinition, resources);
 define_registry!(ScriptsRegistry, ScriptId, Script, scripts);
+define_registry!(SpellsRegistry, SpellId, Spell, spells);
+define_registry!(SubclassesRegistry, SubclassId, Subclass, subclasses);

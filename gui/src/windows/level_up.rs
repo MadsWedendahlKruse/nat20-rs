@@ -14,7 +14,7 @@ use nat20_rs::{
         skill::{Skill, SkillSet},
     },
     entities::character::Character,
-    registry::{self, registry::ClassesRegistry},
+    registry::registry::ClassesRegistry,
     systems::{
         self,
         level_up::{LevelUpDecision, LevelUpGains, LevelUpSession},

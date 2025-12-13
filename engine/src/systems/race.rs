@@ -45,14 +45,7 @@ pub fn set_race(world: &mut World, entity: Entity, race: &RaceId) -> Vec<LevelUp
     );
 
     if !race.subraces.is_empty() {
-        prompts.push(LevelUpPrompt::Choice(ChoiceSpec::single(
-            "Subrace",
-            race.subraces
-                .keys()
-                .cloned()
-                .map(ChoiceItem::Subrace)
-                .collect(),
-        )));
+        prompts.push(LevelUpPrompt::subrace(&race.id));
     }
 
     systems::helpers::set_component::<CreatureSize>(world, entity, race.size.clone());
