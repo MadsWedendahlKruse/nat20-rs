@@ -1,0 +1,7 @@
+{
+    "id": "faction.goblins",
+    "name": "Goblins",
+    "attitudes": {},
+    "default_cross_attitude": "hostile",
+    "default_intra_attitude": "friendly"
+}

@@ -15,10 +15,11 @@ use crate::{
         background::Background,
         class::{Class, Subclass},
         effects::effects::Effect,
+        faction::Faction,
         feat::Feat,
         id::{
-            ActionId, BackgroundId, ClassId, EffectId, FeatId, IdProvider, ItemId, ResourceId,
-            ScriptId, SpellId, SubclassId,
+            ActionId, BackgroundId, ClassId, EffectId, FactionId, FeatId, IdProvider, ItemId,
+            ResourceId, ScriptId, SpellId, SubclassId,
         },
         items::inventory::ItemInstance,
         resource::ResourceDefinition,
@@ -118,6 +119,7 @@ pub struct RegistrySet {
     pub backgrounds: Registry<BackgroundId, Background>,
     pub classes: Registry<ClassId, Class>,
     pub effects: Registry<EffectId, Effect>,
+    pub factions: Registry<FactionId, Faction>,
     pub feats: Registry<FeatId, Feat>,
     pub items: Registry<ItemId, ItemInstance>,
     pub resources: Registry<ResourceId, ResourceDefinition>,
@@ -136,6 +138,7 @@ impl RegistrySet {
         let backgrounds_directory = root_directory.join("backgrounds");
         let classes_directory = root_directory.join("classes");
         let effects_directory = root_directory.join("effects");
+        let factions_directory = root_directory.join("factions");
         let feats_directory = root_directory.join("feats");
         let items_directory = root_directory.join("items");
         let resources_directory = root_directory.join("resources");
@@ -148,6 +151,7 @@ impl RegistrySet {
             backgrounds_directory.as_path(),
             classes_directory.as_path(),
             effects_directory.as_path(),
+            factions_directory.as_path(),
             feats_directory.as_path(),
             items_directory.as_path(),
             resources_directory.as_path(),
@@ -196,21 +200,18 @@ impl RegistrySet {
 
         println!("Loaded {} scripts", scripts.len());
 
-        // The order which the registries are loaded in is *not* irrelevant!
-        // If classes are loaded before feats we'll get stuck in an infinite loop
-        // when the class tries to fetch all the feats for its level up prompts
-        // before the feats registry is fully initialized.
         Ok(Self {
             actions: Registry::load_from_directory(actions_directory)?,
-            spells: Registry::load_from_directory(spells_directory)?,
-            effects: Registry::load_from_directory(effects_directory)?,
             backgrounds: Registry::load_from_directory(backgrounds_directory)?,
-            subclasses: Registry::load_from_directory(subclasses_directory)?,
+            classes: Registry::load_from_directory(classes_directory)?,
+            effects: Registry::load_from_directory(effects_directory)?,
+            factions: Registry::load_from_directory(factions_directory)?,
+            feats: Registry::load_from_directory(feats_directory)?,
             items: Registry::load_from_directory(items_directory)?,
             resources: Registry::load_from_directory(resources_directory)?,
-            feats: Registry::load_from_directory(feats_directory)?,
-            classes: Registry::load_from_directory(classes_directory)?,
             scripts: Registry { entries: scripts },
+            spells: Registry::load_from_directory(spells_directory)?,
+            subclasses: Registry::load_from_directory(subclasses_directory)?,
         })
     }
 }
@@ -239,6 +240,7 @@ define_registry!(ActionsRegistry, ActionId, Action, actions);
 define_registry!(BackgroundsRegistry, BackgroundId, Background, backgrounds);
 define_registry!(ClassesRegistry, ClassId, Class, classes);
 define_registry!(EffectsRegistry, EffectId, Effect, effects);
+define_registry!(FactionsRegistry, FactionId, Faction, factions);
 define_registry!(FeatsRegistry, FeatId, Feat, feats);
 define_registry!(ItemsRegistry, ItemId, ItemInstance, items);
 define_registry!(ResourcesRegistry, ResourceId, ResourceDefinition, resources);

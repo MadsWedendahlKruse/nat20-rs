@@ -11,7 +11,7 @@ use crate::{
         effects::effects::Effect,
         faction::FactionSet,
         health::{hit_points::HitPoints, life_state::LifeState},
-        id::{AIControllerId, BackgroundId, FeatId, Name, RaceId, SubraceId},
+        id::{AIControllerId, BackgroundId, FactionId, FeatId, Name, RaceId, SubraceId},
         items::{
             equipment::{armor::ArmorTrainingSet, loadout::Loadout, weapon::WeaponProficiencyMap},
             inventory::Inventory,
@@ -103,7 +103,7 @@ impl Character {
             // TODO: Default actions like jump, dash, help, etc.
             actions: ActionMap::new(),
             cooldowns: HashMap::new(),
-            factions: FactionSet::from([registry::factions::PLAYERS_ID.clone()]),
+            factions: FactionSet::from([FactionId::from_str("faction.players")]),
         }
     }
 }

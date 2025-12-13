@@ -7,16 +7,14 @@ use crate::{
         faction::{Attitude, AttitudeOverride, Faction, FactionSet},
         id::FactionId,
     },
-    registry,
+    registry::registry::FactionsRegistry,
 };
 
 pub fn get_faction(faction_id: &FactionId) -> &Faction {
-    registry::factions::FACTION_REGISTRY
-        .get(faction_id)
-        .expect(&format!(
-            "Faction with ID `{}` not found in the registry",
-            faction_id
-        ))
+    FactionsRegistry::get(faction_id).expect(&format!(
+        "Faction with ID `{}` not found in the registry",
+        faction_id
+    ))
 }
 
 pub fn attitude_from_to(world: &World, source: Entity, destination: Entity) -> Attitude {

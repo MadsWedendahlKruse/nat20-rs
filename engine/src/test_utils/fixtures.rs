@@ -400,7 +400,7 @@ pub mod creatures {
                 ability::AbilityScoreMap,
                 faction::FactionSet,
                 health::hit_points::HitPoints,
-                id::{EntityIdentifier, ItemId, Name},
+                id::{EntityIdentifier, FactionId, ItemId, Name},
                 items::{
                     equipment::{
                         armor::ArmorTrainingSet, loadout::TryEquipError,
@@ -437,7 +437,7 @@ pub mod creatures {
                     (Ability::Wisdom, 10),
                     (Ability::Charisma, 8),
                 ]),
-                FactionSet::from([registry::factions::GOBLINS_ID.clone()]),
+                FactionSet::from([FactionId::from_str("faction.goblins")]),
             );
             let entity = world.spawn(monster);
             let _ = monster_equipment(

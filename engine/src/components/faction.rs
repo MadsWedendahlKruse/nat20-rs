@@ -1,10 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use hecs::Entity;
+use serde::{Deserialize, Serialize};
 
-use crate::components::id::FactionId;
+use crate::components::id::{FactionId, IdProvider};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Attitude {
     Friendly,
     Neutral,
@@ -13,7 +15,7 @@ pub enum Attitude {
 
 pub type FactionSet = HashSet<FactionId>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Faction {
     id: FactionId,
     name: String,
@@ -25,7 +27,7 @@ pub struct Faction {
 }
 
 /// Optional per-entity attitude overrides
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttitudeOverride {
     /// Overrides for specific entities, e.g. due to Charm effects
     pub entities: HashMap<Entity, Attitude>,
@@ -87,6 +89,14 @@ impl Faction {
 
     pub fn default_intra_attitude(&self) -> Attitude {
         self.default_intra_attitude
+    }
+}
+
+impl IdProvider for Faction {
+    type Id = FactionId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
     }
 }
 

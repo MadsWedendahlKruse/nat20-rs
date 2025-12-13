@@ -1,0 +1,7 @@
+{
+    "id": "faction.players",
+    "name": "Players",
+    "attitudes": {},
+    "default_cross_attitude": "neutral",
+    "default_intra_attitude": "friendly"
+}
