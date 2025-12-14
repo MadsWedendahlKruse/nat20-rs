@@ -1,10 +1,10 @@
 {
-    "id": "effect.fighting_style.defense",
+    "id": "nat20_rs::effect.fighting_style.defense",
     "description": "While you’re wearing Light, Medium, or Heavy armor, you gain a +1 bonus to Armor Class.",
     "duration": "permanent",
     "on_armor_class": [
         {
-            "script": "script.effect.fighting_style.defense"
+            "script": "nat20_rs::script.effect.fighting_style.defense"
         }
     ]
 }

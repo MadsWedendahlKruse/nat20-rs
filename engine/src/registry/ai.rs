@@ -25,7 +25,7 @@ pub static AI_CONTROLLER_REGISTRY: LazyLock<HashMap<AIControllerId, Box<dyn AICo
     });
 
 pub static RANDOM_CONTROLLER_ID: LazyLock<AIControllerId> =
-    LazyLock::new(|| AIControllerId::from_str("ai_controller.random"));
+    LazyLock::new(|| AIControllerId::new("nat20_rs", "ai_controller.random"));
 
 pub struct RandomController;
 

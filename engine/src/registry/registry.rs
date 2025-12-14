@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fmt::Debug,
+    fmt::{self, Debug},
     fs,
     hash::Hash,
     path::{Path, PathBuf},
@@ -8,6 +8,8 @@ use std::{
 };
 
 use serde::de::DeserializeOwned;
+
+use tracing::{error, info};
 
 use crate::{
     components::{
@@ -36,9 +38,16 @@ pub static REGISTRY_ROOT: LazyLock<PathBuf> = LazyLock::new(|| {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../assets/{}", REGISTRIES_FOLDER))
 });
 
-static REGISTRIES: LazyLock<RegistrySet> = LazyLock::new(|| {
-    RegistrySet::load_from_root_directory(&*REGISTRY_ROOT).expect("Failed to load registries")
-});
+static REGISTRIES: LazyLock<RegistrySet> =
+    LazyLock::new(
+        || match RegistrySet::load_from_root_directory(&*REGISTRY_ROOT) {
+            Ok(set) => set,
+            Err(error) => {
+                error!(path = ?&*REGISTRY_ROOT, %error, "Failed to load registries");
+                panic!("Failed to load registries");
+            }
+        },
+    );
 
 #[derive(Debug, Clone)]
 pub struct Registry<K, V> {
@@ -47,15 +56,89 @@ pub struct Registry<K, V> {
 
 #[derive(Debug)]
 pub enum RegistryError {
-    DuplicateIdError(String),
-    LoadError(std::io::Error),
+    ReadDirectory {
+        directory: PathBuf,
+        message: String,
+    },
+    ReadDirectoryEntry {
+        directory: PathBuf,
+        message: String,
+    },
+    ReadFile {
+        path: PathBuf,
+        message: String,
+    },
+    DeserializeJson {
+        path: PathBuf,
+        message: String,
+    },
+    DuplicateId {
+        id_debug: String,
+        first_path: PathBuf,
+        second_path: PathBuf,
+    },
+    Many(Vec<RegistryError>),
 }
 
-impl From<std::io::Error> for RegistryError {
-    fn from(err: std::io::Error) -> Self {
-        RegistryError::LoadError(err)
+impl RegistryError {
+    pub fn push_into(self, errors: &mut Vec<RegistryError>) {
+        match self {
+            RegistryError::Many(mut inner) => errors.append(&mut inner),
+            other => errors.push(other),
+        }
+    }
+
+    pub fn many_if_needed(errors: Vec<RegistryError>) -> Result<(), RegistryError> {
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(RegistryError::Many(errors))
+        }
     }
 }
+
+impl fmt::Display for RegistryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RegistryError::ReadDirectory { directory, message } => {
+                write!(f, "Failed to read directory {:?}: {}", directory, message)
+            }
+            RegistryError::ReadDirectoryEntry { directory, message } => {
+                write!(
+                    f,
+                    "Failed to read directory entry in {:?}: {}",
+                    directory, message
+                )
+            }
+            RegistryError::ReadFile { path, message } => {
+                write!(f, "Failed to read file {:?}: {}", path, message)
+            }
+            RegistryError::DeserializeJson { path, message } => {
+                write!(f, "Failed to deserialize JSON {:?}: {}", path, message)
+            }
+            RegistryError::DuplicateId {
+                id_debug,
+                first_path,
+                second_path,
+            } => {
+                write!(
+                    f,
+                    "Duplicate id {}:\n  first:  {:?}\n  second: {:?}",
+                    id_debug, first_path, second_path
+                )
+            }
+            RegistryError::Many(errors) => {
+                writeln!(f, "{} registry error(s):", errors.len())?;
+                for (index, error) in errors.iter().enumerate() {
+                    writeln!(f, "  {}. {}", index + 1, error)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl std::error::Error for RegistryError {}
 
 impl<K, V> Registry<K, V>
 where
@@ -63,55 +146,103 @@ where
     V: IdProvider<Id = K> + DeserializeOwned,
 {
     pub fn load_from_directory(directory: impl AsRef<Path>) -> Result<Self, RegistryError> {
-        let mut entries = HashMap::new();
-        println!("Loading registry from directory: {:?}", directory.as_ref());
-        Self::load_directory_recursive(directory.as_ref(), &mut entries)?;
-        Ok(Self { entries })
+        let directory = directory.as_ref();
+
+        let mut entries: HashMap<K, V> = HashMap::new();
+        let mut id_to_path: HashMap<K, PathBuf> = HashMap::new();
+        let mut errors: Vec<RegistryError> = Vec::new();
+
+        Self::load_directory_recursive(directory, &mut entries, &mut id_to_path, &mut errors);
+
+        if errors.is_empty() {
+            Ok(Self { entries })
+        } else {
+            Err(RegistryError::Many(errors))
+        }
     }
 
     fn load_directory_recursive(
         directory: &Path,
         entries: &mut HashMap<K, V>,
-    ) -> Result<(), RegistryError> {
-        for entry in fs::read_dir(directory)? {
-            let entry = entry?;
+        id_to_path: &mut HashMap<K, PathBuf>,
+        errors: &mut Vec<RegistryError>,
+    ) {
+        let read_dir_iter = match fs::read_dir(directory) {
+            Ok(iter) => iter,
+            Err(error) => {
+                errors.push(RegistryError::ReadDirectory {
+                    directory: directory.to_path_buf(),
+                    message: error.to_string(),
+                });
+                return;
+            }
+        };
+
+        for entry_result in read_dir_iter {
+            let entry = match entry_result {
+                Ok(entry) => entry,
+                Err(error) => {
+                    errors.push(RegistryError::ReadDirectoryEntry {
+                        directory: directory.to_path_buf(),
+                        message: error.to_string(),
+                    });
+                    continue;
+                }
+            };
+
             let path = entry.path();
 
             if path.is_dir() {
-                Self::load_directory_recursive(&path, entries)?;
+                Self::load_directory_recursive(&path, entries, id_to_path, errors);
                 continue;
             }
 
-            if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            if path.extension().is_none()
+                || path.extension().and_then(|ext| ext.to_str()) != Some("json")
+            {
+                info!("Skipping non-json file in registry: {:?}", path);
                 continue;
             }
 
-            print!("Loading file: {:?}", path);
-            let value = Self::load_file(&path)?;
+            let value = match Self::load_file(&path) {
+                Ok(value) => value,
+                Err(error) => {
+                    error!(%error, "Failed to load registry entry");
+                    error.push_into(errors);
+                    continue;
+                }
+            };
+
             let id = value.id().clone();
-            print!("\rLoaded entry: {:?} from file {:?}\n", id, path);
 
-            if let Some(_) = entries.insert(id.clone(), value) {
-                return Err(RegistryError::DuplicateIdError(format!(
-                    "Duplicate ID found: {:?} in file {:?}",
-                    id, path
-                )));
+            if let Some(first_path) = id_to_path.get(&id).cloned() {
+                errors.push(RegistryError::DuplicateId {
+                    id_debug: format!("{:?}", id),
+                    first_path,
+                    second_path: path.clone(),
+                });
+                // Decide policy:
+                // - Keep first: do not overwrite
+                // - Keep last: overwrite
+                // Recommended for deterministic behavior: keep first.
+                continue;
             }
-        }
 
-        Ok(())
+            id_to_path.insert(id.clone(), path.clone());
+            entries.insert(id, value);
+        }
     }
 
     fn load_file(path: &Path) -> Result<V, RegistryError> {
-        let file_contents = fs::read_to_string(path)?;
-        let value = serde_json::from_str::<V>(&file_contents).map_err(|e| {
-            RegistryError::LoadError(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("Failed to deserialize file {:?}: {}", path, e),
-            ))
+        let file_contents = fs::read_to_string(path).map_err(|error| RegistryError::ReadFile {
+            path: path.to_path_buf(),
+            message: error.to_string(),
         })?;
 
-        Ok(value)
+        serde_json::from_str::<V>(&file_contents).map_err(|error| RegistryError::DeserializeJson {
+            path: path.to_path_buf(),
+            message: error.to_string(),
+        })
     }
 }
 
@@ -150,8 +281,7 @@ impl RegistrySet {
         let subclasses_directory = root_directory.join("subclasses");
         let subspecies_directory = root_directory.join("subspecies");
 
-        // Scripts can be in all directories, so we load them separately
-        let all_directories = vec![
+        let all_directories: Vec<&Path> = vec![
             actions_directory.as_path(),
             backgrounds_directory.as_path(),
             classes_directory.as_path(),
@@ -166,17 +296,115 @@ impl RegistrySet {
             subspecies_directory.as_path(),
         ];
 
-        let mut scripts = HashMap::new();
-        for directory in all_directories {
+        let mut errors: Vec<RegistryError> = Vec::new();
+
+        // Load scripts first (but do not fail early).
+        let scripts_map = Self::load_scripts_from_directories(&all_directories, &mut errors);
+
+        // Helper to load a registry and collect errors.
+        fn load_registry<K, V>(
+            directory: &Path,
+            errors: &mut Vec<RegistryError>,
+        ) -> Option<Registry<K, V>>
+        where
+            K: Eq + Hash + Clone + Debug,
+            V: IdProvider<Id = K> + DeserializeOwned,
+        {
+            if !directory.exists() {
+                // Decide policy: missing directory might be okay.
+                // If not okay, push an error here.
+                return Some(Registry {
+                    entries: HashMap::new(),
+                });
+            }
+
+            match Registry::<K, V>::load_from_directory(directory) {
+                Ok(registry) => Some(registry),
+                Err(error) => {
+                    error.push_into(errors);
+                    None
+                }
+            }
+        }
+
+        let actions = load_registry::<ActionId, Action>(&actions_directory, &mut errors);
+        let backgrounds =
+            load_registry::<BackgroundId, Background>(&backgrounds_directory, &mut errors);
+        let classes = load_registry::<ClassId, Class>(&classes_directory, &mut errors);
+        let effects = load_registry::<EffectId, Effect>(&effects_directory, &mut errors);
+        let factions = load_registry::<FactionId, Faction>(&factions_directory, &mut errors);
+        let feats = load_registry::<FeatId, Feat>(&feats_directory, &mut errors);
+        let items = load_registry::<ItemId, ItemInstance>(&items_directory, &mut errors);
+        let resources =
+            load_registry::<ResourceId, ResourceDefinition>(&resources_directory, &mut errors);
+        let species = load_registry::<SpeciesId, Species>(&species_directory, &mut errors);
+        let spells = load_registry::<SpellId, Spell>(&spells_directory, &mut errors);
+        let subclasses = load_registry::<SubclassId, Subclass>(&subclasses_directory, &mut errors);
+        let subspecies =
+            load_registry::<SubspeciesId, Subspecies>(&subspecies_directory, &mut errors);
+
+        // If anything failed, report all collected diagnostics once.
+        if !errors.is_empty() {
+            return Err(RegistryError::Many(errors));
+        }
+
+        Ok(Self {
+            actions: actions.expect("validated"),
+            backgrounds: backgrounds.expect("validated"),
+            classes: classes.expect("validated"),
+            effects: effects.expect("validated"),
+            factions: factions.expect("validated"),
+            feats: feats.expect("validated"),
+            items: items.expect("validated"),
+            resources: resources.expect("validated"),
+            scripts: Registry {
+                entries: scripts_map,
+            },
+            species: species.expect("validated"),
+            spells: spells.expect("validated"),
+            subclasses: subclasses.expect("validated"),
+            subspecies: subspecies.expect("validated"),
+        })
+    }
+
+    // assuming Script has: id: ScriptId, and Script::try_from(entry) -> Result<Script, ScriptError>
+    fn load_scripts_from_directories(
+        directories: &[&Path],
+        errors: &mut Vec<RegistryError>,
+    ) -> HashMap<ScriptId, Script> {
+        let mut scripts: HashMap<ScriptId, Script> = HashMap::new();
+        let mut script_id_to_path: HashMap<ScriptId, PathBuf> = HashMap::new();
+
+        for directory in directories {
             if !directory.exists() {
                 continue;
             }
 
             let mut stack = vec![directory.to_path_buf()];
             while let Some(dir) = stack.pop() {
-                println!("Stack: {:?}", stack);
-                for entry in fs::read_dir(&dir)? {
-                    let entry = entry?;
+                let read_dir_iter = match fs::read_dir(&dir) {
+                    Ok(iter) => iter,
+                    Err(error) => {
+                        errors.push(RegistryError::ReadDirectory {
+                            directory: dir.clone(),
+                            message: error.to_string(),
+                        });
+                        continue;
+                    }
+                };
+
+                for entry_result in read_dir_iter {
+                    let entry = match entry_result {
+                        Ok(entry) => entry,
+                        Err(error) => {
+                            errors.push(RegistryError::ReadDirectoryEntry {
+                                directory: dir.clone(),
+                                message: error.to_string(),
+                            });
+                            continue;
+                        }
+                    };
+
                     let path = entry.path();
 
                     if path.is_dir() {
@@ -184,44 +412,41 @@ impl RegistrySet {
                         continue;
                     }
 
-                    if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                    if path.extension().is_none()
+                        || path.extension().and_then(|ext| ext.to_str()) == Some("json")
+                    {
                         continue;
                     }
 
                     match Script::try_from(entry) {
                         Ok(script) => {
                             let id = script.id.clone();
-                            println!("Loaded script: {:?}", id);
-                            if scripts.insert(id.clone(), script).is_some() {
-                                return Err(RegistryError::DuplicateIdError(format!(
-                                    "Duplicate Script ID found: {:?}",
-                                    id
-                                )));
+
+                            if let Some(first_path) = script_id_to_path.get(&id).cloned() {
+                                errors.push(RegistryError::DuplicateId {
+                                    id_debug: format!("{:?}", id),
+                                    first_path,
+                                    second_path: path.clone(),
+                                });
+                                continue;
                             }
+
+                            script_id_to_path.insert(id.clone(), path.clone());
+                            scripts.insert(id, script);
                         }
-                        Err(err) => eprintln!("Failed to load script: {:?}", err),
+                        Err(script_error) => {
+                            // Map to a structured error; you can add a dedicated ScriptError variant if you prefer.
+                            errors.push(RegistryError::ReadFile {
+                                path: path.clone(),
+                                message: format!("Failed to load script: {:?}", script_error),
+                            });
+                        }
                     }
                 }
             }
         }
 
-        println!("Loaded {} scripts", scripts.len());
-
-        Ok(Self {
-            actions: Registry::load_from_directory(actions_directory)?,
-            backgrounds: Registry::load_from_directory(backgrounds_directory)?,
-            classes: Registry::load_from_directory(classes_directory)?,
-            effects: Registry::load_from_directory(effects_directory)?,
-            factions: Registry::load_from_directory(factions_directory)?,
-            feats: Registry::load_from_directory(feats_directory)?,
-            items: Registry::load_from_directory(items_directory)?,
-            resources: Registry::load_from_directory(resources_directory)?,
-            scripts: Registry { entries: scripts },
-            species: Registry::load_from_directory(species_directory)?,
-            spells: Registry::load_from_directory(spells_directory)?,
-            subclasses: Registry::load_from_directory(subclasses_directory)?,
-            subspecies: Registry::load_from_directory(subspecies_directory)?,
-        })
+        scripts
     }
 }
 

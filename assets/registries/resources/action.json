@@ -1,5 +1,5 @@
 {
-    "id": "resource.action",
+    "id": "nat20_rs::resource.action",
     "kind": "flat",
     "recharge": "turn"
 }

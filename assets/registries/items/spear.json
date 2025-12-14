@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.spear",
+    "id": "nat20_rs::item.spear",
     "name": "Spear",
     "description": "A versatile spear, effective in both melee and ranged combat.",
     "weight": 1.3607771,
@@ -15,7 +15,10 @@
     "Thrown"
   ],
   "damage": [
-    ["1d6", "piercing"]
+    [
+      "1d6",
+      "piercing"
+    ]
   ],
   "extra_weapon_actions": [],
   "effects": []

@@ -1,12 +1,12 @@
 {
-    "id": "background.criminal",
+    "id": "nat20_rs::background.criminal",
     "ability_scores": [
         "dexterity",
         "intelligence",
         "charisma"
     ],
     "_comment": "Placeholder feat",
-    "feat": "feat.fighting_style.archery",
+    "feat": "nat20_rs::feat.fighting_style.archery",
     "skill_proficiencies": [
         "stealth",
         "sleight_of_hand"
@@ -20,11 +20,11 @@
                     "items": [
                         [
                             2,
-                            "item.dagger"
+                            "nat20_rs::item.dagger"
                         ],
                         [
                             1,
-                            "item.travelers_clothes"
+                            "nat20_rs::item.travelers_clothes"
                         ]
                     ],
                     "money": "16 GP"

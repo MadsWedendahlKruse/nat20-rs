@@ -35,27 +35,32 @@ mod tests {
             vec![
                 // Level 1
                 // TODO: Everyone is dragonborn for now
-                LevelUpDecision::single_choice(ChoiceItem::Species(SpeciesId::from_str(
+                LevelUpDecision::single_choice(ChoiceItem::Species(SpeciesId::new(
+                    "nat20_rs",
                     "species.dragonborn",
                 ))),
-                LevelUpDecision::single_choice(ChoiceItem::Subspecies(SubspeciesId::from_str(
+                LevelUpDecision::single_choice(ChoiceItem::Subspecies(SubspeciesId::new(
+                    "nat20_rs",
                     "subspecies.dragonborn.white",
                 ))),
-                LevelUpDecision::single_choice(ChoiceItem::Background(BackgroundId::from_str(
+                LevelUpDecision::single_choice(ChoiceItem::Background(BackgroundId::new(
+                    "nat20_rs",
                     "background.soldier",
                 ))),
-                LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
+                    "nat20_rs",
                     "class.fighter",
                 ))),
                 LevelUpDecision::AbilityScores(
-                    ClassesRegistry::get(&ClassId::from_str("class.fighter"))
+                    ClassesRegistry::get(&ClassId::new("nat20_rs", "class.fighter"))
                         .unwrap()
                         .default_abilities
                         .clone(),
                 ),
                 LevelUpDecision::single_choice_with_id(
                     "choice.fighting_style",
-                    ChoiceItem::Feat(FeatId::from_str(
+                    ChoiceItem::Feat(FeatId::new(
+                        "nat20_rs",
                         "feat.fighting_style.great_weapon_fighting",
                     )),
                 ),
@@ -67,10 +72,10 @@ mod tests {
                     "choice.starting_equipment.fighter",
                     ChoiceItem::Equipment {
                         items: vec![
-                            (1, ItemId::from_str("item.chainmail")),
-                            (1, ItemId::from_str("item.greatsword")),
-                            (1, ItemId::from_str("item.flail")),
-                            (8, ItemId::from_str("item.javelin")),
+                            (1, ItemId::new("nat20_rs", "item.chainmail")),
+                            (1, ItemId::new("nat20_rs", "item.greatsword")),
+                            (1, ItemId::new("nat20_rs", "item.flail")),
+                            (8, ItemId::new("nat20_rs", "item.javelin")),
                         ],
                         money: "4 GP".to_string(),
                     },
@@ -83,14 +88,17 @@ mod tests {
                     },
                 ),
                 // Level 2
-                LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
+                    "nat20_rs",
                     "class.fighter",
                 ))),
                 // Level 3
-                LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::from_str(
+                LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
+                    "nat20_rs",
                     "class.fighter",
                 ))),
-                LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassId::from_str(
+                LevelUpDecision::single_choice(ChoiceItem::Subclass(SubclassId::new(
+                    "nat20_rs",
                     "subclass.fighter.champion",
                 ))),
             ],
@@ -101,17 +109,17 @@ mod tests {
             assert_eq!(levels.total_level(), 3);
             assert_eq!(
                 levels
-                    .class_level(&ClassId::from_str("class.fighter"))
+                    .class_level(&ClassId::new("nat20_rs", "class.fighter"))
                     .unwrap()
                     .level(),
                 3
             );
             assert_eq!(
                 levels
-                    .class_level(&ClassId::from_str("class.fighter"))
+                    .class_level(&ClassId::new("nat20_rs", "class.fighter"))
                     .unwrap()
                     .subclass(),
-                Some(&SubclassId::from_str("subclass.fighter.champion"))
+                Some(&SubclassId::new("nat20_rs", "subclass.fighter.champion"))
             );
         }
 
@@ -119,8 +127,8 @@ mod tests {
             let effects = systems::effects::effects(&mut world, character);
             let effect_ids: HashSet<&EffectId> = effects.iter().map(|e| e.id()).collect();
             for effect_id in [
-                EffectId::from_str("effect.fighting_style.great_weapon_fighting"),
-                EffectId::from_str("effect.fighter.champion.improved_critical"),
+                EffectId::new("nat20_rs", "effect.fighting_style.great_weapon_fighting"),
+                EffectId::new("nat20_rs", "effect.fighter.champion.improved_critical"),
             ] {
                 assert!(
                     effect_ids.contains(&effect_id),

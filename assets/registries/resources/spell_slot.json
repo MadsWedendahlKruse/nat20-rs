@@ -1,5 +1,5 @@
 {
-    "id": "resource.spell_slot",
+    "id": "nat20_rs::resource.spell_slot",
     "kind": "tiered",
     "recharge": "long_rest"
 }

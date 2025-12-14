@@ -154,7 +154,7 @@ mod tests {
 
         let action_context = ActionContext::Spell {
             level: 5,
-            id: SpellId::from_str("spell.test"),
+            id: SpellId::new("nat20_rs", "spell.test"),
         };
 
         let length = expr

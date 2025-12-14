@@ -15,7 +15,7 @@ mod tests {
             resource::{RechargeRule, ResourceAmount, ResourceAmountMap, ResourceMap},
         },
         engine::event::{ActionData, ActionDecision, ActionDecisionKind},
-        registry, systems,
+        systems,
         test_utils::fixtures,
     };
 
@@ -30,7 +30,7 @@ mod tests {
             fighter,
             &mut game_state.script_engines,
         );
-        let action_id = ActionId::from_str("action.fighter.action_surge");
+        let action_id = ActionId::new("nat20_rs", "action.fighter.action_surge");
         assert!(
             available_actions.contains_key(&action_id),
             "Fighter should have Action Surge action"
@@ -42,12 +42,12 @@ mod tests {
                 systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter);
             // Check that the fighter has one charge of Action Surge
             assert!(resources.can_afford(
-                &ResourceId::from_str("resource.fighter.action_surge"),
+                &ResourceId::new("nat20_rs", "resource.fighter.action_surge"),
                 &ResourceAmount::Flat(1),
             ));
             // Check that the fighter has one action before using Action Surge
             assert!(resources.can_afford(
-                &ResourceId::from_str("resource.action"),
+                &ResourceId::new("nat20_rs", "resource.action"),
                 &ResourceAmount::Flat(1),
             ));
         }
@@ -69,7 +69,7 @@ mod tests {
             let effects = systems::effects::effects(&game_state.world, fighter);
             let action_surge_effect = effects
                 .iter()
-                .find(|e| *e.id() == EffectId::from_str("effect.fighter.action_surge"));
+                .find(|e| *e.id() == EffectId::new("nat20_rs", "effect.fighter.action_surge"));
             assert!(
                 action_surge_effect.is_some(),
                 "Action Surge effect should be applied"
@@ -79,7 +79,7 @@ mod tests {
         // Check that the fighter has two actions after using Action Surge
         assert!(
             systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &ResourceId::from_str("resource.action"),
+                &ResourceId::new("nat20_rs", "resource.action"),
                 &ResourceAmount::Flat(2),
             ),
         );
@@ -94,7 +94,7 @@ mod tests {
         let effects = systems::effects::effects(&game_state.world, fighter);
         let action_surge_effect = effects
             .iter()
-            .find(|e| *e.id() == EffectId::from_str("effect.fighter.action_surge"));
+            .find(|e| *e.id() == EffectId::new("nat20_rs", "effect.fighter.action_surge"));
         assert!(
             action_surge_effect.is_none(),
             "Action Surge effect should be removed"
@@ -104,17 +104,17 @@ mod tests {
         // Check that the fighter has one action after the turn starts
         assert!(
             !resources.can_afford(
-                &ResourceId::from_str("resource.action"),
+                &ResourceId::new("nat20_rs", "resource.action"),
                 &ResourceAmount::Flat(2),
             ) && resources.can_afford(
-                &ResourceId::from_str("resource.action"),
+                &ResourceId::new("nat20_rs", "resource.action"),
                 &ResourceAmount::Flat(1),
             )
         );
 
         // Check that the Action Surge action is out of charges
         assert!(!resources.can_afford(
-            &ResourceId::from_str("resource.fighter.action_surge"),
+            &ResourceId::new("nat20_rs", "resource.fighter.action_surge"),
             &ResourceAmount::Flat(1),
         ));
     }
@@ -130,7 +130,7 @@ mod tests {
             fighter,
             &mut game_state.script_engines,
         );
-        let action_id = ActionId::from_str("action.fighter.second_wind");
+        let action_id = ActionId::new("nat20_rs", "action.fighter.second_wind");
         assert!(
             available_actions.contains_key(&action_id),
             "Fighter should have Second Wind action"
@@ -140,7 +140,7 @@ mod tests {
         // Check that the fighter has two charges of Second Wind
         assert!(
             systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &ResourceId::from_str("resource.fighter.second_wind"),
+                &ResourceId::new("nat20_rs", "resource.fighter.second_wind"),
                 &ResourceAmount::Flat(2),
             )
         );
@@ -159,7 +159,7 @@ mod tests {
             &mut game_state,
             fighter,
             fighter,
-            &ActionId::from_str("test.damage"),
+            &ActionId::new("nat20_rs", "test.damage"),
             &damage_source,
             &ActionContext::Other,
             ResourceAmountMap::new(),
@@ -203,7 +203,7 @@ mod tests {
             let effects = systems::effects::effects(&game_state.world, fighter);
             let extra_attack_effect = effects
                 .iter()
-                .find(|e| *e.id() == EffectId::from_str("effect.extra_attack"));
+                .find(|e| *e.id() == EffectId::new("nat20_rs", "effect.extra_attack"));
             assert!(
                 extra_attack_effect.is_some(),
                 "Fighter should have Extra Attack effect"
@@ -213,7 +213,7 @@ mod tests {
         // Check that the fighter has no stacks of Extra Attack (yet)
         assert!(
             !systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &ResourceId::from_str("resource.extra_attack"),
+                &ResourceId::new("nat20_rs", "resource.extra_attack"),
                 &ResourceAmount::Flat(1),
             ),
             "Fighter should have no stacks of Extra Attack"
@@ -225,7 +225,7 @@ mod tests {
             fighter,
             &mut game_state.script_engines,
         );
-        let action_id = ActionId::from_str("action.weapon_attack");
+        let action_id = ActionId::new("nat20_rs", "action.weapon_attack");
         assert!(
             available_actions.contains_key(&action_id),
             "Fighter should have Weapon Attack action"
@@ -246,7 +246,7 @@ mod tests {
         // Check that the fighter has one stack of Extra Attack
         assert!(
             systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &ResourceId::from_str("resource.extra_attack"),
+                &ResourceId::new("nat20_rs", "resource.extra_attack"),
                 &ResourceAmount::Flat(1),
             ),
             "Fighter should have one stack of Extra Attack"
@@ -254,7 +254,7 @@ mod tests {
         // Check that the fighter has no Actions left
         assert!(
             !systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &ResourceId::from_str("resource.action"),
+                &ResourceId::new("nat20_rs", "resource.action"),
                 &ResourceAmount::Flat(1),
             ),
             "Fighter should have no Actions left"
@@ -282,7 +282,7 @@ mod tests {
         // Check that the fighter has no stacks of Extra Attack left
         assert!(
             !systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter).can_afford(
-                &ResourceId::from_str("resource.extra_attack"),
+                &ResourceId::new("nat20_rs", "resource.extra_attack"),
                 &ResourceAmount::Flat(1),
             ),
             "Fighter should have no stacks of Extra Attack left"

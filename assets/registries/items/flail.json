@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.flail",
+    "id": "nat20_rs::item.flail",
     "name": "Flail",
     "description": "A flail with a spiked head, effective against armored foes.",
     "weight": 0.9071848,
@@ -11,7 +11,10 @@
   "kind": "melee",
   "properties": [],
   "damage": [
-    ["1d8", "bludgeoning"]
+    [
+      "1d8",
+      "bludgeoning"
+    ]
   ],
   "extra_weapon_actions": [],
   "effects": []

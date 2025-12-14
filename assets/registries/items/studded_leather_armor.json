@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.studded_leather_armor",
+    "id": "nat20_rs::item.studded_leather_armor",
     "name": "Studded Leather Armor",
     "description": "A suit of studded leather armor, providing good protection with minimal weight.",
     "weight": 5.896701,

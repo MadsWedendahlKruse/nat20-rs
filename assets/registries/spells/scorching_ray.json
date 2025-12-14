@@ -1,0 +1,25 @@
+{
+    "id": "nat20_rs::spell.scorching_ray",
+    "description": "You hurl three fiery rays. You can hurl them at one target within range or at several. Make a ranged spell attack for each ray. On a hit, the target takes 2d6 Fire damage.",
+    "base_level": 2,
+    "school": "evocation",
+    "kind": {
+        "attack_roll_damage": {
+            "attack_roll": "spell_attack_roll",
+            "damage": "2d6;fire"
+        }
+    },
+    "resource_cost": {
+        "nat20_rs::resource.action": 1
+    },
+    "targeting": {
+        "kind": {
+            "multiple": {
+                "max_targets": "3 + spell_level - 2"
+            }
+        },
+        "range": "120 feet",
+        "require_line_of_sight": true,
+        "allowed_targets": "not_dead"
+    }
+}

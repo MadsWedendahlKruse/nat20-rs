@@ -1,18 +1,13 @@
 use std::{hash::Hash, sync::Arc};
 
-use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     components::{
-        actions::{
-            action::{Action, ActionContext, ActionKind, TargetingFunction},
-            targeting::TargetingContext,
-        },
+        actions::action::{Action, ActionKind, TargetingFunction},
         id::{IdProvider, ResourceId, ScriptId, SpellId},
         resource::{ResourceAmount, ResourceAmountMap},
     },
-    engine::event::Event,
     registry::serialize::spell::SpellDefinition,
 };
 
@@ -52,12 +47,12 @@ impl Spell {
         let action_id = id.clone().into();
         let mut resource_cost = resource_cost;
         if base_level > 0
-            && !resource_cost.contains_key(&ResourceId::from_str("resource.spell_slot"))
+            && !resource_cost.contains_key(&ResourceId::new("nat20_rs", "resource.spell_slot"))
         {
             // TODO: Not sure if this is a good crutch to lean on?
             // Ensure the spell has a spell slot cost if it's not a cantrip
             resource_cost.insert(
-                ResourceId::from_str("resource.spell_slot"),
+                ResourceId::new("nat20_rs", "resource.spell_slot"),
                 ResourceAmount::Tiered {
                     tier: base_level,
                     amount: 1,
@@ -86,7 +81,7 @@ impl Spell {
 
     pub fn base_level(&self) -> u8 {
         for (resource, cost) in self.action.resource_cost() {
-            if *resource == ResourceId::from_str("resource.spell_slot") {
+            if *resource == ResourceId::new("nat20_rs", "resource.spell_slot") {
                 match cost {
                     ResourceAmount::Tiered { tier, .. } => {
                         return *tier;

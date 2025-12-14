@@ -112,7 +112,7 @@ mod tests {
     fn add_flat_modifier() {
         let mut speed = Speed::default();
         speed.add_flat_modifier(
-            ModifierSource::Item(ItemId::from_str("Boots of Speed!")),
+            ModifierSource::Item(ItemId::new("nat20_rs","Boots of Speed!")),
             5.0,
         );
         assert_eq!(speed.get_total_speed().get::<meter>(), 15.0);
@@ -122,10 +122,10 @@ mod tests {
     fn remove_flat_modifier() {
         let mut speed = Speed::default();
         speed.add_flat_modifier(
-            ModifierSource::Item(ItemId::from_str("Boots of Speed!")),
+            ModifierSource::Item(ItemId::new("nat20_rs","Boots of Speed!")),
             5.0,
         );
-        speed.remove_flat_modifier(&ModifierSource::Item(ItemId::from_str("Boots of Speed!")));
+        speed.remove_flat_modifier(&ModifierSource::Item(ItemId::new("nat20_rs","Boots of Speed!")));
         assert_eq!(speed.get_total_speed().get::<meter>(), 10.0);
     }
 
@@ -133,7 +133,7 @@ mod tests {
     fn add_multiplier() {
         let mut speed = Speed::default();
         speed.add_multiplier(
-            ModifierSource::Effect(EffectId::from_str("Expeditious Retreat!")),
+            ModifierSource::Effect(EffectId::new("nat20_rs","Expeditious Retreat!")),
             2.0,
         );
         assert_eq!(speed.get_total_speed().get::<meter>(), 20.0);
@@ -143,10 +143,10 @@ mod tests {
     fn remove_multiplier() {
         let mut speed = Speed::default();
         speed.add_multiplier(
-            ModifierSource::Effect(EffectId::from_str("Expeditious Retreat!")),
+            ModifierSource::Effect(EffectId::new("nat20_rs","Expeditious Retreat!")),
             2.0,
         );
-        speed.remove_multiplier(&ModifierSource::Effect(EffectId::from_str(
+        speed.remove_multiplier(&ModifierSource::Effect(EffectId::new("nat20_rs",
             "Expeditious Retreat!",
         )));
         assert_eq!(speed.get_total_speed().get::<meter>(), 10.0);
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn total_speed_with_zero_multiplier() {
         let mut speed = Speed::default();
-        speed.add_multiplier(ModifierSource::Effect(EffectId::from_str("Fear!")), 0.0);
+        speed.add_multiplier(ModifierSource::Effect(EffectId::new("nat20_rs","Fear!")), 0.0);
         assert_eq!(speed.get_total_speed().get::<meter>(), 0.0);
     }
 
@@ -187,11 +187,11 @@ mod tests {
     fn flat_and_multiplier_combination() {
         let mut speed = Speed::default();
         speed.add_flat_modifier(
-            ModifierSource::Item(ItemId::from_str("Boots of Speed!")),
+            ModifierSource::Item(ItemId::new("nat20_rs","Boots of Speed!")),
             5.0,
         );
         speed.add_multiplier(
-            ModifierSource::Effect(EffectId::from_str("Expeditious Retreat!")),
+            ModifierSource::Effect(EffectId::new("nat20_rs","Expeditious Retreat!")),
             2.0,
         );
         assert_eq!(speed.get_total_speed().get::<meter>(), 30.0);

@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.greatsword",
+    "id": "nat20_rs::item.greatsword",
     "name": "Greatsword",
     "description": "A large two-handed sword, capable of dealing heavy damage.",
     "weight": 2.7215543,
@@ -14,7 +14,10 @@
     "Two-Handed"
   ],
   "damage": [
-    ["2d6", "slashing"]
+    [
+      "2d6",
+      "slashing"
+    ]
   ],
   "extra_weapon_actions": [],
   "effects": []

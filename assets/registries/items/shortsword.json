@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.shortsword",
+    "id": "nat20_rs::item.shortsword",
     "name": "Shortsword",
     "description": "A versatile shortsword, effective in close combat.",
     "weight": 0.9071848,
@@ -14,7 +14,10 @@
     "Finesse"
   ],
   "damage": [
-    ["1d6", "slashing"]
+    [
+      "1d6",
+      "slashing"
+    ]
   ],
   "extra_weapon_actions": [],
   "effects": []

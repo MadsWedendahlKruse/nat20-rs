@@ -1,5 +1,5 @@
 {
-    "id": "action.fighter.second_wind",
+    "id": "nat20_rs::action.fighter.second_wind",
     "description": "You have a limited well of physical and mental stamina that you can draw on. As a Bonus Action, you can use it to regain Hit Points equal to 1d10 plus your Fighter level.",
     "kind": {
         "healing": {
@@ -8,7 +8,7 @@
     },
     "targeting": "self",
     "resource_cost": {
-        "resource.bonus_action": 1,
-        "resource.fighter.second_wind": 1
+        "nat20_rs::resource.bonus_action": 1,
+        "nat20_rs::resource.fighter.second_wind": 1
     }
 }

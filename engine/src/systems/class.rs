@@ -118,8 +118,8 @@ pub fn set_subclass(
     entity: Entity,
     subclass_id: &SubclassId,
 ) -> Vec<LevelUpPrompt> {
-    let class_name = subclass_id.as_str().split(".").collect::<Vec<_>>()[1];
-    let class_id = &ClassId::from_str(format!("class.{}", class_name));
+    let class_name = subclass_id.id.split(".").collect::<Vec<_>>()[1];
+    let class_id = &ClassId::new("nat20_rs", format!("class.{}", class_name));
 
     let class = ClassesRegistry::get(class_id).expect(&format!(
         "Class with name `{}` not found in the registry",

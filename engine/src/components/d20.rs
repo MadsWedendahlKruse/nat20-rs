@@ -1,5 +1,3 @@
-// TODO: reformat imports
-
 use std::{cmp::max, collections::HashMap, fmt, hash::Hash};
 
 use hecs::{Entity, World};
@@ -142,7 +140,6 @@ impl D20Check {
         };
 
         let total_modifier = modifiers.total();
-        // TODO: For some reason this is clamped to zero, so negative modifiers are not applied
         let total = (selected_roll as i32 + total_modifier) as u32;
 
         let is_crit = selected_roll == D20_CRITICAL_SUCCESS;
@@ -422,7 +419,7 @@ mod tests {
             ModifierSource::None,
         ));
         check.modifiers.add_modifier(
-            ModifierSource::Item(ItemId::from_str("item.ring_of_rolling")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_rolling")),
             2,
         );
         println!("Check: {}", check);
@@ -444,12 +441,12 @@ mod tests {
             ModifierSource::None,
         ));
         check.modifiers.add_modifier(
-            ModifierSource::Item(ItemId::from_str("item.ring_of_rolling")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_rolling")),
             2,
         );
         check.advantage_tracker.add(
             AdvantageType::Advantage,
-            ModifierSource::Item(ItemId::from_str("item.lucky_charm")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.lucky_charm")),
         );
         let result = check.roll(0);
 
@@ -475,7 +472,7 @@ mod tests {
         ));
         check.advantage_tracker.add(
             AdvantageType::Disadvantage,
-            ModifierSource::Item(ItemId::from_str("item.cursed_ring")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.cursed_ring")),
         );
         let result = check.roll(4);
 
@@ -501,11 +498,11 @@ mod tests {
         ));
         check.advantage_tracker.add(
             AdvantageType::Advantage,
-            ModifierSource::Item(ItemId::from_str("item.lucky_charm")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.lucky_charm")),
         );
         check.advantage_tracker.add(
             AdvantageType::Disadvantage,
-            ModifierSource::Item(ItemId::from_str("item.cursed_ring")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.cursed_ring")),
         );
         let result = check.roll(4);
 
@@ -525,7 +522,7 @@ mod tests {
             ModifierSource::None,
         ));
         check.modifiers.add_modifier(
-            ModifierSource::Item(ItemId::from_str("item.ring_of_rolling")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_rolling")),
             2,
         );
         let mut result = check.roll(0);

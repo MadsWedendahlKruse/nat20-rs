@@ -22,7 +22,7 @@ mod tests {
         let _ = systems::loadout::equip(
             &mut game_state.world,
             character,
-            ItemsRegistry::get(&ItemId::from_str("item.chainmail"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs", "item.chainmail"))
                 .unwrap()
                 .clone(),
         );
@@ -38,11 +38,9 @@ mod tests {
         // Check that the heavy armor gives stealth disadvantage
         let effects = systems::effects::effects(&game_state.world, character);
         assert!(!effects.is_empty());
-        assert!(
-            effects.iter().any(|e| {
-                *e.id() == EffectId::from_str("effect.item.armor_stealth_disadvantage")
-            })
-        );
+        assert!(effects.iter().any(|e| {
+            *e.id() == EffectId::new("nat20_rs", "effect.item.armor_stealth_disadvantage")
+        }));
     }
 
     #[test]
@@ -62,7 +60,7 @@ mod tests {
             );
             ability_scores.add_modifier(
                 Ability::Dexterity,
-                ModifierSource::Item(ItemId::from_str("item.ring_of_dexterity")),
+                ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_dexterity")),
                 2,
             );
         }
@@ -70,7 +68,7 @@ mod tests {
         let _ = systems::loadout::equip(
             &mut game_state.world,
             character,
-            ItemsRegistry::get(&ItemId::from_str("item.studded_leather_armor"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs", "item.studded_leather_armor"))
                 .unwrap()
                 .clone(),
         );

@@ -1,5 +1,5 @@
 {
-    "id": "subclass.warlock.fiend_patron",
+    "id": "nat20_rs::subclass.warlock.fiend_patron",
     "base": {
         "skill_proficiencies": [],
         "skill_prompts": 0,

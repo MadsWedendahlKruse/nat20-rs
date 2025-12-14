@@ -211,16 +211,7 @@ impl LevelUpPrompt {
             "Feat",
             FeatsRegistry::keys()
                 .filter_map(|feat_id| {
-                    let feat = FeatsRegistry::get(&feat_id).unwrap();
-                    if !feat.meets_prerequisite(world, entity) {
-                        return None;
-                    }
-                    if !feat.is_repeatable()
-                        && systems::helpers::get_component::<Vec<FeatId>>(world, entity)
-                            .contains(&feat_id)
-                    {
-                        return None;
-                    }
+                    systems::feats::can_acquire_feat(world, entity, feat_id).ok()?;
                     // TODO: Bit of a dirty hack to remove fighting styles from the list of feats.
                     if feat_id.to_string().starts_with("feat.fighting_style.") {
                         return None;

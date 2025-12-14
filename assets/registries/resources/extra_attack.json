@@ -1,5 +1,5 @@
 {
-    "id": "resource.extra_attack",
+    "id": "nat20_rs::resource.extra_attack",
     "kind": "flat",
     "recharge": "never"
 }

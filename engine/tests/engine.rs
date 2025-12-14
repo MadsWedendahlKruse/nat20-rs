@@ -139,7 +139,7 @@
 //         let hero_id = hero.id();
 //         // Make sure the hero hits the goblin warrior
 //         let mut test_effect = Effect::new(
-//             EffectId::from_str("effect.test_effect"),
+//             EffectId::new("nat20_rs","nat20_rs::effect.test_effect"),
 //             ModifierSource::Custom("Test Effect".to_string()),
 //             EffectDuration::Permanent,
 //         );
@@ -273,7 +273,7 @@
 //         // TODO: Placeholder ID
 //         let spell_level = 2;
 
-//         let action_id = ActionId::from_str("spell.magic_missile");
+//         let action_id = ActionId::new("nat20_rs","spell.magic_missile");
 //         let context = ActionContext::Spell { level: spell_level };
 //         println!("=== Action ===");
 //         println!("{:?}", (&action_id, &context));

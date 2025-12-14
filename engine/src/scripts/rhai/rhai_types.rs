@@ -157,14 +157,14 @@ impl CustomType for ScriptResourceCost {
         builder
             .with_name("ResourceCost")
             .with_fn("costs_resource", |s: &mut Self, resource_id: String| {
-                s.costs_resource(&ResourceId::from_str(&resource_id))
+                s.costs_resource(&ResourceId::new("nat20_rs",&resource_id))
             })
             .with_fn(
                 "replace_resource",
                 |s: &mut Self, from: String, to: String, new_amount: String| {
                     s.replace_resource(
-                        &ResourceId::from_str(&from),
-                        &ResourceId::from_str(&to),
+                        &ResourceId::new("nat20_rs",&from),
+                        &ResourceId::new("nat20_rs",&to),
                         serde_plain::from_str(&new_amount).expect("Failed to parse ResourceAmount"),
                     )
                 },
@@ -260,7 +260,7 @@ pub mod reaction_plan_module {
     pub fn cancel_trigger_event(resources_to_refund: Array) -> ScriptReactionPlan {
         let resources: Vec<ResourceId> = resources_to_refund
             .into_iter()
-            .map(|v| ResourceId::from_str(v.cast::<String>()))
+            .map(|v| ResourceId::new("nat20_rs",v.cast::<String>()))
             .collect();
 
         ScriptReactionPlan::CancelEvent {
@@ -297,7 +297,7 @@ impl CustomType for ScriptResourceView {
                 "can_afford_resource",
                 |s: &mut Self, resource_id: String, amount: String| {
                     s.can_afford_resource(
-                        &ResourceId::from_str(&resource_id),
+                        &ResourceId::new("nat20_rs",&resource_id),
                         &serde_plain::from_str(&amount).expect("Failed to parse ResourceAmount"),
                     )
                 },
@@ -313,7 +313,7 @@ impl CustomType for ScriptResourceView {
                         panic!("Unexpected type for amount: {:?}", amount.type_name());
                     };
                     s.add_resource(
-                        &ResourceId::from_str(&resource_id),
+                        &ResourceId::new("nat20_rs",&resource_id),
                         &serde_plain::from_str(&amount).expect("Failed to parse ResourceAmount"),
                     )
                 },

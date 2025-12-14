@@ -593,7 +593,7 @@ mod tests {
         resistances.effects.insert(
             DamageType::Slashing,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item(ItemId::from_str("item.shield_of_resistance")),
+                source: ModifierSource::Item(ItemId::new("nat20_rs", "item.shield_of_resistance")),
                 operation: MitigationOperation::Resistance,
             }],
         );
@@ -613,7 +613,7 @@ mod tests {
         resistances.effects.insert(
             DamageType::Fire,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item(ItemId::from_str("item.ring_of_fire_immunity")),
+                source: ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_fire_immunity")),
                 operation: MitigationOperation::Immunity,
             }],
         );
@@ -632,7 +632,10 @@ mod tests {
         resistances.effects.insert(
             DamageType::Slashing,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item(ItemId::from_str("item.shield_of_vulnerability")),
+                source: ModifierSource::Item(ItemId::new(
+                    "nat20_rs",
+                    "item.shield_of_vulnerability",
+                )),
                 operation: MitigationOperation::Vulnerability,
             }],
         );
@@ -651,7 +654,10 @@ mod tests {
         resistances.effects.insert(
             DamageType::Slashing,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item(ItemId::from_str("item.shield_of_flat_reduction")),
+                source: ModifierSource::Item(ItemId::new(
+                    "nat20_rs",
+                    "item.shield_of_flat_reduction",
+                )),
                 operation: MitigationOperation::FlatReduction(3),
             }],
         );
@@ -671,11 +677,17 @@ mod tests {
             DamageType::Slashing,
             vec![
                 DamageMitigationEffect {
-                    source: ModifierSource::Item(ItemId::from_str("item.shield_of_resistance")),
+                    source: ModifierSource::Item(ItemId::new(
+                        "nat20_rs",
+                        "item.shield_of_resistance",
+                    )),
                     operation: MitigationOperation::Resistance,
                 },
                 DamageMitigationEffect {
-                    source: ModifierSource::Item(ItemId::from_str("item.shield_of_flat_reduction")),
+                    source: ModifierSource::Item(ItemId::new(
+                        "nat20_rs",
+                        "item.shield_of_flat_reduction",
+                    )),
                     operation: MitigationOperation::FlatReduction(3),
                 },
             ],
@@ -696,14 +708,14 @@ mod tests {
         resistances.effects.insert(
             DamageType::Slashing,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item(ItemId::from_str("item.shield_of_resistance")),
+                source: ModifierSource::Item(ItemId::new("nat20_rs", "item.shield_of_resistance")),
                 operation: MitigationOperation::Resistance,
             }],
         );
         resistances.effects.insert(
             DamageType::Fire,
             vec![DamageMitigationEffect {
-                source: ModifierSource::Item(ItemId::from_str("item.ring_of_fire_immunity")),
+                source: ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_fire_immunity")),
                 operation: MitigationOperation::Immunity,
             }],
         );
@@ -724,15 +736,19 @@ mod tests {
             DamageType::Slashing,
             vec![
                 DamageMitigationEffect {
-                    source: ModifierSource::Item(ItemId::from_str("item.shield_of_resistance")),
+                    source: ModifierSource::Item(ItemId::new(
+                        "nat20_rs",
+                        "item.shield_of_resistance",
+                    )),
                     operation: MitigationOperation::Resistance,
                 },
                 DamageMitigationEffect {
-                    source: ModifierSource::Effect(EffectId::from_str("Curse of Slashing")),
+                    source: ModifierSource::Effect(EffectId::new("nat20_rs", "Curse of Slashing")),
                     operation: MitigationOperation::Vulnerability,
                 },
                 DamageMitigationEffect {
-                    source: ModifierSource::Item(ItemId::from_str(
+                    source: ModifierSource::Item(ItemId::new(
+                        "nat20_rs",
                         "item.ring_of_slashing_immunity",
                     )),
                     operation: MitigationOperation::Immunity,
@@ -758,11 +774,17 @@ mod tests {
             DamageType::Slashing,
             vec![
                 DamageMitigationEffect {
-                    source: ModifierSource::Item(ItemId::from_str("item.shield_of_resistance")),
+                    source: ModifierSource::Item(ItemId::new(
+                        "nat20_rs",
+                        "item.shield_of_resistance",
+                    )),
                     operation: MitigationOperation::Resistance,
                 },
                 DamageMitigationEffect {
-                    source: ModifierSource::Item(ItemId::from_str("item.shield_of_flat_reduction")),
+                    source: ModifierSource::Item(ItemId::new(
+                        "nat20_rs",
+                        "item.shield_of_flat_reduction",
+                    )),
                     operation: MitigationOperation::FlatReduction(3),
                 },
             ],

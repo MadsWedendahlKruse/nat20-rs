@@ -118,7 +118,7 @@ mod tests {
     #[fixture]
     fn faction_knights() -> Faction {
         Faction::new(
-            FactionId::from_str("faction.knights"),
+            FactionId::new("nat20_rs","faction.knights"),
             "Knights".to_string(),
             HashMap::from([]),
             Attitude::Neutral,
@@ -129,7 +129,7 @@ mod tests {
     #[fixture]
     fn faction_orcs() -> Faction {
         Faction::new(
-            FactionId::from_str("faction.orcs"),
+            FactionId::new("nat20_rs","faction.orcs"),
             "Orcs".to_string(),
             HashMap::from([]),
             Attitude::Neutral,
@@ -169,7 +169,7 @@ mod tests {
     #[rstest]
     fn set_and_remove_attitude(faction_knights: Faction) {
         let mut faction = faction_knights;
-        let orc_id = FactionId::from_str("faction.orcs");
+        let orc_id = FactionId::new("nat20_rs","faction.orcs");
         faction.set_attitude(&orc_id, Attitude::Hostile);
         assert_eq!(faction.attitudes().get(&orc_id), Some(&Attitude::Hostile));
         faction.remove_attitude(&orc_id);

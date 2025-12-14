@@ -43,6 +43,8 @@ impl SlotProvider for EquipmentItem {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
 
     #[test]
@@ -73,18 +75,5 @@ mod tests {
             effects: vec![],
         };
         assert_ne!(boots.valid_slots(), &[EquipmentSlot::Headwear]);
-    }
-
-    #[test]
-    fn serialze() {
-        let gloves = EquipmentItem {
-            item: Item::default(),
-            kind: EquipmentKind::Gloves,
-            effects: vec![EffectId::from_str("effect.test")],
-        };
-        println!("{}", serde_json::to_string_pretty(&gloves).unwrap());
-        let serialized = serde_json::to_string(&gloves).unwrap();
-        let deserialized: EquipmentItem = serde_json::from_str(&serialized).unwrap();
-        assert_eq!(gloves, deserialized);
     }
 }

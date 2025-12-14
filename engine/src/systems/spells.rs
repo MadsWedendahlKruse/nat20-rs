@@ -75,7 +75,7 @@ pub fn update_spell_slots(world: &mut World, entity: Entity) {
         for (level, &num_slots) in slots_vec.iter().enumerate() {
             let level = level as u8 + 1;
             resources.add(
-                ResourceId::from_str("resource.spell_slot"),
+                ResourceId::new("nat20_rs","resource.spell_slot"),
                 ResourceBudgetKind::from(ResourceAmount::Tiered {
                     tier: level,
                     amount: num_slots,

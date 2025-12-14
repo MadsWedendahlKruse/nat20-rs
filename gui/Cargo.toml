@@ -26,3 +26,5 @@ rerecast = "0.2.0"
 uom = "0.37.0"
 serde = "1.0.228"
 serde_json = "1.0.145"
+tracing = "0.1.43"
+tracing-subscriber = { version = "0.3.22", features = ["fmt", "time", "env-filter"] }

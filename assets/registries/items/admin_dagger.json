@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.admin_dagger",
+    "id": "nat20_rs::item.admin_dagger",
     "name": "Admin Dagger",
     "description": "Test dagger, please ignore.",
     "weight": 0.4535924,

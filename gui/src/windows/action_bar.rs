@@ -365,7 +365,7 @@ fn render_target_selection(
     action: &mut ActionData,
     potential_target: &mut Option<(TargetInstance, TargetPathFindingResult)>,
 ) {
-    ui.tooltip_text(action.action_id.as_str());
+    ui.tooltip_text(action.action_id.to_string().as_str());
 
     let targeting_context = systems::actions::targeting_context(
         &game_state.world,
@@ -499,7 +499,7 @@ fn render_target_selection(
                     ui.same_line();
                     render_capacity_meter(
                         ui,
-                        action.action_id.as_str(),
+                        action.action_id.to_string().as_str(),
                         action.targets.len(),
                         max_targets,
                     );

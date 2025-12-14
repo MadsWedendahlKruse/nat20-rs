@@ -91,7 +91,7 @@ impl TryFrom<DirEntry> for Script {
             }
             file_path = parent.to_path_buf();
         }
-        let id = ScriptId::from_str(format!("script.{}", script_id));
+        let id = ScriptId::new("nat20_rs",format!("script.{}", script_id));
 
         Ok(Script {
             id,

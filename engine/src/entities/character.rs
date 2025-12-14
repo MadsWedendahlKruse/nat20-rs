@@ -79,9 +79,9 @@ impl Character {
             brain: registry::ai::RANDOM_CONTROLLER_ID.clone(),
             pose: CreaturePose::identity(),
             name,
-            species: SpeciesId::from_str(""),
+            species: SpeciesId::new("nat20_rs",""),
             subspecies: None,
-            background: BackgroundId::from_str(""),
+            background: BackgroundId::new("nat20_rs",""),
             size: CreatureSize::Medium,
             creature_type: CreatureType::Humanoid,
             speed: Speed::default(),
@@ -103,7 +103,7 @@ impl Character {
             // TODO: Default actions like jump, dash, help, etc.
             actions: ActionMap::new(),
             cooldowns: HashMap::new(),
-            factions: FactionSet::from([FactionId::from_str("faction.players")]),
+            factions: FactionSet::from([FactionId::new("nat20_rs","faction.players")]),
         }
     }
 }

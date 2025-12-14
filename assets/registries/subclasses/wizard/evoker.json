@@ -1,5 +1,5 @@
 {
-    "id": "subclass.wizard.evoker",
+    "id": "nat20_rs::subclass.wizard.evoker",
     "base": {
         "skill_proficiencies": [],
         "skill_prompts": 0,

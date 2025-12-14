@@ -1,5 +1,5 @@
 {
-    "id": "resource.fighter.indomitable",
+    "id": "nat20_rs::resource.fighter.indomitable",
     "kind": "flat",
     "recharge": "long_rest"
 }

@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.dagger",
+    "id": "nat20_rs::item.dagger",
     "name": "Dagger",
     "description": "A simple dagger.",
     "weight": 0.4535924,
@@ -16,7 +16,10 @@
     "Light"
   ],
   "damage": [
-    ["1d4", "piercing"]
+    [
+      "1d4",
+      "piercing"
+    ]
   ],
   "extra_weapon_actions": [],
   "effects": []

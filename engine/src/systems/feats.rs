@@ -2,7 +2,7 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{id::FeatId, level_up::LevelUpPrompt, modifier::ModifierSource},
-    registry::{self, registry::FeatsRegistry},
+    registry::registry::FeatsRegistry,
     systems,
 };
 
@@ -21,13 +21,7 @@ pub fn feats_mut(world: &mut World, entity: Entity) -> hecs::RefMut<'_, Vec<Feat
     systems::helpers::get_component_mut::<Vec<FeatId>>(world, entity)
 }
 
-pub fn add_feat(
-    world: &mut World,
-    entity: Entity,
-    feat_id: &FeatId,
-) -> Result<Vec<LevelUpPrompt>, FeatError> {
-    let mut prompts = Vec::new();
-
+pub fn can_acquire_feat(world: &World, entity: Entity, feat_id: &FeatId) -> Result<(), FeatError> {
     let feat = FeatsRegistry::get(feat_id);
     if feat.is_none() {
         return Err(FeatError::RegistryMissing(feat_id.to_string()));
@@ -48,6 +42,19 @@ pub fn add_feat(
             entity,
         });
     }
+
+    Ok(())
+}
+
+pub fn add_feat(
+    world: &mut World,
+    entity: Entity,
+    feat_id: &FeatId,
+) -> Result<Vec<LevelUpPrompt>, FeatError> {
+    let mut prompts = Vec::new();
+
+    can_acquire_feat(world, entity, feat_id)?;
+    let feat = FeatsRegistry::get(feat_id).unwrap();
 
     for effect in feat.effects() {
         systems::effects::add_effect(

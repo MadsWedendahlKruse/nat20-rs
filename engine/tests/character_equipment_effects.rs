@@ -36,7 +36,7 @@ mod tests {
 
         let ring = EquipmentItem {
             item: Item {
-                id: ItemId::from_str("item.ring_of_attacking"),
+                id: ItemId::new("nat20_rs", "item.ring_of_attacking"),
                 name: "Ring of Attacking".to_string(),
                 description: "A magical ring that grants advantage on attack rolls.".to_string(),
                 weight: Mass::new::<pound>(0.1),
@@ -44,13 +44,13 @@ mod tests {
                 rarity: ItemRarity::Rare,
             },
             kind: EquipmentKind::Ring,
-            effects: vec![EffectId::from_str("effect.item.ring_of_attacking")],
+            effects: vec![EffectId::new("nat20_rs", "effect.item.ring_of_attacking")],
         };
 
         let _ = systems::loadout::equip(
             &mut game_state.world,
             entity,
-            ItemsRegistry::get(&ItemId::from_str("item.dagger"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs", "item.dagger"))
                 .unwrap()
                 .clone(),
         );
@@ -103,7 +103,7 @@ mod tests {
 
         let armor = Armor::light(
             Item {
-                id: ItemId::from_str("item.armor_of_sneaking"),
+                id: ItemId::new("nat20_rs", "item.armor_of_sneaking"),
                 name: "Armor of Sneaking".to_string(),
                 description: "A magical armor that grants a bonus to Stealth.".to_string(),
                 weight: Mass::new::<pound>(0.5),
@@ -111,7 +111,7 @@ mod tests {
                 rarity: ItemRarity::Rare,
             },
             12,
-            vec![EffectId::from_str("effect.item.armor_of_sneaking")],
+            vec![EffectId::new("nat20_rs", "effect.item.armor_of_sneaking")],
         );
         let _ = systems::loadout::equip(&mut world, entity, armor);
 
@@ -140,7 +140,7 @@ mod tests {
 
         let armor = Armor::heavy(
             Item {
-                id: ItemId::from_str("item.armor_of_constitution_saving_throws"),
+                id: ItemId::new("nat20_rs", "item.armor_of_constitution_saving_throws"),
                 name: "Armor of Constitution Saving Throws".to_string(),
                 description: "A magical armor that grants advantage on Constitution saving throws."
                     .to_string(),
@@ -149,7 +149,8 @@ mod tests {
                 rarity: ItemRarity::VeryRare,
             },
             18,
-            vec![EffectId::from_str(
+            vec![EffectId::new(
+                "nat20_rs",
                 "effect.item.armor_of_constitution_saving_throws",
             )],
         );

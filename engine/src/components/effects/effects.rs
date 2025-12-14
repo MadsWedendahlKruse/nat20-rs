@@ -5,7 +5,7 @@ use std::{
 };
 
 use hecs::{Entity, World};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{
     components::{

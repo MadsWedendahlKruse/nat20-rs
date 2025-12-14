@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::LazyLock};
 
 use hecs::{Entity, World};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{
     components::{
@@ -21,8 +21,7 @@ use crate::{
         },
         modifier::{Modifiable, ModifierSet, ModifierSource},
     },
-    engine::game_state::GameState,
-    registry::{self, registry::ItemsRegistry},
+    registry::registry::ItemsRegistry,
     scripts::script_engine::ScriptEngineMap,
     systems::{self},
 };
@@ -376,7 +375,6 @@ impl ActionProvider for Loadout {
 #[cfg(test)]
 mod tests {
     use crate::components::id::ActionId;
-    use crate::registry;
     use crate::test_utils::fixtures;
 
     use super::*;
@@ -392,7 +390,7 @@ mod tests {
     fn equip_unequip_armor() {
         let mut loadout = Loadout::new();
 
-        let armor = ItemsRegistry::get(&ItemId::from_str("item.chainmail"))
+        let armor = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.chainmail"))
             .unwrap()
             .clone();
         let slot = EquipmentSlot::Armor;
@@ -400,13 +398,13 @@ mod tests {
         assert!(unequipped.unwrap().is_empty());
         assert_eq!(
             loadout.armor().unwrap().item.id,
-            ItemId::from_str("item.chainmail")
+            ItemId::new("nat20_rs", "item.chainmail")
         );
 
         let unequipped = loadout.unequip(&slot);
         assert_eq!(
             unequipped.unwrap().item().id,
-            ItemId::from_str("item.chainmail")
+            ItemId::new("nat20_rs", "item.chainmail")
         );
         assert!(loadout.armor().is_none());
 
@@ -419,7 +417,7 @@ mod tests {
     fn equip_armor_twice() {
         let mut loadout = Loadout::new();
 
-        let armor1 = ItemsRegistry::get(&ItemId::from_str("item.chainmail"))
+        let armor1 = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.chainmail"))
             .unwrap()
             .clone();
         let slot = EquipmentSlot::Armor;
@@ -427,9 +425,9 @@ mod tests {
         assert!(unequipped1.unwrap().is_empty());
         assert_eq!(
             loadout.armor().unwrap().item.id,
-            ItemId::from_str("item.chainmail")
+            ItemId::new("nat20_rs", "item.chainmail")
         );
-        let armor2 = ItemsRegistry::get(&ItemId::from_str("item.studded_leather_armor"))
+        let armor2 = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.studded_leather_armor"))
             .unwrap()
             .clone();
         let unequipped2 = loadout.equip_in_slot(&slot, armor2.clone());
@@ -437,7 +435,7 @@ mod tests {
             unequipped2
                 .unwrap()
                 .iter()
-                .any(|item| item.item().id == ItemId::from_str("item.chainmail"))
+                .any(|item| item.item().id == ItemId::new("nat20_rs", "item.chainmail"))
         );
         assert_eq!(loadout.armor().unwrap().item.id, armor2.item().id);
     }
@@ -485,7 +483,7 @@ mod tests {
     fn equip_unequip_weapon() {
         let mut loadout = Loadout::new();
 
-        let weapon: EquipmentInstance = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
+        let weapon: EquipmentInstance = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.dagger"))
             .unwrap()
             .clone()
             .into();
@@ -503,19 +501,21 @@ mod tests {
     fn equip_weapon_twice() {
         let mut loadout = Loadout::new();
 
-        let weapon1: EquipmentInstance = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
-            .unwrap()
-            .clone()
-            .into();
+        let weapon1: EquipmentInstance =
+            ItemsRegistry::get(&ItemId::new("nat20_rs", "item.dagger"))
+                .unwrap()
+                .clone()
+                .into();
         let slot = weapon1.valid_slots()[0];
         let unequipped1 = loadout.equip_in_slot(&slot, weapon1);
         assert_eq!(unequipped1.unwrap().len(), 0);
         assert!(loadout.weapon_in_hand(&slot).is_some());
 
-        let weapon2: EquipmentInstance = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
-            .unwrap()
-            .clone()
-            .into();
+        let weapon2: EquipmentInstance =
+            ItemsRegistry::get(&ItemId::new("nat20_rs", "item.dagger"))
+                .unwrap()
+                .clone()
+                .into();
         let unequipped2 = loadout.equip_in_slot(&slot, weapon2);
         assert_eq!(unequipped2.unwrap().len(), 1);
         assert!(loadout.weapon_in_hand(&slot).is_some());
@@ -525,10 +525,10 @@ mod tests {
     fn equip_two_handed_weapon_should_unequip_other_hand() {
         let mut loadout = Loadout::new();
 
-        let weapon_main_hand = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
+        let weapon_main_hand = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.dagger"))
             .unwrap()
             .clone();
-        let weapon_off_hand = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
+        let weapon_off_hand = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.dagger"))
             .unwrap()
             .clone();
         let main_slot = EquipmentSlot::MeleeMainHand;
@@ -542,7 +542,7 @@ mod tests {
         assert!(unequipped_off.is_ok());
         assert!(loadout.weapon_in_hand(&off_slot).is_some());
 
-        let weapon_two_handed = ItemsRegistry::get(&ItemId::from_str("item.greatsword"))
+        let weapon_two_handed = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.greatsword"))
             .unwrap()
             .clone();
         let unequipped = loadout.equip_in_slot(&main_slot, weapon_two_handed);
@@ -583,12 +583,12 @@ mod tests {
     fn available_actions_melee_and_ranged_weapon() {
         let mut loadout = Loadout::new();
 
-        let weapon1 = ItemsRegistry::get(&ItemId::from_str("item.dagger"))
+        let weapon1 = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.dagger"))
             .unwrap()
             .clone();
         loadout.equip(weapon1);
 
-        let weapon2 = ItemsRegistry::get(&ItemId::from_str("item.shortbow"))
+        let weapon2 = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.shortbow"))
             .unwrap()
             .clone();
         loadout.equip(weapon2);
@@ -602,7 +602,7 @@ mod tests {
         // contexts are different
         assert_eq!(actions.len(), 1);
         assert_eq!(
-            actions[&ActionId::from_str("action.weapon_attack")].len(),
+            actions[&ActionId::new("nat20_rs", "action.weapon_attack")].len(),
             2
         );
         for (_, data) in actions {

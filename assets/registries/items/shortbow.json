@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.shortbow",
+    "id": "nat20_rs::item.shortbow",
     "name": "Shortbow",
     "description": "A lightweight bMass::new::<pound>(ow,) ideal for quick shots.",
     "weight": 0.9071848,
@@ -14,7 +14,10 @@
     "Two-Handed"
   ],
   "damage": [
-    ["1d6", "piercing"]
+    [
+      "1d6",
+      "piercing"
+    ]
   ],
   "extra_weapon_actions": [],
   "effects": []

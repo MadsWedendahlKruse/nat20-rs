@@ -1,7 +1,7 @@
 {
-    "id": "feat.fighting_style.archery",
+    "id": "nat20_rs::feat.fighting_style.archery",
     "description": "You gain a +2 bonus to attack rolls you make with Ranged weapons.",
     "effects": [
-        "effect.fighting_style.archery"
+        "nat20_rs::effect.fighting_style.archery"
     ]
 }

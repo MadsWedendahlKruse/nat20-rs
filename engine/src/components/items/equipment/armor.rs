@@ -1,19 +1,16 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
-use crate::{
-    components::{
-        ability::{Ability, AbilityScoreMap},
-        id::EffectId,
-        items::{
-            equipment::slots::{EquipmentSlot, SlotProvider},
-            item::Item,
-        },
-        modifier::{Modifiable, ModifierSet, ModifierSource},
+use crate::components::{
+    ability::{Ability, AbilityScoreMap},
+    id::EffectId,
+    items::{
+        equipment::slots::{EquipmentSlot, SlotProvider},
+        item::Item,
     },
-    registry,
+    modifier::{Modifiable, ModifierSet, ModifierSource},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Display, Serialize, Deserialize)]
@@ -106,7 +103,10 @@ impl Armor {
         mut effects: Vec<EffectId>,
     ) -> Armor {
         if stealth_disadvantage {
-            effects.push(EffectId::from_str("effect.item.armor_stealth_disadvantage"));
+            effects.push(EffectId::new(
+                "nat20_rs",
+                "effect.item.armor_stealth_disadvantage",
+            ));
         }
 
         Armor {
@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn armor_effects_are_set_correctly() {
-        let effects = vec![EffectId::from_str("test_effect")];
+        let effects = vec![EffectId::new("nat20_rs", "nat20_rs::effect.test")];
         let armor = Armor::clothing(Item::default(), effects.clone());
         assert_eq!(armor.effects(), &effects);
     }

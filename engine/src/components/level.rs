@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn class_level_progression_new_and_accessors() {
-        let subclass = Some(SubclassId::from_str("subclass.test"));
+        let subclass = Some(SubclassId::new("nat20_rs","subclass.test"));
         let clp = ClassLevelProgression::new(3, subclass.clone());
         assert_eq!(clp.level(), 3);
         assert_eq!(clp.subclass(), subclass.as_ref());
@@ -279,7 +279,7 @@ mod tests {
     #[test]
     fn character_level_level_up_and_class_level() {
         let mut cl = CharacterLevels::new();
-        let class = ClassId::from_str("class.fighter");
+        let class = ClassId::new("nat20_rs","class.fighter");
         cl.level_up(class.clone());
         assert_eq!(cl.class_level(&class).unwrap().level(), 1);
         cl.level_up(class.clone());
@@ -290,7 +290,7 @@ mod tests {
     #[should_panic(expected = "Cannot level up beyond maximum level")]
     fn character_level_level_up_beyond_max_panics() {
         let mut cl = CharacterLevels::new();
-        let class = ClassId::from_str("class.wizard");
+        let class = ClassId::new("nat20_rs","class.wizard");
         for _ in 0..MAX_LEVEL {
             cl.level_up(class.clone());
         }
@@ -301,9 +301,9 @@ mod tests {
     #[test]
     fn character_level_set_and_get_subclass() {
         let mut cl = CharacterLevels::new();
-        let class = ClassId::from_str("class.warlock");
+        let class = ClassId::new("nat20_rs","class.warlock");
         cl.level_up(class.clone());
-        let subclass = SubclassId::from_str("subclass.warlock.fiend_patron");
+        let subclass = SubclassId::new("nat20_rs","subclass.warlock.fiend_patron");
         cl.set_subclass(&class, &subclass);
         assert_eq!(cl.subclass(&class), Some(&subclass));
     }
@@ -311,7 +311,7 @@ mod tests {
     #[test]
     fn character_level_experience_for_next_level() {
         let mut cl = CharacterLevels::new();
-        let class = ClassId::from_str("class.wizard");
+        let class = ClassId::new("nat20_rs","class.wizard");
         cl.level_up(class.clone()); // level 1
         assert_eq!(cl.experience_for_next_level(), 300);
         cl.level_up(class.clone()); // level 2
@@ -321,7 +321,7 @@ mod tests {
     #[test]
     fn character_level_experience_for_next_level_at_max() {
         let mut cl = CharacterLevels::new();
-        let class = ClassId::from_str("class.warlock");
+        let class = ClassId::new("nat20_rs","class.warlock");
         for _ in 0..MAX_LEVEL {
             cl.level_up(class.clone());
         }

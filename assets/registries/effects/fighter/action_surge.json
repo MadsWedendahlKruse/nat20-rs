@@ -1,10 +1,10 @@
 {
-    "id": "effect.fighter.action_surge",
+    "id": "nat20_rs::effect.fighter.action_surge",
     "description": "You can take an additional action this turn.",
     "duration": "temporary(1)",
     "modifiers": [
         {
-            "resource": "resource.action",
+            "resource": "nat20_rs::resource.action",
             "amount": 1
         }
     ]

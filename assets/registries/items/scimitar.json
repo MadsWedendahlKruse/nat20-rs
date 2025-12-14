@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.scimitar",
+    "id": "nat20_rs::item.scimitar",
     "name": "Scimitar",
     "description": "A curved sword, favored for its speed and agility.",
     "weight": 1.3607771,
@@ -14,7 +14,10 @@
     "Light"
   ],
   "damage": [
-    ["1d6", "slashing"]
+    [
+      "1d6",
+      "slashing"
+    ]
   ],
   "extra_weapon_actions": [],
   "effects": []

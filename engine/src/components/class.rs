@@ -17,7 +17,6 @@ use crate::{
 };
 
 /// Classes and subclasses share a lot of common properties, so we define a base struct
-// TODO: Better name
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClassBase {
     /// Skills that can be chosen from when gaining the (sub)class
@@ -32,8 +31,6 @@ pub struct ClassBase {
     /// This is usually defined by the class, but certain subclasses might want to override it.
     /// For example, a subclass of a Fighter might gain some spellcasting abilities.
     pub spellcasting: SpellcastingProgression,
-    // TODO
-    // pub features_by_level: HashMap<u8, Vec<ClassFeature>>,
     /// Passive effects that are always active for the class or subclass.
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
     pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,

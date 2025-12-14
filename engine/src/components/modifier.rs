@@ -185,18 +185,21 @@ mod tests {
     fn modifiers() {
         let mut modifiers = ModifierSet::new();
         modifiers.add_modifier(
-            ModifierSource::Item(ItemId::from_str("item.belt_of_strength")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.belt_of_strength")),
             4,
         );
         modifiers.add_modifier(
-            ModifierSource::Effect(EffectId::from_str("effect.bless")),
+            ModifierSource::Effect(EffectId::new("nat20_rs", "nat20_rs::effect.bless")),
             1,
         );
 
         assert_eq!(modifiers.modifiers.len(), 2);
         assert_eq!(modifiers.total(), 5);
 
-        modifiers.remove_modifier(&ModifierSource::Effect(EffectId::from_str("effect.bless")));
+        modifiers.remove_modifier(&ModifierSource::Effect(EffectId::new(
+            "nat20_rs",
+            "nat20_rs::effect.bless",
+        )));
         assert_eq!(modifiers.modifiers.len(), 1);
         assert_eq!(modifiers.total(), 4);
         println!("Modifiers breakdown: {}", modifiers);

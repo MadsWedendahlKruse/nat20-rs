@@ -1,5 +1,5 @@
 {
-    "id": "class.warlock",
+    "id": "nat20_rs::class.warlock",
     "hit_die": "d8",
     "hp_per_level": 5,
     "default_abilities": {
@@ -20,7 +20,7 @@
     ],
     "subclass_level": 3,
     "subclasses": [
-        "subclass.warlock.fiend_patron"
+        "nat20_rs::subclass.warlock.fiend_patron"
     ],
     "feat_levels": [
         19,

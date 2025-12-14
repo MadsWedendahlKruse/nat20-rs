@@ -1,5 +1,5 @@
 {
-    "id": "class.wizard",
+    "id": "nat20_rs::class.wizard",
     "hit_die": "d6",
     "hp_per_level": 4,
     "default_abilities": {
@@ -20,7 +20,7 @@
     ],
     "subclass_level": 3,
     "subclasses": [
-        "subclass.wizard.evoker"
+        "nat20_rs::subclass.wizard.evoker"
     ],
     "feat_levels": [
         8,

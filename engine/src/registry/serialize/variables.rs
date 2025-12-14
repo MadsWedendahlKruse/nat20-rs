@@ -44,7 +44,8 @@ pub static PARSER_VARIABLES: LazyLock<VariableMap> = LazyLock::new(|| {
     let classes = ClassesRegistry::keys();
 
     for class_id in classes {
-        let variable_name = format!("{}.level", class_id.as_str());
+        // TODO: Consider if namespace should be included in variable name
+        let variable_name = format!("{}.level", class_id.id);
         map.insert(
             variable_name,
             Arc::new(

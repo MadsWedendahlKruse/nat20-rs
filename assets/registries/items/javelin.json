@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.javelin",
+    "id": "nat20_rs::item.javelin",
     "name": "Javelin",
     "description": "A versatile javelin, effective in both melee and ranged combat.",
     "weight": 0.9071848,
@@ -14,7 +14,10 @@
     "Range (9.144 / 36.576 m)"
   ],
   "damage": [
-    ["1d6", "piercing"]
+    [
+      "1d6",
+      "piercing"
+    ]
   ],
   "extra_weapon_actions": [],
   "effects": []

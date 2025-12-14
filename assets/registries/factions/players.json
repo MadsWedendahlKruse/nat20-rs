@@ -1,5 +1,5 @@
 {
-    "id": "faction.players",
+    "id": "nat20_rs::faction.players",
     "name": "Players",
     "attitudes": {},
     "default_cross_attitude": "neutral",

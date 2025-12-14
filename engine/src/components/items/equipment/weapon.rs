@@ -225,7 +225,7 @@ impl Weapon {
             WeaponKind::Ranged => Ability::Dexterity,
         };
 
-        let mut weapon_actions = vec![ActionId::from_str("action.weapon_attack")];
+        let mut weapon_actions = vec![ActionId::new("nat20_rs", "action.weapon_attack")];
 
         if damage.is_empty() {
             panic!("Weapon must have at least one damage type");
@@ -442,7 +442,7 @@ mod tests {
     #[test]
     fn create_weapon() {
         let item = Item {
-            id: ItemId::from_str("item.longsword"),
+            id: ItemId::new("nat20_rs", "item.longsword"),
             name: "Longsword".to_string(),
             description: "A longsword".to_string(),
             weight: Mass::new::<pound>(5.0),
@@ -475,7 +475,7 @@ mod tests {
     #[should_panic(expected = "Ranged weapons must have a range property")]
     fn ranged_weapon_without_range_panics() {
         let item = Item {
-            id: ItemId::from_str("Shortbow"),
+            id: ItemId::new("nat20_rs", "Shortbow"),
             name: "Shortbow".to_string(),
             description: "A ranged weapon".to_string(),
             weight: Mass::new::<pound>(2.0),
@@ -496,7 +496,7 @@ mod tests {
     #[test]
     fn weapon_has_property() {
         let item = Item {
-            id: ItemId::from_str("Dagger"),
+            id: ItemId::new("nat20_rs", "Dagger"),
             name: "Dagger".to_string(),
             description: "A small dagger".to_string(),
             weight: Mass::new::<pound>(1.0),
@@ -520,7 +520,7 @@ mod tests {
     #[test]
     fn weapon_enchantment_property() {
         let item = Item {
-            id: ItemId::from_str("item.magic_sword"),
+            id: ItemId::new("nat20_rs", "item.magic_sword"),
             name: "Magic Sword".to_string(),
             description: "A sword with enchantment".to_string(),
             weight: Mass::new::<pound>(3.0),
@@ -542,7 +542,7 @@ mod tests {
     #[test]
     fn weapon_determine_ability_finesse() {
         let item = Item {
-            id: ItemId::from_str("item.rapier"),
+            id: ItemId::new("nat20_rs", "item.rapier"),
             name: "Rapier".to_string(),
             description: "A finesse weapon".to_string(),
             weight: Mass::new::<pound>(2.5),
@@ -573,7 +573,7 @@ mod tests {
     #[test]
     fn weapon_name_and_effects() {
         let item = Item {
-            id: ItemId::from_str("item.warhammer"),
+            id: ItemId::new("nat20_rs", "item.warhammer"),
             name: "Warhammer".to_string(),
             description: "A heavy warhammer".to_string(),
             weight: Mass::new::<pound>(8.0),
@@ -596,7 +596,7 @@ mod tests {
     #[test]
     fn weapon_actions_exist() {
         let item = Item {
-            id: ItemId::from_str("item.shortbow"),
+            id: ItemId::new("nat20_rs", "item.shortbow"),
             name: "Shortbow".to_string(),
             description: "A ranged weapon".to_string(),
             weight: Mass::new::<pound>(2.0),
@@ -620,7 +620,7 @@ mod tests {
     #[test]
     fn weapon_range_melee_default() {
         let item = Item {
-            id: ItemId::from_str("item.club"),
+            id: ItemId::new("nat20_rs", "item.club"),
             name: "Club".to_string(),
             description: "A simple club".to_string(),
             weight: Mass::new::<pound>(2.0),
@@ -642,7 +642,7 @@ mod tests {
     #[test]
     fn weapon_range_melee_reach() {
         let item = Item {
-            id: ItemId::from_str("item.whip"),
+            id: ItemId::new("nat20_rs", "item.whip"),
             name: "Whip".to_string(),
             description: "A whip with reach".to_string(),
             weight: Mass::new::<pound>(3.0),
@@ -664,7 +664,7 @@ mod tests {
     #[test]
     fn weapon_range_ranged() {
         let item = Item {
-            id: ItemId::from_str("item.longbow"),
+            id: ItemId::new("nat20_rs", "item.longbow"),
             name: "Longbow".to_string(),
             description: "A long ranged bow".to_string(),
             weight: Mass::new::<pound>(2.0),
@@ -691,7 +691,7 @@ mod tests {
     #[test]
     fn slot_provider_valid_slots_melee() {
         let item = Item {
-            id: ItemId::from_str("item.axe"),
+            id: ItemId::new("nat20_rs", "item.axe"),
             name: "Axe".to_string(),
             description: "A hand axe".to_string(),
             weight: Mass::new::<pound>(2.0),
@@ -715,7 +715,7 @@ mod tests {
     #[test]
     fn slot_provider_valid_slots_ranged() {
         let item = Item {
-            id: ItemId::from_str("item.crossbow"),
+            id: ItemId::new("nat20_rs", "item.crossbow"),
             name: "Crossbow".to_string(),
             description: "A light crossbow".to_string(),
             weight: Mass::new::<pound>(3.0),
@@ -741,7 +741,7 @@ mod tests {
     // #[test]
     // fn serialize() {
     //     let item = Item {
-    //         id: ItemId::from_str("item.spear"),
+    //         id: ItemId::new("nat20_rs", "item.spear"),
     //         name: "Spear".to_string(),
     //         description: "A simple spear".to_string(),
     //         weight: Mass::new::<pound>(3.0),

@@ -532,7 +532,7 @@ fn render_spellbook_ui(
         let max_level = spells_by_level.keys().max().cloned().unwrap_or(0);
 
         let slots = resources
-            .get(&ResourceId::from_str("resource.spell_slot"))
+            .get(&ResourceId::new("nat20_rs","resource.spell_slot"))
             .and_then(|r| match r {
                 ResourceBudgetKind::Tiered(budgets) => Some(budgets),
                 _ => panic!("Expected ResourceKind::Tiered for SPELL_SLOT"),

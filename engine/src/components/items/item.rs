@@ -29,7 +29,7 @@ pub struct Item {
 impl Default for Item {
     fn default() -> Self {
         Self {
-            id: ItemId::from_str("item.default"),
+            id: ItemId::new("nat20_rs", "item.default"),
             name: "Unnamed Item".to_string(),
             description: "No description provided.".to_string(),
             weight: Mass::new::<kilogram>(0.0),

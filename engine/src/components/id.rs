@@ -2,27 +2,84 @@ use std::ops::Deref;
 
 use hecs::Entity;
 use serde::{Deserialize, Serialize};
-use std::{fmt, fmt::Debug, hash::Hash};
+use std::{fmt, fmt::Debug, hash::Hash, str::FromStr};
+use strum::Display;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Display, Serialize, Deserialize)]
+pub enum IdError {
+    MissingNamespace,
+    InvalidPrefix { expected: String, found: String },
+    EmptyId,
+}
 
 macro_rules! id_newtypes {
     ($($name:ident),+) => {
         $(
             #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-            pub struct $name(String);
+            #[serde(try_from = "String", into = "String")]
+            pub struct $name {
+                pub(crate) namespace: String,
+                pub(crate) id: String,
+            }
 
             impl $name {
-                pub fn from_str(s: impl Into<String>) -> Self {
-                    $name(s.into())
+                pub fn new(namespace: impl Into<String>, id: impl Into<String>) -> Self {
+                    Self {
+                        namespace: namespace.into(),
+                        id: id.into(),
+                    }
                 }
 
-                pub fn as_str(&self) -> &str {
-                    &self.0
+                pub fn namespace(&self) -> &str {
+                    &self.namespace
+                }
+
+                pub fn id(&self) -> &str {
+                    &self.id
+                }
+            }
+
+            impl FromStr for $name {
+                type Err = IdError;
+
+                fn from_str(s: &str) -> Result<Self, IdError> {
+                    let parts: Vec<&str> = s.splitn(2, "::").collect();
+                    if parts.len() != 2 {
+                        return Err(IdError::MissingNamespace);
+                    }
+                    let prefix = stringify!($name).to_lowercase().replace("id", "");
+                    let id = parts[1];
+                    if !id.starts_with(&prefix) {
+                        return Err(IdError::InvalidPrefix {
+                            expected: prefix,
+                            found: id.to_string(),
+                        });
+                    }
+                    if id.trim().is_empty() {
+                        return Err(IdError::EmptyId);
+                    }
+
+                    Ok(Self::new(parts[0].to_string(), parts[1].to_string()))
                 }
             }
 
             impl fmt::Display for $name {
                 fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    write!(f, "{}", self.0)
+                    write!(f, "{}::{}", self.namespace, self.id)
+                }
+            }
+
+            impl TryFrom<String> for $name {
+                type Error = IdError;
+
+                fn try_from(value: String) -> Result<Self, Self::Error> {
+                    Self::from_str(&value)
+                }
+            }
+
+            impl From<$name> for String {
+                fn from(value: $name) -> Self {
+                    value.to_string()
                 }
             }
         )+
@@ -48,25 +105,29 @@ id_newtypes!(
 
 impl Into<ActionId> for SpellId {
     fn into(self) -> ActionId {
-        ActionId(self.0)
+        let id = self.id.replace("spell", "action");
+        ActionId::new(self.namespace, id)
     }
 }
 
 impl Into<ActionId> for &SpellId {
     fn into(self) -> ActionId {
-        ActionId(self.0.clone())
+        let id = self.id.replace("spell", "action");
+        ActionId::new(self.namespace.clone(), id)
     }
 }
 
 impl Into<SpellId> for ActionId {
     fn into(self) -> SpellId {
-        SpellId(self.0)
+        let id = self.id.replace("action", "spell");
+        SpellId::new(self.namespace, id)
     }
 }
 
 impl Into<SpellId> for &ActionId {
     fn into(self) -> SpellId {
-        SpellId(self.0.clone())
+        let id = self.id.replace("action", "spell");
+        SpellId::new(self.namespace.clone(), id)
     }
 }
 

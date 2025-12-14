@@ -300,7 +300,7 @@ mod tests {
     fn composite_roll() {
         let mut modifiers = ModifierSet::new();
         modifiers.add_modifier(
-            ModifierSource::Item(ItemId::from_str("item.ring_of_rolling")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_rolling")),
             2,
         );
         let group1 = DiceSetRoll {

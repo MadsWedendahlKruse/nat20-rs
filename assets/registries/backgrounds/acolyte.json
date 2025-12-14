@@ -1,12 +1,12 @@
 {
-    "id": "background.acolyte",
+    "id": "nat20_rs::background.acolyte",
     "ability_scores": [
         "charisma",
         "intelligence",
         "wisdom"
     ],
     "_comment": "Placeholder feat",
-    "feat": "feat.fighting_style.archery",
+    "feat": "nat20_rs::feat.fighting_style.archery",
     "skill_proficiencies": [
         "insight",
         "religion"
@@ -20,7 +20,7 @@
                     "items": [
                         [
                             1,
-                            "item.robe"
+                            "nat20_rs::item.robe"
                         ]
                     ],
                     "money": "8 GP"

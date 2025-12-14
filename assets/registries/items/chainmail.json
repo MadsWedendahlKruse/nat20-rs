@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.chainmail",
+    "id": "nat20_rs::item.chainmail",
     "name": "Chainmail",
     "description": "A suit of chainmail armor, providing good protection.",
     "weight": 24.947582,
@@ -13,6 +13,6 @@
     "limited": 0
   },
   "effects": [
-    "effect.item.armor_stealth_disadvantage"
+    "nat20_rs::effect.item.armor_stealth_disadvantage"
   ]
 }

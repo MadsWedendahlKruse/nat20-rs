@@ -141,7 +141,7 @@ impl ActionProvider for Spellbook {
 
                 let mut resource_cost = spell.action().resource_cost().clone();
                 resource_cost.insert(
-                    ResourceId::from_str("resource.spell_slot"),
+                    ResourceId::new("nat20_rs", "resource.spell_slot"),
                     ResourceAmount::Tiered {
                         tier: level,
                         amount: 1,
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn add_and_has_spell() {
-        let spell_id = &SpellId::from_str("spell.magic_missile");
+        let spell_id = &SpellId::new("nat20_rs","spell.magic_missile");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id, Ability::Intelligence);
@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn remove_spell() {
-        let spell_id = &SpellId::from_str("spell.magic_missile");
+        let spell_id = &SpellId::new("nat20_rs","spell.magic_missile");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id, Ability::Wisdom);
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn prepare_and_unprepare_spell() {
-        let spell_id = &SpellId::from_str("spell.magic_missile");
+        let spell_id = &SpellId::new("nat20_rs","spell.magic_missile");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id, Ability::Charisma);
@@ -208,8 +208,8 @@ mod tests {
 
     #[test]
     fn all_spells_and_prepared_spells() {
-        let spell_id1 = &SpellId::from_str("spell.magic_missile");
-        let spell_id2 = &SpellId::from_str("spell.fireball");
+        let spell_id1 = &SpellId::new("nat20_rs","spell.magic_missile");
+        let spell_id2 = &SpellId::new("nat20_rs","spell.fireball");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id1, Ability::Intelligence);

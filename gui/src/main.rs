@@ -7,6 +7,7 @@ mod windows;
 
 use glow::HasContext;
 use glutin::surface::GlSurface;
+use tracing_subscriber::{EnvFilter, fmt};
 
 use crate::{
     render::ui::utils::ImguiRenderableMut, state::gui_state::GuiState,
@@ -14,6 +15,15 @@ use crate::{
 };
 
 fn main() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    fmt()
+        .with_env_filter(filter)
+        .with_target(true) // module path == "class name"
+        .with_level(true)
+        .with_timer(fmt::time::UtcTime::rfc_3339())
+        .init();
+
     let (event_loop, window, surface, context) = utils::create_window("Hello, triangle!", None);
     let (mut winit_platform, mut imgui_context) = utils::imgui_init(&window);
     let gl = utils::glow_context(&context);

@@ -1,15 +1,15 @@
 {
-    "id": "spell.counterspell",
+    "id": "nat20_rs::spell.counterspell",
     "description": "You attempt to interrupt a creature in the process of casting a spell. The creature makes a Constitution saving throw. On a failed save, the spell dissipates with no effect, and the action, Bonus Action, or Reaction used to cast it is wasted. If that spell was cast with a spell slot, the slot isn’t expended.",
     "base_level": 3,
     "school": "abjuration",
     "kind": {
         "reaction": {
-            "script": "script.spell.counterspell"
+            "script": "nat20_rs::script.spell.counterspell"
         }
     },
     "resource_cost": {
-        "resource.reaction": 1
+        "nat20_rs::resource.reaction": 1
     },
     "targeting": {
         "kind": "single",
@@ -17,5 +17,5 @@
         "require_line_of_sight": true,
         "allowed_targets": "not_dead"
     },
-    "reaction_trigger": "script.spell.counterspell"
+    "reaction_trigger": "nat20_rs::script.spell.counterspell"
 }

@@ -1,5 +1,5 @@
 {
-    "id": "resource.fighter.second_wind",
+    "id": "nat20_rs::resource.fighter.second_wind",
     "kind": "flat",
     "recharge": "long_rest"
 }

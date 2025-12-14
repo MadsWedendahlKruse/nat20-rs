@@ -698,15 +698,15 @@ impl Default for ResourceMap {
         let mut map = ResourceMap::new();
         map.resources = HashMap::from([
             (
-                ResourceId::from_str("resource.action").clone(),
+                ResourceId::new("nat20_rs","resource.action").clone(),
                 ResourceBudgetKind::Flat(ResourceBudget::new(1, 1).unwrap()),
             ),
             (
-                ResourceId::from_str("resource.bonus_action").clone(),
+                ResourceId::new("nat20_rs","resource.bonus_action").clone(),
                 ResourceBudgetKind::Flat(ResourceBudget::new(1, 1).unwrap()),
             ),
             (
-                ResourceId::from_str("resource.reaction").clone(),
+                ResourceId::new("nat20_rs","resource.reaction").clone(),
                 ResourceBudgetKind::Flat(ResourceBudget::new(1, 1).unwrap()),
             ),
         ]);
@@ -922,32 +922,32 @@ mod tests {
     fn resource_map_add_and_get() {
         let mut map = ResourceMap::new();
         let res = flat_resource(1, 1);
-        map.add(ResourceId::from_str("Action"), res.clone(), false);
-        let got = map.get(&ResourceId::from_str("Action")).unwrap();
+        map.add(ResourceId::new("nat20_rs","Action"), res.clone(), false);
+        let got = map.get(&ResourceId::new("nat20_rs","Action")).unwrap();
         assert_eq!(got.max_uses(), vec![ResourceAmount::Flat(1)]);
     }
 
     #[test]
     fn resource_map_iter() {
         let mut map = ResourceMap::new();
-        map.add(ResourceId::from_str("Action"), flat_resource(1, 1), false);
+        map.add(ResourceId::new("nat20_rs","Action"), flat_resource(1, 1), false);
         map.add(
-            ResourceId::from_str("Bonus Action"),
+            ResourceId::new("nat20_rs","Bonus Action"),
             flat_resource(1, 1),
             false,
         );
         let ids: Vec<_> = map.iter().map(|(id, _)| id).collect();
-        assert!(ids.contains(&&ResourceId::from_str("Action")));
-        assert!(ids.contains(&&ResourceId::from_str("Bonus Action")));
+        assert!(ids.contains(&&ResourceId::new("nat20_rs","Action")));
+        assert!(ids.contains(&&ResourceId::new("nat20_rs","Bonus Action")));
     }
 
     #[test]
     fn resource_map_can_afford_flat() {
         let mut map = ResourceMap::new();
-        map.add(ResourceId::from_str("Ki Point"), flat_resource(3, 3), false);
+        map.add(ResourceId::new("nat20_rs","Ki Point"), flat_resource(3, 3), false);
 
         let mut cost = ResourceAmountMap::new();
-        cost.insert(ResourceId::from_str("Ki Point"), ResourceAmount::Flat(2));
+        cost.insert(ResourceId::new("nat20_rs","Ki Point"), ResourceAmount::Flat(2));
 
         assert!(map.can_afford_all(&cost).0);
     }
@@ -955,10 +955,10 @@ mod tests {
     #[test]
     fn resource_map_can_afford_flat_insufficient() {
         let mut map = ResourceMap::new();
-        map.add(ResourceId::from_str("Ki Point"), flat_resource(1, 3), false);
+        map.add(ResourceId::new("nat20_rs","Ki Point"), flat_resource(1, 3), false);
 
         let mut cost = ResourceAmountMap::new();
-        cost.insert(ResourceId::from_str("Ki Point"), ResourceAmount::Flat(2));
+        cost.insert(ResourceId::new("nat20_rs","Ki Point"), ResourceAmount::Flat(2));
 
         assert!(!map.can_afford_all(&cost).0);
     }
@@ -967,14 +967,14 @@ mod tests {
     fn resource_map_can_afford_tier() {
         let mut map = ResourceMap::new();
         map.add(
-            ResourceId::from_str("Spell Slot"),
+            ResourceId::new("nat20_rs","Spell Slot"),
             tiered_resource(&[(1, 2, 2), (2, 1, 1)]),
             false,
         );
 
         let mut cost = ResourceAmountMap::new();
         cost.insert(
-            ResourceId::from_str("Spell Slot"),
+            ResourceId::new("nat20_rs","Spell Slot"),
             ResourceAmount::Tiered { tier: 1, amount: 2 },
         );
 
@@ -985,14 +985,14 @@ mod tests {
     fn resource_map_can_afford_tier_insufficient() {
         let mut map = ResourceMap::new();
         map.add(
-            ResourceId::from_str("Spell Slot"),
+            ResourceId::new("nat20_rs","Spell Slot"),
             tiered_resource(&[(1, 1, 2), (2, 1, 1)]),
             false,
         );
 
         let mut cost = ResourceAmountMap::new();
         cost.insert(
-            ResourceId::from_str("Spell Slot"),
+            ResourceId::new("nat20_rs","Spell Slot"),
             ResourceAmount::Tiered { tier: 1, amount: 2 },
         );
 
@@ -1002,23 +1002,23 @@ mod tests {
     #[test]
     fn resource_map_spend_flat_success() {
         let mut map = ResourceMap::new();
-        map.add(ResourceId::from_str("Ki Point"), flat_resource(3, 3), false);
+        map.add(ResourceId::new("nat20_rs","Ki Point"), flat_resource(3, 3), false);
 
         let mut cost = ResourceAmountMap::new();
-        cost.insert(ResourceId::from_str("Ki Point"), ResourceAmount::Flat(2));
+        cost.insert(ResourceId::new("nat20_rs","Ki Point"), ResourceAmount::Flat(2));
 
         assert!(map.spend_all(&cost).is_ok());
-        let res = map.get(&ResourceId::from_str("Ki Point")).unwrap();
+        let res = map.get(&ResourceId::new("nat20_rs","Ki Point")).unwrap();
         assert_eq!(res.current_uses()[0], ResourceAmount::Flat(1));
     }
 
     #[test]
     fn resource_map_spend_flat_insufficient() {
         let mut map = ResourceMap::new();
-        map.add(ResourceId::from_str("Ki Point"), flat_resource(1, 3), false);
+        map.add(ResourceId::new("nat20_rs","Ki Point"), flat_resource(1, 3), false);
 
         let mut cost = ResourceAmountMap::new();
-        cost.insert(ResourceId::from_str("Ki Point"), ResourceAmount::Flat(2));
+        cost.insert(ResourceId::new("nat20_rs","Ki Point"), ResourceAmount::Flat(2));
 
         let err = map.spend_all(&cost).unwrap_err();
         match err {
@@ -1027,7 +1027,7 @@ mod tests {
                 needed,
                 available,
             } => {
-                assert_eq!(id, ResourceId::from_str("Ki Point"));
+                assert_eq!(id, ResourceId::new("nat20_rs","Ki Point"));
                 assert_eq!(needed, ResourceAmount::Flat(2));
                 assert_eq!(available, ResourceAmount::Flat(1));
             }
@@ -1039,19 +1039,19 @@ mod tests {
     fn resource_map_spend_tier_success() {
         let mut map = ResourceMap::new();
         map.add(
-            ResourceId::from_str("Spell Slot"),
+            ResourceId::new("nat20_rs","Spell Slot"),
             tiered_resource(&[(1, 2, 2), (2, 1, 1)]),
             false,
         );
 
         let mut cost = ResourceAmountMap::new();
         cost.insert(
-            ResourceId::from_str("Spell Slot"),
+            ResourceId::new("nat20_rs","Spell Slot"),
             ResourceAmount::Tiered { tier: 1, amount: 2 },
         );
 
         assert!(map.spend_all(&cost).is_ok());
-        let res = map.get(&ResourceId::from_str("Spell Slot")).unwrap();
+        let res = map.get(&ResourceId::new("nat20_rs","Spell Slot")).unwrap();
         let uses = res.current_uses();
         assert_eq!(
             uses,
@@ -1065,17 +1065,17 @@ mod tests {
     #[test]
     fn resource_map_can_afford_mixed_resources() {
         let mut map = ResourceMap::new();
-        map.add(ResourceId::from_str("Ki Point"), flat_resource(3, 3), false);
+        map.add(ResourceId::new("nat20_rs","Ki Point"), flat_resource(3, 3), false);
         map.add(
-            ResourceId::from_str("Spell Slot"),
+            ResourceId::new("nat20_rs","Spell Slot"),
             tiered_resource(&[(1, 2, 2), (2, 1, 1)]),
             false,
         );
 
         let mut cost = ResourceAmountMap::new();
-        cost.insert(ResourceId::from_str("Ki Point"), ResourceAmount::Flat(2));
+        cost.insert(ResourceId::new("nat20_rs","Ki Point"), ResourceAmount::Flat(2));
         cost.insert(
-            ResourceId::from_str("Spell Slot"),
+            ResourceId::new("nat20_rs","Spell Slot"),
             ResourceAmount::Tiered { tier: 1, amount: 2 },
         );
 
@@ -1085,16 +1085,16 @@ mod tests {
     #[test]
     fn resource_map_spend_multiple_resources() {
         let mut map = ResourceMap::new();
-        map.add(ResourceId::from_str("Ki Point"), flat_resource(3, 3), false);
-        map.add(ResourceId::from_str("Rage"), flat_resource(2, 2), false);
+        map.add(ResourceId::new("nat20_rs","Ki Point"), flat_resource(3, 3), false);
+        map.add(ResourceId::new("nat20_rs","Rage"), flat_resource(2, 2), false);
 
         let mut cost = ResourceAmountMap::new();
-        cost.insert(ResourceId::from_str("Ki Point"), ResourceAmount::Flat(2));
-        cost.insert(ResourceId::from_str("Rage"), ResourceAmount::Flat(1));
+        cost.insert(ResourceId::new("nat20_rs","Ki Point"), ResourceAmount::Flat(2));
+        cost.insert(ResourceId::new("nat20_rs","Rage"), ResourceAmount::Flat(1));
 
         assert!(map.spend_all(&cost).is_ok());
-        let ki = map.get(&ResourceId::from_str("Ki Point")).unwrap();
-        let rage = map.get(&ResourceId::from_str("Rage")).unwrap();
+        let ki = map.get(&ResourceId::new("nat20_rs","Ki Point")).unwrap();
+        let rage = map.get(&ResourceId::new("nat20_rs","Rage")).unwrap();
         assert_eq!(ki.current_uses()[0], ResourceAmount::Flat(1));
         assert_eq!(rage.current_uses()[0], ResourceAmount::Flat(1));
     }
@@ -1102,23 +1102,23 @@ mod tests {
     #[test]
     fn resource_map_spend_mixed_resources() {
         let mut map = ResourceMap::new();
-        map.add(ResourceId::from_str("Ki Point"), flat_resource(3, 3), false);
+        map.add(ResourceId::new("nat20_rs","Ki Point"), flat_resource(3, 3), false);
         map.add(
-            ResourceId::from_str("Spell Slot"),
+            ResourceId::new("nat20_rs","Spell Slot"),
             tiered_resource(&[(1, 2, 2), (2, 1, 1)]),
             false,
         );
 
         let mut cost = ResourceAmountMap::new();
-        cost.insert(ResourceId::from_str("Ki Point"), ResourceAmount::Flat(2));
+        cost.insert(ResourceId::new("nat20_rs","Ki Point"), ResourceAmount::Flat(2));
         cost.insert(
-            ResourceId::from_str("Spell Slot"),
+            ResourceId::new("nat20_rs","Spell Slot"),
             ResourceAmount::Tiered { tier: 1, amount: 2 },
         );
 
         assert!(map.spend_all(&cost).is_ok());
-        let ki = map.get(&ResourceId::from_str("Ki Point")).unwrap();
-        let spell_slot = map.get(&ResourceId::from_str("Spell Slot")).unwrap();
+        let ki = map.get(&ResourceId::new("nat20_rs","Ki Point")).unwrap();
+        let spell_slot = map.get(&ResourceId::new("nat20_rs","Spell Slot")).unwrap();
         assert_eq!(ki.current_uses()[0], ResourceAmount::Flat(1));
         assert_eq!(
             spell_slot.current_uses(),

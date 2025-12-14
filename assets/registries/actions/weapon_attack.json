@@ -1,5 +1,5 @@
 {
-    "id": "action.weapon_attack",
+    "id": "nat20_rs::action.weapon_attack",
     "description": "Make an attack with a weapon you are wielding. This can be a melee or ranged attack depending on the weapon.",
     "kind": {
         "attack_roll_damage": {
@@ -9,6 +9,6 @@
     },
     "targeting": "weapon_targeting",
     "resource_cost": {
-        "resource.action": 1
+        "nat20_rs::resource.action": 1
     }
 }

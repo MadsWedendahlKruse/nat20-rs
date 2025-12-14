@@ -31,7 +31,7 @@ mod tests {
             ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
             ability_scores.add_modifier(
                 Ability::Strength,
-                ModifierSource::Item(ItemId::from_str("item.ring_of_strength")),
+                ModifierSource::Item(ItemId::new("nat20_rs","item.ring_of_strength")),
                 2,
             );
             assert_eq!(ability_scores.get(Ability::Strength).total(), 19);
@@ -101,7 +101,7 @@ mod tests {
         let _ = systems::loadout::equip(
             &mut world,
             character,
-            ItemsRegistry::get(&ItemId::from_str("item.chainmail"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs","item.chainmail"))
                 .unwrap()
                 .clone(),
         );

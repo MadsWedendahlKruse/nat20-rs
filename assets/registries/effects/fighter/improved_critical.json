@@ -1,5 +1,5 @@
 {
-    "id": "effect.fighter.champion.improved_critical",
+    "id": "nat20_rs::effect.fighter.champion.improved_critical",
     "description": "Your attack rolls with weapons and Unarmed Strikes can score a Critical Hit on a roll of 19 or 20 on the d20.",
     "duration": "permanent",
     "pre_attack_roll": [

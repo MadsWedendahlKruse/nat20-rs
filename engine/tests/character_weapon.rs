@@ -46,7 +46,7 @@ mod tests {
             );
         }
 
-        let weapon = ItemsRegistry::get(&ItemId::from_str("item.scimitar"))
+        let weapon = ItemsRegistry::get(&ItemId::new("nat20_rs","item.scimitar"))
             .unwrap()
             .clone();
         let weapon = match weapon {
@@ -90,7 +90,7 @@ mod tests {
         let entity = game_state.world.spawn(Character::default());
 
         // Equip longsword
-        let longsword = ItemsRegistry::get(&ItemId::from_str("item.longsword"))
+        let longsword = ItemsRegistry::get(&ItemId::new("nat20_rs","item.longsword"))
             .unwrap()
             .clone();
         let _ = systems::loadout::equip(&mut game_state.world, entity, longsword);
@@ -108,7 +108,7 @@ mod tests {
             &mut game_state.world,
             entity,
             &EquipmentSlot::MeleeOffHand,
-            ItemsRegistry::get(&ItemId::from_str("item.dagger"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs","item.dagger"))
                 .unwrap()
                 .clone(),
         )
@@ -146,7 +146,7 @@ mod tests {
             &mut world,
             entity,
             &EquipmentSlot::MeleeOffHand,
-            ItemsRegistry::get(&ItemId::from_str("item.dagger"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs","item.dagger"))
                 .unwrap()
                 .clone(),
         )
@@ -155,7 +155,7 @@ mod tests {
             &mut world,
             entity,
             &EquipmentSlot::MeleeMainHand,
-            ItemsRegistry::get(&ItemId::from_str("item.longsword"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs","item.longsword"))
                 .unwrap()
                 .clone(),
         );
@@ -163,7 +163,7 @@ mod tests {
         let unequipped = systems::loadout::equip(
             &mut world,
             entity,
-            ItemsRegistry::get(&ItemId::from_str("item.greatsword"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs","item.greatsword"))
                 .unwrap()
                 .clone(),
         )
@@ -192,7 +192,7 @@ mod tests {
 
         let longsword = Weapon::new(
             Item {
-                id: ItemId::from_str("item.longsword"),
+                id: ItemId::new("nat20_rs","item.longsword"),
                 name: "Longsword".to_string(),
                 description: "A longsword.".to_string(),
                 weight: Mass::new::<pound>(3.0),

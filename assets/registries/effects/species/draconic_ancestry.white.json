@@ -1,5 +1,5 @@
 {
-    "id": "effect.dragonborn.draconic_ancestry.white",
+    "id": "nat20_rs::effect.dragonborn.draconic_ancestry.white",
     "description": "Your lineage stems from a dragon progenitor. You have resistance to cold damage.",
     "duration": "permanent",
     "modifiers": [

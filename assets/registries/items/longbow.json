@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "item.longbow",
+    "id": "nat20_rs::item.longbow",
     "name": "Longbow",
     "description": "A powerful longbow, effective for ranged combat.",
     "weight": 0.9071848,
@@ -15,7 +15,10 @@
     "Range (45.72 / 182.88 m)"
   ],
   "damage": [
-    ["1d8", "piercing"]
+    [
+      "1d8",
+      "piercing"
+    ]
   ],
   "extra_weapon_actions": [],
   "effects": []
