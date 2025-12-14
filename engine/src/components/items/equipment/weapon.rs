@@ -9,19 +9,22 @@ use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter};
 use uom::si::length::foot;
 
-use crate::components::{
-    ability::{Ability, AbilityScoreMap},
-    actions::targeting::TargetingRange,
-    d20::D20Check,
-    damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
-    dice::DiceSet,
-    id::{ActionId, EffectId},
-    items::{
-        equipment::slots::{EquipmentSlot, SlotProvider},
-        item::Item,
+use crate::{
+    components::{
+        ability::{Ability, AbilityScoreMap},
+        actions::targeting::TargetingRange,
+        d20::D20Check,
+        damage::{AttackRoll, DamageRoll, DamageSource, DamageType},
+        dice::DiceSet,
+        id::{ActionId, EffectId},
+        items::{
+            equipment::slots::{EquipmentSlot, SlotProvider},
+            item::Item,
+        },
+        modifier::{KeyedModifiable, Modifiable, ModifierSet, ModifierSource},
+        proficiency::{Proficiency, ProficiencyLevel},
     },
-    modifier::{KeyedModifiable, Modifiable, ModifierSet, ModifierSource},
-    proficiency::{Proficiency, ProficiencyLevel},
+    registry::serialize::item::WeaponDefinition,
 };
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Display, Serialize, Deserialize)]
@@ -189,17 +192,6 @@ pub struct Weapon {
     ability: Ability,
     weapon_actions: Vec<ActionId>,
     effects: Vec<EffectId>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct WeaponDefinition {
-    pub item: Item,
-    pub kind: WeaponKind,
-    pub category: WeaponCategory,
-    pub properties: HashSet<WeaponProperties>,
-    pub damage: Vec<(DiceSet, DamageType)>,
-    pub extra_weapon_actions: Vec<ActionId>,
-    pub effects: Vec<EffectId>,
 }
 
 impl Weapon {
@@ -406,20 +398,6 @@ impl SlotProvider for Weapon {
         } else {
             &[]
         }
-    }
-}
-
-impl From<WeaponDefinition> for Weapon {
-    fn from(def: WeaponDefinition) -> Self {
-        Weapon::new(
-            def.item,
-            def.kind,
-            def.category,
-            def.properties,
-            def.damage,
-            def.extra_weapon_actions,
-            def.effects,
-        )
     }
 }
 

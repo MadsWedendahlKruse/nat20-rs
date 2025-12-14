@@ -5,16 +5,18 @@
     "_comment": "Missing breath weapon, darkvision and draconic flight!",
     "effects_by_level": {},
     "action_by_level": {},
+    "_todo_species": [
+        "nat20_rs::subspecies.dragonborn.brass",
+        "nat20_rs::subspecies.dragonborn.gold",
+        "nat20_rs::subspecies.dragonborn.bronze",
+        "nat20_rs::subspecies.dragonborn.green",
+        "nat20_rs::subspecies.dragonborn.silver",
+        "nat20_rs::subspecies.dragonborn.copper",
+        "nat20_rs::subspecies.dragonborn.blue"
+    ],
     "subspecies": [
         "nat20_rs::subspecies.dragonborn.black",
-        "nat20_rs::subspecies.dragonborn.blue",
-        "nat20_rs::subspecies.dragonborn.brass",
-        "nat20_rs::subspecies.dragonborn.bronze",
-        "nat20_rs::subspecies.dragonborn.copper",
-        "nat20_rs::subspecies.dragonborn.gold",
-        "nat20_rs::subspecies.dragonborn.green",
         "nat20_rs::subspecies.dragonborn.red",
-        "nat20_rs::subspecies.dragonborn.silver",
         "nat20_rs::subspecies.dragonborn.white"
     ],
     "speed": "30 feet"

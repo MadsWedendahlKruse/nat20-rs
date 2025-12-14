@@ -24,9 +24,19 @@ use crate::{
             ResourceId, ScriptId, SpeciesId, SpellId, SubclassId, SubspeciesId,
         },
         items::inventory::ItemInstance,
-        resource::ResourceDefinition,
+        resource::Resource,
         species::{Species, Subspecies},
         spells::spell::Spell,
+    },
+    registry::{
+        registry_validation::{ReferenceCollector, RegistryReference, RegistryReferenceCollector},
+        serialize::{
+            action::ActionDefinition,
+            class::ClassDefinition,
+            effect::EffectDefinition,
+            species::{SpeciesDefinition, SubspeciesDefinition},
+            spell::SpellDefinition,
+        },
     },
     scripts::script::Script,
 };
@@ -50,8 +60,15 @@ static REGISTRIES: LazyLock<RegistrySet> =
     );
 
 #[derive(Debug, Clone)]
-pub struct Registry<K, V> {
-    pub entries: HashMap<K, V>,
+pub struct RegistryEntry<V, D> {
+    pub value: V,
+    pub definition: D,
+    pub path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+pub struct Registry<K, V, D> {
+    pub entries: HashMap<K, RegistryEntry<V, D>>,
 }
 
 #[derive(Debug)]
@@ -76,6 +93,10 @@ pub enum RegistryError {
         id_debug: String,
         first_path: PathBuf,
         second_path: PathBuf,
+    },
+    MissingRegistryEntry {
+        path: PathBuf,
+        reference: RegistryReference,
     },
     Many(Vec<RegistryError>),
 }
@@ -127,6 +148,13 @@ impl fmt::Display for RegistryError {
                     id_debug, first_path, second_path
                 )
             }
+            RegistryError::MissingRegistryEntry { path, reference } => {
+                write!(
+                    f,
+                    "Missing registry entry for reference {:?} in file {:?}",
+                    reference, path
+                )
+            }
             RegistryError::Many(errors) => {
                 writeln!(f, "{} registry error(s):", errors.len())?;
                 for (index, error) in errors.iter().enumerate() {
@@ -140,15 +168,16 @@ impl fmt::Display for RegistryError {
 
 impl std::error::Error for RegistryError {}
 
-impl<K, V> Registry<K, V>
+impl<K, V, D> Registry<K, V, D>
 where
     K: Eq + Hash + Clone + Debug,
-    V: IdProvider<Id = K> + DeserializeOwned,
+    V: IdProvider<Id = K> + From<D>,
+    D: DeserializeOwned + RegistryReferenceCollector + Clone,
 {
     pub fn load_from_directory(directory: impl AsRef<Path>) -> Result<Self, RegistryError> {
         let directory = directory.as_ref();
 
-        let mut entries: HashMap<K, V> = HashMap::new();
+        let mut entries: HashMap<K, RegistryEntry<V, D>> = HashMap::new();
         let mut id_to_path: HashMap<K, PathBuf> = HashMap::new();
         let mut errors: Vec<RegistryError> = Vec::new();
 
@@ -163,7 +192,7 @@ where
 
     fn load_directory_recursive(
         directory: &Path,
-        entries: &mut HashMap<K, V>,
+        entries: &mut HashMap<K, RegistryEntry<V, D>>,
         id_to_path: &mut HashMap<K, PathBuf>,
         errors: &mut Vec<RegistryError>,
     ) {
@@ -204,14 +233,16 @@ where
                 continue;
             }
 
-            let value = match Self::load_file(&path) {
-                Ok(value) => value,
+            let definition = match Self::load_file(&path) {
+                Ok(definition) => definition,
                 Err(error) => {
                     error!(%error, "Failed to load registry entry");
                     error.push_into(errors);
                     continue;
                 }
             };
+
+            let value = V::from(definition.clone());
 
             let id = value.id().clone();
 
@@ -221,45 +252,69 @@ where
                     first_path,
                     second_path: path.clone(),
                 });
-                // Decide policy:
-                // - Keep first: do not overwrite
-                // - Keep last: overwrite
-                // Recommended for deterministic behavior: keep first.
                 continue;
             }
 
             id_to_path.insert(id.clone(), path.clone());
-            entries.insert(id, value);
+
+            let entry = RegistryEntry {
+                value,
+                definition,
+                path: path.clone(),
+            };
+
+            entries.insert(id, entry);
         }
     }
 
-    fn load_file(path: &Path) -> Result<V, RegistryError> {
+    fn load_file(path: &Path) -> Result<D, RegistryError> {
         let file_contents = fs::read_to_string(path).map_err(|error| RegistryError::ReadFile {
             path: path.to_path_buf(),
             message: error.to_string(),
         })?;
 
-        serde_json::from_str::<V>(&file_contents).map_err(|error| RegistryError::DeserializeJson {
+        serde_json::from_str::<D>(&file_contents).map_err(|error| RegistryError::DeserializeJson {
             path: path.to_path_buf(),
             message: error.to_string(),
         })
     }
+
+    fn load_registry(
+        directory: &Path,
+        errors: &mut Vec<RegistryError>,
+    ) -> Option<Registry<K, V, D>> {
+        if !directory.exists() {
+            // Decide policy: missing directory might be okay.
+            // If not okay, push an error here.
+            return Some(Registry {
+                entries: HashMap::new(),
+            });
+        }
+
+        match Registry::<K, V, D>::load_from_directory(directory) {
+            Ok(registry) => Some(registry),
+            Err(error) => {
+                error.push_into(errors);
+                None
+            }
+        }
+    }
 }
 
 pub struct RegistrySet {
-    pub actions: Registry<ActionId, Action>,
-    pub backgrounds: Registry<BackgroundId, Background>,
-    pub classes: Registry<ClassId, Class>,
-    pub effects: Registry<EffectId, Effect>,
-    pub factions: Registry<FactionId, Faction>,
-    pub feats: Registry<FeatId, Feat>,
-    pub items: Registry<ItemId, ItemInstance>,
-    pub resources: Registry<ResourceId, ResourceDefinition>,
-    pub scripts: Registry<ScriptId, Script>,
-    pub species: Registry<SpeciesId, Species>,
-    pub spells: Registry<SpellId, Spell>,
-    pub subclasses: Registry<SubclassId, Subclass>,
-    pub subspecies: Registry<SubspeciesId, Subspecies>,
+    pub actions: Registry<ActionId, Action, ActionDefinition>,
+    pub backgrounds: Registry<BackgroundId, Background, Background>,
+    pub classes: Registry<ClassId, Class, ClassDefinition>,
+    pub effects: Registry<EffectId, Effect, EffectDefinition>,
+    pub factions: Registry<FactionId, Faction, Faction>,
+    pub feats: Registry<FeatId, Feat, Feat>,
+    pub items: Registry<ItemId, ItemInstance, ItemInstance>,
+    pub resources: Registry<ResourceId, Resource, Resource>,
+    pub scripts: Registry<ScriptId, Script, Script>,
+    pub species: Registry<SpeciesId, Species, SpeciesDefinition>,
+    pub spells: Registry<SpellId, Spell, SpellDefinition>,
+    pub subclasses: Registry<SubclassId, Subclass, Subclass>,
+    pub subspecies: Registry<SubspeciesId, Subspecies, SubspeciesDefinition>,
 }
 
 impl RegistrySet {
@@ -301,54 +356,25 @@ impl RegistrySet {
         // Load scripts first (but do not fail early).
         let scripts_map = Self::load_scripts_from_directories(&all_directories, &mut errors);
 
-        // Helper to load a registry and collect errors.
-        fn load_registry<K, V>(
-            directory: &Path,
-            errors: &mut Vec<RegistryError>,
-        ) -> Option<Registry<K, V>>
-        where
-            K: Eq + Hash + Clone + Debug,
-            V: IdProvider<Id = K> + DeserializeOwned,
-        {
-            if !directory.exists() {
-                // Decide policy: missing directory might be okay.
-                // If not okay, push an error here.
-                return Some(Registry {
-                    entries: HashMap::new(),
-                });
-            }
-
-            match Registry::<K, V>::load_from_directory(directory) {
-                Ok(registry) => Some(registry),
-                Err(error) => {
-                    error.push_into(errors);
-                    None
-                }
-            }
-        }
-
-        let actions = load_registry::<ActionId, Action>(&actions_directory, &mut errors);
-        let backgrounds =
-            load_registry::<BackgroundId, Background>(&backgrounds_directory, &mut errors);
-        let classes = load_registry::<ClassId, Class>(&classes_directory, &mut errors);
-        let effects = load_registry::<EffectId, Effect>(&effects_directory, &mut errors);
-        let factions = load_registry::<FactionId, Faction>(&factions_directory, &mut errors);
-        let feats = load_registry::<FeatId, Feat>(&feats_directory, &mut errors);
-        let items = load_registry::<ItemId, ItemInstance>(&items_directory, &mut errors);
-        let resources =
-            load_registry::<ResourceId, ResourceDefinition>(&resources_directory, &mut errors);
-        let species = load_registry::<SpeciesId, Species>(&species_directory, &mut errors);
-        let spells = load_registry::<SpellId, Spell>(&spells_directory, &mut errors);
-        let subclasses = load_registry::<SubclassId, Subclass>(&subclasses_directory, &mut errors);
-        let subspecies =
-            load_registry::<SubspeciesId, Subspecies>(&subspecies_directory, &mut errors);
+        let actions = Registry::load_registry(&actions_directory, &mut errors);
+        let backgrounds = Registry::load_registry(&backgrounds_directory, &mut errors);
+        let classes = Registry::load_registry(&classes_directory, &mut errors);
+        let effects = Registry::load_registry(&effects_directory, &mut errors);
+        let factions = Registry::load_registry(&factions_directory, &mut errors);
+        let feats = Registry::load_registry(&feats_directory, &mut errors);
+        let items = Registry::load_registry(&items_directory, &mut errors);
+        let resources = Registry::load_registry(&resources_directory, &mut errors);
+        let species = Registry::load_registry(&species_directory, &mut errors);
+        let spells = Registry::load_registry(&spells_directory, &mut errors);
+        let subclasses = Registry::load_registry(&subclasses_directory, &mut errors);
+        let subspecies = Registry::load_registry(&subspecies_directory, &mut errors);
 
         // If anything failed, report all collected diagnostics once.
         if !errors.is_empty() {
             return Err(RegistryError::Many(errors));
         }
 
-        Ok(Self {
+        let set = Self {
             actions: actions.expect("validated"),
             backgrounds: backgrounds.expect("validated"),
             classes: classes.expect("validated"),
@@ -364,15 +390,35 @@ impl RegistrySet {
             spells: spells.expect("validated"),
             subclasses: subclasses.expect("validated"),
             subspecies: subspecies.expect("validated"),
-        })
+        };
+
+        // Validate references now that all registries are loaded.
+        Self::validate_registry_references(&mut errors, &set.actions, &set);
+        Self::validate_registry_references(&mut errors, &set.backgrounds, &set);
+        Self::validate_registry_references(&mut errors, &set.classes, &set);
+        Self::validate_registry_references(&mut errors, &set.effects, &set);
+        Self::validate_registry_references(&mut errors, &set.factions, &set);
+        Self::validate_registry_references(&mut errors, &set.feats, &set);
+        Self::validate_registry_references(&mut errors, &set.items, &set);
+        Self::validate_registry_references(&mut errors, &set.resources, &set);
+        Self::validate_registry_references(&mut errors, &set.species, &set);
+        Self::validate_registry_references(&mut errors, &set.spells, &set);
+        Self::validate_registry_references(&mut errors, &set.subclasses, &set);
+        Self::validate_registry_references(&mut errors, &set.subspecies, &set);
+
+        if !errors.is_empty() {
+            return Err(RegistryError::Many(errors));
+        }
+
+        Ok(set)
     }
 
     // assuming Script has: id: ScriptId, and Script::try_from(entry) -> Result<Script, ScriptError>
     fn load_scripts_from_directories(
         directories: &[&Path],
         errors: &mut Vec<RegistryError>,
-    ) -> HashMap<ScriptId, Script> {
-        let mut scripts: HashMap<ScriptId, Script> = HashMap::new();
+    ) -> HashMap<ScriptId, RegistryEntry<Script, Script>> {
+        let mut scripts: HashMap<ScriptId, RegistryEntry<Script, Script>> = HashMap::new();
         let mut script_id_to_path: HashMap<ScriptId, PathBuf> = HashMap::new();
 
         for directory in directories {
@@ -432,7 +478,14 @@ impl RegistrySet {
                             }
 
                             script_id_to_path.insert(id.clone(), path.clone());
-                            scripts.insert(id, script);
+                            scripts.insert(
+                                id,
+                                RegistryEntry {
+                                    value: script.clone(),
+                                    definition: script,
+                                    path: path.clone(),
+                                },
+                            );
                         }
                         Err(script_error) => {
                             // Map to a structured error; you can add a dedicated ScriptError variant if you prefer.
@@ -448,6 +501,53 @@ impl RegistrySet {
 
         scripts
     }
+
+    fn validate_registry_references<K, V, D>(
+        errors: &mut Vec<RegistryError>,
+        registry: &Registry<K, V, D>,
+        registries: &RegistrySet,
+    ) where
+        K: Eq + Hash + Clone + Debug,
+        V: IdProvider<Id = K> + From<D>,
+        D: DeserializeOwned + RegistryReferenceCollector + Clone,
+    {
+        for entry in registry.entries.values() {
+            let mut collector = ReferenceCollector::new();
+            entry.definition.collect_registry_references(&mut collector);
+            for reference in collector.into_references() {
+                let found = match &reference {
+                    RegistryReference::Action(id) => registries.actions.entries.contains_key(id),
+                    RegistryReference::Background(id) => {
+                        registries.backgrounds.entries.contains_key(id)
+                    }
+                    RegistryReference::Class(id) => registries.classes.entries.contains_key(id),
+                    RegistryReference::Effect(id) => registries.effects.entries.contains_key(id),
+                    RegistryReference::Faction(id) => registries.factions.entries.contains_key(id),
+                    RegistryReference::Feat(id) => registries.feats.entries.contains_key(id),
+                    RegistryReference::Item(id) => registries.items.entries.contains_key(id),
+                    RegistryReference::Resource(id) => {
+                        registries.resources.entries.contains_key(id)
+                    }
+                    RegistryReference::Species(id) => registries.species.entries.contains_key(id),
+                    RegistryReference::Spell(id) => registries.spells.entries.contains_key(id),
+                    RegistryReference::Subclass(id) => {
+                        registries.subclasses.entries.contains_key(id)
+                    }
+                    RegistryReference::Subspecies(id) => {
+                        registries.subspecies.entries.contains_key(id)
+                    }
+                    RegistryReference::Script(id) => registries.scripts.entries.contains_key(id),
+                };
+
+                if !found {
+                    errors.push(RegistryError::MissingRegistryEntry {
+                        path: entry.path.clone(),
+                        reference,
+                    })
+                }
+            }
+        }
+    }
 }
 
 macro_rules! define_registry {
@@ -456,7 +556,7 @@ macro_rules! define_registry {
 
         impl $registry_name {
             pub fn get(key: &$key_type) -> Option<&'static $value_type> {
-                REGISTRIES.$field.entries.get(key)
+                REGISTRIES.$field.entries.get(key).map(|entry| &entry.value)
             }
 
             pub fn keys() -> impl Iterator<Item = &'static $key_type> + 'static {
@@ -464,7 +564,7 @@ macro_rules! define_registry {
             }
 
             pub fn values() -> impl Iterator<Item = &'static $value_type> + 'static {
-                REGISTRIES.$field.entries.values()
+                REGISTRIES.$field.entries.values().map(|entry| &entry.value)
             }
         }
     };
@@ -477,7 +577,7 @@ define_registry!(EffectsRegistry, EffectId, Effect, effects);
 define_registry!(FactionsRegistry, FactionId, Faction, factions);
 define_registry!(FeatsRegistry, FeatId, Feat, feats);
 define_registry!(ItemsRegistry, ItemId, ItemInstance, items);
-define_registry!(ResourcesRegistry, ResourceId, ResourceDefinition, resources);
+define_registry!(ResourcesRegistry, ResourceId, Resource, resources);
 define_registry!(ScriptsRegistry, ScriptId, Script, scripts);
 define_registry!(SpeciesRegistry, SpeciesId, Species, species);
 define_registry!(SpellsRegistry, SpellId, Spell, spells);

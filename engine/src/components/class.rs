@@ -13,32 +13,41 @@ use crate::{
         resource::ResourceBudgetKind,
         skill::Skill,
     },
-    registry::registry::SubclassesRegistry,
+    registry::{registry::SubclassesRegistry, serialize::class::ClassDefinition},
 };
 
 /// Classes and subclasses share a lot of common properties, so we define a base struct
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClassBase {
     /// Skills that can be chosen from when gaining the (sub)class
+    #[serde(default)]
     pub skill_proficiencies: HashSet<Skill>,
     /// The number of skill proficiencies the character can choose
+    #[serde(default)]
     pub skill_prompts: u8,
 
+    #[serde(default)]
     pub armor_proficiencies: HashSet<ArmorType>,
+    #[serde(default)]
     pub weapon_proficiencies: HashSet<WeaponCategory>,
 
     /// Spellcasting progression, defining how many spells slots are available per level, if any.
     /// This is usually defined by the class, but certain subclasses might want to override it.
     /// For example, a subclass of a Fighter might gain some spellcasting abilities.
+    #[serde(default)]
     pub spellcasting: SpellcastingProgression,
     /// Passive effects that are always active for the class or subclass.
+    #[serde(default)]
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
+    #[serde(default)]
     pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
     /// Class specific prompts that can be made at each level.
     /// For example, a Fighter might choose a fighting style at level 1.
     /// TODO: Include subclass prompts?
+    #[serde(default)]
     pub prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
     /// Actions that are available at each level.
+    #[serde(default)]
     pub actions_by_level: HashMap<u8, Vec<ActionId>>,
 }
 
@@ -53,6 +62,12 @@ pub enum SpellcastingProgression {
     Third,
     /// No spellcasting progression, e.g. Fighter.
     None,
+}
+
+impl Default for SpellcastingProgression {
+    fn default() -> Self {
+        SpellcastingProgression::None
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -73,27 +88,6 @@ pub struct Class {
     pub feat_levels: HashSet<u8>,
 
     pub base: ClassBase,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ClassDefinition {
-    pub id: ClassId,
-    pub hit_die: DieSize,
-    pub hp_per_level: u8,
-    pub default_abilities: AbilityScoreDistribution,
-    pub saving_throw_proficiencies: [Ability; 2],
-    pub subclass_level: u8,
-    pub subclasses: HashSet<SubclassId>,
-    pub feat_levels: HashSet<u8>,
-    pub skill_proficiencies: HashSet<Skill>,
-    pub skill_prompts: u8,
-    pub armor_proficiencies: HashSet<ArmorType>,
-    pub weapon_proficiencies: HashSet<WeaponCategory>,
-    pub spellcasting: SpellcastingProgression,
-    pub effects_by_level: HashMap<u8, Vec<EffectId>>,
-    pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
-    pub prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
-    pub actions_by_level: HashMap<u8, Vec<ActionId>>,
 }
 
 impl Class {
@@ -188,30 +182,6 @@ impl Class {
 
     pub fn base(&self) -> &ClassBase {
         &self.base
-    }
-}
-
-impl From<ClassDefinition> for Class {
-    fn from(def: ClassDefinition) -> Self {
-        Class::new(
-            def.id,
-            def.hit_die,
-            def.hp_per_level,
-            def.default_abilities,
-            def.saving_throw_proficiencies,
-            def.subclass_level,
-            def.subclasses,
-            def.feat_levels,
-            def.skill_proficiencies,
-            def.skill_prompts,
-            def.armor_proficiencies,
-            def.weapon_proficiencies,
-            def.spellcasting,
-            def.effects_by_level,
-            def.resources_by_level,
-            def.prompts_by_level,
-            def.actions_by_level,
-        )
     }
 }
 

@@ -16,15 +16,18 @@ use crate::{
         },
         id::{ActionId, EffectId, ResourceId, ScriptId},
         items::equipment::armor::ArmorClass,
-        modifier::{KeyedModifiable, Modifiable, ModifierSource},
+        modifier::{self, KeyedModifiable, Modifiable, ModifierSource},
         resource::{ResourceAmount, ResourceAmountMap, ResourceMap},
         saving_throw::SavingThrowSet,
         skill::SkillSet,
     },
-    registry::serialize::modifier::{
-        AbilityModifierProvider, ArmorClassModifierProvider, AttackRollModifier,
-        AttackRollModifierProvider, D20CheckModifierProvider, DamageResistanceProvider,
-        SavingThrowModifierProvider, SkillModifierProvider,
+    registry::{
+        registry_validation::{ReferenceCollector, RegistryReference, RegistryReferenceCollector},
+        serialize::modifier::{
+            AbilityModifierProvider, ArmorClassModifierProvider, AttackRollModifier,
+            AttackRollModifierProvider, D20CheckModifierProvider, DamageResistanceProvider,
+            SavingThrowModifierProvider, SkillModifierProvider,
+        },
     },
     scripts::{
         script_api::{ScriptActionView, ScriptEntityView},
@@ -136,6 +139,22 @@ impl From<EffectDefinition> for Effect {
         }
 
         effect
+    }
+}
+
+impl RegistryReferenceCollector for EffectDefinition {
+    fn collect_registry_references(&self, collector: &mut ReferenceCollector) {
+        if let Some(replaces) = &self.replaces {
+            collector.add(RegistryReference::Effect(replaces.clone()));
+        }
+        for modifier in &self.modifiers {
+            match modifier {
+                EffectModifier::Resource { resource, .. } => {
+                    collector.add(RegistryReference::Resource(resource.clone()));
+                }
+                _ => { /* No references to collect */ }
+            }
+        }
     }
 }
 

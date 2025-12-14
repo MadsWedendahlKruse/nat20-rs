@@ -5,6 +5,7 @@ use std::{
 
 use hecs::{Entity, World};
 use strum::IntoEnumIterator;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::{
@@ -276,7 +277,7 @@ fn resolve_level_up_prompt(
                                         let result =
                                             systems::loadout::equip(world, entity, equipment);
                                         if let Err(e) = result {
-                                            eprintln!("Failed to equip item {}: {:?}", item_id, e);
+                                            error!("Failed to equip item {}: {:?}", item_id, e);
                                         } else {
                                             // If the item is successfully equipped,
                                             // we don't need to add it to inventory

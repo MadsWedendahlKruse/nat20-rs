@@ -3,10 +3,13 @@ use serde::{Deserialize, Serialize};
 use crate::{
     components::{
         id::{ScriptId, SpellId},
-        resource::ResourceAmountMap,
+        resource::{self, ResourceAmountMap},
         spells::spell::{MagicSchool, Spell},
     },
-    registry::serialize::{action::ActionKindDefinition, targeting::TargetingDefinition},
+    registry::{
+        registry_validation::{ReferenceCollector, RegistryReference, RegistryReferenceCollector},
+        serialize::{action::ActionKindDefinition, targeting::TargetingDefinition},
+    },
 };
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -34,5 +37,17 @@ impl From<SpellDefinition> for Spell {
             value.targeting.function(),
             value.reaction_trigger,
         )
+    }
+}
+
+impl RegistryReferenceCollector for SpellDefinition {
+    fn collect_registry_references(&self, collector: &mut ReferenceCollector) {
+        self.kind.collect_registry_references(collector);
+        for resource in self.resource_cost.keys() {
+            collector.add(RegistryReference::Resource(resource.clone()));
+        }
+        if let Some(script_id) = &self.reaction_trigger {
+            collector.add(RegistryReference::Script(script_id.clone()));
+        }
     }
 }

@@ -13,6 +13,7 @@ use nat20_rs::{
     test_utils::fixtures,
 };
 use parry3d::na::Point3;
+use tracing::info;
 
 use crate::{
     render::{
@@ -45,7 +46,7 @@ impl SpawnPredefinedWindow {
 
         for spawner in spawners {
             let entity = spawner(&mut world).id();
-            println!("Spawned predefined entity: {:?}", entity);
+            info!("Spawned predefined entity: {:?}", entity);
             // Ensure all resources are fully recharged
             systems::time::pass_time(&mut world, entity, &RechargeRule::LongRest);
         }

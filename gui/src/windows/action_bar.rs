@@ -23,6 +23,7 @@ use nat20_rs::{
     },
 };
 use parry3d::na::Point3;
+use tracing::{debug, info};
 use uom::si::length::meter;
 
 use crate::{
@@ -573,10 +574,7 @@ fn render_target_selection(
         let response_to = if let Some(prompt) = game_state.next_prompt_entity(action.actor)
             && prompt.actors().contains(&action.actor)
         {
-            println!(
-                "[ActionBar] Submitting action in response to prompt: {:#?}",
-                prompt
-            );
+            info!("Submitting action in response to prompt: {:#?}", prompt);
             Some(prompt.id)
         } else {
             None
@@ -595,7 +593,7 @@ fn render_target_selection(
             game_state.submit_decision(ActionDecision::without_response_to(action_kind))
         };
 
-        println!("Submitted action decision: {:#?}", result);
+        info!("Submitted action decision: {:#?}", result);
     }
 
     // TODO: gui_state util function to handle checking for Some and taking?
@@ -743,21 +741,15 @@ fn update_potential_target(
     };
 
     if is_new_target {
-        println!(
-            "[update_potential_target] Finding path to new target {:?}",
-            closest_target
-        );
+        debug!("Finding path to new target {:?}", closest_target);
         match systems::movement::path_to_target(game_state, &potential_action, true) {
             Ok(result) => {
-                println!(
-                    "[update_potential_target] Found path to target {:?}: {:?}",
-                    closest_target, result
-                );
+                debug!("Found path to target {:?}: {:?}", closest_target, result);
                 *potential_target = Some((closest_target, result));
             }
             Err(err) => {
-                println!(
-                    "[update_potential_target] Error finding path to target {:?}: {:?}",
+                debug!(
+                    "Error finding path to target {:?}: {:?}",
                     closest_target, err
                 );
                 *potential_target = None;

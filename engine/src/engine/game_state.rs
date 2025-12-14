@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use hecs::{Entity, World};
 use parry3d::{na::Point3, shape::Ball};
 use strum::IntoEnumIterator;
+use tracing::{info, warn};
 
 use crate::{
     components::actions::{
@@ -131,8 +132,8 @@ impl GameState {
 
         if let Some(session) = self.session_for_entity(entity) {
             if !session.pending_events().is_empty() {
-                println!(
-                    "Warning: ending turn for {:?} while there are pending events: {:#?}",
+                warn!(
+                    "Ending turn for {:?} while there are pending events: {:#?}",
                     entity,
                     session.pending_events()
                 );
@@ -430,14 +431,12 @@ impl GameState {
         let ready_to_resume = {
             if session.pending_prompts().is_empty() {
                 // Not sure this ever actually happens
-                println!("[GameState] No pending prompts; ready to resume pending events.");
+                info!("No pending prompts; ready to resume pending events.");
                 true
             } else if let Some(front) = session.next_prompt()
                 && !matches!(front.kind, ActionPromptKind::Reactions { .. })
             {
-                println!(
-                    "[GameState] Next prompt is not a reaction; ready to resume pending events."
-                );
+                info!("Next prompt is not a reaction; ready to resume pending events.");
                 true
             } else {
                 false
@@ -471,8 +470,8 @@ impl GameState {
             return None;
         };
 
-        println!(
-            "[GameState] Collecting reactions to event {:?} from reactors: {:?}",
+        info!(
+            "Collecting reactions to event {:?} from reactors: {:?}",
             event.id, reactors
         );
 
@@ -497,11 +496,11 @@ impl GameState {
         }
 
         if reaction_options.is_empty() {
-            println!("\tNo reaction options available for event {:?}", event.id);
+            info!("No reaction options available for event {:?}", event.id);
             None
         } else {
-            println!(
-                "\tFound reactors for event {:?}: {:?}",
+            info!(
+                "Found reactors for event {:?}: {:?}",
                 event.id,
                 reaction_options.keys()
             );
@@ -568,8 +567,8 @@ impl GameState {
                                     event,
                                     resources_refunded,
                                 } => {
-                                    println!(
-                                        "[GameState] Cancelling event {:?} due to reaction by {:?}",
+                                    info!(
+                                        "Cancelling event {:?} due to reaction by {:?}",
                                         event.id,
                                         action_result.performer.id()
                                     );

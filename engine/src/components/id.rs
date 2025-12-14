@@ -105,28 +105,28 @@ id_newtypes!(
 
 impl Into<ActionId> for SpellId {
     fn into(self) -> ActionId {
-        let id = self.id.replace("spell", "action");
+        let id = self.id.replacen("spell", "action", 1);
         ActionId::new(self.namespace, id)
     }
 }
 
 impl Into<ActionId> for &SpellId {
     fn into(self) -> ActionId {
-        let id = self.id.replace("spell", "action");
+        let id = self.id.replacen("spell", "action", 1);
         ActionId::new(self.namespace.clone(), id)
     }
 }
 
 impl Into<SpellId> for ActionId {
     fn into(self) -> SpellId {
-        let id = self.id.replace("action", "spell");
+        let id = self.id.replacen("action", "spell", 1);
         SpellId::new(self.namespace, id)
     }
 }
 
 impl Into<SpellId> for &ActionId {
     fn into(self) -> SpellId {
-        let id = self.id.replace("action", "spell");
+        let id = self.id.replacen("action", "spell", 1);
         SpellId::new(self.namespace.clone(), id)
     }
 }

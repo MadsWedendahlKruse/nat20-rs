@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -8,10 +6,13 @@ use crate::{
         id::{ActionId, EffectId, ScriptId},
         resource::{RechargeRule, ResourceAmountMap},
     },
-    registry::serialize::{
-        d20::{AttackRollProvider, SavingThrowProvider},
-        dice::{DamageEquation, HealEquation},
-        targeting::TargetingDefinition,
+    registry::{
+        registry_validation::{ReferenceCollector, RegistryReference, RegistryReferenceCollector},
+        serialize::{
+            d20::{AttackRollProvider, SavingThrowProvider},
+            dice::{DamageEquation, HealEquation},
+            targeting::TargetingDefinition,
+        },
     },
 };
 
@@ -124,6 +125,27 @@ impl From<ActionKindDefinition> for ActionKind {
     }
 }
 
+impl RegistryReferenceCollector for ActionKindDefinition {
+    fn collect_registry_references(&self, collector: &mut ReferenceCollector) {
+        match self {
+            ActionKindDefinition::UnconditionalEffect { effect }
+            | ActionKindDefinition::SavingThrowEffect { effect, .. }
+            | ActionKindDefinition::BeneficialEffect { effect } => {
+                collector.add(RegistryReference::Effect(effect.clone()));
+            }
+            ActionKindDefinition::Composite { actions } => {
+                for action in actions {
+                    action.collect_registry_references(collector);
+                }
+            }
+            ActionKindDefinition::Reaction { script } => {
+                collector.add(RegistryReference::Script(script.clone()));
+            }
+            _ => { /* No references to collect */ }
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ActionDefinition {
     pub id: ActionId,
@@ -138,6 +160,18 @@ pub struct ActionDefinition {
     // TODO: How to handle reaction triggers in serialization?
     #[serde(default)]
     pub reaction_trigger: Option<ScriptId>,
+}
+
+impl RegistryReferenceCollector for ActionDefinition {
+    fn collect_registry_references(&self, collector: &mut ReferenceCollector) {
+        self.kind.collect_registry_references(collector);
+        for resource in self.resource_cost.keys() {
+            collector.add(RegistryReference::Resource(resource.clone()));
+        }
+        if let Some(reaction_trigger) = &self.reaction_trigger {
+            collector.add(RegistryReference::Script(reaction_trigger.clone()));
+        }
+    }
 }
 
 impl From<ActionDefinition> for Action {

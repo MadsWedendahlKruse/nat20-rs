@@ -1,6 +1,7 @@
 use std::{any::type_name, ops::Deref};
 
 use hecs::{Entity, Ref, World};
+use tracing::error;
 
 use crate::components::level::{ChallengeRating, CharacterLevels, Level};
 
@@ -36,7 +37,7 @@ fn missing_component_panic<T: 'static>(entity: Entity) -> ! {
     let type_name = type_name::<T>();
 
     if type_name.starts_with('&') {
-        eprintln!(
+        error!(
             "❗️ You likely passed a reference type to a helper expecting a component.\n\
             `get_component::<{}>()` is incorrect — try `get_component::<{}>()` instead.",
             type_name,

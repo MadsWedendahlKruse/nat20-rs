@@ -8,6 +8,7 @@ use nat20_rs::{
     systems,
 };
 use strum::IntoEnumIterator;
+use tracing::info;
 
 use crate::{
     render::ui::{
@@ -112,7 +113,7 @@ pub fn render_inventory(
             let item_name = items[i].item().name.clone();
             if render_item_button(ui, items[i].item(), i) {
                 // Handle item click (don't think we need to do anything here)
-                println!("Clicked on item: {}", item_name);
+                info!("Clicked on item: {}", item_name);
             }
 
             if ui.is_item_hovered() {
@@ -152,7 +153,7 @@ pub fn render_loadout(ui: &imgui::Ui, world: &World, entity: Entity) -> Option<I
             if let Some(item) = item {
                 if render_item_button(ui, item.item(), i) {
                     // Handle item click (don't think we need to do anything here)
-                    println!("Clicked on loadout item: {}", item.item().name);
+                    info!("Clicked on loadout item: {}", item.item().name);
                 }
 
                 if ui.is_item_hovered() {
@@ -183,7 +184,7 @@ pub fn render_loadout(ui: &imgui::Ui, world: &World, entity: Entity) -> Option<I
 pub fn render_loadout_inventory(ui: &imgui::Ui, world: &mut World, entity: Entity) {
     if let Some(event) = render_loadout(ui, world, entity) {
         // Handle loadout interaction event
-        println!("Loadout interaction: {:?}", event);
+        info!("Loadout interaction: {:?}", event);
 
         let ContainerSlot::Loadout(slot) = event.slot else {
             return;
@@ -192,27 +193,27 @@ pub fn render_loadout_inventory(ui: &imgui::Ui, world: &mut World, entity: Entit
         match event.mode {
             InteractMode::RightClick => {
                 // Handle right-click on loadout item
-                println!("Right-clicked on loadout item: {:?}", event.slot);
+                info!("Right-clicked on loadout item: {:?}", event.slot);
             }
 
             InteractMode::DoubleClick => {
                 let result = systems::inventory::unequip(world, entity, &slot);
                 if let Some(item) = result {
-                    println!("Unequipped item: {:?}", item);
+                    info!("Unequipped item: {:?}", item);
                     systems::inventory::add_item(world, entity, item);
                 }
             }
 
             InteractMode::Drag => {
                 // Handle drag on loadout item
-                println!("Dragging loadout item: {:?}", event.slot);
+                info!("Dragging loadout item: {:?}", event.slot);
             }
         }
     }
 
     if let Some(event) = render_inventory(ui, world, entity) {
         // Handle inventory interaction event
-        println!("Inventory interaction: {:?}", event);
+        info!("Inventory interaction: {:?}", event);
 
         let ContainerSlot::Inventory(index) = event.slot else {
             return;
@@ -226,7 +227,7 @@ pub fn render_loadout_inventory(ui: &imgui::Ui, world: &mut World, entity: Entit
         match event.mode {
             InteractMode::RightClick => {
                 // Handle right-click on inventory item
-                println!("Right-clicked on inventory item: {:?}", item.item().name);
+                info!("Right-clicked on inventory item: {:?}", item.item().name);
             }
 
             InteractMode::DoubleClick => {
@@ -237,20 +238,20 @@ pub fn render_loadout_inventory(ui: &imgui::Ui, world: &mut World, entity: Entit
                         // Remove the item that was equipped from the inventory
                         systems::inventory::remove_item(world, entity, index);
                         for unequipped_item in unequipped_items {
-                            println!("Unequipped item: {:?}", unequipped_item);
+                            info!("Unequipped item: {:?}", unequipped_item);
                             // Add unequipped items back to inventory
                             systems::inventory::add_item(world, entity, unequipped_item);
                         }
                     }
                     Err(err) => {
-                        println!("Failed to equip item: {:?}", err);
+                        info!("Failed to equip item: {:?}", err);
                     }
                 }
             }
 
             InteractMode::Drag => {
                 // Handle drag on inventory item
-                println!("Dragging inventory item: {:?}", item.item().name);
+                info!("Dragging inventory item: {:?}", item.item().name);
             }
         }
     }

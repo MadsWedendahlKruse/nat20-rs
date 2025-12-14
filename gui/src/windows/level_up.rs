@@ -21,6 +21,7 @@ use nat20_rs::{
     },
 };
 use strum::IntoEnumIterator;
+use tracing::{debug, info};
 
 use crate::{
     render::ui::{
@@ -339,7 +340,7 @@ impl LevelUpWindow {
 
         let pending_prompts = self.level_up_session.as_ref().unwrap().pending_prompts();
 
-        println!("Pending prompts: {:?}", pending_prompts);
+        info!("Pending prompts: {:?}", pending_prompts);
 
         // Keep all the decisions in progress which are still valid for the new level-up session
         for promp_progress in pending_decisions {
@@ -451,7 +452,7 @@ impl ImguiRenderableMutWithContext<&mut World> for LevelUpWindow {
                         if pending_decision.progress.is_complete() {
                             let decision = pending_decision.progress.clone().finalize();
                             if !level_up_session.decisions().contains(&decision) {
-                                println!("New decision: {:?}", decision);
+                                debug!("New decision: {:?}", decision);
                                 decision_updated = Some((i, pending_decision.clone()));
                             }
                         }

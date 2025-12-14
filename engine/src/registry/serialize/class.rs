@@ -1,0 +1,151 @@
+use std::collections::{HashMap, HashSet};
+
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    components::{
+        ability::{Ability, AbilityScoreDistribution},
+        class::{Class, SpellcastingProgression, Subclass},
+        dice::DieSize,
+        id::{ActionId, ClassId, EffectId, ResourceId, SubclassId},
+        items::equipment::{armor::ArmorType, weapon::WeaponCategory},
+        level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
+        resource::ResourceBudgetKind,
+        skill::Skill,
+    },
+    registry::registry_validation::{
+        ReferenceCollector, RegistryReference, RegistryReferenceCollector,
+    },
+};
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ClassDefinition {
+    pub id: ClassId,
+    pub hit_die: DieSize,
+    pub hp_per_level: u8,
+    pub default_abilities: AbilityScoreDistribution,
+    pub saving_throw_proficiencies: [Ability; 2],
+    pub subclass_level: u8,
+    pub subclasses: HashSet<SubclassId>,
+    pub feat_levels: HashSet<u8>,
+    pub skill_proficiencies: HashSet<Skill>,
+    pub skill_prompts: u8,
+    pub armor_proficiencies: HashSet<ArmorType>,
+    pub weapon_proficiencies: HashSet<WeaponCategory>,
+    pub spellcasting: SpellcastingProgression,
+    pub effects_by_level: HashMap<u8, Vec<EffectId>>,
+    pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
+    pub prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
+    pub actions_by_level: HashMap<u8, Vec<ActionId>>,
+}
+
+impl From<ClassDefinition> for Class {
+    fn from(def: ClassDefinition) -> Self {
+        Class::new(
+            def.id,
+            def.hit_die,
+            def.hp_per_level,
+            def.default_abilities,
+            def.saving_throw_proficiencies,
+            def.subclass_level,
+            def.subclasses,
+            def.feat_levels,
+            def.skill_proficiencies,
+            def.skill_prompts,
+            def.armor_proficiencies,
+            def.weapon_proficiencies,
+            def.spellcasting,
+            def.effects_by_level,
+            def.resources_by_level,
+            def.prompts_by_level,
+            def.actions_by_level,
+        )
+    }
+}
+
+impl RegistryReferenceCollector for ClassDefinition {
+    fn collect_registry_references(&self, collector: &mut ReferenceCollector) {
+        for effect_list in self.effects_by_level.values() {
+            for effect in effect_list {
+                collector.add(RegistryReference::Effect(effect.clone()));
+            }
+        }
+        for action_list in self.actions_by_level.values() {
+            for action in action_list {
+                collector.add(RegistryReference::Action(action.clone()));
+            }
+        }
+        for prompts in self.prompts_by_level.values() {
+            for prompt in prompts {
+                prompt.collect_registry_references(collector);
+            }
+        }
+    }
+}
+
+impl RegistryReferenceCollector for LevelUpPrompt {
+    fn collect_registry_references(&self, collector: &mut ReferenceCollector) {
+        match self {
+            LevelUpPrompt::Choice(choice_spec) => {
+                choice_spec.collect_registry_references(collector);
+            }
+            LevelUpPrompt::AbilityScoreImprovement { feat, .. } => {
+                collector.add(RegistryReference::Feat(feat.clone()));
+            }
+            _ => { /* No references to collect */ }
+        }
+    }
+}
+
+impl RegistryReferenceCollector for ChoiceSpec {
+    fn collect_registry_references(&self, collector: &mut ReferenceCollector) {
+        for option in &self.options {
+            match option {
+                ChoiceItem::Action(action_id) => {
+                    collector.add(RegistryReference::Action(action_id.clone()));
+                }
+                ChoiceItem::Background(background_id) => {
+                    collector.add(RegistryReference::Background(background_id.clone()));
+                }
+                ChoiceItem::Class(class_id) => {
+                    collector.add(RegistryReference::Class(class_id.clone()));
+                }
+                ChoiceItem::Subclass(subclass_id) => {
+                    collector.add(RegistryReference::Subclass(subclass_id.clone()));
+                }
+                ChoiceItem::Effect(effect_id) => {
+                    collector.add(RegistryReference::Effect(effect_id.clone()));
+                }
+                ChoiceItem::Feat(feat_id) => {
+                    collector.add(RegistryReference::Feat(feat_id.clone()));
+                }
+                ChoiceItem::Species(species_id) => {
+                    collector.add(RegistryReference::Species(species_id.clone()));
+                }
+                ChoiceItem::Subspecies(subspecies_id) => {
+                    collector.add(RegistryReference::Subspecies(subspecies_id.clone()));
+                }
+                ChoiceItem::Equipment { items, .. } => {
+                    for (_, item_id) in items {
+                        collector.add(RegistryReference::Item(item_id.clone()));
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl RegistryReferenceCollector for Subclass {
+    fn collect_registry_references(&self, collector: &mut ReferenceCollector) {
+        for effect_list in self.base.effects_by_level.values() {
+            for effect in effect_list {
+                collector.add(RegistryReference::Effect(effect.clone()));
+            }
+        }
+        for action_list in self.base.actions_by_level.values() {
+            for action in action_list {
+                collector.add(RegistryReference::Action(action.clone()));
+            }
+        }
+    }
+}

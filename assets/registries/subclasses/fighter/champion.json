@@ -1,11 +1,6 @@
 {
     "id": "nat20_rs::subclass.fighter.champion",
     "base": {
-        "skill_proficiencies": [],
-        "skill_prompts": 0,
-        "armor_proficiencies": [],
-        "weapon_proficiencies": [],
-        "spellcasting": "none",
         "effects_by_level": {
             "15": [
                 "nat20_rs::effect.fighter.champion.superior_critical"
@@ -15,7 +10,6 @@
                 "nat20_rs::effect.fighter.champion.remarkable_athlete"
             ]
         },
-        "resources_by_level": {},
         "prompts_by_level": {
             "7": [
                 {
@@ -38,7 +32,6 @@
                     }
                 }
             ]
-        },
-        "actions_by_level": {}
+        }
     }
 }

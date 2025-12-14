@@ -1,4 +1,7 @@
-use std::{num::NonZeroU32, time::Instant};
+use std::{
+    num::NonZeroU32,
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
 
 mod render;
 mod state;
@@ -7,7 +10,10 @@ mod windows;
 
 use glow::HasContext;
 use glutin::surface::GlSurface;
-use tracing_subscriber::{EnvFilter, fmt};
+use tracing_subscriber::{
+    EnvFilter,
+    fmt::{format::Writer, time::FormatTime},
+};
 
 use crate::{
     render::ui::utils::ImguiRenderableMut, state::gui_state::GuiState,
@@ -15,14 +21,7 @@ use crate::{
 };
 
 fn main() {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-
-    fmt()
-        .with_env_filter(filter)
-        .with_target(true) // module path == "class name"
-        .with_level(true)
-        .with_timer(fmt::time::UtcTime::rfc_3339())
-        .init();
+    init_logging();
 
     let (event_loop, window, surface, context) = utils::create_window("Hello, triangle!", None);
     let (mut winit_platform, mut imgui_context) = utils::imgui_init(&window);
@@ -167,4 +166,41 @@ fn main() {
             }
         })
         .expect("EventLoop error");
+}
+
+fn init_logging() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(true) // module path == "class name"
+        .with_level(true)
+        .with_timer(FixedMillisUtcTime)
+        .with_ansi(true)
+        .init();
+}
+
+pub struct FixedMillisUtcTime;
+
+impl FormatTime for FixedMillisUtcTime {
+    fn format_time(&self, writer: &mut Writer<'_>) -> std::fmt::Result {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+
+        let seconds = now.as_secs();
+        let millis = now.subsec_millis();
+
+        // Convert seconds to UTC date/time
+        let datetime = chrono::DateTime::<chrono::Utc>::from(
+            UNIX_EPOCH + std::time::Duration::from_secs(seconds),
+        );
+
+        write!(
+            writer,
+            "{}.{:03}Z",
+            datetime.format("%Y-%m-%dT%H:%M:%S"),
+            millis
+        )
+    }
 }

@@ -9,6 +9,7 @@ use nat20_rs::{
     },
     systems::{self},
 };
+use tracing::{info, warn};
 
 use crate::{
     render::{
@@ -202,16 +203,16 @@ impl RenderableMutWithContext<&mut GameState> for Encounter {
             if let Some(path) = ai_decision.path {
                 let result = game_state
                     .submit_movement(self.current_entity(), *path.taken_path.end().unwrap());
-                println!("AI movement submitted: {:?}", result);
+                info!("AI movement submitted: {:?}", result);
                 if let Ok(path_result) = result {
                     gui_state.path_cache.insert(ai_decision.actor, path_result);
                 }
             }
             if let Some(action_decision) = ai_decision.decision {
                 let result = game_state.submit_decision(action_decision);
-                println!("AI decision submitted: {:?}", result);
+                info!("AI decision submitted: {:?}", result);
                 if result.is_err() {
-                    println!("Failed to submit AI decision, skipping turn.");
+                    warn!("Failed to submit AI decision, skipping turn.");
                     self.end_turn(game_state, ai_decision.actor);
                 }
             } else {

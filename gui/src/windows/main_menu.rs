@@ -15,6 +15,7 @@ use nat20_rs::{
 use parry3d::na::{Matrix4, Point3};
 use serde::Deserialize;
 use strum::IntoEnumIterator;
+use tracing::error;
 
 use crate::{
     render::{
@@ -273,7 +274,7 @@ impl MainMenuWindow {
                                         gui_state.path_cache.insert(entity, path_result);
                                     }
                                     Err(err) => {
-                                        println!("Failed to submit movement: {:?}", err);
+                                        error!("Failed to submit movement: {:?}", err);
                                     }
                                 }
                             }

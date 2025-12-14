@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use hecs::World;
+use tracing::error;
 
 use crate::{
     components::{
@@ -47,7 +48,7 @@ pub fn evaluate_reaction_trigger(
     match engine.evaluate_reaction_trigger(script, &context) {
         Ok(result) => result,
         Err(err) => {
-            println!(
+            error!(
                 "Error evaluating reaction trigger script {:?} for reactor {:?}: {:?}",
                 reaction_trigger, context.reactor, err
             );
@@ -69,7 +70,7 @@ pub fn evaluate_reaction_body(
     match engine.evaluate_reaction_body(script, &context) {
         Ok(plan) => plan,
         Err(err) => {
-            println!(
+            error!(
                 "Error evaluating reaction body script {:?} for reactor {:?}: {:?}",
                 reaction_body, context.reaction_data.reactor, err
             );
@@ -97,7 +98,7 @@ pub fn evaluate_resource_cost_hook(
     match engine.evaluate_resource_cost_hook(script, action_view, entity_view) {
         Ok(resource_cost) => resource_cost,
         Err(err) => {
-            println!(
+            error!(
                 "Error evaluating resource cost hook script {:?} for entity {:?}: {:?}",
                 resource_cost_hook, entity_view.entity, err
             );
@@ -126,7 +127,7 @@ pub fn evalute_action_hook(
     match engine.evaluate_action_hook(script, action_view, entity_view) {
         Ok(modified_entity_view) => modified_entity_view,
         Err(err) => {
-            println!(
+            error!(
                 "Error evaluating action hook script {:?} for entity {:?}: {:?}",
                 action_hook, entity_view.entity, err
             );
@@ -153,7 +154,7 @@ pub fn evaluate_armor_class_hook(
     match engine.evaluate_armor_class_hook(script, entity_view) {
         Ok(modifier) => modifier,
         Err(err) => {
-            println!(
+            error!(
                 "Error evaluating armor class hook script {:?} for entity {:?}: {:?}",
                 armor_class_hook, entity_view.entity, err
             );
@@ -181,7 +182,7 @@ pub fn evaluate_damage_roll_result_hook(
     match engine.evaluate_damage_roll_result_hook(script, entity_view, damage_roll_result) {
         Ok(modified_damage_roll_result) => modified_damage_roll_result,
         Err(err) => {
-            println!(
+            error!(
                 "Error evaluating damage roll result hook script {:?} for entity {:?}: {:?}",
                 damage_roll_result_hook, entity_view.entity, err
             );
@@ -252,7 +253,7 @@ pub fn apply_reaction_plan(
             match process_event_result {
                 Ok(_) => {}
                 Err(err) => {
-                    println!(
+                    error!(
                         "Error processing ModifyD20Result reaction for reactor {:?}: {:?}",
                         reaction_data.reactor, err
                     );
@@ -320,7 +321,7 @@ pub fn apply_reaction_plan(
             match process_event_result {
                 Ok(_) => {}
                 Err(err) => {
-                    println!(
+                    error!(
                         "Error processing RerollD20Result reaction for reactor {:?}: {:?}",
                         reaction_data.reactor, err
                     );
@@ -368,7 +369,7 @@ pub fn apply_reaction_plan(
             match process_event_result {
                 Ok(_) => {}
                 Err(err) => {
-                    println!(
+                    error!(
                         "Error processing CancelEvent reaction for reactor {:?}: {:?}",
                         reaction_data.reactor, err
                     );

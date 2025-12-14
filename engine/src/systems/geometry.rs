@@ -8,6 +8,7 @@ use parry3d::{
     shape::{Capsule, Shape},
 };
 use polyanya::Coords;
+use tracing::debug;
 
 use crate::{
     components::species::CreatureSize,
@@ -323,10 +324,6 @@ pub fn line_of_sight_point_point(
         && let Some(closest) = result.closest()
     {
         let distance = (to - from).magnitude();
-        println!(
-            "[line_of_sight_point_point] Closest hit from {:?} to {:?} at toi {:?} (distance {:?})",
-            from, to, closest.toi, distance
-        );
         LineOfSightResult {
             has_line_of_sight: closest.toi >= distance - EPSILON,
             raycast_result: Some(result),

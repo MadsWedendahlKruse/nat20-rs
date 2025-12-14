@@ -8,6 +8,7 @@ use rerecast::{
     AreaType, BuildContoursFlags, Config, DetailNavmesh, HeightfieldBuilder, PolygonNavmesh,
 };
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 use uom::si::{f32::Length, length::meter};
 
 #[derive(Serialize, Deserialize)]
@@ -120,24 +121,15 @@ fn build_navmesh(
             .collect(),
         area_types: vec![AreaType::DEFAULT_WALKABLE; indices.len()],
     };
-    println!(
-        "[WorldGeometry] - Created nav trimesh in {:?}",
-        start_time.elapsed()
-    );
+    debug!("Created nav trimesh in {:?}", start_time.elapsed());
 
     let start_time = std::time::Instant::now();
     nav_trimesh.mark_walkable_triangles(f32::to_radians(45.0));
-    println!(
-        "[WorldGeometry] - Marked walkable triangles in {:?}",
-        start_time.elapsed()
-    );
+    debug!("Marked walkable triangles in {:?}", start_time.elapsed());
 
     let start_time = std::time::Instant::now();
     let aabb = nav_trimesh.compute_aabb().unwrap();
-    println!(
-        "[WorldGeometry] - Computed AABB in {:?}",
-        start_time.elapsed()
-    );
+    debug!("Computed AABB in {:?}", start_time.elapsed());
 
     let start_time = std::time::Instant::now();
     let mut heightfield = HeightfieldBuilder {
@@ -147,19 +139,13 @@ fn build_navmesh(
     }
     .build()
     .unwrap();
-    println!(
-        "[WorldGeometry] - Built heightfield in {:?}",
-        start_time.elapsed()
-    );
+    debug!("Built heightfield in {:?}", start_time.elapsed());
 
     let start_time = std::time::Instant::now();
     heightfield
         .rasterize_triangles(&nav_trimesh, config.walkable_climb)
         .unwrap();
-    println!(
-        "[WorldGeometry] - Rasterized triangles in {:?}",
-        start_time.elapsed()
-    );
+    debug!("Rasterized triangles in {:?}", start_time.elapsed());
 
     let start_time = std::time::Instant::now();
     // Once all geometry is rasterized, we do initial pass of filtering to
@@ -168,33 +154,24 @@ fn build_navmesh(
     heightfield.filter_low_hanging_walkable_obstacles(config.walkable_climb);
     heightfield.filter_ledge_spans(config.walkable_height, config.walkable_climb);
     heightfield.filter_walkable_low_height_spans(config.walkable_height);
-    println!(
-        "[WorldGeometry] - Filtered walkable surfaces in {:?}",
-        start_time.elapsed()
-    );
+    debug!("Filtered walkable surfaces in {:?}", start_time.elapsed());
 
     let start_time = std::time::Instant::now();
     let mut compact_heightfield = heightfield
         .into_compact(config.walkable_height, config.walkable_climb)
         .unwrap();
-    println!(
-        "[WorldGeometry] - Converted to compact heightfield in {:?}",
+    debug!(
+        "Converted to compact heightfield in {:?}",
         start_time.elapsed()
     );
 
     let start_time = std::time::Instant::now();
     compact_heightfield.erode_walkable_area(config.walkable_radius);
-    println!(
-        "[WorldGeometry] - Eroded walkable area in {:?}",
-        start_time.elapsed()
-    );
+    debug!("Eroded walkable area in {:?}", start_time.elapsed());
 
     let start_time = std::time::Instant::now();
     compact_heightfield.build_distance_field();
-    println!(
-        "[WorldGeometry] - Built distance field in {:?}",
-        start_time.elapsed()
-    );
+    debug!("Built distance field in {:?}", start_time.elapsed());
 
     let start_time = std::time::Instant::now();
     compact_heightfield
@@ -204,10 +181,7 @@ fn build_navmesh(
             config.merge_region_area,
         )
         .unwrap();
-    println!(
-        "[WorldGeometry] - Built compact heightfield in {:?}",
-        start_time.elapsed()
-    );
+    debug!("Built compact heightfield in {:?}", start_time.elapsed());
 
     let start_time = std::time::Instant::now();
     let contours = compact_heightfield.build_contours(
@@ -215,12 +189,9 @@ fn build_navmesh(
         config.max_edge_len,
         BuildContoursFlags::DEFAULT,
     );
-    println!(
-        "[WorldGeometry] - Built contours in {:?}",
-        start_time.elapsed()
-    );
+    debug!("Built contours in {:?}", start_time.elapsed());
 
-    println!("[WorldGeometry] Creating navmesh",);
+    debug!("[WorldGeometry] Creating navmesh",);
     let build_start_time = std::time::Instant::now();
     let poly_navmesh = contours
         .into_polygon_mesh(config.max_vertices_per_polygon)
@@ -234,10 +205,7 @@ fn build_navmesh(
     )
     .unwrap();
 
-    println!(
-        "[WorldGeometry] - Navmesh built in {:?}",
-        build_start_time.elapsed()
-    );
+    debug!("Navmesh built in {:?}", build_start_time.elapsed());
 
     let mut polyanya_mesh: polyanya::Mesh =
         polyanya::RecastFullMesh::new(poly_navmesh.clone(), detail_navmesh.clone()).into();

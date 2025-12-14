@@ -9,6 +9,7 @@ use nat20_rs::{
     },
     systems,
 };
+use tracing::{error, info};
 
 use crate::{
     render::{
@@ -52,10 +53,7 @@ impl ReactionsWindow {
         event: &Event,
         options: &HashMap<Entity, Vec<ReactionData>>,
     ) {
-        println!(
-            "[ReactionsWindow] Activating reactions window for prompt {:?}",
-            prompt_id
-        );
+        info!("Activating reactions window for prompt {:?}", prompt_id);
         self.state = ReactionWindowState::Active {
             prompt_id,
             event: event.clone(),
@@ -159,10 +157,7 @@ impl RenderableMutWithContext<&mut GameState> for ReactionsWindow {
                         .map(|decisions| decisions.keys().cloned().collect::<Vec<Entity>>());
 
                     if button_clicked && let Some(reactor) = entity {
-                        println!(
-                            "[ReactionsWindow] Submitting reaction decision for reactor {:?}...",
-                            reactor
-                        );
+                        info!("Submitting reaction decision for reactor {:?}...", reactor);
                         let result = game_state.submit_decision(ActionDecision {
                             response_to: *prompt_id,
                             kind: ActionDecisionKind::Reaction {
@@ -174,18 +169,12 @@ impl RenderableMutWithContext<&mut GameState> for ReactionsWindow {
                         match result {
                             Ok(()) => {
                                 if let Some(keys) = &mut decision_keys {
-                                    println!(
-                                        "[ReactionsWindow] Submitted reaction decision for reactor {:?}",
-                                        reactor
-                                    );
+                                    info!("Submitted reaction decision for reactor {:?}", reactor);
                                     keys.push(*reactor);
                                 }
                             }
                             Err(action_error) => {
-                                println!(
-                                    "[ReactionsWindow] Failed to submit reaction decision: {:#?}",
-                                    action_error
-                                );
+                                error!("Failed to submit reaction decision: {:#?}", action_error);
                             }
                         }
                     }
@@ -196,7 +185,7 @@ impl RenderableMutWithContext<&mut GameState> for ReactionsWindow {
                                 || decisions.contains(entity)
                         })
                     {
-                        println!("[ReactionsWindow] All reactions submitted, closing window.");
+                        info!("All reactions submitted, closing window.");
                         new_state = Some(ReactionWindowState::Pending);
                     }
                 },
