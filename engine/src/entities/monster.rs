@@ -13,7 +13,7 @@ use crate::{
             armor::ArmorTrainingSet, loadout::Loadout, weapon::WeaponProficiencyMap,
         },
         level::ChallengeRating,
-        race::{CreatureSize, CreatureType},
+        species::{CreatureSize, CreatureType},
         resource::ResourceMap,
         saving_throw::SavingThrowSet,
         skill::SkillSet,

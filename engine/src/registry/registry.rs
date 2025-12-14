@@ -19,10 +19,11 @@ use crate::{
         feat::Feat,
         id::{
             ActionId, BackgroundId, ClassId, EffectId, FactionId, FeatId, IdProvider, ItemId,
-            ResourceId, ScriptId, SpellId, SubclassId,
+            ResourceId, ScriptId, SpeciesId, SpellId, SubclassId, SubspeciesId,
         },
         items::inventory::ItemInstance,
         resource::ResourceDefinition,
+        species::{Species, Subspecies},
         spells::spell::Spell,
     },
     scripts::script::Script,
@@ -124,8 +125,10 @@ pub struct RegistrySet {
     pub items: Registry<ItemId, ItemInstance>,
     pub resources: Registry<ResourceId, ResourceDefinition>,
     pub scripts: Registry<ScriptId, Script>,
+    pub species: Registry<SpeciesId, Species>,
     pub spells: Registry<SpellId, Spell>,
     pub subclasses: Registry<SubclassId, Subclass>,
+    pub subspecies: Registry<SubspeciesId, Subspecies>,
 }
 
 impl RegistrySet {
@@ -142,8 +145,10 @@ impl RegistrySet {
         let feats_directory = root_directory.join("feats");
         let items_directory = root_directory.join("items");
         let resources_directory = root_directory.join("resources");
+        let species_directory = root_directory.join("species");
         let spells_directory = root_directory.join("spells");
         let subclasses_directory = root_directory.join("subclasses");
+        let subspecies_directory = root_directory.join("subspecies");
 
         // Scripts can be in all directories, so we load them separately
         let all_directories = vec![
@@ -155,8 +160,10 @@ impl RegistrySet {
             feats_directory.as_path(),
             items_directory.as_path(),
             resources_directory.as_path(),
+            species_directory.as_path(),
             spells_directory.as_path(),
             subclasses_directory.as_path(),
+            subspecies_directory.as_path(),
         ];
 
         let mut scripts = HashMap::new();
@@ -210,8 +217,10 @@ impl RegistrySet {
             items: Registry::load_from_directory(items_directory)?,
             resources: Registry::load_from_directory(resources_directory)?,
             scripts: Registry { entries: scripts },
+            species: Registry::load_from_directory(species_directory)?,
             spells: Registry::load_from_directory(spells_directory)?,
             subclasses: Registry::load_from_directory(subclasses_directory)?,
+            subspecies: Registry::load_from_directory(subspecies_directory)?,
         })
     }
 }
@@ -245,5 +254,7 @@ define_registry!(FeatsRegistry, FeatId, Feat, feats);
 define_registry!(ItemsRegistry, ItemId, ItemInstance, items);
 define_registry!(ResourcesRegistry, ResourceId, ResourceDefinition, resources);
 define_registry!(ScriptsRegistry, ScriptId, Script, scripts);
+define_registry!(SpeciesRegistry, SpeciesId, Species, species);
 define_registry!(SpellsRegistry, SpellId, Spell, spells);
 define_registry!(SubclassesRegistry, SubclassId, Subclass, subclasses);
+define_registry!(SubspeciesRegistry, SubspeciesId, Subspecies, subspecies);

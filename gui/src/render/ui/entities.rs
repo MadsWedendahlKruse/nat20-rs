@@ -5,9 +5,9 @@ use nat20_rs::{
         damage::DamageResistances,
         effects::effects::{Effect, EffectDuration},
         health::{hit_points::HitPoints, life_state::LifeState},
-        id::{FeatId, Name, RaceId, SubraceId},
+        id::{FeatId, Name, SpeciesId, SubspeciesId},
         level::{ChallengeRating, CharacterLevels},
-        race::{CreatureSize, CreatureType},
+        species::{CreatureSize, CreatureType},
         resource::ResourceMap,
         skill::SkillSet,
         speed::Speed,
@@ -139,12 +139,12 @@ where
     }
 }
 
-pub fn render_race_if_present(ui: &imgui::Ui, world: &World, entity: Entity) {
+pub fn render_species_if_present(ui: &imgui::Ui, world: &World, entity: Entity) {
     let mut query = world
-        .query_one::<(&RaceId, &Option<SubraceId>)>(entity)
+        .query_one::<(&SpeciesId, &Option<SubspeciesId>)>(entity)
         .unwrap();
-    if let Some((race, subrace)) = query.get() {
-        (race.clone(), subrace.clone()).render(ui);
+    if let Some((species, subspecies)) = query.get() {
+        (species.clone(), subspecies.clone()).render(ui);
     }
 }
 
@@ -157,7 +157,7 @@ fn render_overview(
 ) {
     match mode {
         CreatureRenderMode::Full | CreatureRenderMode::Inspect => {
-            render_race_if_present(ui, world, entity);
+            render_species_if_present(ui, world, entity);
 
             render_if_present::<CreatureSize>(ui, world, entity);
             ui.same_line();

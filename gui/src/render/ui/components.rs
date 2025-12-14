@@ -16,7 +16,7 @@ use nat20_rs::{
         },
         effects::effects::{Effect, EffectDuration},
         health::{hit_points::HitPoints, life_state::LifeState},
-        id::{ActionId, FeatId, Name, RaceId, ResourceId, SpellId, SubraceId},
+        id::{ActionId, FeatId, Name, SpeciesId, ResourceId, SpellId, SubspeciesId},
         items::{
             equipment::{
                 armor::{Armor, ArmorClass, ArmorDexterityBonus, ArmorType},
@@ -29,7 +29,7 @@ use nat20_rs::{
         level::{ChallengeRating, CharacterLevels, Level},
         modifier::{Modifiable, ModifierSet},
         proficiency::{Proficiency, ProficiencyLevel},
-        race::{CreatureSize, CreatureType},
+        species::{CreatureSize, CreatureType},
         resource::{ResourceAmount, ResourceAmountMap, ResourceBudgetKind, ResourceMap},
         saving_throw::{SavingThrowKind, SavingThrowSet},
         skill::{Skill, SkillSet, skill_ability},
@@ -1358,13 +1358,13 @@ impl ImguiRenderable for D20ResultKind {
     }
 }
 
-impl ImguiRenderable for (RaceId, Option<SubraceId>) {
+impl ImguiRenderable for (SpeciesId, Option<SubspeciesId>) {
     fn render(&self, ui: &imgui::Ui) {
-        let (race, subrace) = self;
-        let text = if subrace.is_some() {
-            subrace.as_ref().unwrap().to_string()
+        let (species, subspecies) = self;
+        let text = if subspecies.is_some() {
+            subspecies.as_ref().unwrap().to_string()
         } else {
-            race.to_string()
+            species.to_string()
         };
         TextSegment::new(text, TextKind::Details).render(ui);
     }

@@ -1,7 +1,6 @@
 extern crate nat20_rs;
 
 mod tests {
-    use hecs::World;
     use nat20_rs::{
         components::{
             ability::{Ability, AbilityScore, AbilityScoreMap},

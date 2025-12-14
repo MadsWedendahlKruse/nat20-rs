@@ -1,0 +1,21 @@
+{
+    "id": "species.dragonborn",
+    "creature_type": "humanoid",
+    "size": "medium",
+    "_comment": "Missing breath weapon, darkvision and draconic flight!",
+    "effects_by_level": {},
+    "action_by_level": {},
+    "subspecies": [
+        "subspecies.dragonborn.black",
+        "subspecies.dragonborn.blue",
+        "subspecies.dragonborn.brass",
+        "subspecies.dragonborn.bronze",
+        "subspecies.dragonborn.copper",
+        "subspecies.dragonborn.gold",
+        "subspecies.dragonborn.green",
+        "subspecies.dragonborn.red",
+        "subspecies.dragonborn.silver",
+        "subspecies.dragonborn.white"
+    ],
+    "speed": "30 feet"
+}

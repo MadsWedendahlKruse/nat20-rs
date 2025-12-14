@@ -80,6 +80,31 @@ impl Evaluable for IntExpression {
     }
 }
 
+impl IntExpression {
+    pub fn evaluate_without_variables(&self) -> Result<i32, EvaluationError> {
+        match self {
+            IntExpression::Literal(value) => Ok(*value),
+            IntExpression::Variable(name) => Err(EvaluationError::UnknownVariable(name.clone())),
+            IntExpression::Add(left, right) => {
+                Ok(left.evaluate_without_variables()? + right.evaluate_without_variables()?)
+            }
+            IntExpression::Subtract(left, right) => {
+                Ok(left.evaluate_without_variables()? - right.evaluate_without_variables()?)
+            }
+            IntExpression::Multiply(left, right) => {
+                Ok(left.evaluate_without_variables()? * right.evaluate_without_variables()?)
+            }
+            IntExpression::Divide(left, right) => {
+                let denominator = right.evaluate_without_variables()?;
+                if denominator == 0 {
+                    return Err(EvaluationError::DivisionByZero);
+                }
+                Ok(left.evaluate_without_variables()? / denominator)
+            }
+            IntExpression::Negate(inner) => Ok(-inner.evaluate_without_variables()?),
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct DiceExpression {
     pub count_expression: IntExpression,

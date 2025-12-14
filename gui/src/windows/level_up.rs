@@ -24,7 +24,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     render::ui::{
-        entities::render_race_if_present,
+        entities::render_species_if_present,
         text::{TextKind, TextSegments},
         utils::{
             ImguiRenderable, ImguiRenderableMut, ImguiRenderableMutWithContext, labels_max_width,
@@ -389,7 +389,7 @@ impl ImguiRenderableMutWithContext<&mut World> for LevelUpWindow {
                     .build();
             }
 
-            render_race_if_present(ui, world, self.character.unwrap());
+            render_species_if_present(ui, world, self.character.unwrap());
 
             {
                 let levels = systems::helpers::get_component::<CharacterLevels>(
@@ -399,7 +399,7 @@ impl ImguiRenderableMutWithContext<&mut World> for LevelUpWindow {
                 levels.render(ui);
 
                 // If a class has been chosen, show what will be gained at this level
-                // TODO: Include race and subrace gains
+                // TODO: Include species and subspecies gains
                 if let Some(level_up_session) = &self.level_up_session {
                     if let Some(class) = level_up_session.chosen_class() {
                         systems::level_up::level_up_gains(

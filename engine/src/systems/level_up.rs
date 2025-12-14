@@ -97,7 +97,7 @@ impl LevelUpSession {
 
         let levels = systems::helpers::get_component::<CharacterLevels>(world, character);
         if levels.total_level() == 0 {
-            [LevelUpPrompt::race(), LevelUpPrompt::background()]
+            [LevelUpPrompt::species(), LevelUpPrompt::background()]
                 .iter()
                 .for_each(|prompt| {
                     pending_prompts.push(prompt.clone());
@@ -257,12 +257,12 @@ fn resolve_level_up_prompt(
                         systems::class::set_subclass(world, entity, subclass_id);
                     }
 
-                    ChoiceItem::Race(race_id) => {
-                        prompts.extend(systems::race::set_race(world, entity, race_id));
+                    ChoiceItem::Species(species_id) => {
+                        prompts.extend(systems::species::set_species(world, entity, species_id));
                     }
 
-                    ChoiceItem::Subrace(subrace_id) => {
-                        systems::race::set_subrace(world, entity, subrace_id);
+                    ChoiceItem::Subspecies(subspecies_id) => {
+                        systems::species::set_subspecies(world, entity, subspecies_id);
                     }
 
                     ChoiceItem::Equipment { items, money } => {

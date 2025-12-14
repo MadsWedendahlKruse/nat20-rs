@@ -116,6 +116,17 @@ impl<D: QuantityDimension> Evaluable for QuantityExpressionDefinition<D> {
     }
 }
 
+impl<D: QuantityDimension> QuantityExpressionDefinition<D> {
+    pub fn evaluate_without_variables(&self) -> Result<D::Quantity, EvaluationError> {
+        let scalar = self.expression.evaluate_without_variables()? as f32;
+
+        let quantity = D::make_quantity(scalar, &self.unit_name)
+            .map_err(|message| EvaluationError::UnknownVariable(message))?; // or add a new error kind
+
+        Ok(quantity)
+    }
+}
+
 pub type LengthExpressionDefinition = QuantityExpressionDefinition<LengthDim>;
 
 #[cfg(test)]

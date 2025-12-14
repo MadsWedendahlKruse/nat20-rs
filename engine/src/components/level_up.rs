@@ -11,15 +11,15 @@ use crate::{
     components::{
         ability::Ability,
         id::{
-            ActionId, BackgroundId, ClassId, EffectId, FeatId, ItemId, RaceId, SubclassId,
-            SubraceId,
+            ActionId, BackgroundId, ClassId, EffectId, FeatId, ItemId, SpeciesId, SubclassId,
+            SubspeciesId,
         },
         modifier::ModifierSource,
         skill::Skill,
     },
     registry::{
         self,
-        registry::{BackgroundsRegistry, ClassesRegistry, FeatsRegistry},
+        registry::{BackgroundsRegistry, ClassesRegistry, FeatsRegistry, SpeciesRegistry},
     },
     systems::{self},
 };
@@ -48,8 +48,8 @@ pub enum ChoiceItem {
     Subclass(SubclassId),
     Effect(EffectId),
     Feat(FeatId),
-    Race(RaceId),
-    Subrace(SubraceId),
+    Species(SpeciesId),
+    Subspecies(SubspeciesId),
     Equipment {
         items: Vec<(u8, ItemId)>,
         money: String, // e.g., "10 GP"
@@ -67,8 +67,8 @@ impl ChoiceItem {
             ChoiceItem::Subclass(_) => "choice.subclass",
             ChoiceItem::Effect(_) => "choice.effect",
             ChoiceItem::Feat(_) => "choice.feat",
-            ChoiceItem::Race(_) => "choice.race",
-            ChoiceItem::Subrace(_) => "choice.subrace",
+            ChoiceItem::Species(_) => "choice.species",
+            ChoiceItem::Subspecies(_) => "choice.subspecies",
             ChoiceItem::Equipment { .. } => "choice.equipment",
         }
     }
@@ -76,8 +76,8 @@ impl ChoiceItem {
     /// Primarily used for visualization purposes.
     pub fn priority(&self) -> u8 {
         match self {
-            ChoiceItem::Race(_) => 0,
-            ChoiceItem::Subrace(_) => 1,
+            ChoiceItem::Species(_) => 0,
+            ChoiceItem::Subspecies(_) => 1,
             ChoiceItem::Background(_) => 2,
             ChoiceItem::Class(_) => 3,
             ChoiceItem::Subclass(_) => 4,
@@ -98,8 +98,8 @@ impl std::fmt::Display for ChoiceItem {
             ChoiceItem::Background(id) => write!(f, "{}", id),
             ChoiceItem::Class(id) => write!(f, "{}", id),
             ChoiceItem::Subclass(id) => write!(f, "{}", id),
-            ChoiceItem::Race(id) => write!(f, "{}", id),
-            ChoiceItem::Subrace(id) => write!(f, "{}", id),
+            ChoiceItem::Species(id) => write!(f, "{}", id),
+            ChoiceItem::Subspecies(id) => write!(f, "{}", id),
             ChoiceItem::Equipment { items, money } => {
                 let mut lines: Vec<String> = items
                     .iter()
@@ -231,24 +231,22 @@ impl LevelUpPrompt {
         ))
     }
 
-    pub fn race() -> Self {
+    pub fn species() -> Self {
         LevelUpPrompt::Choice(ChoiceSpec::single(
-            "Race",
-            registry::races::RACE_REGISTRY
-                .keys()
+            "Species",
+            SpeciesRegistry::keys()
                 .cloned()
-                .map(ChoiceItem::Race)
+                .map(ChoiceItem::Species)
                 .collect(),
         ))
     }
 
-    pub fn subrace(race: &RaceId) -> Self {
-        let subraces = registry::races::RACE_REGISTRY
-            .get(race)
-            .map_or_else(Vec::new, |r| r.subraces.keys().cloned().collect());
+    pub fn subspecies(species: &SpeciesId) -> Self {
+        let subspecies =
+            SpeciesRegistry::get(species).map_or_else(HashSet::new, |r| r.subspecies.clone());
         LevelUpPrompt::Choice(ChoiceSpec::single(
-            "Subrace",
-            subraces.into_iter().map(ChoiceItem::Subrace).collect(),
+            "Subspecies",
+            subspecies.into_iter().map(ChoiceItem::Subspecies).collect(),
         ))
     }
 }

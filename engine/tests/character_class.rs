@@ -8,7 +8,10 @@ mod tests {
     use nat20_rs::{
         components::{
             ability::Ability,
-            id::{BackgroundId, ClassId, EffectId, FeatId, ItemId, SubclassId},
+            id::{
+                BackgroundId, ClassId, EffectId, FeatId, ItemId, SpeciesId, SubclassId,
+                SubspeciesId,
+            },
             level::CharacterLevels,
             level_up::ChoiceItem,
             proficiency::ProficiencyLevel,
@@ -16,7 +19,7 @@ mod tests {
             skill::{Skill, SkillSet},
         },
         entities::character::Character,
-        registry::{self, registry::ClassesRegistry},
+        registry::registry::ClassesRegistry,
         systems::{self, level_up::LevelUpDecision},
     };
 
@@ -32,12 +35,12 @@ mod tests {
             vec![
                 // Level 1
                 // TODO: Everyone is dragonborn for now
-                LevelUpDecision::single_choice(ChoiceItem::Race(
-                    registry::races::DRAGONBORN_ID.clone(),
-                )),
-                LevelUpDecision::single_choice(ChoiceItem::Subrace(
-                    registry::races::DRAGONBORN_WHITE_ID.clone(),
-                )),
+                LevelUpDecision::single_choice(ChoiceItem::Species(SpeciesId::from_str(
+                    "species.dragonborn",
+                ))),
+                LevelUpDecision::single_choice(ChoiceItem::Subspecies(SubspeciesId::from_str(
+                    "subspecies.dragonborn.white",
+                ))),
                 LevelUpDecision::single_choice(ChoiceItem::Background(BackgroundId::from_str(
                     "background.soldier",
                 ))),

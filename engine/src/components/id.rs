@@ -39,8 +39,8 @@ id_newtypes!(
     SpellId,
     FeatId,
     BackgroundId,
-    RaceId,
-    SubraceId,
+    SpeciesId,
+    SubspeciesId,
     AIControllerId,
     FactionId,
     ScriptId

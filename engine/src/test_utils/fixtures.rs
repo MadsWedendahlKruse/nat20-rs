@@ -58,8 +58,8 @@ pub mod creatures {
         use crate::{
             components::{
                 id::{
-                    BackgroundId, ClassId, EntityIdentifier, FeatId, ItemId, Name, SpellId,
-                    SubclassId,
+                    BackgroundId, ClassId, EntityIdentifier, FeatId, ItemId, Name, SpeciesId,
+                    SpellId, SubclassId, SubspeciesId,
                 },
                 level_up::ChoiceItem,
                 modifier::KeyedModifiable,
@@ -67,10 +67,7 @@ pub mod creatures {
                 spells::spellbook::Spellbook,
             },
             entities::character::Character,
-            registry::{
-                self,
-                registry::{ClassesRegistry, ItemsRegistry},
-            },
+            registry::registry::{ClassesRegistry, ItemsRegistry},
         };
 
         use super::*;
@@ -94,12 +91,12 @@ pub mod creatures {
                 vec![
                     // Level 1
                     // TODO: Everyone is dragonborn for now
-                    LevelUpDecision::single_choice(ChoiceItem::Race(
-                        registry::races::DRAGONBORN_ID.clone(),
-                    )),
-                    LevelUpDecision::single_choice(ChoiceItem::Subrace(
-                        registry::races::DRAGONBORN_WHITE_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Species(SpeciesId::from_str(
+                        "species.dragonborn",
+                    ))),
+                    LevelUpDecision::single_choice(ChoiceItem::Subspecies(SubspeciesId::from_str(
+                        "subspecies.dragonborn.white",
+                    ))),
                     LevelUpDecision::single_choice(ChoiceItem::Background(BackgroundId::from_str(
                         "background.soldier",
                     ))),
@@ -234,12 +231,12 @@ pub mod creatures {
                 vec![
                     // Level 1
                     // TODO: Everyone is dragonborn for now
-                    LevelUpDecision::single_choice(ChoiceItem::Race(
-                        registry::races::DRAGONBORN_ID.clone(),
-                    )),
-                    LevelUpDecision::single_choice(ChoiceItem::Subrace(
-                        registry::races::DRAGONBORN_RED_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Species(SpeciesId::from_str(
+                        "species.dragonborn",
+                    ))),
+                    LevelUpDecision::single_choice(ChoiceItem::Subspecies(SubspeciesId::from_str(
+                        "subspecies.dragonborn.red",
+                    ))),
                     LevelUpDecision::single_choice(ChoiceItem::Background(BackgroundId::from_str(
                         "background.sage",
                     ))),
@@ -323,12 +320,12 @@ pub mod creatures {
                 vec![
                     // Level 1
                     // TODO: Everyone is dragonborn for now
-                    LevelUpDecision::single_choice(ChoiceItem::Race(
-                        registry::races::DRAGONBORN_ID.clone(),
-                    )),
-                    LevelUpDecision::single_choice(ChoiceItem::Subrace(
-                        registry::races::DRAGONBORN_BLACK_ID.clone(),
-                    )),
+                    LevelUpDecision::single_choice(ChoiceItem::Species(SpeciesId::from_str(
+                        "species.dragonborn",
+                    ))),
+                    LevelUpDecision::single_choice(ChoiceItem::Subspecies(SubspeciesId::from_str(
+                        "subspecies.dragonborn.black",
+                    ))),
                     LevelUpDecision::single_choice(ChoiceItem::Background(BackgroundId::from_str(
                         "background.acolyte",
                     ))),
@@ -410,7 +407,7 @@ pub mod creatures {
                 },
                 level::ChallengeRating,
                 proficiency::{Proficiency, ProficiencyLevel},
-                race::{CreatureSize, CreatureType},
+                species::{CreatureSize, CreatureType},
                 speed::Speed,
             },
             entities::monster::Monster,

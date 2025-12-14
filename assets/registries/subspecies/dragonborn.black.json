@@ -1,0 +1,8 @@
+{
+    "id": "subspecies.dragonborn.black",
+    "effects_by_level": {
+        "1": [
+            "effect.dragonborn.draconic_ancestry.black"
+        ]
+    }
+}

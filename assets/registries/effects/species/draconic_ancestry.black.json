@@ -1,5 +1,5 @@
 {
-    "id": "effect.dragonborn.draconic_ancestry_black",
+    "id": "effect.dragonborn.draconic_ancestry.black",
     "description": "Your lineage stems from a dragon progenitor. You have resistance to acid damage.",
     "duration": "permanent",
     "modifiers": [

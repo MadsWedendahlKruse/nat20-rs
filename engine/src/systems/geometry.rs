@@ -10,7 +10,7 @@ use parry3d::{
 use polyanya::Coords;
 
 use crate::{
-    components::race::CreatureSize,
+    components::species::CreatureSize,
     engine::geometry::{WorldGeometry, WorldPath},
 };
 

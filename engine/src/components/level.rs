@@ -325,7 +325,7 @@ mod tests {
         for _ in 0..MAX_LEVEL {
             cl.level_up(class.clone());
         }
-        // Should return 0 or handle gracefully
+        // Should return 0 or handle gspeciesfully
         assert_eq!(cl.experience_for_next_level(), 0);
     }
 }

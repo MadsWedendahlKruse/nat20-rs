@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::components::id::{
-    ActionId, BackgroundId, ClassId, EffectId, FeatId, ItemId, RaceId, SubclassId, SubraceId,
+    ActionId, BackgroundId, ClassId, EffectId, FeatId, ItemId, SpeciesId, SubclassId, SubspeciesId,
 };
 
 use super::{ability::Ability, proficiency::ProficiencyLevel};
@@ -25,8 +25,8 @@ pub enum ModifierSource {
     Feat(FeatId),                 // e.g. "Great Weapon Master"
     FeatRepeatable(FeatId, Uuid), // e.g. "Ability Score Improvement" with unique instance ID
     Custom(String),               // fallback for ad-hoc things
-    Race(RaceId),                 // e.g. "Dwarf"
-    Subrace(SubraceId),           // e.g. "Hill Dwarf"
+    Species(SpeciesId),           // e.g. "Dwarf"
+    Subspecies(SubspeciesId),     // e.g. "Hill Dwarf"
     None,                         // Used for cases where no modifier is applicable
 }
 
@@ -50,8 +50,8 @@ impl fmt::Display for ModifierSource {
             ModifierSource::FeatRepeatable(feat, instance_id) => {
                 write!(f, "Feat: {} ({})", feat, instance_id)
             }
-            ModifierSource::Race(id) => write!(f, "Race: {}", id),
-            ModifierSource::Subrace(id) => write!(f, "Subrace: {}", id),
+            ModifierSource::Species(id) => write!(f, "Species: {}", id),
+            ModifierSource::Subspecies(id) => write!(f, "Subspecies: {}", id),
             ModifierSource::None => write!(f, "None"),
         }
     }

@@ -1,0 +1,62 @@
+use std::collections::{HashMap, HashSet};
+
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    components::{
+        id::{ActionId, EffectId, SpeciesId, SubspeciesId},
+        species::{CreatureSize, CreatureType, Species, SpeciesBase, Subspecies},
+        speed::Speed,
+    },
+    registry::serialize::quantity::LengthExpressionDefinition,
+};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpeciesDefinition {
+    pub id: SpeciesId,
+    pub creature_type: CreatureType,
+    pub size: CreatureSize,
+    #[serde(default)]
+    pub effects_by_level: HashMap<u8, Vec<EffectId>>,
+    #[serde(default)]
+    pub actions_by_level: HashMap<u8, Vec<ActionId>>,
+    pub subspecies: HashSet<SubspeciesId>,
+    pub speed: LengthExpressionDefinition,
+}
+
+impl From<SpeciesDefinition> for Species {
+    fn from(value: SpeciesDefinition) -> Self {
+        Species {
+            id: value.id,
+            base: SpeciesBase {
+                effects_by_level: value.effects_by_level,
+                actions_by_level: value.actions_by_level,
+            },
+            subspecies: value.subspecies,
+            creature_type: value.creature_type,
+            size: value.size,
+            speed: Speed::new(value.speed.evaluate_without_variables().unwrap()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubspeciesDefinition {
+    pub id: SubspeciesId,
+    #[serde(default)]
+    pub effects_by_level: HashMap<u8, Vec<EffectId>>,
+    #[serde(default)]
+    pub actions_by_level: HashMap<u8, Vec<ActionId>>,
+}
+
+impl From<SubspeciesDefinition> for Subspecies {
+    fn from(value: SubspeciesDefinition) -> Self {
+        Subspecies {
+            id: value.id,
+            base: SpeciesBase {
+                effects_by_level: value.effects_by_level,
+                actions_by_level: value.actions_by_level,
+            },
+        }
+    }
+}

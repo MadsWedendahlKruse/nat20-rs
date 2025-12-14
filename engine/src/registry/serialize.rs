@@ -6,6 +6,7 @@ pub mod feat;
 pub mod modifier;
 pub mod parser;
 pub mod quantity;
+pub mod species;
 pub mod spell;
 pub mod targeting;
 pub mod variables;
