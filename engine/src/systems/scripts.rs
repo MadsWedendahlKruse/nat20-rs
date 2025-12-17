@@ -22,7 +22,7 @@ use crate::{
             ScriptReactionBodyContext, ScriptReactionPlan, ScriptReactionTriggerContext,
             ScriptResourceCost,
         },
-        script_engine::ScriptEngineMap,
+        script_engine::SCRIPT_ENGINES,
     },
     systems::{
         self,
@@ -31,7 +31,6 @@ use crate::{
 };
 
 pub fn evaluate_reaction_trigger(
-    script_engines: &mut ScriptEngineMap,
     reaction_trigger: &ScriptId,
     context: &ScriptReactionTriggerContext,
 ) -> bool {
@@ -42,7 +41,8 @@ pub fn evaluate_reaction_trigger(
         )
         .as_str(),
     );
-    let engine = script_engines
+    let mut engine_lock = SCRIPT_ENGINES.lock().unwrap();
+    let engine = engine_lock
         .get_mut(&script.language)
         .expect(format!("No script engine found for language: {:?}", script.language).as_str());
     match engine.evaluate_reaction_trigger(script, &context) {
@@ -58,13 +58,13 @@ pub fn evaluate_reaction_trigger(
 }
 
 pub fn evaluate_reaction_body(
-    script_engines: &mut ScriptEngineMap,
     reaction_body: &ScriptId,
     context: &ScriptReactionBodyContext,
 ) -> ScriptReactionPlan {
     let script = ScriptsRegistry::get(reaction_body)
         .expect(format!("Reaction script not found in registry: {:?}", reaction_body).as_str());
-    let engine = script_engines
+    let mut engine_lock = SCRIPT_ENGINES.lock().unwrap();
+    let engine = engine_lock
         .get_mut(&script.language)
         .expect(format!("No script engine found for language: {:?}", script.language).as_str());
     match engine.evaluate_reaction_body(script, &context) {
@@ -80,7 +80,6 @@ pub fn evaluate_reaction_body(
 }
 
 pub fn evaluate_resource_cost_hook(
-    script_engines: &mut ScriptEngineMap,
     resource_cost_hook: &ScriptId,
     action_view: &ScriptActionView,
     entity_view: &ScriptEntityView,
@@ -92,7 +91,8 @@ pub fn evaluate_resource_cost_hook(
         )
         .as_str(),
     );
-    let engine = script_engines
+    let mut engine_lock = SCRIPT_ENGINES.lock().unwrap();
+    let engine = engine_lock
         .get_mut(&script.language)
         .expect(format!("No script engine found for language: {:?}", script.language).as_str());
     match engine.evaluate_resource_cost_hook(script, action_view, entity_view) {
@@ -109,7 +109,6 @@ pub fn evaluate_resource_cost_hook(
 }
 
 pub fn evalute_action_hook(
-    script_engines: &mut ScriptEngineMap,
     action_hook: &ScriptId,
     action_view: &ScriptActionView,
     entity_view: &ScriptEntityView,
@@ -121,7 +120,8 @@ pub fn evalute_action_hook(
         )
         .as_str(),
     );
-    let engine = script_engines
+    let mut engine_lock = SCRIPT_ENGINES.lock().unwrap();
+    let engine = engine_lock
         .get_mut(&script.language)
         .expect(format!("No script engine found for language: {:?}", script.language).as_str());
     match engine.evaluate_action_hook(script, action_view, entity_view) {
@@ -137,7 +137,6 @@ pub fn evalute_action_hook(
 }
 
 pub fn evaluate_armor_class_hook(
-    script_engines: &mut ScriptEngineMap,
     armor_class_hook: &ScriptId,
     entity_view: &ScriptEntityView,
 ) -> i32 {
@@ -148,7 +147,8 @@ pub fn evaluate_armor_class_hook(
         )
         .as_str(),
     );
-    let engine = script_engines
+    let mut engine_lock = SCRIPT_ENGINES.lock().unwrap();
+    let engine = engine_lock
         .get_mut(&script.language)
         .expect(format!("No script engine found for language: {:?}", script.language).as_str());
     match engine.evaluate_armor_class_hook(script, entity_view) {
@@ -164,7 +164,6 @@ pub fn evaluate_armor_class_hook(
 }
 
 pub fn evaluate_damage_roll_result_hook(
-    script_engines: &mut ScriptEngineMap,
     damage_roll_result_hook: &ScriptId,
     entity_view: &ScriptEntityView,
     damage_roll_result: &DamageRollResult,
@@ -176,7 +175,8 @@ pub fn evaluate_damage_roll_result_hook(
         )
         .as_str(),
     );
-    let engine = script_engines
+    let mut engine_lock = SCRIPT_ENGINES.lock().unwrap();
+    let engine = engine_lock
         .get_mut(&script.language)
         .expect(format!("No script engine found for language: {:?}", script.language).as_str());
     match engine.evaluate_damage_roll_result_hook(script, entity_view, damage_roll_result) {

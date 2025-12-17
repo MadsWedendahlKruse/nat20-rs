@@ -210,15 +210,11 @@ pub fn damage(
             // the target's AC
             let attack_roll = systems::damage::attack_roll_fn(
                 attack_roll.as_ref(),
-                game_state,
+                &game_state.world,
                 performer,
                 context,
             );
-            let armor_class = systems::loadout::armor_class(
-                &game_state.world,
-                target,
-                &mut game_state.script_engines,
-            );
+            let armor_class = systems::loadout::armor_class(&game_state.world, target);
 
             // Create an event to represent the attack roll being made
             let event = Event::new(EventKind::D20CheckPerformed(
@@ -272,7 +268,7 @@ pub fn damage(
                             *performer,
                             systems::damage::damage_roll_fn(
                                 damage_roll.as_ref(),
-                                game_state,
+                                &game_state.world,
                                 *performer,
                                 &context,
                                 is_crit,
@@ -350,7 +346,7 @@ pub fn damage(
 
             let damage_roll = systems::damage::damage_roll_fn(
                 damage.as_ref(),
-                game_state,
+                &game_state.world,
                 performer,
                 context,
                 false,

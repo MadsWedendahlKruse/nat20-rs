@@ -13,7 +13,6 @@ use nat20_rs::{
     },
 };
 use parry3d::na::{Matrix4, Point3};
-use serde::Deserialize;
 use strum::IntoEnumIterator;
 use tracing::error;
 
@@ -326,10 +325,7 @@ impl MainMenuWindow {
                         format!("{}##{:?}", name.as_str(), entity),
                         imgui::TreeNodeFlags::FRAMED,
                     ) {
-                        entity.render_mut_with_context(
-                            ui,
-                            (&mut game_state.world, &mut game_state.script_engines),
-                        );
+                        entity.render_mut_with_context(ui, &mut game_state.world);
                         ui.separator();
 
                         if ui.button(format!("Debug##{:?}", entity)) {

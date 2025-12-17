@@ -442,7 +442,6 @@ impl Action {
 
         for hook in hooks {
             hook(
-                &mut game_state.script_engines,
                 &mut game_state.world,
                 performer,
                 self,

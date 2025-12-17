@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 
 use hecs::{Entity, World};
 use parry3d::{na::Point3, shape::Ball};
-use strum::IntoEnumIterator;
 use tracing::{info, warn};
 
 use crate::{
@@ -20,9 +19,6 @@ use crate::{
         geometry::WorldGeometry,
         interaction::{InteractionEngine, InteractionScopeId, InteractionSession},
     },
-    scripts::{
-        rhai::rhai_engine::RhaiScriptEngine, script::ScriptLanguage, script_engine::ScriptEngine,
-    },
     systems::{
         self,
         movement::{MovementError, PathResult},
@@ -39,25 +35,10 @@ pub struct GameState {
     pub interaction_engine: InteractionEngine,
     pub event_log: EventLog,
     event_listeners: HashMap<EventId, EventListener>,
-
-    // TODO: Not sure where this guy should live
-    pub script_engines: HashMap<ScriptLanguage, Box<dyn ScriptEngine>>,
 }
 
 impl GameState {
     pub fn new(geometry: WorldGeometry) -> Self {
-        let mut script_engines: HashMap<ScriptLanguage, Box<dyn ScriptEngine>> = HashMap::new();
-        for language in ScriptLanguage::iter() {
-            match language {
-                // ScriptLanguage::Lua => {
-                //     script_engines.insert(language, Box::new(LuaScriptEngine::new()));
-                // }
-                ScriptLanguage::Rhai => {
-                    script_engines.insert(language, Box::new(RhaiScriptEngine::new()));
-                }
-            }
-        }
-
         Self {
             world: World::new(),
             encounters: HashMap::new(),
@@ -66,7 +47,6 @@ impl GameState {
             event_log: EventLog::new(),
             event_listeners: HashMap::new(),
             geometry,
-            script_engines,
         }
     }
 
@@ -386,7 +366,6 @@ impl GameState {
                             &self.geometry,
                             *reactor,
                             event,
-                            &mut self.script_engines,
                         );
                         if !reactions.is_empty() {
                             new_options.insert(*reactor, reactions);
@@ -487,7 +466,6 @@ impl GameState {
                 &self.geometry,
                 *reactor,
                 event,
-                &mut self.script_engines,
             );
 
             if !reactions.is_empty() {

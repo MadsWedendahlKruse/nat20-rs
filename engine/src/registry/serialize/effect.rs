@@ -16,7 +16,7 @@ use crate::{
         },
         id::{ActionId, EffectId, ResourceId, ScriptId},
         items::equipment::armor::ArmorClass,
-        modifier::{self, KeyedModifiable, Modifiable, ModifierSource},
+        modifier::{KeyedModifiable, Modifiable, ModifierSource},
         resource::{ResourceAmount, ResourceAmountMap, ResourceMap},
         saving_throw::SavingThrowSet,
         skill::SkillSet,
@@ -29,10 +29,7 @@ use crate::{
             SavingThrowModifierProvider, SkillModifierProvider,
         },
     },
-    scripts::{
-        script_api::{ScriptActionView, ScriptEntityView},
-        script_engine::ScriptEngineMap,
-    },
+    scripts::script_api::{ScriptActionView, ScriptEntityView},
     systems,
 };
 
@@ -457,14 +454,12 @@ impl HookEffect<DamageRollResultHook> for DamageRollResultHookDefinition {
                 let script_id = script.clone();
 
                 Arc::new(
-                    move |script_engines: &mut ScriptEngineMap,
-                          world: &World,
+                    move |world: &World,
                           entity: Entity,
                           damage_roll_result: &mut DamageRollResult| {
                         let entity_view = ScriptEntityView::from_world(world, entity);
 
                         let modified_damage = systems::scripts::evaluate_damage_roll_result_hook(
-                            script_engines,
                             &script_id,
                             &entity_view,
                             damage_roll_result,
@@ -478,12 +473,9 @@ impl HookEffect<DamageRollResultHook> for DamageRollResultHookDefinition {
 
     fn combine_hooks(hooks: Vec<DamageRollResultHook>) -> DamageRollResultHook {
         Arc::new(
-            move |script_engines: &mut ScriptEngineMap,
-                  world: &World,
-                  entity: Entity,
-                  damage_roll_result: &mut DamageRollResult| {
+            move |world: &World, entity: Entity, damage_roll_result: &mut DamageRollResult| {
                 for hook in &hooks {
-                    hook(script_engines, world, entity, damage_roll_result);
+                    hook(world, entity, damage_roll_result);
                 }
             },
         )
@@ -503,17 +495,11 @@ impl HookEffect<ArmorClassHook> for ArmorClassHookDefinition {
                 let effect_id = effect.clone();
                 let script_id = script.clone();
                 Arc::new(
-                    move |script_engines: &mut ScriptEngineMap,
-                          world: &World,
-                          entity: Entity,
-                          armor_class: &mut ArmorClass| {
+                    move |world: &World, entity: Entity, armor_class: &mut ArmorClass| {
                         let entity_view = ScriptEntityView::from_world(world, entity);
 
-                        let modifier = systems::scripts::evaluate_armor_class_hook(
-                            script_engines,
-                            &script_id,
-                            &entity_view,
-                        );
+                        let modifier =
+                            systems::scripts::evaluate_armor_class_hook(&script_id, &entity_view);
                         armor_class
                             .add_modifier(ModifierSource::Effect(effect_id.clone()), modifier);
                     },
@@ -523,9 +509,9 @@ impl HookEffect<ArmorClassHook> for ArmorClassHookDefinition {
     }
 
     fn combine_hooks(hooks: Vec<ArmorClassHook>) -> ArmorClassHook {
-        Arc::new(move |script_engines, world, entity, armor_class| {
+        Arc::new(move |world, entity, armor_class| {
             for hook in &hooks {
-                hook(script_engines, world, entity, armor_class);
+                hook(world, entity, armor_class);
             }
         })
     }
@@ -546,8 +532,7 @@ impl HookEffect<ActionHook> for ActionHookDefinition {
                 let effect_id = effect.clone();
                 let script_id = script.clone();
                 Arc::new(
-                    move |script_engines: &mut ScriptEngineMap,
-                          world: &mut World,
+                    move |world: &mut World,
                           entity: Entity,
                           action: &Action,
                           context: &ActionContext,
@@ -557,7 +542,6 @@ impl HookEffect<ActionHook> for ActionHookDefinition {
                         let entity_view = ScriptEntityView::from_world(world, entity);
 
                         let modified_entity = systems::scripts::evalute_action_hook(
-                            script_engines,
                             &script_id,
                             &action_view,
                             &entity_view,
@@ -571,21 +555,13 @@ impl HookEffect<ActionHook> for ActionHookDefinition {
 
     fn combine_hooks(hooks: Vec<ActionHook>) -> ActionHook {
         Arc::new(
-            move |script_engines: &mut ScriptEngineMap,
-                  world: &mut World,
+            move |world: &mut World,
                   entity: Entity,
                   action: &Action,
                   context: &ActionContext,
                   resource_costs: &ResourceAmountMap| {
                 for hook in &hooks {
-                    hook(
-                        script_engines,
-                        world,
-                        entity,
-                        action,
-                        context,
-                        resource_costs,
-                    );
+                    hook(world, entity, action, context, resource_costs);
                 }
             },
         )
@@ -605,8 +581,7 @@ impl HookEffect<ResourceCostHook> for ResourceCostHookDefinition {
                 let effect_id = effect.clone();
                 let script_id = script.clone();
                 Arc::new(
-                    move |script_engines: &mut ScriptEngineMap,
-                          world: &World,
+                    move |world: &World,
                           entity: Entity,
                           action: &ActionId,
                           context: &ActionContext,
@@ -616,7 +591,6 @@ impl HookEffect<ResourceCostHook> for ResourceCostHookDefinition {
                         let entity_view = ScriptEntityView::from_world(world, entity);
 
                         let modified_costs = systems::scripts::evaluate_resource_cost_hook(
-                            script_engines,
                             &script_id,
                             &action_view,
                             &entity_view,
@@ -630,21 +604,13 @@ impl HookEffect<ResourceCostHook> for ResourceCostHookDefinition {
 
     fn combine_hooks(hooks: Vec<ResourceCostHook>) -> ResourceCostHook {
         Arc::new(
-            move |script_engines: &mut ScriptEngineMap,
-                  world: &World,
+            move |world: &World,
                   entity: Entity,
                   action: &ActionId,
                   context: &ActionContext,
                   resource_costs: &mut ResourceAmountMap| {
                 for hook in &hooks {
-                    hook(
-                        script_engines,
-                        world,
-                        entity,
-                        action,
-                        context,
-                        resource_costs,
-                    );
+                    hook(world, entity, action, context, resource_costs);
                 }
             },
         )

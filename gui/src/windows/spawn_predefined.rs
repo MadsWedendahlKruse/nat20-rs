@@ -100,14 +100,8 @@ impl RenderableMutWithContext<&mut GameState> for SpawnPredefinedWindow {
                                 }
                             }
                             ui.separator();
-                            entity.render_with_context(
-                                ui,
-                                (
-                                    &self.world,
-                                    &CreatureRenderMode::Full,
-                                    &mut game_state.script_engines,
-                                ),
-                            );
+                            entity
+                                .render_with_context(ui, (&self.world, &CreatureRenderMode::Full));
                         }
                     });
 

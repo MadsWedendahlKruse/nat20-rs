@@ -46,7 +46,7 @@ mod tests {
             );
         }
 
-        let weapon = ItemsRegistry::get(&ItemId::new("nat20_rs","item.scimitar"))
+        let weapon = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.scimitar"))
             .unwrap()
             .clone();
         let weapon = match weapon {
@@ -67,7 +67,7 @@ mod tests {
             )
         };
         let damage_result =
-            systems::damage::damage_roll(damage_roll, &mut game_state, entity, false);
+            systems::damage::damage_roll(damage_roll, &game_state.world, entity, false);
 
         println!("{:?}", damage_result);
         assert!(
@@ -90,7 +90,7 @@ mod tests {
         let entity = game_state.world.spawn(Character::default());
 
         // Equip longsword
-        let longsword = ItemsRegistry::get(&ItemId::new("nat20_rs","item.longsword"))
+        let longsword = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.longsword"))
             .unwrap()
             .clone();
         let _ = systems::loadout::equip(&mut game_state.world, entity, longsword);
@@ -108,7 +108,7 @@ mod tests {
             &mut game_state.world,
             entity,
             &EquipmentSlot::MeleeOffHand,
-            ItemsRegistry::get(&ItemId::new("nat20_rs","item.dagger"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs", "item.dagger"))
                 .unwrap()
                 .clone(),
         )
@@ -146,7 +146,7 @@ mod tests {
             &mut world,
             entity,
             &EquipmentSlot::MeleeOffHand,
-            ItemsRegistry::get(&ItemId::new("nat20_rs","item.dagger"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs", "item.dagger"))
                 .unwrap()
                 .clone(),
         )
@@ -155,7 +155,7 @@ mod tests {
             &mut world,
             entity,
             &EquipmentSlot::MeleeMainHand,
-            ItemsRegistry::get(&ItemId::new("nat20_rs","item.longsword"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs", "item.longsword"))
                 .unwrap()
                 .clone(),
         );
@@ -163,7 +163,7 @@ mod tests {
         let unequipped = systems::loadout::equip(
             &mut world,
             entity,
-            ItemsRegistry::get(&ItemId::new("nat20_rs","item.greatsword"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs", "item.greatsword"))
                 .unwrap()
                 .clone(),
         )
@@ -192,7 +192,7 @@ mod tests {
 
         let longsword = Weapon::new(
             Item {
-                id: ItemId::new("nat20_rs","item.longsword"),
+                id: ItemId::new("nat20_rs", "item.longsword"),
                 name: "Longsword".to_string(),
                 description: "A longsword.".to_string(),
                 weight: Mass::new::<pound>(3.0),

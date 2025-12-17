@@ -23,7 +23,6 @@ use crate::{
         skill::Skill,
     },
     registry::serialize::effect::EffectDefinition,
-    scripts::script_engine::ScriptEngineMap,
 };
 
 use super::hooks::EffectHook;
@@ -113,25 +112,17 @@ impl Effect {
                 as AttackRollHook,
             post_attack_roll: Arc::new(|_: &World, _: Entity, _: &mut AttackRollResult| {})
                 as AttackRollResultHook,
-            on_armor_class: Arc::new(
-                |_: &mut ScriptEngineMap, _: &World, _: Entity, _: &mut ArmorClass| {},
-            ) as ArmorClassHook,
+            on_armor_class: Arc::new(|_: &World, _: Entity, _: &mut ArmorClass| {})
+                as ArmorClassHook,
             pre_damage_roll: Arc::new(|_: &World, _: Entity, _: &mut DamageRoll| {})
                 as DamageRollHook,
-            post_damage_roll: Arc::new(
-                |_: &mut ScriptEngineMap, _: &World, _: Entity, _: &mut DamageRollResult| {},
-            ) as DamageRollResultHook,
+            post_damage_roll: Arc::new(|_: &World, _: Entity, _: &mut DamageRollResult| {})
+                as DamageRollResultHook,
             on_action: Arc::new(
-                |_: &mut ScriptEngineMap,
-                 _: &mut World,
-                 _: Entity,
-                 _: &Action,
-                 _: &ActionContext,
-                 _: &ResourceAmountMap| {},
+                |_: &mut World, _: Entity, _: &Action, _: &ActionContext, _: &ResourceAmountMap| {},
             ) as ActionHook,
             on_resource_cost: Arc::new(
-                |_: &mut ScriptEngineMap,
-                 _: &World,
+                |_: &World,
                  _: Entity,
                  _: &ActionId,
                  _: &ActionContext,

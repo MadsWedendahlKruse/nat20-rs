@@ -205,7 +205,6 @@ fn render_actions(
                 for (context, cost) in contexts_and_costs.iter_mut() {
                     for effect in systems::effects::effects(&game_state.world, entity).iter() {
                         (effect.on_resource_cost)(
-                            &mut game_state.script_engines,
                             &game_state.world,
                             entity,
                             action_id,
@@ -422,11 +421,7 @@ fn render_target_selection(
                     && let TargetInstance::Entity(target) = potential_target
                 {
                     let attack_roll = attack_roll(&game_state.world, action.actor, &action.context);
-                    let target_ac = systems::loadout::armor_class(
-                        &game_state.world,
-                        *target,
-                        &mut game_state.script_engines,
-                    );
+                    let target_ac = systems::loadout::armor_class(&game_state.world, *target);
                     ui.tooltip(|| {
                         ui.separator();
 

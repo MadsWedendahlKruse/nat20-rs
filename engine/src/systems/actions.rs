@@ -22,13 +22,9 @@ use crate::{
         game_state::GameState,
         geometry::WorldGeometry,
     },
-    registry::{
-        self,
-        registry::{ActionsRegistry, SpellsRegistry},
-    },
-    scripts::{
-        script_api::{ScriptEventView, ScriptReactionBodyContext, ScriptReactionTriggerContext},
-        script_engine::ScriptEngineMap,
+    registry::registry::{ActionsRegistry, SpellsRegistry},
+    scripts::script_api::{
+        ScriptEventView, ScriptReactionBodyContext, ScriptReactionTriggerContext,
     },
     systems::{self, geometry::RaycastFilter},
 };
@@ -160,24 +156,13 @@ pub fn action_usable_on_targets(
     Ok(())
 }
 
-pub fn available_actions(
-    world: &World,
-    entity: Entity,
-    script_engines: &mut ScriptEngineMap,
-) -> ActionMap {
+pub fn available_actions(world: &World, entity: Entity) -> ActionMap {
     let mut actions = all_actions(world, entity);
 
     actions.retain(|action_id, action_data| {
         action_data.retain_mut(|(action_context, resource_cost)| {
             for effect in systems::effects::effects(world, entity).iter() {
-                (effect.on_resource_cost)(
-                    script_engines,
-                    world,
-                    entity,
-                    action_id,
-                    action_context,
-                    resource_cost,
-                );
+                (effect.on_resource_cost)(world, entity, action_id, action_context, resource_cost);
             }
             action_usable(world, entity, action_id, &action_context, resource_cost).is_ok()
         });
@@ -323,13 +308,10 @@ pub fn available_reactions_to_event(
     world_geometry: &WorldGeometry,
     reactor: Entity,
     event: &Event,
-    script_engines: &mut ScriptEngineMap,
 ) -> Vec<ReactionData> {
     let mut reactions = Vec::new();
 
-    for (reaction_id, contexts_and_costs) in
-        systems::actions::available_actions(world, reactor, script_engines)
-    {
+    for (reaction_id, contexts_and_costs) in systems::actions::available_actions(world, reactor) {
         let reaction = systems::actions::get_action(&reaction_id);
         if reaction.is_none() {
             continue;
@@ -349,7 +331,7 @@ pub fn available_reactions_to_event(
                 reactor: reactor.into(),
                 event: script_event,
             };
-            if systems::scripts::evaluate_reaction_trigger(script_engines, trigger, &context) {
+            if systems::scripts::evaluate_reaction_trigger(trigger, &context) {
                 for (context, resource_cost) in &contexts_and_costs {
                     if action_usable_on_targets(
                         world,
@@ -387,11 +369,7 @@ pub fn perform_reaction(game_state: &mut GameState, reaction_data: &ReactionData
             let context = ScriptReactionBodyContext {
                 reaction_data: reaction_data.clone(),
             };
-            let plan = systems::scripts::evaluate_reaction_body(
-                &mut game_state.script_engines,
-                reaction,
-                &context,
-            );
+            let plan = systems::scripts::evaluate_reaction_body(reaction, &context);
             systems::scripts::apply_reaction_plan(game_state, &context, plan);
         }
         _ => panic!(

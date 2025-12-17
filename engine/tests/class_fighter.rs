@@ -25,11 +25,7 @@ mod tests {
         let fighter = fixtures::creatures::heroes::fighter(&mut game_state.world).id();
 
         // Check that the fighter has the Action Surge action
-        let available_actions = systems::actions::available_actions(
-            &game_state.world,
-            fighter,
-            &mut game_state.script_engines,
-        );
+        let available_actions = systems::actions::available_actions(&game_state.world, fighter);
         let action_id = ActionId::new("nat20_rs", "action.fighter.action_surge");
         assert!(
             available_actions.contains_key(&action_id),
@@ -125,11 +121,7 @@ mod tests {
         let fighter = fixtures::creatures::heroes::fighter(&mut game_state.world).id();
 
         // Check that the fighter has the Second Wind action
-        let available_actions = systems::actions::available_actions(
-            &game_state.world,
-            fighter,
-            &mut game_state.script_engines,
-        );
+        let available_actions = systems::actions::available_actions(&game_state.world, fighter);
         let action_id = ActionId::new("nat20_rs", "action.fighter.second_wind");
         assert!(
             available_actions.contains_key(&action_id),
@@ -220,11 +212,7 @@ mod tests {
         );
 
         // Fighter makes a weapon attack, which costs one Action and grants one stack of Extra Attack
-        let available_actions = systems::actions::available_actions(
-            &game_state.world,
-            fighter,
-            &mut game_state.script_engines,
-        );
+        let available_actions = systems::actions::available_actions(&game_state.world, fighter);
         let action_id = ActionId::new("nat20_rs", "action.weapon_attack");
         assert!(
             available_actions.contains_key(&action_id),
@@ -261,11 +249,7 @@ mod tests {
         );
 
         // Fighter makes another attack, which should consume the Extra Attack stack
-        let available_actions = systems::actions::available_actions(
-            &game_state.world,
-            fighter,
-            &mut game_state.script_engines,
-        );
+        let available_actions = systems::actions::available_actions(&game_state.world, fighter);
         let contexts_and_costs = available_actions.get(&action_id).unwrap();
         let _ = game_state.submit_decision(ActionDecision::without_response_to(
             ActionDecisionKind::Action {

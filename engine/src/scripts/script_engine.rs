@@ -1,8 +1,14 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{LazyLock, Mutex},
+};
+
+use strum::IntoEnumIterator;
 
 use crate::{
     components::damage::DamageRollResult,
     scripts::{
+        rhai::rhai_engine::RhaiScriptEngine,
         script::{Script, ScriptError, ScriptLanguage},
         script_api::{
             ScriptActionView, ScriptEntityView, ScriptReactionBodyContext, ScriptReactionPlan,
@@ -10,6 +16,26 @@ use crate::{
         },
     },
 };
+
+pub static SCRIPT_ENGINES: LazyLock<
+    Mutex<HashMap<ScriptLanguage, Box<dyn ScriptEngine + Send + Sync>>>,
+> = LazyLock::new(|| {
+    let mut engines = HashMap::new();
+    for language in ScriptLanguage::iter() {
+        match language {
+            // ScriptLanguage::Lua => {
+            //     engines.insert(language, Box::new(LuaScriptEngine::new()));
+            // }
+            ScriptLanguage::Rhai => {
+                engines.insert(
+                    language,
+                    Box::new(RhaiScriptEngine::new()) as Box<dyn ScriptEngine + Send + Sync>,
+                );
+            }
+        }
+    }
+    Mutex::new(engines)
+});
 
 pub trait ScriptEngine {
     /// Pure predicate: should the reaction trigger?
@@ -57,5 +83,3 @@ pub trait ScriptEngine {
         damage_roll_result: &DamageRollResult,
     ) -> Result<DamageRollResult, ScriptError>;
 }
-
-pub type ScriptEngineMap = HashMap<ScriptLanguage, Box<dyn ScriptEngine>>;

@@ -176,14 +176,8 @@ impl RenderableMutWithContext<&mut GameState> for Encounter {
 
                     // Participant column
                     ui.table_next_column();
-                    entity.render_with_context(
-                        ui,
-                        (
-                            &game_state.world,
-                            &CreatureRenderMode::Compact,
-                            &mut game_state.script_engines,
-                        ),
-                    );
+                    entity
+                        .render_with_context(ui, (&game_state.world, &CreatureRenderMode::Compact));
                 }
             }
 

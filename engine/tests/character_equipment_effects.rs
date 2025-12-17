@@ -57,7 +57,7 @@ mod tests {
 
         // Before equipping the ring
         let roll = systems::damage::attack_roll_weapon(
-            &mut game_state,
+            &game_state.world,
             entity,
             &EquipmentSlot::MeleeMainHand,
         );
@@ -74,7 +74,7 @@ mod tests {
             ring,
         );
         let roll = systems::damage::attack_roll_weapon(
-            &mut game_state,
+            &game_state.world,
             entity,
             &EquipmentSlot::MeleeMainHand,
         );
@@ -86,7 +86,7 @@ mod tests {
         // Unequip the ring
         systems::loadout::unequip(&mut game_state.world, entity, &EquipmentSlot::Ring1);
         let roll = systems::damage::attack_roll_weapon(
-            &mut game_state,
+            &game_state.world,
             entity,
             &EquipmentSlot::MeleeMainHand,
         );

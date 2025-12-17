@@ -3,7 +3,6 @@ use hecs::{Entity, Ref, World};
 use crate::{
     components::{
         damage::{AttackRoll, DamageRoll},
-        id::EffectId,
         items::{
             equipment::{
                 armor::ArmorClass,
@@ -14,7 +13,6 @@ use crate::{
         },
         modifier::ModifierSource,
     },
-    scripts::script_engine::ScriptEngineMap,
     systems,
 };
 
@@ -82,12 +80,8 @@ pub fn unequip(
     unequipped_item
 }
 
-pub fn armor_class(
-    world: &World,
-    entity: Entity,
-    script_engines: &mut ScriptEngineMap,
-) -> ArmorClass {
-    loadout(world, entity).armor_class(world, entity, script_engines)
+pub fn armor_class(world: &World, entity: Entity) -> ArmorClass {
+    loadout(world, entity).armor_class(world, entity)
 }
 
 pub fn can_equip(world: &World, entity: Entity, equipment: &EquipmentInstance) -> bool {
