@@ -209,8 +209,12 @@ mod tests {
 
         systems::loadout::equip(&mut world, entity, longsword).unwrap();
 
-        let roll =
-            systems::loadout::weapon_attack_roll(&world, entity, &EquipmentSlot::MeleeMainHand);
+        let roll = systems::loadout::weapon_attack_roll(
+            &world,
+            entity,
+            entity,
+            &EquipmentSlot::MeleeMainHand,
+        );
 
         println!("{:?}", roll);
         assert!(
