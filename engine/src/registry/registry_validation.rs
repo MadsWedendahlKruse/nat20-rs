@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     components::{
@@ -29,6 +29,28 @@ pub enum RegistryReference {
     Spell(SpellId),
     Subclass(SubclassId),
     Subspecies(SubspeciesId),
+}
+
+impl Display for RegistryReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RegistryReference::Action(id) => write!(f, "Action '{}'", id),
+            RegistryReference::Background(id) => write!(f, "Background '{}'", id),
+            RegistryReference::Class(id) => write!(f, "Class '{}'", id),
+            RegistryReference::Effect(id) => write!(f, "Effect '{}'", id),
+            RegistryReference::Faction(id) => write!(f, "Faction '{}'", id),
+            RegistryReference::Feat(id) => write!(f, "Feat '{}'", id),
+            RegistryReference::Item(id) => write!(f, "Item '{}'", id),
+            RegistryReference::Resource(id) => write!(f, "Resource '{}'", id),
+            RegistryReference::Script(id, function) => {
+                write!(f, "Script '{}' (function: {:?})", id, function)
+            }
+            RegistryReference::Species(id) => write!(f, "Species '{}'", id),
+            RegistryReference::Spell(id) => write!(f, "Spell '{}'", id),
+            RegistryReference::Subclass(id) => write!(f, "Subclass '{}'", id),
+            RegistryReference::Subspecies(id) => write!(f, "Subspecies '{}'", id),
+        }
+    }
 }
 
 #[derive(Debug, Default)]

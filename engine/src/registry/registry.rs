@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fmt::{self, Debug},
+    fmt::{self, Debug, Display},
     fs,
     hash::Hash,
     path::{Path, PathBuf},
@@ -97,6 +97,7 @@ pub enum RegistryError {
     MissingRegistryEntry {
         path: PathBuf,
         reference: RegistryReference,
+        suggestion: Option<String>,
     },
     ScriptError(ScriptError),
     Many(Vec<RegistryError>),
@@ -141,11 +142,20 @@ impl fmt::Display for RegistryError {
                     id_debug, first_path, second_path
                 )
             }
-            RegistryError::MissingRegistryEntry { path, reference } => {
+            RegistryError::MissingRegistryEntry {
+                path,
+                reference,
+                suggestion,
+            } => {
                 write!(
                     f,
-                    "Missing registry entry for reference {:?} in file {:?}",
-                    reference, path
+                    "Missing registry entry for reference {} in definition at {:?}{}",
+                    reference,
+                    path,
+                    match suggestion {
+                        Some(s) => format!(". Did you mean '{}'?", s),
+                        None => String::new(),
+                    }
                 )
             }
             RegistryError::ScriptError(script_error) => {
@@ -166,7 +176,7 @@ impl std::error::Error for RegistryError {}
 
 impl<K, V, D> Registry<K, V, D>
 where
-    K: Eq + Hash + Clone + Debug,
+    K: Eq + Hash + Clone + Debug + Display,
     V: IdProvider<Id = K> + From<D>,
     D: DeserializeOwned + RegistryReferenceCollector + Clone,
 {
@@ -294,6 +304,10 @@ where
                 None
             }
         }
+    }
+
+    pub fn all_keys_strings(&self) -> Vec<String> {
+        self.entries.keys().map(|key| format!("{}", key)).collect()
     }
 }
 
@@ -568,13 +582,70 @@ impl RegistrySet {
                 };
 
                 if !found {
+                    let suggestion = Self::find_nearest_match(registries, &reference);
                     errors.push(RegistryError::MissingRegistryEntry {
                         path: entry.path.clone(),
                         reference,
+                        suggestion: Some(suggestion),
                     });
                 }
             }
         }
+    }
+
+    fn find_nearest_match(registries: &RegistrySet, reference: &RegistryReference) -> String {
+        let (id_str, candidates) = match reference {
+            RegistryReference::Action(id) => {
+                (id.to_string(), registries.actions.all_keys_strings())
+            }
+            RegistryReference::Background(id) => {
+                (id.to_string(), registries.backgrounds.all_keys_strings())
+            }
+            RegistryReference::Class(id) => (id.to_string(), registries.classes.all_keys_strings()),
+            RegistryReference::Effect(id) => {
+                (id.to_string(), registries.effects.all_keys_strings())
+            }
+            RegistryReference::Faction(id) => {
+                (id.to_string(), registries.factions.all_keys_strings())
+            }
+            RegistryReference::Feat(id) => (id.to_string(), registries.feats.all_keys_strings()),
+            RegistryReference::Item(id) => (id.to_string(), registries.items.all_keys_strings()),
+            RegistryReference::Resource(id) => {
+                (id.to_string(), registries.resources.all_keys_strings())
+            }
+            RegistryReference::Species(id) => {
+                (id.to_string(), registries.species.all_keys_strings())
+            }
+            RegistryReference::Spell(id) => (id.to_string(), registries.spells.all_keys_strings()),
+            RegistryReference::Subclass(id) => {
+                (id.to_string(), registries.subclasses.all_keys_strings())
+            }
+            RegistryReference::Subspecies(id) => {
+                (id.to_string(), registries.subspecies.all_keys_strings())
+            }
+            RegistryReference::Script(id, _) => (
+                id.to_string(),
+                registries
+                    .scripts
+                    .entries
+                    .keys()
+                    .map(|k| format!("{}", k))
+                    .collect(),
+            ),
+        };
+
+        let mut best_match = String::new();
+        let mut best_distance = usize::MAX;
+
+        for candidate in candidates {
+            let distance = strsim::levenshtein(&id_str, &candidate);
+            if distance < best_distance {
+                best_distance = distance;
+                best_match = candidate;
+            }
+        }
+
+        best_match
     }
 }
 
