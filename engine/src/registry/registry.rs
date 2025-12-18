@@ -38,7 +38,7 @@ use crate::{
             spell::SpellDefinition,
         },
     },
-    scripts::script::Script,
+    scripts::script::{Script, ScriptError},
 };
 
 pub static REGISTRIES_FOLDER: &str = "registries";
@@ -98,6 +98,7 @@ pub enum RegistryError {
         path: PathBuf,
         reference: RegistryReference,
     },
+    ScriptError(ScriptError),
     Many(Vec<RegistryError>),
 }
 
@@ -106,14 +107,6 @@ impl RegistryError {
         match self {
             RegistryError::Many(mut inner) => errors.append(&mut inner),
             other => errors.push(other),
-        }
-    }
-
-    pub fn many_if_needed(errors: Vec<RegistryError>) -> Result<(), RegistryError> {
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(RegistryError::Many(errors))
         }
     }
 }
@@ -154,6 +147,9 @@ impl fmt::Display for RegistryError {
                     "Missing registry entry for reference {:?} in file {:?}",
                     reference, path
                 )
+            }
+            RegistryError::ScriptError(script_error) => {
+                write!(f, "Script error: {}", script_error)
             }
             RegistryError::Many(errors) => {
                 writeln!(f, "{} registry error(s):", errors.len())?;
@@ -418,88 +414,104 @@ impl RegistrySet {
         directories: &[&Path],
         errors: &mut Vec<RegistryError>,
     ) -> HashMap<ScriptId, RegistryEntry<Script, Script>> {
-        let mut scripts: HashMap<ScriptId, RegistryEntry<Script, Script>> = HashMap::new();
-        let mut script_id_to_path: HashMap<ScriptId, PathBuf> = HashMap::new();
+        let mut scripts = HashMap::new();
+        let mut script_id_to_path = HashMap::new();
 
         for directory in directories {
             if !directory.exists() {
                 continue;
             }
 
-            let mut stack = vec![directory.to_path_buf()];
-            while let Some(dir) = stack.pop() {
-                let read_dir_iter = match fs::read_dir(&dir) {
-                    Ok(iter) => iter,
-                    Err(error) => {
-                        errors.push(RegistryError::ReadDirectory {
-                            directory: dir.clone(),
-                            message: error.to_string(),
-                        });
-                        continue;
-                    }
-                };
-
-                for entry_result in read_dir_iter {
-                    let entry = match entry_result {
-                        Ok(entry) => entry,
-                        Err(error) => {
-                            errors.push(RegistryError::ReadDirectoryEntry {
-                                directory: dir.clone(),
-                                message: error.to_string(),
-                            });
-                            continue;
-                        }
-                    };
-
-                    let path = entry.path();
-
-                    if path.is_dir() {
-                        stack.push(path);
-                        continue;
-                    }
-
-                    if path.extension().is_none()
-                        || path.extension().and_then(|ext| ext.to_str()) == Some("json")
-                    {
-                        continue;
-                    }
-
-                    match Script::try_from(entry) {
-                        Ok(script) => {
-                            let id = script.id.clone();
-
-                            if let Some(first_path) = script_id_to_path.get(&id).cloned() {
-                                errors.push(RegistryError::DuplicateId {
-                                    id_debug: format!("{:?}", id),
-                                    first_path,
-                                    second_path: path.clone(),
-                                });
-                                continue;
-                            }
-
-                            script_id_to_path.insert(id.clone(), path.clone());
-                            scripts.insert(
-                                id,
-                                RegistryEntry {
-                                    value: script.clone(),
-                                    definition: script,
-                                    path: path.clone(),
-                                },
-                            );
-                        }
-                        Err(script_error) => {
-                            // Map to a structured error; you can add a dedicated ScriptError variant if you prefer.
-                            errors.push(RegistryError::ReadFile {
-                                path: path.clone(),
-                                message: format!("Failed to load script: {:?}", script_error),
-                            });
-                        }
-                    }
-                }
-            }
+            Self::load_scripts_from_directory_recursive(
+                directory,
+                &mut scripts,
+                &mut script_id_to_path,
+                errors,
+            );
         }
 
         scripts
+    }
+
+    fn load_scripts_from_directory_recursive(
+        directory: &Path,
+        scripts: &mut HashMap<ScriptId, RegistryEntry<Script, Script>>,
+        script_id_to_path: &mut HashMap<ScriptId, PathBuf>,
+        errors: &mut Vec<RegistryError>,
+    ) {
+        let read_dir_iter = match fs::read_dir(directory) {
+            Ok(iter) => iter,
+            Err(error) => {
+                errors.push(RegistryError::ReadDirectory {
+                    directory: directory.to_path_buf(),
+                    message: error.to_string(),
+                });
+                return;
+            }
+        };
+
+        for entry_result in read_dir_iter {
+            let entry = match entry_result {
+                Ok(entry) => entry,
+                Err(error) => {
+                    errors.push(RegistryError::ReadDirectoryEntry {
+                        directory: directory.to_path_buf(),
+                        message: error.to_string(),
+                    });
+                    continue;
+                }
+            };
+
+            let path = entry.path();
+
+            if path.is_dir() {
+                Self::load_scripts_from_directory_recursive(
+                    &path,
+                    scripts,
+                    script_id_to_path,
+                    errors,
+                );
+                continue;
+            }
+
+            // Scripts are "non-json" files in registry folders.
+            if path.extension().is_none()
+                || path.extension().and_then(|ext| ext.to_str()) == Some("json")
+            {
+                continue;
+            }
+
+            match Script::try_from(entry) {
+                Ok(script) => {
+                    let id = script.id.clone();
+
+                    if let Some(first_path) = script_id_to_path.get(&id).cloned() {
+                        errors.push(RegistryError::DuplicateId {
+                            id_debug: format!("{:?}", id),
+                            first_path,
+                            second_path: path.clone(),
+                        });
+                        continue;
+                    }
+
+                    script_id_to_path.insert(id.clone(), path.clone());
+                    scripts.insert(
+                        id,
+                        RegistryEntry {
+                            value: script.clone(),
+                            definition: script,
+                            path: path.clone(),
+                        },
+                    );
+                }
+                Err(script_error) => {
+                    errors.push(RegistryError::ReadFile {
+                        path: path.clone(),
+                        message: format!("Failed to load script: {:?}", script_error),
+                    });
+                }
+            }
+        }
     }
 
     fn validate_registry_references<K, V, D>(
@@ -536,14 +548,30 @@ impl RegistrySet {
                     RegistryReference::Subspecies(id) => {
                         registries.subspecies.entries.contains_key(id)
                     }
-                    RegistryReference::Script(id) => registries.scripts.entries.contains_key(id),
+                    RegistryReference::Script(id, function) => {
+                        let found = registries.scripts.entries.contains_key(id);
+
+                        if found {
+                            let script_entry = &registries.scripts.entries[id].value;
+                            if !function.defined_in_script(script_entry) {
+                                errors.push(RegistryError::ScriptError(
+                                    ScriptError::MissingFunction {
+                                        function_name: function.fn_name().to_string(),
+                                        script_id: id.clone(),
+                                    },
+                                ));
+                            }
+                        }
+
+                        found
+                    }
                 };
 
                 if !found {
                     errors.push(RegistryError::MissingRegistryEntry {
                         path: entry.path.clone(),
                         reference,
-                    })
+                    });
                 }
             }
         }

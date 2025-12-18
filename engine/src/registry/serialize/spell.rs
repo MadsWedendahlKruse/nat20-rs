@@ -10,6 +10,7 @@ use crate::{
         registry_validation::{ReferenceCollector, RegistryReference, RegistryReferenceCollector},
         serialize::{action::ActionKindDefinition, targeting::TargetingDefinition},
     },
+    scripts::script::ScriptFunction,
 };
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -47,7 +48,10 @@ impl RegistryReferenceCollector for SpellDefinition {
             collector.add(RegistryReference::Resource(resource.clone()));
         }
         if let Some(script_id) = &self.reaction_trigger {
-            collector.add(RegistryReference::Script(script_id.clone()));
+            collector.add(RegistryReference::Script(
+                script_id.clone(),
+                ScriptFunction::ReactionTrigger,
+            ));
         }
     }
 }

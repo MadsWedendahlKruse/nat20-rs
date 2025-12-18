@@ -14,6 +14,7 @@ use crate::{
             targeting::TargetingDefinition,
         },
     },
+    scripts::script::ScriptFunction,
 };
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -139,7 +140,10 @@ impl RegistryReferenceCollector for ActionKindDefinition {
                 }
             }
             ActionKindDefinition::Reaction { script } => {
-                collector.add(RegistryReference::Script(script.clone()));
+                collector.add(RegistryReference::Script(
+                    script.clone(),
+                    ScriptFunction::ReactionBody,
+                ));
             }
             _ => { /* No references to collect */ }
         }
@@ -169,7 +173,10 @@ impl RegistryReferenceCollector for ActionDefinition {
             collector.add(RegistryReference::Resource(resource.clone()));
         }
         if let Some(reaction_trigger) = &self.reaction_trigger {
-            collector.add(RegistryReference::Script(reaction_trigger.clone()));
+            collector.add(RegistryReference::Script(
+                reaction_trigger.clone(),
+                ScriptFunction::ReactionTrigger,
+            ));
         }
     }
 }

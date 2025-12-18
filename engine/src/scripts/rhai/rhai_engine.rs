@@ -7,7 +7,7 @@ use crate::{
     registry::registry::REGISTRY_ROOT,
     scripts::{
         rhai::rhai_types,
-        script::{Script, ScriptError},
+        script::{Script, ScriptError, ScriptFunction},
         script_api::{
             ScriptActionContext, ScriptActionView, ScriptD20CheckDCKind,
             ScriptD20CheckPerformedView, ScriptD20Result, ScriptDamageRollResult, ScriptEntity,
@@ -99,7 +99,12 @@ impl ScriptEngine for RhaiScriptEngine {
 
         let mut scope = Scope::new();
         self.engine
-            .call_fn::<bool>(&mut scope, &ast, "reaction_trigger", (context.clone(),))
+            .call_fn::<bool>(
+                &mut scope,
+                &ast,
+                ScriptFunction::ReactionTrigger.fn_name(),
+                (context.clone(),),
+            )
             .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))
     }
 
@@ -114,7 +119,12 @@ impl ScriptEngine for RhaiScriptEngine {
         let mut scope = Scope::new();
         let plan = self
             .engine
-            .call_fn::<ScriptReactionPlan>(&mut scope, &ast, "reaction_body", (context.clone(),))
+            .call_fn::<ScriptReactionPlan>(
+                &mut scope,
+                &ast,
+                ScriptFunction::ReactionBody.fn_name(),
+                (context.clone(),),
+            )
             .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
 
         Ok(plan)
@@ -133,7 +143,7 @@ impl ScriptEngine for RhaiScriptEngine {
             .call_fn::<()>(
                 &mut scope,
                 &ast,
-                "resource_cost_hook",
+                ScriptFunction::ResourceCostHook.fn_name(),
                 (action.clone(), entity.clone()),
             )
             .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
@@ -154,7 +164,7 @@ impl ScriptEngine for RhaiScriptEngine {
             .call_fn::<()>(
                 &mut scope,
                 &ast,
-                "action_hook",
+                ScriptFunction::ActionHook.fn_name(),
                 (context.clone(), entity.clone()),
             )
             .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
@@ -171,7 +181,12 @@ impl ScriptEngine for RhaiScriptEngine {
         let mut scope = Scope::new();
         let modifier = self
             .engine
-            .call_fn::<i64>(&mut scope, &ast, "armor_class_hook", (entity.clone(),))
+            .call_fn::<i64>(
+                &mut scope,
+                &ast,
+                ScriptFunction::ArmorClassHook.fn_name(),
+                (entity.clone(),),
+            )
             .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
 
         // Rhai’s default integer type is i64. Apparently there's a "significant
@@ -193,7 +208,7 @@ impl ScriptEngine for RhaiScriptEngine {
             .call_fn::<()>(
                 &mut scope,
                 &ast,
-                "damage_roll_result_hook",
+                ScriptFunction::DamageRollResultHook.fn_name(),
                 (entity.clone(), damage_roll_result.clone()),
             )
             .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;

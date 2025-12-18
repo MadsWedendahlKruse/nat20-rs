@@ -1,6 +1,6 @@
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::{
     components::{
@@ -29,8 +29,11 @@ use crate::{
             SavingThrowModifierProvider, SkillModifierProvider,
         },
     },
-    scripts::script_api::{
-        ScriptActionView, ScriptDamageRollResult, ScriptEntityView, ScriptResourceCost,
+    scripts::{
+        script::ScriptFunction,
+        script_api::{
+            ScriptActionView, ScriptDamageRollResult, ScriptEntityView, ScriptResourceCost,
+        },
     },
     systems,
 };
@@ -152,6 +155,57 @@ impl RegistryReferenceCollector for EffectDefinition {
                     collector.add(RegistryReference::Resource(resource.clone()));
                 }
                 _ => { /* No references to collect */ }
+            }
+        }
+        for hook in &self.pre_attack_roll {
+            match hook {
+                AttackRollHookDefinition::Script { script } => {
+                    collector.add(RegistryReference::Script(
+                        script.clone(),
+                        ScriptFunction::AttackRollHook,
+                    ));
+                }
+                _ => { /* No references to collect */ }
+            }
+        }
+        for hook in &self.post_damage_roll {
+            match hook {
+                DamageRollResultHookDefinition::Script { script } => {
+                    collector.add(RegistryReference::Script(
+                        script.clone(),
+                        ScriptFunction::DamageRollResultHook,
+                    ));
+                }
+            }
+        }
+        for hook in &self.on_armor_class {
+            match hook {
+                ArmorClassHookDefinition::Script { script } => {
+                    collector.add(RegistryReference::Script(
+                        script.clone(),
+                        ScriptFunction::ArmorClassHook,
+                    ));
+                }
+            }
+        }
+        for hook in &self.on_action {
+            match hook {
+                ActionHookDefinition::Script { script } => {
+                    collector.add(RegistryReference::Script(
+                        script.clone(),
+                        ScriptFunction::ActionHook,
+                    ));
+                }
+            }
+        }
+        for hook in &self.on_resource_cost {
+            match hook {
+                ResourceCostHookDefinition::Script { script } => {
+                    collector.add(RegistryReference::Script(
+                        script.clone(),
+                        ScriptFunction::ResourceCostHook,
+                    ));
+                }
             }
         }
     }

@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     fs::{self, DirEntry},
     str::FromStr,
 };
@@ -12,8 +13,49 @@ use crate::{
 
 #[derive(Debug)]
 pub enum ScriptError {
+    MissingFileExtension,
+    UnknownLanguage {
+        full_path: String,
+        extension: String,
+    },
+    MissingFunction {
+        function_name: String,
+        script_id: ScriptId,
+    },
     LoadError(String),
     RuntimeError(String),
+}
+
+impl Display for ScriptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScriptError::MissingFileExtension => {
+                write!(f, "Script file is missing a file extension")
+            }
+            ScriptError::UnknownLanguage {
+                full_path,
+                extension,
+            } => {
+                write!(
+                    f,
+                    "Unknown script language '{}' for script file '{}'",
+                    extension, full_path
+                )
+            }
+            ScriptError::MissingFunction {
+                function_name,
+                script_id,
+            } => {
+                write!(
+                    f,
+                    "Missing function '{}' in script '{}'",
+                    function_name, script_id
+                )
+            }
+            ScriptError::LoadError(message) => write!(f, "Script load error: {}", message),
+            ScriptError::RuntimeError(message) => write!(f, "Script runtime error: {}", message),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, EnumIter)]
@@ -70,12 +112,15 @@ impl TryFrom<DirEntry> for Script {
             ))
         })?;
 
-        let language = ScriptLanguage::from_str(
-            full_file_path
-                .extension()
-                .and_then(|s| s.to_str())
-                .ok_or_else(|| ScriptError::LoadError("Missing file extension".to_string()))?,
-        )?;
+        let file_extension = full_file_path
+            .extension()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| ScriptError::MissingFileExtension)?;
+        let language =
+            ScriptLanguage::from_str(file_extension).map_err(|_| ScriptError::UnknownLanguage {
+                full_path: full_file_path.to_string_lossy().to_string(),
+                extension: file_extension.to_string(),
+            })?;
 
         // Keep visiting parent folders until we reach the registry root
         let mut script_id = file_name.to_string();
@@ -107,5 +152,38 @@ impl IdProvider for Script {
 
     fn id(&self) -> &Self::Id {
         &self.id
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumIter)]
+pub enum ScriptFunction {
+    ActionHook,
+    ArmorClassHook,
+    AttackRollHook,
+    DamageRollResultHook,
+    ReactionBody,
+    ReactionTrigger,
+    ResourceCostHook,
+}
+
+impl ScriptFunction {
+    pub fn fn_name(&self) -> &str {
+        match self {
+            ScriptFunction::ActionHook => "action_hook",
+            ScriptFunction::ArmorClassHook => "armor_class_hook",
+            ScriptFunction::AttackRollHook => "attack_roll_hook",
+            ScriptFunction::DamageRollResultHook => "damage_roll_result_hook",
+            ScriptFunction::ReactionBody => "reaction_body",
+            ScriptFunction::ReactionTrigger => "reaction_trigger",
+            ScriptFunction::ResourceCostHook => "resource_cost_hook",
+        }
+    }
+
+    pub fn defined_in_script(&self, script: &Script) -> bool {
+        match script.language {
+            ScriptLanguage::Rhai => script
+                .content
+                .contains(format!("fn {}", self.fn_name()).as_str()),
+        }
     }
 }

@@ -1,14 +1,17 @@
 use std::collections::HashMap;
 
-use crate::components::{
-    background::Background,
-    faction::Faction,
-    feat::Feat,
-    id::{
-        ActionId, BackgroundId, ClassId, EffectId, FactionId, FeatId, ItemId, ResourceId, ScriptId,
-        SpeciesId, SpellId, SubclassId, SubspeciesId,
+use crate::{
+    components::{
+        background::Background,
+        faction::Faction,
+        feat::Feat,
+        id::{
+            ActionId, BackgroundId, ClassId, EffectId, FactionId, FeatId, ItemId, ResourceId,
+            ScriptId, SpeciesId, SpellId, SubclassId, SubspeciesId,
+        },
+        resource::Resource,
     },
-    resource::Resource,
+    scripts::script::ScriptFunction,
 };
 
 #[derive(Debug, Clone)]
@@ -21,7 +24,7 @@ pub enum RegistryReference {
     Feat(FeatId),
     Item(ItemId),
     Resource(ResourceId),
-    Script(ScriptId),
+    Script(ScriptId, ScriptFunction),
     Species(SpeciesId),
     Spell(SpellId),
     Subclass(SubclassId),
