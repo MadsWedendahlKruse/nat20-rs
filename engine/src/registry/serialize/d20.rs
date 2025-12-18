@@ -37,18 +37,18 @@ impl FromStr for AttackRollProvider {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let function = match s {
             "weapon_attack_roll" => Arc::new(
-                |world: &World, entity: Entity, action_context: &ActionContext| {
-                    weapon_attack_roll(world, entity, action_context)
+                |world: &World, entity: Entity, target: Entity, action_context: &ActionContext| {
+                    weapon_attack_roll(world, entity, target, action_context)
                 },
             ) as Arc<AttackRollFunction>,
             "spell_attack_roll" => Arc::new({
-                |world: &World, entity: Entity, action_context: &ActionContext| {
+                |world: &World, entity: Entity, target: Entity, action_context: &ActionContext| {
                     let spell_id = if let ActionContext::Spell { id, .. } = action_context {
                         id
                     } else {
                         panic!("Action context must be Spell for spell_attack_roll");
                     };
-                    spell_attack_roll(world, entity, &spell_id)
+                    spell_attack_roll(world, entity, target, &spell_id)
                 }
             }) as Arc<AttackRollFunction>,
             _ => {
@@ -77,14 +77,24 @@ impl From<AttackRollProvider> for String {
     }
 }
 
-fn weapon_attack_roll(world: &World, entity: Entity, action_context: &ActionContext) -> AttackRoll {
+fn weapon_attack_roll(
+    world: &World,
+    entity: Entity,
+    target: Entity,
+    action_context: &ActionContext,
+) -> AttackRoll {
     if let ActionContext::Weapon { slot } = action_context {
-        return systems::loadout::weapon_attack_roll(world, entity, slot);
+        return systems::loadout::weapon_attack_roll(world, entity, target, slot);
     }
     panic!("Action context must be Weapon");
 }
 
-fn spell_attack_roll(world: &World, caster: Entity, spell_id: &SpellId) -> AttackRoll {
+fn spell_attack_roll(
+    world: &World,
+    caster: Entity,
+    target: Entity,
+    spell_id: &SpellId,
+) -> AttackRoll {
     let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, caster);
     let spellcasting_ability = systems::helpers::get_component::<Spellbook>(world, caster)
         .spellcasting_ability(spell_id)

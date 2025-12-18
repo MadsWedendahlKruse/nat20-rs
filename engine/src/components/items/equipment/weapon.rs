@@ -52,7 +52,7 @@ pub enum WeaponProperties {
     // TODO: Loading,
     Range(TargetingRange),
     Reach,
-    Thrown,
+    Thrown(TargetingRange),
     TwoHanded,
     /// Damage if wielded with two hands
     Versatile(DiceSet),
@@ -66,6 +66,7 @@ impl Display for WeaponProperties {
             WeaponProperties::Versatile(dice) => write!(f, "Versatile ({})", dice),
             WeaponProperties::Range(range) => write!(f, "Range ({})", range),
             WeaponProperties::TwoHanded => write!(f, "Two-Handed"),
+            WeaponProperties::Thrown(range) => write!(f, "Thrown ({})", range),
             _ => write!(f, "{:?}", self),
         }
     }
@@ -83,7 +84,6 @@ impl FromStr for WeaponProperties {
                 "heavy" => Ok(WeaponProperties::Heavy),
                 "light" => Ok(WeaponProperties::Light),
                 "reach" => Ok(WeaponProperties::Reach),
-                "thrown" => Ok(WeaponProperties::Thrown),
                 "twohanded" | "two-handed" => Ok(WeaponProperties::TwoHanded),
                 _ => Err(format!("Invalid weapon property: {}", s)),
             }
@@ -116,6 +116,16 @@ impl FromStr for WeaponProperties {
                             .trim_end_matches("m"),
                     )?;
                     Ok(WeaponProperties::Range(range))
+                }
+                "thrown" => {
+                    let rest = parts[1..].join(" ");
+                    let range = TargetingRange::from_str(
+                        rest.trim()
+                            .trim_start_matches('(')
+                            .trim_end_matches(')')
+                            .trim_end_matches("m"),
+                    )?;
+                    Ok(WeaponProperties::Thrown(range))
                 }
                 _ => Err(format!("Invalid weapon property: {}", s)),
             }

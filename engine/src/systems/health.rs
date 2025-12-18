@@ -212,6 +212,7 @@ pub fn damage(
                 attack_roll.as_ref(),
                 &game_state.world,
                 performer,
+                target,
                 context,
             );
             let armor_class = systems::loadout::armor_class(&game_state.world, target);

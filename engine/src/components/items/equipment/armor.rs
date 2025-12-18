@@ -38,6 +38,12 @@ impl ArmorDexterityBonus {
     }
 }
 
+impl Default for ArmorDexterityBonus {
+    fn default() -> Self {
+        ArmorDexterityBonus::Unlimited
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArmorClass {
     pub base: (i32, ModifierSource),

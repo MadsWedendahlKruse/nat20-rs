@@ -8,7 +8,7 @@ use parry3d::{
     shape::{Capsule, Shape},
 };
 use polyanya::Coords;
-use tracing::debug;
+use uom::si::f32::Length;
 
 use crate::{
     components::species::CreatureSize,
@@ -416,6 +416,17 @@ pub fn ground_position(
     } else {
         None
     }
+}
+
+pub fn distance_between_entities(
+    world: &World,
+    entity_a: Entity,
+    entity_b: Entity,
+) -> Option<Length> {
+    let pos_a = get_foot_position(world, entity_a)?;
+    let pos_b = get_foot_position(world, entity_b)?;
+    let distance = (pos_b - pos_a).magnitude();
+    Some(Length::new::<uom::si::length::meter>(distance))
 }
 
 pub fn teleport_to(world: &mut World, entity: Entity, new_position: &Point3<f32>) {

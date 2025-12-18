@@ -420,7 +420,8 @@ fn render_target_selection(
                 if let Some(potential_target) = &potential_target_instance
                     && let TargetInstance::Entity(target) = potential_target
                 {
-                    let attack_roll = attack_roll(&game_state.world, action.actor, &action.context);
+                    let attack_roll =
+                        attack_roll(&game_state.world, action.actor, *target, &action.context);
                     let target_ac = systems::loadout::armor_class(&game_state.world, *target);
                     ui.tooltip(|| {
                         ui.separator();

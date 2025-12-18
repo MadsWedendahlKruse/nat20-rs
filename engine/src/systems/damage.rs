@@ -6,7 +6,6 @@ use crate::{
         damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
         items::equipment::slots::EquipmentSlot,
     },
-    engine::game_state::GameState,
     systems,
 };
 
@@ -62,9 +61,10 @@ pub fn attack_roll_fn(
     attack_roll_fn: &AttackRollFunction,
     world: &World,
     entity: Entity,
+    target: Entity,
     context: &ActionContext,
 ) -> AttackRollResult {
-    let roll = attack_roll_fn(world, entity, context);
+    let roll = attack_roll_fn(world, entity, target, context);
     attack_roll(roll, world, entity)
 }
 
@@ -82,9 +82,14 @@ pub fn damage_roll_weapon(
     )
 }
 
-pub fn attack_roll_weapon(world: &World, entity: Entity, slot: &EquipmentSlot) -> AttackRollResult {
+pub fn attack_roll_weapon(
+    world: &World,
+    entity: Entity,
+    target: Entity,
+    slot: &EquipmentSlot,
+) -> AttackRollResult {
     attack_roll(
-        systems::loadout::weapon_attack_roll(world, entity, slot),
+        systems::loadout::weapon_attack_roll(world, entity, target, slot),
         world,
         entity,
     )

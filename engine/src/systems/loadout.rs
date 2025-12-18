@@ -92,6 +92,11 @@ pub fn weapon_damage_roll(world: &World, entity: Entity, slot: &EquipmentSlot) -
     loadout(world, entity).damage_roll(world, entity, slot)
 }
 
-pub fn weapon_attack_roll(world: &World, entity: Entity, slot: &EquipmentSlot) -> AttackRoll {
-    loadout(world, entity).attack_roll(world, entity, slot)
+pub fn weapon_attack_roll(
+    world: &World,
+    entity: Entity,
+    target: Entity,
+    slot: &EquipmentSlot,
+) -> AttackRoll {
+    loadout(world, entity).attack_roll(world, entity, target, slot)
 }

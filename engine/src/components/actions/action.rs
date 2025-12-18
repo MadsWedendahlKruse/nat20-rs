@@ -49,7 +49,8 @@ pub enum ActionContext {
 }
 
 pub type DamageFunction = dyn Fn(&World, Entity, &ActionContext) -> DamageRoll + Send + Sync;
-pub type AttackRollFunction = dyn Fn(&World, Entity, &ActionContext) -> AttackRoll + Send + Sync;
+pub type AttackRollFunction =
+    dyn Fn(&World, Entity, Entity, &ActionContext) -> AttackRoll + Send + Sync;
 pub type SavingThrowFunction =
     dyn Fn(&World, Entity, &ActionContext) -> SavingThrowDC + Send + Sync;
 pub type HealFunction = dyn Fn(&World, Entity, &ActionContext) -> DiceSetRoll + Send + Sync;

@@ -334,9 +334,7 @@ impl TargetingContext {
 
             let distance = match target {
                 TargetInstance::Entity(entity) => {
-                    let target_position =
-                        systems::geometry::get_foot_position(world, *entity).unwrap();
-                    Length::new::<meter>((target_position - actor_position).norm())
+                    systems::geometry::distance_between_entities(world, actor, *entity).unwrap()
                 }
 
                 TargetInstance::Point(point) => {

@@ -59,6 +59,7 @@ mod tests {
         let roll = systems::damage::attack_roll_weapon(
             &game_state.world,
             entity,
+            entity,
             &EquipmentSlot::MeleeMainHand,
         );
         assert_eq!(
@@ -76,6 +77,7 @@ mod tests {
         let roll = systems::damage::attack_roll_weapon(
             &game_state.world,
             entity,
+            entity,
             &EquipmentSlot::MeleeMainHand,
         );
         assert_eq!(
@@ -87,6 +89,7 @@ mod tests {
         systems::loadout::unequip(&mut game_state.world, entity, &EquipmentSlot::Ring1);
         let roll = systems::damage::attack_roll_weapon(
             &game_state.world,
+            entity,
             entity,
             &EquipmentSlot::MeleeMainHand,
         );

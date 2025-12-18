@@ -27,13 +27,7 @@ impl EquipmentSlot {
     }
 
     pub fn is_weapon_slot(&self) -> bool {
-        matches!(
-            self,
-            EquipmentSlot::MeleeMainHand
-                | EquipmentSlot::MeleeOffHand
-                | EquipmentSlot::RangedMainHand
-                | EquipmentSlot::RangedOffHand
-        )
+        Self::weapon_slots().contains(self)
     }
 
     pub fn other_hand(&self) -> Option<EquipmentSlot> {

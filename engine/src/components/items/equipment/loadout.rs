@@ -7,6 +7,7 @@ use crate::{
     components::{
         ability::AbilityScoreMap,
         actions::action::{ActionContext, ActionMap, ActionProvider},
+        d20::AdvantageType,
         damage::{AttackRoll, AttackRollResult, DamageRoll},
         id::{EffectId, ItemId},
         items::{
@@ -315,16 +316,31 @@ impl Loadout {
         false
     }
 
-    pub fn attack_roll(&self, world: &World, entity: Entity, slot: &EquipmentSlot) -> AttackRoll {
+    pub fn attack_roll(
+        &self,
+        world: &World,
+        entity: Entity,
+        target: Entity,
+        slot: &EquipmentSlot,
+    ) -> AttackRoll {
         // TODO: Unarmed attacks
         let weapon = self
             .weapon_in_hand(slot)
             .expect("No weapon equipped in the specified slot");
-        weapon.attack_roll(
+        let mut attack_roll = weapon.attack_roll(
             &systems::helpers::get_component::<AbilityScoreMap>(world, entity),
             &systems::helpers::get_component::<WeaponProficiencyMap>(world, entity)
                 .proficiency(&weapon.category()),
-        )
+        );
+        let distance = systems::geometry::distance_between_entities(world, entity, target).unwrap();
+        let range = weapon.range();
+        if distance > range.normal() {
+            attack_roll.d20_check.advantage_tracker_mut().add(
+                AdvantageType::Disadvantage,
+                ModifierSource::Custom("Target is outside normal range".to_string()),
+            );
+        }
+        attack_roll
     }
 
     pub fn damage_roll(&self, world: &World, entity: Entity, slot: &EquipmentSlot) -> DamageRoll {
