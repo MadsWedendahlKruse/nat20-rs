@@ -87,6 +87,15 @@ impl fmt::Display for DamageComponentResult {
     }
 }
 
+impl Default for DamageComponentResult {
+    fn default() -> Self {
+        Self {
+            result: DiceSetRollResult::default(),
+            damage_type: DamageType::Slashing,
+        }
+    }
+}
+
 /// This is used in the attack roll hook so we e.g. only apply Fighting Style
 /// Archery when making a ranged attack
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -237,6 +246,16 @@ impl fmt::Display for DamageRollResult {
             write!(f, " + {}", comp)?;
         }
         write!(f, " = {}", self.total)
+    }
+}
+
+impl Default for DamageRollResult {
+    fn default() -> Self {
+        Self {
+            components: vec![DamageComponentResult::default()],
+            total: 0,
+            source: DamageSource::Spell,
+        }
     }
 }
 

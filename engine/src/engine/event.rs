@@ -236,7 +236,7 @@ pub struct ActionData {
 pub struct ReactionData {
     pub reactor: Entity,
     // The event that triggered this reaction
-    pub event: Arc<Event>,
+    pub event: Box<Event>,
     pub reaction_id: ActionId,
     pub context: ActionContext,
     pub resource_cost: ResourceAmountMap,

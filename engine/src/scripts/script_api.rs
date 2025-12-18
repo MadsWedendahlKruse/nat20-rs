@@ -1,13 +1,18 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    fmt::Debug,
+    str::FromStr,
+    sync::{Arc, RwLock},
+};
 
 use hecs::{Entity, World};
 
 use crate::{
     components::{
         actions::action::ActionContext,
+        damage::{DamageRollResult, DamageSource},
         dice::{DiceSet, DiceSetRoll},
         id::{ActionId, ResourceId},
-        items::equipment::{armor::ArmorType, loadout::Loadout, weapon::WeaponKind},
+        items::equipment::loadout::Loadout,
         modifier::{ModifierSet, ModifierSource},
         resource::{ResourceAmount, ResourceAmountMap, ResourceBudgetKind, ResourceMap},
     },
@@ -22,6 +27,125 @@ use crate::{
         d20::{D20CheckDCKind, D20ResultKind},
     },
 };
+
+/// Thread-safe shared wrapper for script-exposed data. The primary purpose is to
+/// allow the scripts to mutate data without cloning it back and forth, e.g.
+/// exposing a resource cost map that the script can modify in place.
+///
+/// However, note that sometimes we want to expose data as immutable (read-only).
+/// This is due to the following reasons:
+///     1. There are different types of scripts, and not all of them are supposed
+///        to modify data. For example, a reaction trigger script should only inspect
+///        the event which triggerd it, and then decide whether to react or not. It
+///        should not be able to modify the event data itself.
+///     2. To avoid duplicating structs/enums for mutable vs immutable variants,
+///        we use a single `ScriptShared<T>` type with a flag indicating mutability.
+///        This simplifies the API and reduces code duplication.
+/// The `mutable` flag indicates whether the data can be mutated via `write()`.
+/// Only data that has been taken with `take_from()` is intended to be mutable.
+#[derive(Debug, Clone)]
+pub struct ScriptShared<T> {
+    inner: Arc<RwLock<T>>,
+    mutable: bool,
+}
+
+impl<T> ScriptShared<T> {
+    pub fn new(value: T) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(value)),
+            mutable: false,
+        }
+    }
+
+    /// Moves the value out of `target` and replaces it with `T::default()`.
+    pub fn take_from(target: &mut T) -> Self
+    where
+        T: Default,
+    {
+        Self {
+            inner: Arc::new(RwLock::new(std::mem::take(target))),
+            mutable: true,
+        }
+    }
+
+    pub fn is_mutable(&self) -> bool {
+        self.mutable
+    }
+
+    /// Moves the value out of this shared wrapper.
+    /// Panics if the handle was cloned and is still shared.
+    pub fn into_inner(self) -> T
+    where
+        T: Debug,
+    {
+        Arc::try_unwrap(self.inner)
+            .expect("Shared value leaked (extra Arc clones exist)")
+            .into_inner()
+            .expect("RwLock poisoned")
+    }
+
+    pub fn read(&self) -> std::sync::RwLockReadGuard<'_, T> {
+        self.inner.read().expect("RwLock poisoned")
+    }
+
+    pub fn write(&self) -> std::sync::RwLockWriteGuard<'_, T> {
+        if !self.mutable {
+            panic!("Attempted to get mutable access to an immutable ScriptShared value");
+        }
+        self.inner.write().expect("RwLock poisoned")
+    }
+}
+
+macro_rules! impl_script_shared_methods {
+    ($wrapper:ty, $inner:ty) => {
+        impl $wrapper {
+            pub fn new(value: $inner) -> Self {
+                Self {
+                    inner: ScriptShared::new(value),
+                }
+            }
+
+            pub fn take_from(target: &mut $inner) -> Self {
+                Self {
+                    inner: ScriptShared::take_from(target),
+                }
+            }
+
+            pub fn into_inner(self) -> $inner {
+                self.inner.into_inner()
+            }
+        }
+    };
+}
+
+macro_rules! impl_take_replace_world {
+    ($wrapper:ty, $inner:ty) => {
+        impl $wrapper {
+            pub fn new_from_world(world: &World, entity: Entity) -> Self {
+                let component = systems::helpers::get_component_clone::<$inner>(world, entity);
+                Self::new(component)
+            }
+
+            pub fn take_from_world(world: &mut World, entity: Entity) -> Self {
+                if let Ok(component) = world.query_one_mut::<&mut $inner>(entity) {
+                    Self::take_from(component)
+                } else {
+                    panic!(
+                        "Entity {:?} does not have component {}",
+                        entity,
+                        std::any::type_name::<$inner>()
+                    );
+                }
+            }
+
+            pub fn replace_in_world(self, world: &mut World, entity: Entity) {
+                if let Ok(component) = world.query_one_mut::<&mut $inner>(entity) {
+                    *component = self.into_inner();
+                }
+            }
+        }
+    };
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScriptEntity {
@@ -41,6 +165,35 @@ impl Into<Entity> for ScriptEntity {
         Entity::from_bits(self.id).unwrap()
     }
 }
+
+#[derive(Clone)]
+pub struct ScriptDamageRollResult {
+    inner: ScriptShared<DamageRollResult>,
+}
+
+impl ScriptDamageRollResult {
+    pub fn source(&self) -> DamageSource {
+        self.inner.read().source.clone()
+    }
+
+    pub fn clamp_damage_dice_min(&mut self, minimum_roll: u32) {
+        let mut inner = self.inner.write();
+
+        for component in &mut inner.components {
+            // This assumes DamageComponentResult has `result: DiceSetRollResult` etc.
+            for roll in &mut component.result.rolls {
+                if *roll < minimum_roll {
+                    *roll = minimum_roll;
+                }
+            }
+            component.result.recalculate_total();
+        }
+
+        inner.recalculate_total();
+    }
+}
+
+impl_script_shared_methods!(ScriptDamageRollResult, DamageRollResult);
 
 #[derive(Clone)]
 pub struct ScriptD20CheckDCKind {
@@ -81,17 +234,6 @@ impl ScriptD20Result {
             is_success: result_kind.is_success(dc_kind),
         }
     }
-}
-
-// TODO
-pub struct ScriptDiceRollResult {
-    pub subtotal: i32,
-    pub die_results: Vec<u32>,
-}
-
-pub struct ScriptDamageRollResult {
-    pub total_damage: i32,
-    // add more fields as needed
 }
 
 /// High-level event view that scripts can work with.
@@ -200,52 +342,39 @@ impl From<&ActionContext> for ScriptActionContext {
     }
 }
 
-/// Resource cost passed to/from scripts.
-/// Tracks if it was modified inside the script, so we know whether to update the
-/// original cost outside the script.
 #[derive(Clone)]
 pub struct ScriptResourceCost {
-    pub inner: ResourceAmountMap,
-    pub modified: bool,
+    inner: ScriptShared<ResourceAmountMap>,
 }
 
 impl ScriptResourceCost {
     pub fn costs_resource(&self, resource_id: &ResourceId) -> bool {
-        self.inner.contains_key(resource_id)
+        self.inner.read().contains_key(resource_id)
     }
 
     pub fn replace_resource(&mut self, from: &ResourceId, to: &ResourceId, amount: ResourceAmount) {
-        if let Some(from_amount) = self.inner.get(from) {
+        let mut cost = self.inner.write();
+
+        if let Some(from_amount) = cost.get(from) {
             if &amount >= from_amount {
-                self.inner.remove(from);
+                cost.remove(from);
             } else {
-                self.inner
-                    .entry(from.clone())
+                cost.entry(from.clone())
                     .and_modify(|e| *e -= amount.clone());
             }
         }
 
-        self.inner
-            .entry(to.clone())
+        cost.entry(to.clone())
             .and_modify(|e| *e += amount.clone())
             .or_insert(amount);
-
-        self.modified = true;
-    }
-
-    pub fn apply_modifications(&self, cost: &mut ResourceAmountMap) {
-        if self.modified {
-            *cost = self.inner.clone();
-        }
     }
 }
 
+impl_script_shared_methods!(ScriptResourceCost, ResourceAmountMap);
+
 impl From<&ResourceAmountMap> for ScriptResourceCost {
     fn from(cost: &ResourceAmountMap) -> Self {
-        ScriptResourceCost {
-            inner: cost.clone(),
-            modified: false,
-        }
+        ScriptResourceCost::new(cost.clone())
     }
 }
 
@@ -256,7 +385,6 @@ pub struct ScriptActionView {
     pub actor: Entity,
     pub action_context: ScriptActionContext,
     pub resource_cost: ScriptResourceCost,
-    // later: spell_id, spell_level, school, tags, etc.
 }
 
 impl ScriptActionView {
@@ -264,13 +392,13 @@ impl ScriptActionView {
         action_id: &ActionId,
         actor: Entity,
         action_context: &ActionContext,
-        resource_cost: &ResourceAmountMap,
+        resource_cost: ScriptResourceCost,
     ) -> Self {
         ScriptActionView {
             action_id: action_id.to_string(),
             actor,
             action_context: ScriptActionContext::from(action_context),
-            resource_cost: ScriptResourceCost::from(resource_cost),
+            resource_cost,
         }
     }
 }
@@ -281,7 +409,7 @@ impl From<&ActionData> for ScriptActionView {
             action_id: action.action_id.to_string(),
             actor: action.actor,
             action_context: ScriptActionContext::from(&action.context),
-            resource_cost: ScriptResourceCost::from(&action.resource_cost),
+            resource_cost: ScriptResourceCost::new(action.resource_cost.clone()),
         }
     }
 }
@@ -427,44 +555,29 @@ impl From<&Loadout> for ScriptLoadoutView {
 
 #[derive(Debug, Clone)]
 pub struct ScriptResourceView {
-    pub modified: bool,
-    pub resources: ResourceMap,
-}
-
-impl From<&ResourceMap> for ScriptResourceView {
-    fn from(resources: &ResourceMap) -> Self {
-        ScriptResourceView {
-            modified: false,
-            resources: resources.clone(),
-        }
-    }
+    pub inner: ScriptShared<ResourceMap>,
 }
 
 impl ScriptResourceView {
     pub fn can_afford_resource(&self, resource_id: &ResourceId, amount: &ResourceAmount) -> bool {
-        return self.resources.can_afford(resource_id, amount);
+        return self.inner.read().can_afford(resource_id, amount);
     }
 
     pub fn add_resource(&mut self, resource_id: &ResourceId, amount: &ResourceAmount) {
-        self.resources.add(
+        self.inner.write().add(
             resource_id.clone(),
             ResourceBudgetKind::from(amount.clone()),
             true,
         );
-        self.modified = true;
-    }
-
-    pub fn apply_modifications(&self, resources: &mut ResourceMap) {
-        if self.modified {
-            *resources = self.resources.clone();
-        }
     }
 }
+
+impl_script_shared_methods!(ScriptResourceView, ResourceMap);
+impl_take_replace_world!(ScriptResourceView, ResourceMap);
 
 /// Snapshot of an entity for scripts to inspect.
 #[derive(Debug, Clone)]
 pub struct ScriptEntityView {
-    // pub modified: bool,
     pub entity: ScriptEntity,
     pub resources: ScriptResourceView,
     pub loadout: ScriptLoadoutView,
@@ -472,23 +585,25 @@ pub struct ScriptEntityView {
 }
 
 impl ScriptEntityView {
-    pub fn from_world(world: &World, entity: Entity) -> Self {
-        let resources = systems::helpers::get_component::<ResourceMap>(world, entity);
-        let loadout = systems::loadout::loadout(world, entity);
-
+    pub fn new_from_world(world: &World, entity: Entity) -> Self {
         ScriptEntityView {
-            // modified: false,
             entity: ScriptEntity::from(entity),
-            resources: ScriptResourceView::from(&*resources),
-            loadout: ScriptLoadoutView::from(&*loadout),
+            resources: ScriptResourceView::new_from_world(world, entity),
+            loadout: ScriptLoadoutView::from(&*systems::loadout::loadout(world, entity)),
         }
     }
 
-    pub fn apply_modifications(&self, world: &mut World) {
+    pub fn take_from_world(world: &mut World, entity: Entity) -> Self {
+        ScriptEntityView {
+            entity: ScriptEntity::from(entity),
+            resources: ScriptResourceView::take_from_world(world, entity),
+            loadout: ScriptLoadoutView::from(&*systems::loadout::loadout(world, entity)),
+        }
+    }
+
+    pub fn replace_in_world(self, world: &mut World) {
         let entity: Entity = self.entity.clone().into();
-        self.resources.apply_modifications(
-            &mut systems::helpers::get_component_mut::<ResourceMap>(world, entity),
-        );
+        self.resources.replace_in_world(world, entity);
     }
 }
 

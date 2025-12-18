@@ -5,15 +5,12 @@ use std::{
 
 use strum::IntoEnumIterator;
 
-use crate::{
-    components::damage::DamageRollResult,
-    scripts::{
-        rhai::rhai_engine::RhaiScriptEngine,
-        script::{Script, ScriptError, ScriptLanguage},
-        script_api::{
-            ScriptActionView, ScriptEntityView, ScriptReactionBodyContext, ScriptReactionPlan,
-            ScriptReactionTriggerContext, ScriptResourceCost,
-        },
+use crate::scripts::{
+    rhai::rhai_engine::RhaiScriptEngine,
+    script::{Script, ScriptError, ScriptLanguage},
+    script_api::{
+        ScriptActionView, ScriptDamageRollResult, ScriptEntityView, ScriptReactionBodyContext,
+        ScriptReactionPlan, ScriptReactionTriggerContext,
     },
 };
 
@@ -58,7 +55,7 @@ pub trait ScriptEngine {
         script: &Script,
         action: &ScriptActionView,
         entity: &ScriptEntityView,
-    ) -> Result<ScriptResourceCost, ScriptError>;
+    ) -> Result<(), ScriptError>;
 
     /// Execute an action hook, returning the modified entity view.
     fn evaluate_action_hook(
@@ -66,7 +63,7 @@ pub trait ScriptEngine {
         script: &Script,
         action: &ScriptActionView,
         entity: &ScriptEntityView,
-    ) -> Result<ScriptEntityView, ScriptError>;
+    ) -> Result<(), ScriptError>;
 
     /// Execute an armor class hook, returning the modifier to apply.
     fn evaluate_armor_class_hook(
@@ -80,6 +77,6 @@ pub trait ScriptEngine {
         &mut self,
         script: &Script,
         entity: &ScriptEntityView,
-        damage_roll_result: &DamageRollResult,
-    ) -> Result<DamageRollResult, ScriptError>;
+        damage_roll_result: &ScriptDamageRollResult,
+    ) -> Result<(), ScriptError>;
 }

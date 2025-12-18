@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     components::{
         id::{ScriptId, SpellId},
-        resource::{self, ResourceAmountMap},
+        resource::ResourceAmountMap,
         spells::spell::{MagicSchool, Spell},
     },
     registry::{

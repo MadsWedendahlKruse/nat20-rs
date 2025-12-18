@@ -1,6 +1,6 @@
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::{
     components::{
@@ -29,7 +29,9 @@ use crate::{
             SavingThrowModifierProvider, SkillModifierProvider,
         },
     },
-    scripts::script_api::{ScriptActionView, ScriptEntityView},
+    scripts::script_api::{
+        ScriptActionView, ScriptDamageRollResult, ScriptEntityView, ScriptResourceCost,
+    },
     systems,
 };
 
@@ -447,24 +449,26 @@ pub enum DamageRollResultHookDefinition {
 }
 
 impl HookEffect<DamageRollResultHook> for DamageRollResultHookDefinition {
-    fn build_hook(&self, effect: &EffectId) -> DamageRollResultHook {
+    fn build_hook(&self, _effect: &EffectId) -> DamageRollResultHook {
         match self {
             DamageRollResultHookDefinition::Script { script } => {
-                let effect_id = effect.clone();
                 let script_id = script.clone();
 
                 Arc::new(
                     move |world: &World,
                           entity: Entity,
                           damage_roll_result: &mut DamageRollResult| {
-                        let entity_view = ScriptEntityView::from_world(world, entity);
+                        let entity_view = ScriptEntityView::new_from_world(world, entity);
+                        let script_damage_roll_result =
+                            ScriptDamageRollResult::take_from(damage_roll_result);
 
-                        let modified_damage = systems::scripts::evaluate_damage_roll_result_hook(
+                        systems::scripts::evaluate_damage_roll_result_hook(
                             &script_id,
                             &entity_view,
-                            damage_roll_result,
+                            &script_damage_roll_result,
                         );
-                        *damage_roll_result = modified_damage;
+
+                        *damage_roll_result = script_damage_roll_result.into_inner();
                     },
                 )
             }
@@ -496,7 +500,7 @@ impl HookEffect<ArmorClassHook> for ArmorClassHookDefinition {
                 let script_id = script.clone();
                 Arc::new(
                     move |world: &World, entity: Entity, armor_class: &mut ArmorClass| {
-                        let entity_view = ScriptEntityView::from_world(world, entity);
+                        let entity_view = ScriptEntityView::new_from_world(world, entity);
 
                         let modifier =
                             systems::scripts::evaluate_armor_class_hook(&script_id, &entity_view);
@@ -520,16 +524,13 @@ impl HookEffect<ArmorClassHook> for ArmorClassHookDefinition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ActionHookDefinition {
-    /// Standard pattern: “extra attack” logic could *eventually* become a pattern,
-    /// but start as script.
     Script { script: ScriptId },
 }
 
 impl HookEffect<ActionHook> for ActionHookDefinition {
-    fn build_hook(&self, effect: &EffectId) -> ActionHook {
+    fn build_hook(&self, _effect: &EffectId) -> ActionHook {
         match self {
             ActionHookDefinition::Script { script } => {
-                let effect_id = effect.clone();
                 let script_id = script.clone();
                 Arc::new(
                     move |world: &mut World,
@@ -537,16 +538,24 @@ impl HookEffect<ActionHook> for ActionHookDefinition {
                           action: &Action,
                           context: &ActionContext,
                           resource_costs: &ResourceAmountMap| {
-                        let action_view =
-                            ScriptActionView::new(&action.id, entity, context, resource_costs);
-                        let entity_view = ScriptEntityView::from_world(world, entity);
+                        let action_view = ScriptActionView::new(
+                            &action.id,
+                            entity,
+                            context,
+                            // TEMP
+                            ScriptResourceCost::new(resource_costs.clone()),
+                        );
 
-                        let modified_entity = systems::scripts::evalute_action_hook(
+                        let entity_view = ScriptEntityView::take_from_world(world, entity);
+
+                        systems::scripts::evalute_action_hook(
                             &script_id,
                             &action_view,
                             &entity_view,
                         );
-                        modified_entity.apply_modifications(world);
+
+                        // Replace the entity in the world with the modified one
+                        entity_view.replace_in_world(world);
                     },
                 )
             }
@@ -575,10 +584,9 @@ pub enum ResourceCostHookDefinition {
 }
 
 impl HookEffect<ResourceCostHook> for ResourceCostHookDefinition {
-    fn build_hook(&self, effect: &EffectId) -> ResourceCostHook {
+    fn build_hook(&self, _effect: &EffectId) -> ResourceCostHook {
         match self {
             ResourceCostHookDefinition::Script { script } => {
-                let effect_id = effect.clone();
                 let script_id = script.clone();
                 Arc::new(
                     move |world: &World,
@@ -586,16 +594,25 @@ impl HookEffect<ResourceCostHook> for ResourceCostHookDefinition {
                           action: &ActionId,
                           context: &ActionContext,
                           resource_costs: &mut ResourceAmountMap| {
-                        let action_view =
-                            ScriptActionView::new(action, entity, context, resource_costs);
-                        let entity_view = ScriptEntityView::from_world(world, entity);
+                        // Evaluate the script, which can modify the shared resource costs.
+                        let action_view = ScriptActionView::new(
+                            action,
+                            entity,
+                            context,
+                            // Move out (no clone), leaving an empty map behind temporarily
+                            ScriptResourceCost::take_from(resource_costs),
+                        );
 
-                        let modified_costs = systems::scripts::evaluate_resource_cost_hook(
+                        let entity_view = ScriptEntityView::new_from_world(world, entity);
+
+                        systems::scripts::evaluate_resource_cost_hook(
                             &script_id,
                             &action_view,
                             &entity_view,
                         );
-                        modified_costs.apply_modifications(resource_costs);
+
+                        // Move back out (no clone)
+                        *resource_costs = action_view.resource_cost.into_inner();
                     },
                 )
             }

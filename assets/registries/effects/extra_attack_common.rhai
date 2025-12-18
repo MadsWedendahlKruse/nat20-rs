@@ -11,7 +11,7 @@ private fn should_apply_extra_attack(action_view) {
 
 fn extra_attack_action_hook(action_view, entity_view, max_extra_attacks) {
     if !should_apply_extra_attack(action_view) {
-        return entity_view;
+        return;
     }
 
     // The first time the character triggers Extra Attack their action is
@@ -25,22 +25,21 @@ fn extra_attack_action_hook(action_view, entity_view, max_extra_attacks) {
             max_extra_attacks
         );
     }
-
-    return entity_view;
 }
 
 fn resource_cost_hook(action_view, entity_view) {
-    // The intial resource cost of the action
-    let resource_cost = action_view.resource_cost;
-
     if !should_apply_extra_attack(action_view) {
-        return resource_cost;
+        return;
     }
 
     // If the entity has any charges of extra attack use those instead of the action
     if entity_view.resources.can_afford_resource(global::EXTRA_ATTACK_RESOURCE_ID, "1") {
-        resource_cost.replace_resource(global::ACTION_RESOURCE_ID, global::EXTRA_ATTACK_RESOURCE_ID, "1")
+        action_view.resource_cost.replace_resource(
+            global::ACTION_RESOURCE_ID,
+            global::EXTRA_ATTACK_RESOURCE_ID,
+            "1"
+        );
     }
 
-    return resource_cost;
+    return;
 }

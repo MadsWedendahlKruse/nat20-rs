@@ -3,21 +3,17 @@ use std::collections::HashMap;
 use rhai::{AST, Engine, Scope, exported_module, module_resolvers::FileModuleResolver};
 
 use crate::{
-    components::{
-        damage::{DamageComponentResult, DamageRollResult, DamageSource},
-        dice::DiceSetRollResult,
-        id::ScriptId,
-    },
+    components::{damage::DamageSource, id::ScriptId},
     registry::registry::REGISTRY_ROOT,
     scripts::{
         rhai::rhai_types,
         script::{Script, ScriptError},
         script_api::{
             ScriptActionContext, ScriptActionView, ScriptD20CheckDCKind,
-            ScriptD20CheckPerformedView, ScriptD20Result, ScriptEntity, ScriptEntityView,
-            ScriptEventView, ScriptLoadoutView, ScriptReactionBodyContext, ScriptReactionPlan,
-            ScriptReactionTriggerContext, ScriptResourceCost, ScriptResourceView,
-            ScriptSavingThrow,
+            ScriptD20CheckPerformedView, ScriptD20Result, ScriptDamageRollResult, ScriptEntity,
+            ScriptEntityView, ScriptEventView, ScriptLoadoutView, ScriptReactionBodyContext,
+            ScriptReactionPlan, ScriptReactionTriggerContext, ScriptResourceCost,
+            ScriptResourceView, ScriptSavingThrow,
         },
         script_engine::ScriptEngine,
     },
@@ -33,12 +29,8 @@ impl RhaiScriptEngine {
         let mut engine = Engine::new();
 
         engine
-            // --- Might not work? ---
-            .build_type::<DiceSetRollResult>()
-            .build_type::<DamageComponentResult>()
             .build_type::<DamageSource>()
-            .build_type::<DamageRollResult>()
-            // --- Script API Types ---
+            .build_type::<ScriptDamageRollResult>()
             .build_type::<ScriptActionContext>()
             .build_type::<ScriptActionView>()
             .build_type::<ScriptD20CheckDCKind>()
@@ -133,12 +125,12 @@ impl ScriptEngine for RhaiScriptEngine {
         script: &Script,
         action: &ScriptActionView,
         entity: &ScriptEntityView,
-    ) -> Result<ScriptResourceCost, ScriptError> {
+    ) -> Result<(), ScriptError> {
         let ast = self.get_ast(script).cloned()?;
         let mut scope = Scope::new();
         let cost = self
             .engine
-            .call_fn::<ScriptResourceCost>(
+            .call_fn::<()>(
                 &mut scope,
                 &ast,
                 "resource_cost_hook",
@@ -154,12 +146,12 @@ impl ScriptEngine for RhaiScriptEngine {
         script: &Script,
         context: &ScriptActionView,
         entity: &ScriptEntityView,
-    ) -> Result<ScriptEntityView, ScriptError> {
+    ) -> Result<(), ScriptError> {
         let ast = self.get_ast(script).cloned()?;
         let mut scope = Scope::new();
         let modified_entity = self
             .engine
-            .call_fn::<ScriptEntityView>(
+            .call_fn::<()>(
                 &mut scope,
                 &ast,
                 "action_hook",
@@ -192,13 +184,13 @@ impl ScriptEngine for RhaiScriptEngine {
         &mut self,
         script: &Script,
         entity: &ScriptEntityView,
-        damage_roll_result: &DamageRollResult,
-    ) -> Result<DamageRollResult, ScriptError> {
+        damage_roll_result: &ScriptDamageRollResult,
+    ) -> Result<(), ScriptError> {
         let ast = self.get_ast(script).cloned()?;
         let mut scope = Scope::new();
         let modified_damage_roll_result = self
             .engine
-            .call_fn::<DamageRollResult>(
+            .call_fn::<()>(
                 &mut scope,
                 &ast,
                 "damage_roll_result_hook",

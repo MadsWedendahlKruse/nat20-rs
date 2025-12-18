@@ -7,7 +7,7 @@ use strum::EnumIter;
 
 use crate::{
     components::id::{IdProvider, ScriptId},
-    registry::registry::{REGISTRIES_FOLDER, REGISTRY_ROOT},
+    registry::registry::REGISTRIES_FOLDER,
 };
 
 #[derive(Debug)]
@@ -91,7 +91,7 @@ impl TryFrom<DirEntry> for Script {
             }
             file_path = parent.to_path_buf();
         }
-        let id = ScriptId::new("nat20_rs",format!("script.{}", script_id));
+        let id = ScriptId::new("nat20_rs", format!("script.{}", script_id));
 
         Ok(Script {
             id,

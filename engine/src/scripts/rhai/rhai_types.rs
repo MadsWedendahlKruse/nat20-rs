@@ -1,16 +1,11 @@
 use rhai::{Array, CustomType, TypeBuilder, plugin::*};
 
 use crate::{
-    components::{
-        damage::{DamageComponentResult, DamageRollResult, DamageSource},
-        dice::DiceSetRollResult,
-        id::ResourceId,
-        items::equipment::weapon::WeaponKind,
-    },
+    components::{damage::DamageSource, id::ResourceId},
     scripts::script_api::{
         ScriptActionContext, ScriptActionView, ScriptD20CheckDCKind, ScriptD20CheckPerformedView,
-        ScriptD20Result, ScriptEntity, ScriptEntityView, ScriptEventRef, ScriptEventView,
-        ScriptLoadoutView, ScriptReactionBodyContext, ScriptReactionPlan,
+        ScriptD20Result, ScriptDamageRollResult, ScriptEntity, ScriptEntityView, ScriptEventRef,
+        ScriptEventView, ScriptLoadoutView, ScriptReactionBodyContext, ScriptReactionPlan,
         ScriptReactionTriggerContext, ScriptResourceCost, ScriptResourceView, ScriptSavingThrow,
     },
 };
@@ -20,35 +15,6 @@ impl CustomType for ScriptEntity {
         builder
             .with_name("Entity")
             .with_get("id", |s: &mut Self| s.id);
-    }
-}
-/// === Trying something out here ===
-impl CustomType for DiceSetRollResult {
-    fn build(mut builder: TypeBuilder<Self>) {
-        builder.with_name("DiceSetRollResult").with_get_set(
-            "rolls",
-            |s: &mut Self| {
-                Array::from(
-                    s.rolls
-                        .iter()
-                        .map(|&v| Dynamic::from(v as i64))
-                        .collect::<Vec<Dynamic>>(),
-                )
-            },
-            |s: &mut Self, v: Array| {
-                s.rolls = v.into_iter().map(|d| d.cast::<i64>() as u32).collect();
-            },
-        );
-    }
-}
-
-impl CustomType for DamageComponentResult {
-    fn build(mut builder: TypeBuilder<Self>) {
-        builder.with_name("DamageComponentResult").with_get_set(
-            "result",
-            |s: &mut Self| s.result.clone(),
-            |s: &mut Self, v: DiceSetRollResult| s.result = v,
-        );
     }
 }
 
@@ -63,33 +29,16 @@ impl CustomType for DamageSource {
     }
 }
 
-impl CustomType for DamageRollResult {
+impl CustomType for ScriptDamageRollResult {
     fn build(mut builder: TypeBuilder<Self>) {
         builder
             .with_name("DamageRollResult")
-            .with_get("total", |s: &mut Self| s.total)
-            .with_get_set(
-                "components",
-                |s: &mut Self| {
-                    Array::from(
-                        s.components
-                            .iter()
-                            .map(|c| Dynamic::from(c.clone()))
-                            .collect::<Vec<Dynamic>>(),
-                    )
-                },
-                |s: &mut Self, v: Array| {
-                    s.components = v
-                        .into_iter()
-                        .map(|d| d.cast::<DamageComponentResult>())
-                        .collect();
-                    s.recalculate_total();
-                },
-            )
-            .with_get("source", |s: &mut Self| s.source.clone());
+            .with_get("source", |s: &mut Self| s.source().clone())
+            .with_fn("clamp_damage_dice_min", |s: &mut Self, min: i64| {
+                s.clamp_damage_dice_min(min as u32);
+            });
     }
 }
-/// === End trying something out ===
 
 impl CustomType for ScriptD20CheckDCKind {
     fn build(mut builder: TypeBuilder<Self>) {
@@ -157,14 +106,14 @@ impl CustomType for ScriptResourceCost {
         builder
             .with_name("ResourceCost")
             .with_fn("costs_resource", |s: &mut Self, resource_id: String| {
-                s.costs_resource(&ResourceId::new("nat20_rs",&resource_id))
+                s.costs_resource(&ResourceId::new("nat20_rs", &resource_id))
             })
             .with_fn(
                 "replace_resource",
                 |s: &mut Self, from: String, to: String, new_amount: String| {
                     s.replace_resource(
-                        &ResourceId::new("nat20_rs",&from),
-                        &ResourceId::new("nat20_rs",&to),
+                        &ResourceId::new("nat20_rs", &from),
+                        &ResourceId::new("nat20_rs", &to),
                         serde_plain::from_str(&new_amount).expect("Failed to parse ResourceAmount"),
                     )
                 },
@@ -260,7 +209,7 @@ pub mod reaction_plan_module {
     pub fn cancel_trigger_event(resources_to_refund: Array) -> ScriptReactionPlan {
         let resources: Vec<ResourceId> = resources_to_refund
             .into_iter()
-            .map(|v| ResourceId::new("nat20_rs",v.cast::<String>()))
+            .map(|v| ResourceId::new("nat20_rs", v.cast::<String>()))
             .collect();
 
         ScriptReactionPlan::CancelEvent {
@@ -297,7 +246,7 @@ impl CustomType for ScriptResourceView {
                 "can_afford_resource",
                 |s: &mut Self, resource_id: String, amount: String| {
                     s.can_afford_resource(
-                        &ResourceId::new("nat20_rs",&resource_id),
+                        &ResourceId::new("nat20_rs", &resource_id),
                         &serde_plain::from_str(&amount).expect("Failed to parse ResourceAmount"),
                     )
                 },
@@ -313,7 +262,7 @@ impl CustomType for ScriptResourceView {
                         panic!("Unexpected type for amount: {:?}", amount.type_name());
                     };
                     s.add_resource(
-                        &ResourceId::new("nat20_rs",&resource_id),
+                        &ResourceId::new("nat20_rs", &resource_id),
                         &serde_plain::from_str(&amount).expect("Failed to parse ResourceAmount"),
                     )
                 },

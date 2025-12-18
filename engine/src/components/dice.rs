@@ -203,6 +203,17 @@ impl DiceSetRollResult {
     }
 }
 
+impl Default for DiceSetRollResult {
+    fn default() -> Self {
+        Self {
+            die_size: DieSize::D6,
+            rolls: vec![],
+            modifiers: ModifierSet::new(),
+            subtotal: 0,
+        }
+    }
+}
+
 impl fmt::Display for DiceSetRollResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

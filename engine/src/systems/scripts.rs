@@ -18,9 +18,9 @@ use crate::{
     registry::registry::ScriptsRegistry,
     scripts::{
         script_api::{
-            ScriptActionView, ScriptEntityRole, ScriptEntityView, ScriptEventRef,
-            ScriptReactionBodyContext, ScriptReactionPlan, ScriptReactionTriggerContext,
-            ScriptResourceCost,
+            ScriptActionView, ScriptDamageRollResult, ScriptEntityRole, ScriptEntityView,
+            ScriptEventRef, ScriptReactionBodyContext, ScriptReactionPlan,
+            ScriptReactionTriggerContext, ScriptResourceCost,
         },
         script_engine::SCRIPT_ENGINES,
     },
@@ -83,7 +83,7 @@ pub fn evaluate_resource_cost_hook(
     resource_cost_hook: &ScriptId,
     action_view: &ScriptActionView,
     entity_view: &ScriptEntityView,
-) -> ScriptResourceCost {
+) {
     let script = ScriptsRegistry::get(resource_cost_hook).expect(
         format!(
             "Resource cost hook script not found in registry: {:?}",
@@ -96,14 +96,12 @@ pub fn evaluate_resource_cost_hook(
         .get_mut(&script.language)
         .expect(format!("No script engine found for language: {:?}", script.language).as_str());
     match engine.evaluate_resource_cost_hook(script, action_view, entity_view) {
-        Ok(resource_cost) => resource_cost,
+        Ok(()) => {}
         Err(err) => {
             error!(
                 "Error evaluating resource cost hook script {:?} for entity {:?}: {:?}",
                 resource_cost_hook, entity_view.entity, err
             );
-            // I guess we can just return the original cost if there's an error
-            action_view.resource_cost.clone()
         }
     }
 }
@@ -112,7 +110,7 @@ pub fn evalute_action_hook(
     action_hook: &ScriptId,
     action_view: &ScriptActionView,
     entity_view: &ScriptEntityView,
-) -> ScriptEntityView {
+) {
     let script = ScriptsRegistry::get(action_hook).expect(
         format!(
             "Action hook script not found in registry: {:?}",
@@ -125,13 +123,12 @@ pub fn evalute_action_hook(
         .get_mut(&script.language)
         .expect(format!("No script engine found for language: {:?}", script.language).as_str());
     match engine.evaluate_action_hook(script, action_view, entity_view) {
-        Ok(modified_entity_view) => modified_entity_view,
+        Ok(()) => {}
         Err(err) => {
             error!(
                 "Error evaluating action hook script {:?} for entity {:?}: {:?}",
                 action_hook, entity_view.entity, err
             );
-            entity_view.clone()
         }
     }
 }
@@ -166,8 +163,8 @@ pub fn evaluate_armor_class_hook(
 pub fn evaluate_damage_roll_result_hook(
     damage_roll_result_hook: &ScriptId,
     entity_view: &ScriptEntityView,
-    damage_roll_result: &DamageRollResult,
-) -> DamageRollResult {
+    damage_roll_result: &ScriptDamageRollResult,
+) {
     let script = ScriptsRegistry::get(damage_roll_result_hook).expect(
         format!(
             "Damage roll result hook script not found in registry: {:?}",
@@ -180,13 +177,12 @@ pub fn evaluate_damage_roll_result_hook(
         .get_mut(&script.language)
         .expect(format!("No script engine found for language: {:?}", script.language).as_str());
     match engine.evaluate_damage_roll_result_hook(script, entity_view, damage_roll_result) {
-        Ok(modified_damage_roll_result) => modified_damage_roll_result,
+        Ok(()) => {}
         Err(err) => {
             error!(
                 "Error evaluating damage roll result hook script {:?} for entity {:?}: {:?}",
                 damage_roll_result_hook, entity_view.entity, err
             );
-            damage_roll_result.clone()
         }
     }
 }

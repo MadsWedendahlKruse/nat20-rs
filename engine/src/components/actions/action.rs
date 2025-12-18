@@ -182,7 +182,7 @@ pub enum ReactionResult {
         modification: Arc<dyn Fn(&World, &mut Event) + Send + Sync>,
     },
     CancelEvent {
-        event: Arc<Event>,
+        event: Box<Event>,
         resources_refunded: ResourceAmountMap,
     },
     NoEffect,
