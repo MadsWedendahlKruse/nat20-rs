@@ -6,7 +6,7 @@ use nat20_rs::{
         health::{hit_points::HitPoints, life_state::LifeState},
         id::Name,
     },
-    engine::{game_state::GameState, geometry::WorldGeometry},
+    engine::{event::ActionPromptKind, game_state::GameState, geometry::WorldGeometry},
     systems::{
         self,
         geometry::{CreaturePose, RaycastFilter, RaycastHitKind},
@@ -174,10 +174,7 @@ impl MainMenuWindow {
                         && let Some(prompt) = game_state.next_prompt_entity(entity)
                     {
                         match &prompt.kind {
-                            nat20_rs::engine::event::ActionPromptKind::Reactions {
-                                event,
-                                options,
-                            } => {
+                            ActionPromptKind::Reactions { event, options } => {
                                 reactions.activate(prompt.id, &event, &options);
                             }
                             _ => {}

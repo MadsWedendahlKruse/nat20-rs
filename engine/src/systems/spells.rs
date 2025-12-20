@@ -5,15 +5,12 @@ use hecs::{Entity, World};
 use crate::{
     components::{
         class::SpellcastingProgression,
-        id::{ResourceId, SpellId},
+        id::ResourceId,
         level::CharacterLevels,
         resource::{ResourceAmount, ResourceBudgetKind, ResourceMap},
-        spells::spell::Spell,
+        spells::spellbook::Spellbook,
     },
-    registry::{
-        self,
-        registry::{ClassesRegistry, SpellsRegistry},
-    },
+    registry::registry::ClassesRegistry,
 };
 
 pub fn spellcaster_levels(world: &World, entity: Entity) -> u8 {
@@ -69,19 +66,24 @@ static SPELL_SLOTS_PER_LEVEL: LazyLock<HashMap<u8, Vec<u8>>> = LazyLock::new(|| 
 });
 
 pub fn update_spell_slots(world: &mut World, entity: Entity) {
-    if let Ok(mut resources) = world.get::<&mut ResourceMap>(entity) {
-        let spellcaster_levels = spellcaster_levels(world, entity);
+    let spellcaster_levels = spellcaster_levels(world, entity);
+    if let Ok((resources, spellbook)) =
+        world.query_one_mut::<(&mut ResourceMap, &mut Spellbook)>(entity)
+    {
         let slots_vec = SPELL_SLOTS_PER_LEVEL.get(&spellcaster_levels).unwrap();
         for (level, &num_slots) in slots_vec.iter().enumerate() {
-            let level = level as u8 + 1;
+            let spellslot_level = level as u8 + 1;
             resources.add(
-                ResourceId::new("nat20_rs","resource.spell_slot"),
+                ResourceId::new("nat20_rs", "resource.spell_slot"),
                 ResourceBudgetKind::from(ResourceAmount::Tiered {
-                    tier: level,
+                    tier: spellslot_level,
                     amount: num_slots,
                 }),
                 false,
             );
+            if spellbook.max_spell_level() < spellslot_level {
+                spellbook.set_max_spell_level(spellslot_level);
+            }
         }
     }
 }

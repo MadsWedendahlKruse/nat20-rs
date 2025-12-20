@@ -127,15 +127,8 @@ impl RenderableMutWithContext<&mut GameState> for ReactionsWindow {
 
                             if render_button_selectable(
                                 ui,
-                                // format!(
-                                //     "{}: {:#?}\nCost: {:#?}##{:?}",
-                                //     option.reaction_id,
-                                //     option.context,
-                                //     option.resource_cost,
-                                //     reactor
-                                // ),
                                 format!(
-                                    "{}:\nCost: {:#?}##{:?}",
+                                    "{}##{:?}{:?}",
                                     option.reaction_id, option.resource_cost, reactor
                                 ),
                                 [0., 0.],
@@ -145,6 +138,16 @@ impl RenderableMutWithContext<&mut GameState> for ReactionsWindow {
                                     (true, Some(reactor), Some(option.clone()));
                             }
 
+                            if ui.is_item_hovered() {
+                                ui.tooltip(|| {
+                                    (&option.reaction_id, &option.context, &option.resource_cost)
+                                        .render_with_context(ui, (&game_state.world, *reactor));
+                                });
+                            }
+                        }
+
+                        if options.len() > 0 {
+                            ui.separator();
                             if ui.button(format!("Don't react##{:?}", reactor)) {
                                 (button_clicked, entity, choice) = (true, Some(reactor), None);
                             }

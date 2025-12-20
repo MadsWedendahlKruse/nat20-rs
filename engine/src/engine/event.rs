@@ -95,27 +95,18 @@ impl Event {
 
     pub fn action_performed_event(
         game_state: &GameState,
-        performer: Entity,
-        action_id: &ActionId,
-        context: &ActionContext,
-        resource_cost: &ResourceAmountMap,
-        target: Entity,
-        result: ActionKindResult,
+        action_data: &ActionData,
+        results: Vec<(Entity, ActionKindResult)>,
     ) -> Event {
+        let results = results
+            .into_iter()
+            .map(|(entity, result)| {
+                ActionResult::new(&game_state.world, action_data.actor, entity, result)
+            })
+            .collect();
         Event::new(EventKind::ActionPerformed {
-            action: ActionData {
-                actor: performer,
-                action_id: action_id.clone(),
-                context: context.clone(),
-                resource_cost: resource_cost.clone(),
-                targets: vec![TargetInstance::Entity(target)],
-            },
-            results: vec![ActionResult::new(
-                &game_state.world,
-                performer,
-                target,
-                result,
-            )],
+            action: action_data.clone(),
+            results: results,
         })
     }
 }
@@ -232,6 +223,21 @@ pub struct ActionData {
     pub targets: Vec<TargetInstance>,
 }
 
+impl ActionData {
+    pub fn entity_targets(&self) -> Vec<Entity> {
+        self.targets
+            .iter()
+            .filter_map(|t| {
+                if let TargetInstance::Entity(e) = t {
+                    Some(*e)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReactionData {
     pub reactor: Entity,
@@ -240,6 +246,7 @@ pub struct ReactionData {
     pub reaction_id: ActionId,
     pub context: ActionContext,
     pub resource_cost: ResourceAmountMap,
+    pub target: TargetInstance,
 }
 
 impl From<&ReactionData> for ActionData {
@@ -249,7 +256,7 @@ impl From<&ReactionData> for ActionData {
             action_id: reaction.reaction_id.clone(),
             context: reaction.context.clone(),
             resource_cost: reaction.resource_cost.clone(),
-            targets: vec![TargetInstance::Entity(reaction.event.actor().unwrap())], // TODO: What if no actor?
+            targets: vec![reaction.target.clone()],
         }
     }
 }

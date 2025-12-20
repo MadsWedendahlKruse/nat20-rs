@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use hecs::World;
 use tracing::error;
@@ -6,21 +6,20 @@ use tracing::error;
 use crate::{
     components::{
         actions::action::{ActionKindResult, ReactionResult},
-        damage::DamageRollResult,
         id::ScriptId,
-        modifier::ModifierSource,
+        modifier::{Modifiable, ModifierSource},
         resource::ResourceAmountMap,
     },
     engine::{
-        event::{CallbackResult, Event, EventCallback, EventKind},
+        event::{ActionData, CallbackResult, Event, EventCallback, EventKind, ReactionData},
         game_state::GameState,
     },
     registry::registry::ScriptsRegistry,
     scripts::{
         script_api::{
-            ScriptActionView, ScriptDamageRollResult, ScriptEntityRole, ScriptEntityView,
-            ScriptEventRef, ScriptReactionBodyContext, ScriptReactionPlan,
-            ScriptReactionTriggerContext, ScriptResourceCost,
+            ScriptActionView, ScriptDamageMitigationResult, ScriptDamageRollResult,
+            ScriptEntityRole, ScriptEntityView, ScriptEventRef, ScriptReactionBodyContext,
+            ScriptReactionPlan, ScriptReactionTriggerContext,
         },
         script_engine::SCRIPT_ENGINES,
     },
@@ -72,7 +71,7 @@ pub fn evaluate_reaction_body(
         Err(err) => {
             error!(
                 "Error evaluating reaction body script {:?} for reactor {:?}: {:?}",
-                reaction_body, context.reaction_data.reactor, err
+                reaction_body, context.reactor, err
             );
             ScriptReactionPlan::None
         }
@@ -187,19 +186,44 @@ pub fn evaluate_damage_roll_result_hook(
     }
 }
 
+pub fn evaluate_damage_taken_hook(
+    damage_taken_hook: &ScriptId,
+    entity_view: &ScriptEntityView,
+    damage_mitigation_result: &ScriptDamageMitigationResult,
+) {
+    let script = ScriptsRegistry::get(damage_taken_hook).expect(
+        format!(
+            "Damage taken hook script not found in registry: {:?}",
+            damage_taken_hook
+        )
+        .as_str(),
+    );
+    let mut engine_lock = SCRIPT_ENGINES.lock().unwrap();
+    let engine = engine_lock
+        .get_mut(&script.language)
+        .expect(format!("No script engine found for language: {:?}", script.language).as_str());
+    match engine.evaluate_damage_taken_hook(script, entity_view, damage_mitigation_result) {
+        Ok(()) => {}
+        Err(err) => {
+            error!(
+                "Error evaluating damage taken hook script {:?} for entity {:?}: {:?}",
+                damage_taken_hook, entity_view.entity, err
+            );
+        }
+    }
+}
+
 pub fn apply_reaction_plan(
     game_state: &mut GameState,
-    context: &ScriptReactionBodyContext,
+    reaction_data: &ReactionData,
     plan: ScriptReactionPlan,
 ) {
-    let reaction_data = &context.reaction_data;
-
     match plan {
         ScriptReactionPlan::None => {}
 
         ScriptReactionPlan::Sequence(plans) => {
             for p in plans {
-                apply_reaction_plan(game_state, context, p);
+                apply_reaction_plan(game_state, reaction_data, p);
             }
         }
 
@@ -212,22 +236,25 @@ pub fn apply_reaction_plan(
 
             let result = ReactionResult::ModifyEvent {
                 modification: Arc::new({
-                    let action_id = context.reaction_data.reaction_id.clone();
+                    let action_id = reaction_data.reaction_id.clone();
                     move |_world: &World, event: &mut Event| {
                         if let EventKind::D20CheckPerformed(_, ref mut existing_result, _) =
                             event.kind
                         {
                             match existing_result {
-                                D20ResultKind::Skill { result, .. } => {
+                                D20ResultKind::Skill { result, .. }
+                                | D20ResultKind::SavingThrow { result, .. } => {
                                     result.add_bonus(
                                         ModifierSource::Action(action_id.clone()),
                                         bonus_value,
                                     );
                                 }
-                                _ => panic!(
-                                    "ModifyD20Result applied to wrong result type: {:?}",
-                                    existing_result
-                                ),
+                                D20ResultKind::AttackRoll { result } => {
+                                    result.roll_result.add_bonus(
+                                        ModifierSource::Action(action_id.clone()),
+                                        bonus_value,
+                                    );
+                                }
                             }
                         } else {
                             panic!("ModifyD20Result applied to wrong event type: {:?}", event);
@@ -238,12 +265,8 @@ pub fn apply_reaction_plan(
 
             let process_event_result = game_state.process_event(Event::action_performed_event(
                 game_state,
-                reaction_data.reactor,
-                &reaction_data.reaction_id,
-                &reaction_data.context,
-                &reaction_data.resource_cost,
-                reaction_data.reactor,
-                ActionKindResult::Reaction { result },
+                &ActionData::from(reaction_data),
+                vec![(reaction_data.reactor, ActionKindResult::Reaction { result })],
             ));
 
             match process_event_result {
@@ -251,6 +274,63 @@ pub fn apply_reaction_plan(
                 Err(err) => {
                     error!(
                         "Error processing ModifyD20Result reaction for reactor {:?}: {:?}",
+                        reaction_data.reactor, err
+                    );
+                }
+            }
+        }
+
+        ScriptReactionPlan::ModifyD20DC { modifier } => {
+            let modifier_value = modifier.evaluate(
+                &game_state.world,
+                reaction_data.reactor,
+                &reaction_data.context,
+            );
+
+            let result = ReactionResult::ModifyEvent {
+                modification: Arc::new({
+                    let action = reaction_data.reaction_id.clone();
+                    move |_world: &World, event: &mut Event| {
+                        if let EventKind::D20CheckPerformed(_, _, ref mut dc_kind) = event.kind {
+                            println!("Applying ModifyD20DC with modifier {}", modifier_value);
+                            match dc_kind {
+                                D20CheckDCKind::SavingThrow(d20_check_dc) => {
+                                    d20_check_dc.dc.add_modifier(
+                                        ModifierSource::Action(action.clone()),
+                                        modifier_value,
+                                    );
+                                }
+                                D20CheckDCKind::Skill(d20_check_dc) => {
+                                    d20_check_dc.dc.add_modifier(
+                                        ModifierSource::Action(action.clone()),
+                                        modifier_value,
+                                    );
+                                }
+                                D20CheckDCKind::AttackRoll(_, armor_class) => {
+                                    armor_class.add_modifier(
+                                        ModifierSource::Action(action.clone()),
+                                        modifier_value,
+                                    );
+                                }
+                            }
+                        } else {
+                            panic!("ModifyD20DC applied to wrong event type: {:?}", event);
+                        }
+                    }
+                }),
+            };
+
+            let process_event_result = game_state.process_event(Event::action_performed_event(
+                game_state,
+                &ActionData::from(reaction_data),
+                vec![(reaction_data.reactor, ActionKindResult::Reaction { result })],
+            ));
+
+            match process_event_result {
+                Ok(_) => {}
+                Err(err) => {
+                    error!(
+                        "Error processing ModifyD20DC reaction for reactor {:?}: {:?}",
                         reaction_data.reactor, err
                     );
                 }
@@ -274,7 +354,7 @@ pub fn apply_reaction_plan(
             let result = ReactionResult::ModifyEvent {
                 modification: Arc::new({
                     let actor = reaction_data.event.actor().unwrap();
-                    let action_id = context.reaction_data.reaction_id.clone();
+                    let action_id = reaction_data.reaction_id.clone();
                     move |world: &World, event: &mut Event| {
                         if let EventKind::D20CheckPerformed(
                             _,
@@ -306,12 +386,8 @@ pub fn apply_reaction_plan(
 
             let process_event_result = game_state.process_event(Event::action_performed_event(
                 game_state,
-                reaction_data.reactor,
-                &reaction_data.reaction_id,
-                &reaction_data.context,
-                &reaction_data.resource_cost,
-                reaction_data.reactor,
-                ActionKindResult::Reaction { result },
+                &ActionData::from(reaction_data),
+                vec![(reaction_data.reactor, ActionKindResult::Reaction { result })],
             ));
 
             match process_event_result {
@@ -338,8 +414,7 @@ pub fn apply_reaction_plan(
                 // TODO: Which resources should we refund if it's *not* the trigger event?
                 resources_refunded.insert(
                     resource_id.clone(),
-                    context
-                        .reaction_data
+                    reaction_data
                         .resource_cost
                         .get(resource_id)
                         .cloned()
@@ -354,12 +429,11 @@ pub fn apply_reaction_plan(
 
             let process_event_result = game_state.process_event(Event::action_performed_event(
                 game_state,
-                reaction_data.reactor,
-                &reaction_data.reaction_id,
-                &reaction_data.context,
-                &reaction_data.resource_cost,
-                target_event.actor().unwrap(),
-                ActionKindResult::Reaction { result },
+                &ActionData::from(reaction_data),
+                vec![(
+                    target_event.actor().unwrap(),
+                    ActionKindResult::Reaction { result },
+                )],
             ));
 
             match process_event_result {
@@ -382,12 +456,11 @@ pub fn apply_reaction_plan(
             // Resolve the target entity
             let target_entity = match target {
                 ScriptEntityRole::Reactor => reaction_data.reactor,
-                ScriptEntityRole::Actor => context
-                    .reaction_data
+                ScriptEntityRole::Actor => reaction_data
                     .event
                     .actor()
                     .expect("Trigger event has no actor"),
-                ScriptEntityRole::Target => context.reaction_data.event.target().expect(
+                ScriptEntityRole::Target => reaction_data.event.target().expect(
                     "RequireSavingThrow reaction target role 'Target' but trigger event has no target",
                 ),
             };
@@ -402,7 +475,7 @@ pub fn apply_reaction_plan(
             // Emit the check event and attach callback to continue the plan.
             let check_event = systems::d20::check(game_state, target_entity, &dc_kind);
 
-            let context_clone = context.clone();
+            let context_clone = reaction_data.clone();
             let on_success_plan = *on_success;
             let on_failure_plan = *on_failure;
 

@@ -289,7 +289,7 @@ impl Weapon {
             enchantment as i32,
         );
 
-        AttackRoll::new(attack_roll, DamageSource::from_weapon(self))
+        AttackRoll::new(attack_roll, DamageSource::from(self))
     }
 
     pub fn damage_roll(

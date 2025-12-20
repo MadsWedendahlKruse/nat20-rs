@@ -11,7 +11,6 @@ use uuid::Uuid;
 use crate::{
     components::{
         ability::{Ability, AbilityScore, AbilityScoreDistribution, AbilityScoreMap},
-        class,
         health::hit_points::HitPoints,
         id::{ActionId, ClassId, EffectId, Name, ResourceId},
         items::{equipment::loadout::EquipmentInstance, money::MonetaryValue},

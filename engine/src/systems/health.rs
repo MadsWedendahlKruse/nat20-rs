@@ -1,28 +1,28 @@
-use std::{ops::Deref, sync::Arc};
+use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use hecs::{Entity, World};
+use tracing::debug;
+use tracing_subscriber::field::debug;
 
 use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
-        actions::action::{ActionContext, ActionKind, ActionKindResult},
+        actions::action::{ActionKind, ActionKindResult},
         damage::{
             AttackRollResult, DamageMitigationEffect, DamageMitigationResult, DamageResistances,
             DamageRollResult, MitigationOperation,
         },
         health::{hit_points::HitPoints, life_state::LifeState},
-        id::ActionId,
         level::CharacterLevels,
         modifier::{Modifiable, ModifierSource},
-        resource::ResourceAmountMap,
         saving_throw::SavingThrowKind,
     },
     engine::{
-        event::{CallbackResult, Event, EventCallback, EventKind},
+        event::{ActionData, CallbackResult, Event, EventCallback, EventKind},
         game_state::GameState,
     },
     entities::{character::CharacterTag, monster::MonsterTag},
-    registry::{self, registry::ClassesRegistry},
+    registry::registry::ClassesRegistry,
     systems::{
         self,
         d20::{D20CheckDCKind, D20ResultKind},
@@ -63,57 +63,66 @@ fn damage_internal(
     attack_roll: Option<&AttackRollResult>,
     resistances: &DamageResistances,
 ) -> (Option<DamageMitigationResult>, Option<LifeState>) {
-    let (mitigation_result, killed_by_damage, mut new_life_state) =
-        if let Ok((hit_points, life_state)) =
-            world.query_one_mut::<(&mut HitPoints, &mut LifeState)>(target)
-        {
-            // Track any changes to the life state of the target
-            let mut new_life_state = None;
-            // Check if the target is already at 0 HP
-            let hp_before_damage = hit_points.current();
-            if hit_points.current() == 0 {
-                match life_state {
-                    LifeState::Stable => {
-                        new_life_state = Some(LifeState::unconscious());
-                    }
+    let mut mitigation_result = resistances.apply(damage_roll_result);
+    for effect in systems::effects::effects(world, target).iter() {
+        (effect.damage_taken)(&world, target, &mut mitigation_result);
+    }
 
-                    LifeState::Unconscious(death_saving_throws) => {
-                        if let Some(attack_roll) = attack_roll {
-                            if attack_roll.roll_result.is_crit {
-                                death_saving_throws.record_failure(2);
-                            } else {
-                                death_saving_throws.record_failure(1);
-                            }
+    let (killed_by_damage, mut new_life_state) = if let Ok((hit_points, life_state)) =
+        world.query_one_mut::<(&mut HitPoints, &mut LifeState)>(target)
+    {
+        // Track any changes to the life state of the target
+        let mut new_life_state = None;
+        // Check if the target is already at 0 HP
+        let hp_before_damage = hit_points.current();
+        if hit_points.current() == 0 {
+            match life_state {
+                LifeState::Stable => {
+                    new_life_state = Some(LifeState::unconscious());
+                }
+
+                LifeState::Unconscious(death_saving_throws) => {
+                    if let Some(attack_roll) = attack_roll {
+                        if attack_roll.roll_result.is_crit {
+                            death_saving_throws.record_failure(2);
                         } else {
                             death_saving_throws.record_failure(1);
                         }
-
-                        let next_state = death_saving_throws.next_state();
-                        if !matches!(next_state, LifeState::Unconscious(_)) {
-                            // If the next state is not still unconscious, we need to update it
-                            new_life_state = Some(next_state);
-                        }
+                    } else {
+                        death_saving_throws.record_failure(1);
                     }
 
-                    _ => {
-                        // Other valid states where HP would be zero are some form of
-                        // dead, so no-op
-                        // TODO: Validate that this is the case?
+                    let next_state = death_saving_throws.next_state();
+                    if !matches!(next_state, LifeState::Unconscious(_)) {
+                        // If the next state is not still unconscious, we need to update it
+                        new_life_state = Some(next_state);
                     }
                 }
+
+                _ => {
+                    // Other valid states where HP would be zero are some form of
+                    // dead, so no-op
+                    // TODO: Validate that this is the case?
+                }
             }
+        }
 
-            let mitigation_result = resistances.apply(damage_roll_result);
-            hit_points.damage(mitigation_result.total.max(0) as u32);
+        hit_points.damage(mitigation_result.total.max(0) as u32);
+        debug!(
+            "Entity {:?} took {} damage (HP: {} -> {})",
+            target,
+            mitigation_result.total.max(0),
+            hp_before_damage,
+            hit_points.current()
+        );
 
-            (
-                mitigation_result,
-                hp_before_damage > 0 && hit_points.current() == 0,
-                new_life_state,
-            )
-        } else {
-            return (None, None);
-        };
+        (
+            hp_before_damage > 0 && hit_points.current() == 0,
+            new_life_state,
+        )
+    } else {
+        return (None, None);
+    };
 
     if killed_by_damage {
         // Monsters and Characters 'die' differently
@@ -137,13 +146,14 @@ fn damage_internal(
 
 pub fn damage(
     game_state: &mut GameState,
-    performer: Entity,
-    target: Entity,
-    action_id: &ActionId,
+    action_data: &ActionData,
     action_kind: &ActionKind,
-    context: &ActionContext,
-    resource_cost: ResourceAmountMap,
+    target: Entity,
 ) {
+    debug!(
+        "Applying damage action {:?} by entity {:?} on target {:?}",
+        action_kind, action_data.actor, target
+    );
     let resistances =
         if let Ok(resistances) = &game_state.world.get::<&mut DamageResistances>(target) {
             resistances.deref().clone()
@@ -154,21 +164,29 @@ pub fn damage(
     let (event, callback) = match action_kind {
         ActionKind::UnconditionalDamage { damage } => {
             // Create the damage roll event
-            let damage_roll = damage(&game_state.world, performer, context).roll_raw(false);
+            let damage_roll =
+                damage(&game_state.world, action_data.actor, &action_data.context).roll_raw(false);
             let event = Event::new(EventKind::DamageRollPerformed(
-                performer,
+                action_data.actor,
                 damage_roll.clone(),
             ));
+            debug!(
+                "UnconditionalDamage: Created damage roll event with id {:?}",
+                event.id
+            );
 
             // Create a callback to handle the result of the damage roll
             let callback: EventCallback = Arc::new({
-                let action_id = action_id.clone();
-                let context = context.clone();
-                let resource_cost = resource_cost.clone();
+                let action_data = action_data.clone();
                 let target = target;
                 let resistances = resistances.clone();
                 move |game_state, event| match &event.kind {
                     EventKind::DamageRollResolved(performer, damage_roll_result) => {
+                        debug!(
+                            "UnconditionalDamage: Handling DamageRollResolved event with id {:?} as a response to {:?}",
+                            event.id,
+                            event.response_to.unwrap()
+                        );
                         let (damage_taken, new_life_state) = damage_internal(
                             &mut game_state.world,
                             target,
@@ -179,16 +197,15 @@ pub fn damage(
 
                         CallbackResult::Event(Event::action_performed_event(
                             &game_state,
-                            *performer,
-                            &action_id,
-                            &context,
-                            &resource_cost,
-                            target,
-                            ActionKindResult::UnconditionalDamage {
-                                damage_roll: damage_roll.clone(),
-                                damage_taken,
-                                new_life_state,
-                            },
+                            &action_data,
+                            vec![(
+                                target,
+                                ActionKindResult::UnconditionalDamage {
+                                    damage_roll: damage_roll.clone(),
+                                    damage_taken,
+                                    new_life_state,
+                                },
+                            )],
                         ))
                     }
                     _ => {
@@ -211,35 +228,41 @@ pub fn damage(
             let attack_roll = systems::damage::attack_roll_fn(
                 attack_roll.as_ref(),
                 &game_state.world,
-                performer,
+                action_data.actor,
                 target,
-                context,
+                &action_data.context,
             );
             let armor_class = systems::loadout::armor_class(&game_state.world, target);
 
             // Create an event to represent the attack roll being made
             let event = Event::new(EventKind::D20CheckPerformed(
-                performer,
+                action_data.actor,
                 D20ResultKind::AttackRoll {
                     result: attack_roll.clone(),
                 },
-                D20CheckDCKind::AttackRoll(target, armor_class.clone()),
+                D20CheckDCKind::AttackRoll(target, armor_class),
             ));
 
             // Create a callback to handle the result of the attack roll
             // This callback will handle applying damage based on whether the attack
             // hits or misses, and will also handle critical hits
             let callback: EventCallback = Arc::new({
-                let action_id = action_id.clone();
-                let context = context.clone();
-                let resource_cost = resource_cost.clone();
+                let action_data = action_data.clone();
                 let resistances = resistances.clone();
-
                 let damage = damage.clone();
                 let damage_on_miss = damage_on_miss.clone();
-
                 move |game_state, event| match &event.kind {
                     EventKind::D20CheckResolved(performer, result, dc) => {
+                        let armor_class = match dc {
+                            D20CheckDCKind::AttackRoll(_, ac) => ac.clone(),
+                            _ => {
+                                panic!(
+                                    "Expected D20CheckDCKind::AttackRoll in attack roll callback, got: {:?}",
+                                    dc
+                                );
+                            }
+                        };
+
                         // Determine the damage to apply based on whether the attack hits or misses
                         let (damage_roll, is_crit) = if result.is_success(dc) {
                             (&damage, result.d20_result().is_crit)
@@ -249,29 +272,28 @@ pub fn damage(
                             // If the attack misses and there's no damage on miss, no damage is dealt
                             return CallbackResult::Event(Event::action_performed_event(
                                 game_state,
-                                *performer,
-                                &action_id,
-                                &context,
-                                &resource_cost,
-                                target,
-                                ActionKindResult::AttackRollDamage {
-                                    attack_roll: attack_roll.clone(),
-                                    armor_class: armor_class.clone(),
-                                    damage_roll: None,
-                                    damage_taken: None,
-                                    new_life_state: None,
-                                },
+                                &action_data,
+                                vec![(
+                                    target,
+                                    ActionKindResult::AttackRollDamage {
+                                        attack_roll: attack_roll.clone(),
+                                        armor_class: armor_class.clone(),
+                                        damage_roll: None,
+                                        damage_taken: None,
+                                        new_life_state: None,
+                                    },
+                                )],
                             ));
                         };
 
                         // Create the damage roll event
                         let event = Event::new(EventKind::DamageRollPerformed(
-                            *performer,
+                            action_data.actor,
                             systems::damage::damage_roll_fn(
                                 damage_roll.as_ref(),
                                 &game_state.world,
-                                *performer,
-                                &context,
+                                action_data.actor,
+                                &action_data.context,
                                 is_crit,
                             ),
                         ));
@@ -280,9 +302,7 @@ pub fn damage(
                         return CallbackResult::EventWithCallback(
                             event,
                             Arc::new({
-                                let action_id = action_id.clone();
-                                let context = context.clone();
-                                let resource_cost = resource_cost.clone();
+                                let action_data = action_data.clone();
                                 let target = target;
                                 let resistances = resistances.clone();
                                 let attack_roll = attack_roll.clone();
@@ -303,18 +323,19 @@ pub fn damage(
                                         return CallbackResult::Event(
                                             Event::action_performed_event(
                                                 &game_state,
-                                                *performer,
-                                                &action_id,
-                                                &context,
-                                                &resource_cost,
-                                                target,
-                                                ActionKindResult::AttackRollDamage {
-                                                    attack_roll: attack_roll.clone(),
-                                                    armor_class: armor_class.clone(),
-                                                    damage_roll: Some(damage_roll_result.clone()),
-                                                    damage_taken,
-                                                    new_life_state,
-                                                },
+                                                &action_data,
+                                                vec![(
+                                                    target,
+                                                    ActionKindResult::AttackRollDamage {
+                                                        attack_roll: attack_roll.clone(),
+                                                        armor_class: armor_class.clone(),
+                                                        damage_roll: Some(
+                                                            damage_roll_result.clone(),
+                                                        ),
+                                                        damage_taken,
+                                                        new_life_state,
+                                                    },
+                                                )],
                                             ),
                                         );
                                     }
@@ -343,24 +364,24 @@ pub fn damage(
             half_damage_on_save,
             damage,
         } => {
-            let saving_throw_dc = saving_throw(&game_state.world, performer, context);
+            let saving_throw_dc =
+                saving_throw(&game_state.world, action_data.actor, &action_data.context);
 
             let damage_roll = systems::damage::damage_roll_fn(
                 damage.as_ref(),
                 &game_state.world,
-                performer,
-                context,
+                action_data.actor,
+                &action_data.context,
                 false,
             );
             let event = Event::new(EventKind::DamageRollPerformed(
-                performer,
+                action_data.actor,
                 damage_roll.clone(),
             ));
 
             // Create a callback listener to handle the result of the damage roll
             let callback: EventCallback = Arc::new({
-                let action_id = action_id.clone();
-                let context = context.clone();
+                let action_data = action_data.clone();
                 let target = target;
                 let resistances = resistances.clone();
                 let saving_throw_dc = saving_throw_dc.clone();
@@ -370,7 +391,7 @@ pub fn damage(
                         // Create an event to represent the saving throw being made
                         let saving_throw_event = systems::d20::check(
                             game_state,
-                            *performer,
+                            target,
                             &D20CheckDCKind::SavingThrow(saving_throw_dc.clone()),
                         );
 
@@ -378,9 +399,7 @@ pub fn damage(
                         return CallbackResult::EventWithCallback(
                             saving_throw_event,
                             Arc::new({
-                                let action_id = action_id.clone();
-                                let context = context.clone();
-                                let resource_cost = resource_cost.clone();
+                                let action_data = action_data.clone();
                                 let target = target;
                                 let resistances = resistances.clone();
                                 let saving_throw_dc = saving_throw_dc.clone();
@@ -421,21 +440,20 @@ pub fn damage(
                                         return CallbackResult::Event(
                                             Event::action_performed_event(
                                                 &game_state,
-                                                *performer,
-                                                &action_id,
-                                                &context,
-                                                &resource_cost,
-                                                target,
-                                                ActionKindResult::SavingThrowDamage {
-                                                    saving_throw_dc: saving_throw_dc.clone(),
-                                                    saving_throw_result: result
-                                                        .d20_result()
-                                                        .clone(),
-                                                    half_damage_on_save,
-                                                    damage_roll: damage_roll_result.clone(),
-                                                    damage_taken,
-                                                    new_life_state,
-                                                },
+                                                &action_data,
+                                                vec![(
+                                                    target,
+                                                    ActionKindResult::SavingThrowDamage {
+                                                        saving_throw_dc: saving_throw_dc.clone(),
+                                                        saving_throw_result: result
+                                                            .d20_result()
+                                                            .clone(),
+                                                        half_damage_on_save,
+                                                        damage_roll: damage_roll_result.clone(),
+                                                        damage_taken,
+                                                        new_life_state,
+                                                    },
+                                                )],
                                             ),
                                         );
                                     }

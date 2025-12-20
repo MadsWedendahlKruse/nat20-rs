@@ -2,13 +2,18 @@ use std::{fmt, sync::Arc};
 
 use hecs::{Entity, World};
 
-use crate::components::{
-    actions::action::{Action, ActionContext},
-    d20::{D20Check, D20CheckResult},
-    damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
-    id::ActionId,
-    items::equipment::armor::ArmorClass,
-    resource::ResourceAmountMap,
+use crate::{
+    components::{
+        actions::action::{Action, ActionContext},
+        d20::{D20Check, D20CheckResult},
+        damage::{
+            AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
+        },
+        id::ActionId,
+        items::equipment::armor::ArmorClass,
+        resource::ResourceAmountMap,
+    },
+    engine::event::ActionData,
 };
 
 pub type EffectHook = Arc<dyn Fn(&mut World, Entity) + Send + Sync>;
@@ -19,10 +24,10 @@ pub type D20CheckHook = Arc<dyn Fn(&World, Entity, &mut D20Check) + Send + Sync>
 pub type D20CheckResultHook = Arc<dyn Fn(&World, Entity, &mut D20CheckResult) + Send + Sync>;
 pub type DamageRollHook = Arc<dyn Fn(&World, Entity, &mut DamageRoll) + Send + Sync>;
 pub type DamageRollResultHook = Arc<dyn Fn(&World, Entity, &mut DamageRollResult) + Send + Sync>;
-pub type ActionHook =
-    Arc<dyn Fn(&mut World, Entity, &Action, &ActionContext, &ResourceAmountMap) + Send + Sync>;
+pub type ActionHook = Arc<dyn Fn(&mut World, &ActionData) + Send + Sync>;
 pub type ResourceCostHook =
     Arc<dyn Fn(&World, Entity, &ActionId, &ActionContext, &mut ResourceAmountMap) + Send + Sync>;
+pub type DamageTakenHook = Arc<dyn Fn(&World, Entity, &mut DamageMitigationResult) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct D20CheckHooks {

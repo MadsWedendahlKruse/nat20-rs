@@ -1,0 +1,27 @@
+{
+    "id": "nat20_rs::spell.shield",
+    "description": "An imperceptible barrier of magical force protects you. Until the start of your next turn, you have a +5 bonus to AC, including against the triggering attack, and you take no damage from Magic Missile.",
+    "base_level": 1,
+    "school": "abjuration",
+    "kind": {
+        "composite": {
+            "actions": [
+                {
+                    "reaction": {
+                        "script": "nat20_rs::script.spell.shield"
+                    }
+                },
+                {
+                    "beneficial_effect": {
+                        "effect": "nat20_rs::effect.spell.shield"
+                    }
+                }
+            ]
+        }
+    },
+    "resource_cost": {
+        "nat20_rs::resource.reaction": 1
+    },
+    "targeting": "self",
+    "reaction_trigger": "nat20_rs::script.spell.shield"
+}

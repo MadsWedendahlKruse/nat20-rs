@@ -571,10 +571,21 @@ impl GameState {
                                 }
 
                                 // TODO: How to handle this properly?
-                                ReactionResult::ModifyEvent { modification } => (modification)(
-                                    &self.world,
-                                    &mut session.pending_events_mut().front_mut().unwrap(),
-                                ),
+                                ReactionResult::ModifyEvent { modification } => {
+                                    info!(
+                                        "Modifying event {:?} due to reaction by {:?}",
+                                        event.id,
+                                        action_result.performer.id()
+                                    );
+                                    (modification)(
+                                        &self.world,
+                                        &mut session.pending_events_mut().front_mut().unwrap(),
+                                    );
+                                    println!(
+                                        "Event after modification: {:#?}",
+                                        session.pending_events().front().unwrap(),
+                                    );
+                                }
 
                                 ReactionResult::NoEffect => { /* Do nothing */ }
                             }
@@ -622,15 +633,13 @@ impl GameState {
     fn log_event(&mut self, event: Event) {
         // If the actor is in combat log it in the encounter log, otherwise in
         // the global log
-        if let Some(actor) = event.actor() {
-            if let Some(encounter_id) = self.in_combat.get(&actor) {
-                if let Some(encounter) = self.encounters.get_mut(encounter_id) {
-                    encounter.log_event(event);
-                } else {
-                    panic!("Inconsistent state: entity is in combat but encounter not found");
-                }
+        if let Some(actor) = event.actor()
+            && let Some(encounter_id) = self.in_combat.get(&actor)
+        {
+            if let Some(encounter) = self.encounters.get_mut(encounter_id) {
+                encounter.log_event(event);
             } else {
-                self.event_log.push(event);
+                panic!("Inconsistent state: entity is in combat but encounter not found");
             }
         } else {
             self.event_log.push(event);

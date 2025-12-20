@@ -12,7 +12,20 @@ use super::modifier::{ModifierSet, ModifierSource};
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoEnumIterator};
 
-#[derive(EnumIter, Hash, Eq, PartialEq, Debug, Clone, Copy, Display, Serialize, Deserialize)]
+#[derive(
+    EnumIter,
+    Hash,
+    Eq,
+    PartialEq,
+    Debug,
+    Clone,
+    Copy,
+    Display,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+)]
 #[serde(try_from = "String", into = "String")]
 pub enum Ability {
     Strength = 0,
@@ -227,7 +240,7 @@ mod tests {
     fn ability_total() {
         let mut ability_score = AbilityScore::new(Ability::Dexterity, 14);
         ability_score.modifiers.add_modifier(
-            ModifierSource::Item(ItemId::new("nat20_rs","item.ring_of_dexterity")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_dexterity")),
             2,
         );
         assert_eq!(ability_score.total(), 16); // 14 + 2 = 16
@@ -243,7 +256,7 @@ mod tests {
         );
         ability_scores.add_modifier(
             Ability::Dexterity,
-            ModifierSource::Item(ItemId::new("nat20_rs","item.ring_of_dexterity")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_dexterity")),
             2,
         );
 
@@ -260,7 +273,7 @@ mod tests {
         ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
         ability_scores.add_modifier(
             Ability::Strength,
-            ModifierSource::Item(ItemId::new("nat20_rs","item.ring_of_strength")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_strength")),
             2,
         );
 
@@ -295,14 +308,14 @@ mod tests {
         );
         ability_scores.add_modifier(
             Ability::Dexterity,
-            ModifierSource::Item(ItemId::new("nat20_rs","item.ring_of_dexterity")),
+            ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_dexterity")),
             2,
         );
 
         assert_eq!(ability_scores.total(Ability::Dexterity), 17);
         ability_scores.remove_modifier(
             Ability::Dexterity,
-            &ModifierSource::Item(ItemId::new("nat20_rs","item.ring_of_dexterity")),
+            &ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_dexterity")),
         );
         assert_eq!(ability_scores.total(Ability::Dexterity), 15);
     }

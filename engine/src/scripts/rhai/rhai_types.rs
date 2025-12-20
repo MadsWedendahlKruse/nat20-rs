@@ -1,12 +1,13 @@
 use rhai::{Array, CustomType, TypeBuilder, plugin::*};
 
 use crate::{
-    components::{damage::DamageSource, id::ResourceId},
+    components::id::ResourceId,
     scripts::script_api::{
-        ScriptActionContext, ScriptActionView, ScriptD20CheckDCKind, ScriptD20CheckPerformedView,
-        ScriptD20Result, ScriptDamageRollResult, ScriptEntity, ScriptEntityView, ScriptEventRef,
-        ScriptEventView, ScriptLoadoutView, ScriptReactionBodyContext, ScriptReactionPlan,
-        ScriptReactionTriggerContext, ScriptResourceCost, ScriptResourceView, ScriptSavingThrow,
+        ScriptActionContext, ScriptActionView, ScriptD20CheckDCKind, ScriptD20CheckView,
+        ScriptD20Result, ScriptDamageMitigationResult, ScriptDamageRollResult, ScriptEntity,
+        ScriptEntityView, ScriptEventRef, ScriptEventView, ScriptLoadoutView,
+        ScriptReactionBodyContext, ScriptReactionPlan, ScriptReactionTriggerContext,
+        ScriptResourceCost, ScriptResourceView, ScriptSavingThrow,
     },
 };
 
@@ -18,25 +19,23 @@ impl CustomType for ScriptEntity {
     }
 }
 
-impl CustomType for DamageSource {
-    fn build(mut builder: TypeBuilder<Self>) {
-        builder
-            .with_name("DamageSource")
-            .with_get("kind", |s: &mut Self| match s {
-                DamageSource::Weapon(weapon_kind) => weapon_kind.to_string(),
-                DamageSource::Spell => "Spell".to_string(),
-            });
-    }
-}
-
 impl CustomType for ScriptDamageRollResult {
     fn build(mut builder: TypeBuilder<Self>) {
         builder
             .with_name("DamageRollResult")
-            .with_get("source", |s: &mut Self| s.source().clone())
+            .with_get("source", |s: &mut Self| s.source())
             .with_fn("clamp_damage_dice_min", |s: &mut Self, min: i64| {
                 s.clamp_damage_dice_min(min as u32);
             });
+    }
+}
+
+impl CustomType for ScriptDamageMitigationResult {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("DamageMitigationResult")
+            .with_get("source", |s: &mut Self| s.source())
+            .with_fn("add_immunity", |s: &mut Self| s.add_immunity());
     }
 }
 
@@ -44,7 +43,15 @@ impl CustomType for ScriptD20CheckDCKind {
     fn build(mut builder: TypeBuilder<Self>) {
         builder
             .with_name("D20CheckDCKind")
-            .with_get("label", |s: &mut Self| s.label.clone());
+            .with_get("label", |s: &mut Self| s.label.clone())
+            .with_get("dc", |s: &mut Self| s.dc.clone())
+            .with_get("target", |s: &mut Self| {
+                if let Some(target) = &s.target {
+                    target.id
+                } else {
+                    0
+                }
+            });
     }
 }
 
@@ -53,18 +60,17 @@ impl CustomType for ScriptD20Result {
         builder
             .with_name("D20Result")
             .with_get("total", |s: &mut Self| s.total)
-            .with_get("kind", |s: &mut Self| s.kind.clone())
+            .with_get("dc_kind", |s: &mut Self| s.dc_kind.clone())
             .with_get("is_success", |s: &mut Self| s.is_success);
     }
 }
 
-impl CustomType for ScriptD20CheckPerformedView {
+impl CustomType for ScriptD20CheckView {
     fn build(mut builder: TypeBuilder<Self>) {
         builder
             .with_name("D20CheckPerformedView")
             .with_get("performer", |s: &mut Self| s.performer.clone())
-            .with_get("result", |s: &mut Self| s.result.clone())
-            .with_get("dc_kind", |s: &mut Self| s.dc_kind.clone());
+            .with_get("result", |s: &mut Self| s.result.clone());
     }
 }
 
@@ -176,6 +182,12 @@ pub mod reaction_plan_module {
         }
     }
 
+    pub fn modify_d20_dc(modifier: String) -> ScriptReactionPlan {
+        ScriptReactionPlan::ModifyD20DC {
+            modifier: modifier.parse().unwrap(),
+        }
+    }
+
     pub fn reroll_d20_result(bonus: String, force_use_new: bool) -> ScriptReactionPlan {
         let bonus = if bonus.is_empty() {
             None
@@ -274,7 +286,7 @@ impl CustomType for ScriptEntityView {
     fn build(mut builder: TypeBuilder<Self>) {
         builder
             .with_name("EntityView")
-            .with_get("entity", |s: &mut Self| s.entity.clone())
+            .with_get("entity", |s: &mut Self| s.entity.id)
             .with_get("loadout", |s: &mut Self| s.loadout.clone())
             .with_get_set(
                 "resources",
@@ -288,7 +300,7 @@ impl CustomType for ScriptReactionTriggerContext {
     fn build(mut builder: TypeBuilder<Self>) {
         builder
             .with_name("ReactionTriggerContext")
-            .with_get("reactor", |s: &mut Self| s.reactor.clone())
+            .with_get("reactor", |s: &mut Self| s.reactor.id)
             .with_get("event", |s: &mut Self| s.event.clone())
             .with_fn(
                 "is_own_failed_d20_check",
@@ -299,7 +311,7 @@ impl CustomType for ScriptReactionTriggerContext {
                     let d20_check = s.event.as_d20_check_performed();
                     return d20_check.performer == s.reactor
                         && !d20_check.result.is_success
-                        && d20_check.dc_kind.label == dc_kind;
+                        && d20_check.result.dc_kind.label == dc_kind;
                 },
             );
     }
@@ -309,6 +321,7 @@ impl CustomType for ScriptReactionBodyContext {
     fn build(mut builder: TypeBuilder<Self>) {
         builder
             .with_name("ReactionBodyContext")
-            .with_get("reaction_data", |s: &mut Self| s.reaction_data.clone());
+            .with_get("reactor", |s: &mut Self| s.reactor.id)
+            .with_get("event", |s: &mut Self| s.event.clone());
     }
 }

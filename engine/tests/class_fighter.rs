@@ -6,12 +6,12 @@ mod tests {
     use nat20_rs::{
         components::{
             actions::{
-                action::{ActionContext, ActionKind},
+                action::{Action, ActionContext, ActionKind},
                 targeting::TargetInstance,
             },
             damage::{DamageRoll, DamageSource, DamageType},
             health::hit_points::HitPoints,
-            id::{ActionId, EffectId, ResourceId},
+            id::{ActionId, EffectId, ResourceId, SpellId},
             resource::{RechargeRule, ResourceAmount, ResourceAmountMap, ResourceMap},
         },
         engine::event::{ActionData, ActionDecision, ActionDecisionKind},
@@ -143,19 +143,18 @@ mod tests {
                 DamageRoll::new(
                     "1d4".parse().unwrap(),
                     DamageType::Force,
-                    DamageSource::Spell,
+                    DamageSource::Spell(SpellId::new("nat20_rs", "test.spell")),
                 )
             }),
         };
-        systems::health::damage(
-            &mut game_state,
-            fighter,
-            fighter,
-            &ActionId::new("nat20_rs", "test.damage"),
-            &damage_source,
-            &ActionContext::Other,
-            ResourceAmountMap::new(),
-        );
+        let action_data = ActionData {
+            actor: fighter,
+            action_id: ActionId::new("nat20_rs", "action.test.unconditional_damage"),
+            context: ActionContext::Other,
+            resource_cost: ResourceAmountMap::new(),
+            targets: vec![TargetInstance::Entity(fighter)],
+        };
+        systems::health::damage(&mut game_state, &action_data, &damage_source, fighter);
 
         // Check that the fighter's HP is reduced
         let prev_hp = {

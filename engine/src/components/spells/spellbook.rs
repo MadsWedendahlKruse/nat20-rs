@@ -7,7 +7,7 @@ use crate::{
         id::{ResourceId, SpellId},
         resource::ResourceAmount,
     },
-    registry::{self, registry::SpellsRegistry},
+    registry::registry::SpellsRegistry,
     systems,
 };
 
@@ -20,6 +20,8 @@ pub struct Spellbook {
     prepared_spells: HashSet<SpellId>,
     /// Maximum number of spells that can be prepared.
     max_prepared_spells: usize,
+    /// Maximum level of spells that can be cast.
+    max_spell_level: u8,
     /// The ability to use when casting the spell. This depends on the class the
     /// spell was learned as
     spellcasting_ability: HashMap<SpellId, Ability>,
@@ -31,6 +33,7 @@ impl Spellbook {
             spells: HashSet::new(),
             prepared_spells: HashSet::new(),
             max_prepared_spells: 0,
+            max_spell_level: 0,
             spellcasting_ability: HashMap::new(),
         }
     }
@@ -76,6 +79,14 @@ impl Spellbook {
 
     pub fn max_prepared_spells(&self) -> usize {
         self.max_prepared_spells
+    }
+
+    pub fn set_max_spell_level(&mut self, level: u8) {
+        self.max_spell_level = level;
+    }
+
+    pub fn max_spell_level(&self) -> u8 {
+        self.max_spell_level
     }
 
     pub fn prepared_spells(&self) -> &HashSet<SpellId> {
@@ -133,7 +144,7 @@ impl ActionProvider for Spellbook {
                 continue;
             }
 
-            for level in spell.base_level()..=systems::spells::MAX_SPELL_LEVEL {
+            for level in spell.base_level()..=self.max_spell_level {
                 let context = ActionContext::Spell {
                     id: spell_id.clone(),
                     level,
@@ -165,7 +176,7 @@ mod tests {
 
     #[test]
     fn add_and_has_spell() {
-        let spell_id = &SpellId::new("nat20_rs","spell.magic_missile");
+        let spell_id = &SpellId::new("nat20_rs", "spell.magic_missile");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id, Ability::Intelligence);
@@ -179,7 +190,7 @@ mod tests {
 
     #[test]
     fn remove_spell() {
-        let spell_id = &SpellId::new("nat20_rs","spell.magic_missile");
+        let spell_id = &SpellId::new("nat20_rs", "spell.magic_missile");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id, Ability::Wisdom);
@@ -192,7 +203,7 @@ mod tests {
 
     #[test]
     fn prepare_and_unprepare_spell() {
-        let spell_id = &SpellId::new("nat20_rs","spell.magic_missile");
+        let spell_id = &SpellId::new("nat20_rs", "spell.magic_missile");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id, Ability::Charisma);
@@ -208,8 +219,8 @@ mod tests {
 
     #[test]
     fn all_spells_and_prepared_spells() {
-        let spell_id1 = &SpellId::new("nat20_rs","spell.magic_missile");
-        let spell_id2 = &SpellId::new("nat20_rs","spell.fireball");
+        let spell_id1 = &SpellId::new("nat20_rs", "spell.magic_missile");
+        let spell_id2 = &SpellId::new("nat20_rs", "spell.fireball");
 
         let mut spellbook = Spellbook::new();
         spellbook.add_spell(spell_id1, Ability::Intelligence);

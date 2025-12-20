@@ -10,10 +10,12 @@ use serde::Deserialize;
 use crate::{
     components::{
         actions::action::{Action, ActionContext},
-        damage::{AttackRoll, AttackRollResult, DamageRoll, DamageRollResult},
+        damage::{
+            AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
+        },
         effects::hooks::{
             ActionHook, ArmorClassHook, AttackRollHook, AttackRollResultHook, D20CheckHooks,
-            DamageRollHook, DamageRollResultHook, ResourceCostHook,
+            DamageRollHook, DamageRollResultHook, DamageTakenHook, ResourceCostHook,
         },
         id::{ActionId, EffectId, IdProvider},
         items::equipment::armor::ArmorClass,
@@ -22,6 +24,7 @@ use crate::{
         saving_throw::SavingThrowKind,
         skill::Skill,
     },
+    engine::event::ActionData,
     registry::serialize::effect::EffectDefinition,
 };
 
@@ -93,6 +96,7 @@ pub struct Effect {
     pub post_damage_roll: DamageRollResultHook,
     pub on_action: ActionHook,
     pub on_resource_cost: ResourceCostHook,
+    pub damage_taken: DamageTakenHook,
 }
 
 impl Effect {
@@ -118,9 +122,7 @@ impl Effect {
                 as DamageRollHook,
             post_damage_roll: Arc::new(|_: &World, _: Entity, _: &mut DamageRollResult| {})
                 as DamageRollResultHook,
-            on_action: Arc::new(
-                |_: &mut World, _: Entity, _: &Action, _: &ActionContext, _: &ResourceAmountMap| {},
-            ) as ActionHook,
+            on_action: Arc::new(|_: &mut World, _: &ActionData| {}) as ActionHook,
             on_resource_cost: Arc::new(
                 |_: &World,
                  _: Entity,
@@ -128,6 +130,8 @@ impl Effect {
                  _: &ActionContext,
                  _: &mut ResourceAmountMap| {},
             ) as ResourceCostHook,
+            damage_taken: Arc::new(|_: &World, _: Entity, _: &mut DamageMitigationResult| {})
+                as DamageTakenHook,
             replaces: None,
         }
     }

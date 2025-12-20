@@ -7,7 +7,7 @@ use nat20_rs::{
             targeting::{AreaShape, TargetInstance, TargetingContext, TargetingKind},
         },
         d20::RollMode,
-        id::{ActionId, Name},
+        id::{ActionId, Name, ResourceId},
         modifier::Modifiable,
         resource::{ResourceAmountMap, ResourceMap},
         speed::Speed,
@@ -198,6 +198,12 @@ fn render_actions(
                     systems::actions::get_action(action_id).unwrap().kind(),
                     ActionKind::Reaction { .. }
                 ) {
+                    continue;
+                }
+                // Don't render actions that cost a reaction
+                if contexts_and_costs.iter().all(|(_, cost)| {
+                    cost.contains_key(&ResourceId::new("nat20_rs", "resource.reaction"))
+                }) {
                     continue;
                 }
 

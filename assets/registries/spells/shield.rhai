@@ -1,0 +1,38 @@
+fn reaction_trigger(context) {
+    let event = context.event;
+
+    if event.is_action() {
+        let action = event.as_action();
+        // Cannot use Shield as a reaction to your own spell
+        if action.actor == context.reactor {
+            return false;
+        }
+        // Note that we're checking for the ID of the Magic Missile *action*
+        // here, not the spell itself.
+        return action.action_id == "nat20_rs::action.magic_missile";
+    }
+
+    if event.is_d20_check_performed() {
+        let d20_check = event.as_d20_check_performed();
+
+        // Shield can be used to react to an attack roll against the caster
+        let result = d20_check.result;
+        return result.dc_kind.label == "AttackRoll" && 
+            result.dc_kind.target == context.reactor &&
+            result.is_success == true;
+    }
+
+    return false;
+}
+
+fn reaction_body(context) {
+    if context.event.is_d20_check_performed() {
+        ReactionPlan::modify_d20_dc("5")
+    }
+}
+
+fn damage_taken_hook(entity_view, damage_mitigation_result) {
+    if damage_mitigation_result.source == "nat20_rs::spell.magic_missile" {
+        damage_mitigation_result.add_immunity();
+    }
+}

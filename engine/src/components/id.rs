@@ -15,7 +15,7 @@ pub enum IdError {
 macro_rules! id_newtypes {
     ($($name:ident),+) => {
         $(
-            #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+            #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
             #[serde(try_from = "String", into = "String")]
             pub struct $name {
                 pub(crate) namespace: String,

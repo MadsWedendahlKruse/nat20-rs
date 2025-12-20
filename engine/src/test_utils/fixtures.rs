@@ -335,6 +335,10 @@ pub mod creatures {
                 &SpellId::new("nat20_rs", "spell.counterspell"),
                 Ability::Intelligence,
             );
+            spellbook.add_spell(
+                &SpellId::new("nat20_rs", "spell.shield"),
+                Ability::Intelligence,
+            );
 
             EntityIdentifier::new(entity, name)
         }

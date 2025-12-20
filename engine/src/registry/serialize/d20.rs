@@ -120,7 +120,7 @@ fn spell_attack_roll(
         proficiency_bonus as i32,
     );
 
-    AttackRoll::new(roll, DamageSource::Spell)
+    AttackRoll::new(roll, DamageSource::Spell(spell_id.clone()))
 }
 
 #[derive(Clone, Serialize, Deserialize)]

@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use rhai::{AST, Engine, Scope, exported_module, module_resolvers::FileModuleResolver};
 
 use crate::{
-    components::{damage::DamageSource, id::ScriptId},
+    components::id::ScriptId,
     registry::registry::REGISTRY_ROOT,
     scripts::{
         rhai::rhai_types,
         script::{Script, ScriptError, ScriptFunction},
         script_api::{
-            ScriptActionContext, ScriptActionView, ScriptD20CheckDCKind,
-            ScriptD20CheckPerformedView, ScriptD20Result, ScriptDamageRollResult, ScriptEntity,
+            ScriptActionContext, ScriptActionView, ScriptD20CheckDCKind, ScriptD20CheckView,
+            ScriptD20Result, ScriptDamageMitigationResult, ScriptDamageRollResult, ScriptEntity,
             ScriptEntityView, ScriptEventView, ScriptLoadoutView, ScriptReactionBodyContext,
             ScriptReactionPlan, ScriptReactionTriggerContext, ScriptResourceCost,
             ScriptResourceView, ScriptSavingThrow,
@@ -29,12 +29,12 @@ impl RhaiScriptEngine {
         let mut engine = Engine::new();
 
         engine
-            .build_type::<DamageSource>()
             .build_type::<ScriptDamageRollResult>()
+            .build_type::<ScriptDamageMitigationResult>()
             .build_type::<ScriptActionContext>()
             .build_type::<ScriptActionView>()
             .build_type::<ScriptD20CheckDCKind>()
-            .build_type::<ScriptD20CheckPerformedView>()
+            .build_type::<ScriptD20CheckView>()
             .build_type::<ScriptD20Result>()
             .build_type::<ScriptEntity>()
             .build_type::<ScriptEntityView>()
@@ -42,6 +42,7 @@ impl RhaiScriptEngine {
             .build_type::<ScriptLoadoutView>()
             .build_type::<ScriptReactionPlan>()
             .build_type::<ScriptReactionTriggerContext>()
+            .build_type::<ScriptReactionBodyContext>()
             .build_type::<ScriptResourceCost>()
             .build_type::<ScriptResourceView>()
             .build_type::<ScriptSavingThrow>();
@@ -138,8 +139,7 @@ impl ScriptEngine for RhaiScriptEngine {
     ) -> Result<(), ScriptError> {
         let ast = self.get_ast(script).cloned()?;
         let mut scope = Scope::new();
-        let cost = self
-            .engine
+        self.engine
             .call_fn::<()>(
                 &mut scope,
                 &ast,
@@ -148,7 +148,7 @@ impl ScriptEngine for RhaiScriptEngine {
             )
             .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
 
-        Ok(cost)
+        Ok(())
     }
 
     fn evaluate_action_hook(
@@ -159,8 +159,7 @@ impl ScriptEngine for RhaiScriptEngine {
     ) -> Result<(), ScriptError> {
         let ast = self.get_ast(script).cloned()?;
         let mut scope = Scope::new();
-        let modified_entity = self
-            .engine
+        self.engine
             .call_fn::<()>(
                 &mut scope,
                 &ast,
@@ -169,7 +168,7 @@ impl ScriptEngine for RhaiScriptEngine {
             )
             .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
 
-        Ok(modified_entity)
+        Ok(())
     }
 
     fn evaluate_armor_class_hook(
@@ -203,8 +202,7 @@ impl ScriptEngine for RhaiScriptEngine {
     ) -> Result<(), ScriptError> {
         let ast = self.get_ast(script).cloned()?;
         let mut scope = Scope::new();
-        let modified_damage_roll_result = self
-            .engine
+        self.engine
             .call_fn::<()>(
                 &mut scope,
                 &ast,
@@ -213,6 +211,25 @@ impl ScriptEngine for RhaiScriptEngine {
             )
             .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
 
-        Ok(modified_damage_roll_result)
+        Ok(())
+    }
+
+    fn evaluate_damage_taken_hook(
+        &mut self,
+        script: &Script,
+        entity: &ScriptEntityView,
+        damage_mitigation_result: &ScriptDamageMitigationResult,
+    ) -> Result<(), ScriptError> {
+        let ast = self.get_ast(script).cloned()?;
+        let mut scope = Scope::new();
+        self.engine
+            .call_fn::<()>(
+                &mut scope,
+                &ast,
+                ScriptFunction::DamageTakenHook.fn_name(),
+                (entity.clone(), damage_mitigation_result.clone()),
+            )
+            .map_err(|e| ScriptError::RuntimeError(format!("Rhai error: {}", e)))?;
+        Ok(())
     }
 }

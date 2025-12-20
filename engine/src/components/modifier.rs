@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use crate::components::id::{
 
 use super::{ability::Ability, proficiency::ProficiencyLevel};
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ModifierSource {
     Base, // The base value, no specific source
     Background(BackgroundId),
@@ -59,7 +59,7 @@ impl fmt::Display for ModifierSource {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModifierSet {
-    modifiers: HashMap<ModifierSource, i32>,
+    modifiers: BTreeMap<ModifierSource, i32>,
 }
 
 pub trait Modifiable {
@@ -73,12 +73,12 @@ pub trait Modifiable {
 impl ModifierSet {
     pub fn new() -> Self {
         Self {
-            modifiers: HashMap::new(),
+            modifiers: BTreeMap::new(),
         }
     }
 
     pub fn from(source: ModifierSource, value: i32) -> Self {
-        let mut modifiers = HashMap::new();
+        let mut modifiers = BTreeMap::new();
         modifiers.insert(source, value);
         Self { modifiers }
     }

@@ -332,13 +332,16 @@ impl Loadout {
             &systems::helpers::get_component::<WeaponProficiencyMap>(world, entity)
                 .proficiency(&weapon.category()),
         );
-        let distance = systems::geometry::distance_between_entities(world, entity, target).unwrap();
         let range = weapon.range();
-        if distance > range.normal() {
-            attack_roll.d20_check.advantage_tracker_mut().add(
-                AdvantageType::Disadvantage,
-                ModifierSource::Custom("Target is outside normal range".to_string()),
-            );
+        if range.normal() != range.max() {
+            let distance =
+                systems::geometry::distance_between_entities(world, entity, target).unwrap();
+            if distance > range.normal() {
+                attack_roll.d20_check.advantage_tracker_mut().add(
+                    AdvantageType::Disadvantage,
+                    ModifierSource::Custom("Target is outside normal range".to_string()),
+                );
+            }
         }
         attack_roll
     }

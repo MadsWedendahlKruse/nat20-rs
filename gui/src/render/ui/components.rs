@@ -16,7 +16,7 @@ use nat20_rs::{
         },
         effects::effects::{Effect, EffectDuration},
         health::{hit_points::HitPoints, life_state::LifeState},
-        id::{ActionId, FeatId, Name, SpeciesId, ResourceId, SpellId, SubspeciesId},
+        id::{ActionId, FeatId, Name, ResourceId, SpeciesId, SpellId, SubspeciesId},
         items::{
             equipment::{
                 armor::{Armor, ArmorClass, ArmorDexterityBonus, ArmorType},
@@ -29,10 +29,10 @@ use nat20_rs::{
         level::{ChallengeRating, CharacterLevels, Level},
         modifier::{Modifiable, ModifierSet},
         proficiency::{Proficiency, ProficiencyLevel},
-        species::{CreatureSize, CreatureType},
         resource::{ResourceAmount, ResourceAmountMap, ResourceBudgetKind, ResourceMap},
         saving_throw::{SavingThrowKind, SavingThrowSet},
         skill::{Skill, SkillSet, skill_ability},
+        species::{CreatureSize, CreatureType},
         speed::Speed,
         spells::spellbook::Spellbook,
     },
@@ -532,7 +532,7 @@ fn render_spellbook_ui(
         let max_level = spells_by_level.keys().max().cloned().unwrap_or(0);
 
         let slots = resources
-            .get(&ResourceId::new("nat20_rs","resource.spell_slot"))
+            .get(&ResourceId::new("nat20_rs", "resource.spell_slot"))
             .and_then(|r| match r {
                 ResourceBudgetKind::Tiered(budgets) => Some(budgets),
                 _ => panic!("Expected ResourceKind::Tiered for SPELL_SLOT"),
@@ -776,6 +776,7 @@ impl ImguiRenderable for ArmorClass {
                     (format!("({})", self.base.1), TextKind::Details),
                 ])
                 .render(ui);
+                //TODO: Fix indent
                 indent_text(ui, 1);
                 self.dexterity_bonus.render(ui);
                 if !self.modifiers.is_empty() {
@@ -965,6 +966,12 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
                         ),
                     );
                 });
+
+                if ui.is_item_hovered() {
+                    ui.tooltip(|| {
+                        (damage_roll, damage_taken).render(ui);
+                    });
+                }
             }
 
             ActionKindResult::AttackRollDamage {
@@ -1047,6 +1054,36 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
                         ),
                     );
                 });
+
+                if ui.is_item_hovered() {
+                    ui.tooltip(|| {
+                        ui.text("Saving Throw DC:");
+                        ui.same_line();
+                        saving_throw_dc.render(ui);
+
+                        ui.text("");
+                        ui.text("Saving Throw:");
+                        ui.same_line();
+                        saving_throw_result.render(ui);
+
+                        if saving_throw_result.is_success(saving_throw_dc) {
+                            if *half_damage_on_save {
+                                ui.same_line();
+                                TextSegment::new("(Success - Half Damage)", TextKind::Details)
+                                    .render(ui);
+                            } else {
+                                ui.same_line();
+                                TextSegment::new("(Success)", TextKind::Details).render(ui);
+                            }
+                        } else {
+                            ui.same_line();
+                            TextSegment::new("(Failure)", TextKind::Details).render(ui);
+                        }
+
+                        ui.text("");
+                        (damage_roll, damage_taken).render(ui);
+                    });
+                }
             }
 
             ActionKindResult::UnconditionalEffect { effect, applied } => todo!(),
@@ -1289,6 +1326,25 @@ impl ImguiRenderableWithContext<(&str, Option<&str>, u8)> for Option<LifeState> 
     }
 }
 
+impl ImguiRenderable for (&DamageRollResult, &Option<DamageMitigationResult>) {
+    fn render(&self, ui: &imgui::Ui) {
+        let (damage_roll, damage_taken) = self;
+
+        ui.text("Damage Roll:");
+        ui.same_line();
+        damage_roll.render(ui);
+
+        if let Some(damage_taken) = damage_taken {
+            ui.text("");
+            ui.text("Damage Taken:");
+            ui.same_line();
+            damage_taken.render(ui);
+        } else {
+            ui.text("No damage taken.");
+        }
+    }
+}
+
 impl ImguiRenderable for D20CheckDC<SavingThrowKind> {
     fn render(&self, ui: &imgui::Ui) {
         self.dc.render_with_context(ui, ModifierSetRenderMode::Line);
@@ -1511,13 +1567,13 @@ impl ImguiRenderableWithContext<(&World, Entity, &ActionContext)> for ActionKind
                 .render(ui);
             }
 
-            ActionKind::Utility {} => todo!(),
+            ActionKind::Composite { actions } => {
+                for action in actions {
+                    action.render_with_context(ui, (world, entity, action_context));
+                }
+            }
 
-            ActionKind::Composite { actions } => todo!(),
-
-            ActionKind::Reaction { reaction } => todo!(),
-
-            ActionKind::Custom(_) => todo!(),
+            _ => {}
         }
     }
 }

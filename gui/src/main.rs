@@ -168,8 +168,15 @@ fn main() {
         .expect("EventLoop error");
 }
 
+const DEFAULT_LOG_LEVEL: &str = "info";
+
 fn init_logging() {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let mut log_level = DEFAULT_LOG_LEVEL;
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        log_level = &args[1];
+    }
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)

@@ -8,12 +8,14 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        actions::action::ActionContext,
-        damage::{DamageRollResult, DamageSource},
+        actions::{action::ActionContext, targeting::TargetInstance},
+        damage::{
+            DamageMitigationEffect, DamageMitigationResult, DamageRollResult, MitigationOperation,
+        },
         dice::{DiceSet, DiceSetRoll},
         id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
-        modifier::{ModifierSet, ModifierSource},
+        modifier::{Modifiable, ModifierSet, ModifierSource},
         resource::{ResourceAmount, ResourceAmountMap, ResourceBudgetKind, ResourceMap},
     },
     engine::event::{ActionData, Event, EventKind, ReactionData},
@@ -172,8 +174,8 @@ pub struct ScriptDamageRollResult {
 }
 
 impl ScriptDamageRollResult {
-    pub fn source(&self) -> DamageSource {
-        self.inner.read().source.clone()
+    pub fn source(&self) -> String {
+        self.inner.read().source.to_string()
     }
 
     pub fn clamp_damage_dice_min(&mut self, minimum_roll: u32) {
@@ -196,18 +198,56 @@ impl ScriptDamageRollResult {
 impl_script_shared_methods!(ScriptDamageRollResult, DamageRollResult);
 
 #[derive(Clone)]
+pub struct ScriptDamageMitigationResult {
+    inner: ScriptShared<DamageMitigationResult>,
+}
+
+impl ScriptDamageMitigationResult {
+    pub fn source(&self) -> String {
+        self.inner.read().source.to_string()
+    }
+
+    pub fn add_immunity(&mut self) {
+        let mut inner = self.inner.write();
+        for component in &mut inner.components {
+            component.modifiers.push(DamageMitigationEffect {
+                source: ModifierSource::Custom(
+                    "TODO: Figure out how to propagate the source".to_string(),
+                ),
+                operation: MitigationOperation::Immunity,
+            });
+        }
+        inner.recalculate_total();
+    }
+}
+
+impl_script_shared_methods!(ScriptDamageMitigationResult, DamageMitigationResult);
+
+#[derive(Clone)]
 pub struct ScriptD20CheckDCKind {
-    // minimal content; you can refine it as needed
     pub label: String,
+    pub dc: i32,
+    // Currently only used for AttackRoll
+    pub target: Option<ScriptEntity>,
 }
 
 impl ScriptD20CheckDCKind {
     pub fn from(dc_kind: &D20CheckDCKind) -> Self {
-        ScriptD20CheckDCKind {
-            label: match dc_kind {
-                D20CheckDCKind::SavingThrow(_) => "SavingThrow".to_string(),
-                D20CheckDCKind::Skill(_) => "Skill".to_string(),
-                D20CheckDCKind::AttackRoll(_, _) => "AttackRoll".to_string(),
+        match dc_kind {
+            D20CheckDCKind::SavingThrow(dc) => ScriptD20CheckDCKind {
+                label: "SavingThrow".to_string(),
+                dc: dc.dc.total(),
+                target: None,
+            },
+            D20CheckDCKind::Skill(dc) => ScriptD20CheckDCKind {
+                label: "Skill".to_string(),
+                dc: dc.dc.total(),
+                target: None,
+            },
+            D20CheckDCKind::AttackRoll(target_entity, armor_class) => ScriptD20CheckDCKind {
+                label: "AttackRoll".to_string(),
+                dc: armor_class.total() as i32,
+                target: Some(ScriptEntity::from(*target_entity)),
             },
         }
     }
@@ -216,7 +256,7 @@ impl ScriptD20CheckDCKind {
 #[derive(Clone)]
 pub struct ScriptD20Result {
     pub total: u32,
-    pub kind: ScriptD20CheckDCKind,
+    pub dc_kind: ScriptD20CheckDCKind,
     pub is_success: bool,
 }
 
@@ -230,7 +270,7 @@ impl ScriptD20Result {
         };
         ScriptD20Result {
             total: result.total(),
-            kind: ScriptD20CheckDCKind::from(dc_kind),
+            dc_kind: ScriptD20CheckDCKind::from(dc_kind),
             is_success: result_kind.is_success(dc_kind),
         }
     }
@@ -239,11 +279,8 @@ impl ScriptD20Result {
 /// High-level event view that scripts can work with.
 #[derive(Clone)]
 pub enum ScriptEventView {
-    D20CheckPerformed(ScriptD20CheckPerformedView),
     ActionRequested(ScriptActionView),
-    // later:
-    // DamageRollPerformed(DamageView),
-    // ...
+    D20CheckPerformed(ScriptD20CheckView),
 }
 
 impl ScriptEventView {
@@ -251,7 +288,7 @@ impl ScriptEventView {
         match &event.kind {
             EventKind::D20CheckPerformed(performer, result_kind, dc_kind) => {
                 Some(ScriptEventView::D20CheckPerformed(
-                    ScriptD20CheckPerformedView::from_parts(*performer, result_kind, dc_kind),
+                    ScriptD20CheckView::from_parts(*performer, result_kind, dc_kind),
                 ))
             }
 
@@ -271,50 +308,53 @@ impl ScriptEventView {
             _ => None, // extend with more variants as needed
         }
     }
-
-    pub fn is_d20_check_performed(&self) -> bool {
-        matches!(self, ScriptEventView::D20CheckPerformed(_))
-    }
-
-    pub fn as_d20_check_performed(&self) -> &ScriptD20CheckPerformedView {
-        if let ScriptEventView::D20CheckPerformed(view) = self {
-            view
-        } else {
-            panic!("Not a D20CheckPerformed event view");
-        }
-    }
-
-    pub fn is_action(&self) -> bool {
-        matches!(self, ScriptEventView::ActionRequested(_))
-    }
-
-    pub fn as_action(&self) -> &ScriptActionView {
-        if let ScriptEventView::ActionRequested(view) = self {
-            view
-        } else {
-            panic!("Not an ActionRequested event view");
-        }
-    }
 }
+
+macro_rules! impl_event_accessors {
+    ($enum_name:ident {
+        $(
+            $is_name:ident => $as_name:ident : $variant:ident ( $ty:ty )
+        ),+ $(,)?
+    }) => {
+        impl $enum_name {
+            $(
+                pub fn $is_name(&self) -> bool {
+                    matches!(self, Self::$variant(_))
+                }
+
+                pub fn $as_name(&self) -> &$ty {
+                    if let Self::$variant(value) = self {
+                        value
+                    } else {
+                        panic!(concat!("Not a ", stringify!($variant), " event view"));
+                    }
+                }
+            )+
+        }
+    };
+}
+
+impl_event_accessors!(ScriptEventView {
+    is_d20_check_performed => as_d20_check_performed: D20CheckPerformed(ScriptD20CheckView),
+    is_action              => as_action:              ActionRequested(ScriptActionView),
+});
 
 /// View of a "D20CheckPerformed" event.
 #[derive(Clone)]
-pub struct ScriptD20CheckPerformedView {
+pub struct ScriptD20CheckView {
     pub performer: ScriptEntity,
     pub result: ScriptD20Result,
-    pub dc_kind: ScriptD20CheckDCKind,
 }
 
-impl ScriptD20CheckPerformedView {
+impl ScriptD20CheckView {
     pub fn from_parts(
         performer: Entity,
         result_kind: &D20ResultKind,
         dc_kind: &D20CheckDCKind,
     ) -> Self {
-        ScriptD20CheckPerformedView {
+        ScriptD20CheckView {
             performer: ScriptEntity::from(performer),
             result: ScriptD20Result::from(result_kind, dc_kind),
-            dc_kind: ScriptD20CheckDCKind::from(dc_kind),
         }
     }
 }
@@ -385,6 +425,7 @@ pub struct ScriptActionView {
     pub actor: Entity,
     pub action_context: ScriptActionContext,
     pub resource_cost: ScriptResourceCost,
+    pub targets: Vec<ScriptEntity>,
 }
 
 impl ScriptActionView {
@@ -393,12 +434,14 @@ impl ScriptActionView {
         actor: Entity,
         action_context: &ActionContext,
         resource_cost: ScriptResourceCost,
+        targets: Vec<ScriptEntity>,
     ) -> Self {
         ScriptActionView {
             action_id: action_id.to_string(),
             actor,
             action_context: ScriptActionContext::from(action_context),
             resource_cost,
+            targets,
         }
     }
 }
@@ -410,6 +453,14 @@ impl From<&ActionData> for ScriptActionView {
             actor: action.actor,
             action_context: ScriptActionContext::from(&action.context),
             resource_cost: ScriptResourceCost::new(action.resource_cost.clone()),
+            targets: action
+                .targets
+                .iter()
+                .filter_map(|t| match t {
+                    TargetInstance::Entity(entity) => Some(ScriptEntity::from(*entity)),
+                    TargetInstance::Point(_) => None, // TODO: Handle point targets if needed
+                })
+                .collect(),
         }
     }
 }
@@ -516,6 +567,9 @@ pub enum ScriptReactionPlan {
     /// Add a flat modifier to the most recent D20 roll for this event.
     ModifyD20Result { bonus: ScriptD20Bonus },
 
+    /// Add a flat modifier to the DC for this event.
+    ModifyD20DC { modifier: ScriptD20Bonus },
+
     /// Reroll the most recent D20 roll for this event with an optional modifier.
     /// Can also be set to force using the new roll.
     RerollD20Result {
@@ -618,5 +672,21 @@ pub struct ScriptReactionTriggerContext {
 /// TODO: Implement this properly - if it's even need at all?
 #[derive(Clone)]
 pub struct ScriptReactionBodyContext {
-    pub reaction_data: ReactionData,
+    pub reactor: ScriptEntity,
+    pub event: ScriptEventView,
+    pub reaction_id: String,
+    pub context: ScriptActionContext,
+    pub resource_cost: ScriptResourceCost,
+}
+
+impl From<&ReactionData> for ScriptReactionBodyContext {
+    fn from(data: &ReactionData) -> Self {
+        ScriptReactionBodyContext {
+            reactor: ScriptEntity::from(data.reactor),
+            event: ScriptEventView::from_event(&data.event).unwrap(),
+            reaction_id: data.reaction_id.to_string(),
+            context: ScriptActionContext::from(&data.context),
+            resource_cost: ScriptResourceCost::new(data.resource_cost.clone()),
+        }
+    }
 }

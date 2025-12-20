@@ -1,6 +1,6 @@
 fn damage_roll_result_hook(entity_view, damage_roll_result) {
     // Only apply for melee attacks with a weapon wielded in both hands
-    if damage_roll_result.source.kind != "Melee" 
+    if damage_roll_result.source != "Melee" 
         || !entity_view.loadout.wielding_with_both_hands("Melee") {
         return;
     }

@@ -9,10 +9,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     components::{
+        actions::action::ActionContext,
         d20::{D20Check, D20CheckResult},
-        dice::{DiceSet, DiceSetRoll, DiceSetRollResult, DieSize},
-        items::equipment::weapon::{Weapon, WeaponKind},
+        dice::{DiceSet, DiceSetRoll, DiceSetRollResult},
+        id::SpellId,
+        items::equipment::{
+            slots::EquipmentSlot,
+            weapon::{Weapon, WeaponKind},
+        },
         modifier::{ModifierSet, ModifierSource},
+        spells::spell,
     },
     systems::{self},
 };
@@ -104,12 +110,28 @@ pub enum DamageSource {
     // TODO: Could also just use the entire weapon instead? Would be a lot of cloning unless
     // we introduce a lifetime for a reference
     Weapon(WeaponKind),
-    Spell,
+    Spell(SpellId),
 }
 
-impl DamageSource {
-    pub fn from_weapon(weapon: &Weapon) -> Self {
-        Self::Weapon(weapon.kind().clone())
+impl From<&Weapon> for DamageSource {
+    fn from(weapon: &Weapon) -> Self {
+        DamageSource::Weapon(weapon.kind().clone())
+    }
+}
+
+impl From<&ActionContext> for DamageSource {
+    fn from(action_context: &ActionContext) -> Self {
+        match action_context {
+            ActionContext::Spell { id, .. } => DamageSource::Spell(id.clone()),
+            ActionContext::Weapon { slot } => match slot {
+                EquipmentSlot::MeleeMainHand => DamageSource::Weapon(WeaponKind::Melee),
+                EquipmentSlot::MeleeOffHand => DamageSource::Weapon(WeaponKind::Melee),
+                EquipmentSlot::RangedMainHand => DamageSource::Weapon(WeaponKind::Ranged),
+                EquipmentSlot::RangedOffHand => DamageSource::Weapon(WeaponKind::Ranged),
+                _ => panic!("Unsupported equipment slot for DamageSource"),
+            },
+            _ => panic!("Unsupported ActionContext for DamageSource"),
+        }
     }
 }
 
@@ -117,8 +139,8 @@ impl TryFrom<String> for DamageSource {
     type Error = String;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value == "spell" {
-            return Ok(DamageSource::Spell);
+        if let Ok(spell_id) = SpellId::try_from(value.clone()) {
+            return Ok(DamageSource::Spell(spell_id));
         }
         match value.to_ascii_lowercase().as_str() {
             "melee" => Ok(DamageSource::Weapon(WeaponKind::Melee)),
@@ -130,9 +152,21 @@ impl TryFrom<String> for DamageSource {
 
 impl Into<String> for DamageSource {
     fn into(self) -> String {
+        self.to_string()
+    }
+}
+
+impl Default for DamageSource {
+    fn default() -> Self {
+        DamageSource::Weapon(WeaponKind::Melee)
+    }
+}
+
+impl Display for DamageSource {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DamageSource::Weapon(kind) => format!("{:?}", kind),
-            DamageSource::Spell => "spell".to_string(),
+            DamageSource::Weapon(kind) => write!(f, "{:?}", kind),
+            DamageSource::Spell(spell_id) => write!(f, "{}", spell_id),
         }
     }
 }
@@ -254,7 +288,7 @@ impl Default for DamageRollResult {
         Self {
             components: vec![DamageComponentResult::default()],
             total: 0,
-            source: DamageSource::Spell,
+            source: DamageSource::Weapon(WeaponKind::Melee),
         }
     }
 }
@@ -423,7 +457,11 @@ impl DamageResistances {
             });
         }
 
-        DamageMitigationResult { components, total }
+        DamageMitigationResult {
+            components,
+            total,
+            source: roll.source.clone(),
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -461,6 +499,16 @@ pub struct DamageComponentMitigation {
     pub modifiers: Vec<DamageMitigationEffect>,
 }
 
+impl DamageComponentMitigation {
+    pub fn recalculate_total(&mut self) {
+        let mut value = self.original.subtotal;
+        for modifier in &self.modifiers {
+            value = modifier.operation.apply(value);
+        }
+        self.after_mods = value;
+    }
+}
+
 impl fmt::Display for DamageComponentMitigation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.original.subtotal == self.after_mods {
@@ -490,7 +538,18 @@ impl fmt::Display for DamageComponentMitigation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DamageMitigationResult {
     pub components: Vec<DamageComponentMitigation>,
+    pub source: DamageSource,
     pub total: i32,
+}
+
+impl DamageMitigationResult {
+    pub fn recalculate_total(&mut self) {
+        self.total = 0;
+        for comp in &mut self.components {
+            comp.recalculate_total();
+            self.total += comp.after_mods;
+        }
+    }
 }
 
 impl fmt::Display for DamageMitigationResult {
@@ -500,6 +559,16 @@ impl fmt::Display for DamageMitigationResult {
             write!(f, " + {}", comp)?;
         }
         write!(f, " = {}", self.total)
+    }
+}
+
+impl Default for DamageMitigationResult {
+    fn default() -> Self {
+        Self {
+            components: Vec::new(),
+            total: 0,
+            source: DamageSource::default(),
+        }
     }
 }
 
@@ -571,6 +640,7 @@ mod tests {
         components::{
             ability::Ability,
             actions::action::{ActionContext, ActionKind, ActionProvider},
+            dice::DieSize,
             id::{EffectId, ItemId, SpellId},
             items::item::Item,
             modifier::{Modifiable, ModifierSet, ModifierSource},

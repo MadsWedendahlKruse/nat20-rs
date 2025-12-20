@@ -2,10 +2,7 @@ use hecs::World;
 use imgui::TreeNodeFlags;
 use nat20_rs::{
     components::{
-        actions::{
-            action::{ActionContext, ActionKind},
-            targeting::TargetInstance,
-        },
+        actions::{action::ActionKind, targeting::TargetInstance},
         id::Name,
     },
     engine::event::{ActionData, EncounterEvent, Event, EventKind, EventLog},
@@ -78,6 +75,18 @@ pub fn render_event_description(ui: &imgui::Ui, event: &Event, world: &World) {
         EventKind::ReactionRequested { reaction } => {
             render_action_description(ui, &ActionData::from(reaction), world);
         }
+        EventKind::D20CheckPerformed(entity, _, dc_kind) => {
+            let label = get_dc_description(world, dc_kind);
+            let mut segments = vec![(
+                format!(
+                    "{}'s",
+                    systems::helpers::get_component::<Name>(world, *entity).as_str()
+                ),
+                TextKind::Actor,
+            )];
+            segments.extend(label);
+            TextSegments::new(segments).render(ui);
+        }
         _ => TextSegments::new(vec![(
             format!("{:?}", event.kind.name()),
             TextKind::Details,
@@ -92,6 +101,19 @@ pub fn events_match(event1: &Event, event2: &Event) -> bool {
             EventKind::ActionRequested { action: a1 },
             EventKind::ActionPerformed { action: a2, .. },
         ) => a1.actor == a2.actor && a1.action_id == a2.action_id && a1.targets == a2.targets,
+
+        (
+            EventKind::ActionPerformed { action: a1, .. },
+            EventKind::ActionPerformed { action: a2, .. },
+        ) => {
+            a1.actor == a2.actor
+                && a1.action_id == a2.action_id
+                && a1.targets == a2.targets
+                && matches!(
+                    systems::actions::get_action(&a1.action_id).unwrap().kind(),
+                    ActionKind::Composite { .. }
+                )
+        }
 
         (EventKind::D20CheckPerformed(e1, _, _), EventKind::D20CheckResolved(e2, _, _)) => e1 == e2,
 
@@ -116,6 +138,8 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for EventLog {
             // the 'ActionRequested' and 'ActionPerformed' events, so if two
             // consecutive events "match" then we only show the first one, e.g.
             // for an action we would only show the 'ActionPerformed' event.
+            // Similarly for composite actions we might have multiple 'ActionPerformed'
+            // events in a row that we can collapse into one.
             if **log_level == LogLevel::Info && i < log_level_events.len() - 1 {
                 let next_entry = &log_level_events[i + 1];
                 if events_match(entry, next_entry) {
@@ -130,7 +154,7 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for EventLog {
 
 impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
     fn render_with_context(&self, ui: &imgui::Ui, context: &(&World, &LogLevel)) {
-        let (world, log_level) = context;
+        let (world, _) = context;
 
         let group_token = ui.begin_group();
 
@@ -184,7 +208,8 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                             systems::helpers::get_component::<Name>(world, *entity).to_string()
                         }
                         TargetInstance::Point(point) => {
-                            format!("point at ({}, {}, {})", point.x, point.y, point.z).to_string()
+                            format!("point ({:.1}, {:.1}, {:.1})", point.x, point.y, point.z)
+                                .to_string()
                         }
                     };
 
@@ -236,25 +261,7 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
 
             EventKind::D20CheckResolved(entity, result_kind, dc_kind)
             | EventKind::D20CheckPerformed(entity, result_kind, dc_kind) => {
-                let dc_text_segments = match dc_kind {
-                    D20CheckDCKind::SavingThrow(dc) => {
-                        vec![
-                            (dc.key.to_string(), TextKind::Ability),
-                            ("saving throw".to_string(), TextKind::Normal),
-                        ]
-                    }
-                    D20CheckDCKind::Skill(dc) => vec![
-                        (dc.key.to_string(), TextKind::Ability),
-                        ("check".to_string(), TextKind::Normal),
-                    ],
-                    D20CheckDCKind::AttackRoll(target, _) => {
-                        let target_name = systems::helpers::get_component::<Name>(world, *target);
-                        vec![
-                            ("attack roll against".to_string(), TextKind::Normal),
-                            (target_name.to_string(), TextKind::Actor),
-                        ]
-                    }
-                };
+                let dc_text_segments = get_dc_description(world, dc_kind);
 
                 let mut segments = vec![
                     (
@@ -284,6 +291,11 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                         ui.text("D20 Check:");
                         ui.same_line();
                         result_kind.render(ui);
+                        if result_kind.is_success(dc_kind) {
+                            TextSegment::new("(Success)", TextKind::Details).render(ui);
+                        } else {
+                            TextSegment::new("(Failure)", TextKind::Details).render(ui);
+                        }
                     });
                 }
             }
@@ -327,6 +339,26 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
     }
 }
 
+fn get_dc_description(world: &World, dc_kind: &D20CheckDCKind) -> Vec<(String, TextKind)> {
+    match dc_kind {
+        D20CheckDCKind::SavingThrow(dc) => vec![
+            (dc.key.to_string(), TextKind::Ability),
+            ("saving throw".to_string(), TextKind::Normal),
+        ],
+        D20CheckDCKind::Skill(dc) => vec![
+            (dc.key.to_string(), TextKind::Ability),
+            ("check".to_string(), TextKind::Normal),
+        ],
+        D20CheckDCKind::AttackRoll(target, _) => {
+            let target_name = systems::helpers::get_component::<Name>(world, *target);
+            vec![
+                ("attack roll against".to_string(), TextKind::Normal),
+                (target_name.to_string(), TextKind::Actor),
+            ]
+        }
+    }
+}
+
 impl ImguiRenderableWithContext<&World> for ActionData {
     fn render_with_context(&self, ui: &imgui::Ui, world: &World) {
         TextSegments::new(vec![
@@ -342,19 +374,9 @@ impl ImguiRenderableWithContext<&World> for ActionData {
         let self_target =
             self.targets.len() == 1 && self.targets[0] == TargetInstance::Entity(self.actor);
 
-        let targets = self
-            .targets
-            .iter()
-            .map(|target| match target {
-                TargetInstance::Entity(entity) => *entity,
-                TargetInstance::Point(point) => {
-                    // Placeholder for point targets
-                    self.actor
-                }
-            })
-            .collect::<Vec<_>>();
+        let targets = self.entity_targets();
 
-        if !self_target {
+        if !self_target && !targets.is_empty() {
             ui.same_line();
             TextSegment::new("on", TextKind::Normal).render(ui);
             targets.render_with_context(ui, &world);

@@ -7,11 +7,14 @@ use crate::{
         ability::AbilityScoreMap,
         actions::action::{Action, ActionContext},
         d20::{D20CheckKey, D20CheckSet},
-        damage::{DamageMitigationEffect, DamageResistances, DamageRollResult},
+        damage::{
+            DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
+        },
         effects::{
             effects::{Effect, EffectDuration},
             hooks::{
-                ActionHook, ArmorClassHook, AttackRollHook, DamageRollResultHook, ResourceCostHook,
+                ActionHook, ArmorClassHook, AttackRollHook, DamageRollResultHook, DamageTakenHook,
+                ResourceCostHook,
             },
         },
         id::{ActionId, EffectId, ResourceId, ScriptId},
@@ -21,6 +24,7 @@ use crate::{
         saving_throw::SavingThrowSet,
         skill::SkillSet,
     },
+    engine::event::ActionData,
     registry::{
         registry_validation::{ReferenceCollector, RegistryReference, RegistryReferenceCollector},
         serialize::modifier::{
@@ -32,7 +36,8 @@ use crate::{
     scripts::{
         script::ScriptFunction,
         script_api::{
-            ScriptActionView, ScriptDamageRollResult, ScriptEntityView, ScriptResourceCost,
+            ScriptActionView, ScriptDamageMitigationResult, ScriptDamageRollResult,
+            ScriptEntityView, ScriptResourceCost,
         },
     },
     systems,
@@ -69,6 +74,8 @@ pub struct EffectDefinition {
     // pub pre_damage_roll: Vec<DamageRollHookDef>,
     #[serde(default)]
     pub post_damage_roll: Vec<DamageRollResultHookDefinition>,
+    #[serde(default)]
+    pub on_damage_taken: Vec<DamageTakenHookDefinition>,
     /// “Big” custom logic lives here
     #[serde(default)]
     pub on_action: Vec<ActionHookDefinition>,
@@ -120,6 +127,12 @@ impl From<EffectDefinition> for Effect {
         {
             let hooks = collect_effect_hooks(&definition.post_damage_roll, &effect_id);
             effect.post_damage_roll = DamageRollResultHookDefinition::combine_hooks(hooks);
+        }
+
+        // Build damage_taken hooks
+        {
+            let hooks = collect_effect_hooks(&definition.on_damage_taken, &effect_id);
+            effect.damage_taken = DamageTakenHookDefinition::combine_hooks(hooks);
         }
 
         // Build armor class hooks
@@ -180,6 +193,7 @@ impl RegistryReferenceCollector for EffectDefinition {
         }
         for hook in &self.on_armor_class {
             match hook {
+                ArmorClassHookDefinition::Modifier { .. } => { /* No references to collect */ }
                 ArmorClassHookDefinition::Script { script } => {
                     collector.add(RegistryReference::Script(
                         script.clone(),
@@ -289,9 +303,6 @@ pub enum EffectModifier {
         resource: ResourceId,
         amount: ResourceAmount,
     },
-    ArmorClassModifier {
-        armor_class: ArmorClassModifierProvider,
-    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -364,20 +375,6 @@ impl EffectModifier {
                     }
                     EffectPhase::Unapply => {
                         resources.remove_uses(resource, amount);
-                    }
-                }
-            }
-
-            EffectModifier::ArmorClassModifier {
-                armor_class: modifier,
-            } => {
-                let mut ac = systems::helpers::get_component_mut::<ArmorClass>(world, entity);
-                match phase {
-                    EffectPhase::Apply => {
-                        ac.add_modifier(source, modifier.delta);
-                    }
-                    EffectPhase::Unapply => {
-                        ac.remove_modifier(&source);
                     }
                 }
             }
@@ -543,12 +540,26 @@ impl HookEffect<DamageRollResultHook> for DamageRollResultHookDefinition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ArmorClassHookDefinition {
-    Script { script: ScriptId },
+    Modifier {
+        modifier: ArmorClassModifierProvider,
+    },
+    Script {
+        script: ScriptId,
+    },
 }
 
 impl HookEffect<ArmorClassHook> for ArmorClassHookDefinition {
     fn build_hook(&self, effect: &EffectId) -> ArmorClassHook {
         match self {
+            ArmorClassHookDefinition::Modifier { modifier } => Arc::new({
+                let modifier = modifier.clone();
+                let effect = effect.clone();
+                move |_world, _entity, armor_class| {
+                    armor_class
+                        .add_modifier(ModifierSource::Effect(effect.clone()), modifier.delta);
+                }
+            }),
+
             ArmorClassHookDefinition::Script { script } => {
                 let effect_id = effect.clone();
                 let script_id = script.clone();
@@ -586,48 +597,26 @@ impl HookEffect<ActionHook> for ActionHookDefinition {
         match self {
             ActionHookDefinition::Script { script } => {
                 let script_id = script.clone();
-                Arc::new(
-                    move |world: &mut World,
-                          entity: Entity,
-                          action: &Action,
-                          context: &ActionContext,
-                          resource_costs: &ResourceAmountMap| {
-                        let action_view = ScriptActionView::new(
-                            &action.id,
-                            entity,
-                            context,
-                            // TEMP
-                            ScriptResourceCost::new(resource_costs.clone()),
-                        );
+                Arc::new(move |world: &mut World, action_data: &ActionData| {
+                    let action_view = ScriptActionView::from(action_data);
 
-                        let entity_view = ScriptEntityView::take_from_world(world, entity);
+                    let entity_view = ScriptEntityView::take_from_world(world, action_data.actor);
 
-                        systems::scripts::evalute_action_hook(
-                            &script_id,
-                            &action_view,
-                            &entity_view,
-                        );
+                    systems::scripts::evalute_action_hook(&script_id, &action_view, &entity_view);
 
-                        // Replace the entity in the world with the modified one
-                        entity_view.replace_in_world(world);
-                    },
-                )
+                    // Replace the entity in the world with the modified one
+                    entity_view.replace_in_world(world);
+                })
             }
         }
     }
 
     fn combine_hooks(hooks: Vec<ActionHook>) -> ActionHook {
-        Arc::new(
-            move |world: &mut World,
-                  entity: Entity,
-                  action: &Action,
-                  context: &ActionContext,
-                  resource_costs: &ResourceAmountMap| {
-                for hook in &hooks {
-                    hook(world, entity, action, context, resource_costs);
-                }
-            },
-        )
+        Arc::new(move |world: &mut World, action_data: &ActionData| {
+            for hook in &hooks {
+                hook(world, action_data);
+            }
+        })
     }
 }
 
@@ -655,6 +644,8 @@ impl HookEffect<ResourceCostHook> for ResourceCostHookDefinition {
                             context,
                             // Move out (no clone), leaving an empty map behind temporarily
                             ScriptResourceCost::take_from(resource_costs),
+                            // TODO: Not sure what to do about targets here
+                            Vec::new(),
                         );
 
                         let entity_view = ScriptEntityView::new_from_world(world, entity);
@@ -682,6 +673,51 @@ impl HookEffect<ResourceCostHook> for ResourceCostHookDefinition {
                   resource_costs: &mut ResourceAmountMap| {
                 for hook in &hooks {
                     hook(world, entity, action, context, resource_costs);
+                }
+            },
+        )
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DamageTakenHookDefinition {
+    Script { script: ScriptId },
+}
+
+impl HookEffect<DamageTakenHook> for DamageTakenHookDefinition {
+    fn build_hook(&self, _effect: &EffectId) -> DamageTakenHook {
+        match self {
+            DamageTakenHookDefinition::Script { script } => {
+                let script_id = script.clone();
+                Arc::new(
+                    move |world: &World,
+                          entity: Entity,
+                          damage_mitigation_result: &mut DamageMitigationResult| {
+                        let entity_view = ScriptEntityView::new_from_world(world, entity);
+                        let script_damage_mitigation_result =
+                            ScriptDamageMitigationResult::take_from(damage_mitigation_result);
+
+                        systems::scripts::evaluate_damage_taken_hook(
+                            &script_id,
+                            &entity_view,
+                            &script_damage_mitigation_result,
+                        );
+
+                        *damage_mitigation_result = script_damage_mitigation_result.into_inner();
+                    },
+                )
+            }
+        }
+    }
+
+    fn combine_hooks(hooks: Vec<DamageTakenHook>) -> DamageTakenHook {
+        Arc::new(
+            move |world: &World,
+                  entity: Entity,
+                  damage_mitigation_result: &mut DamageMitigationResult| {
+                for hook in &hooks {
+                    hook(world, entity, damage_mitigation_result);
                 }
             },
         )

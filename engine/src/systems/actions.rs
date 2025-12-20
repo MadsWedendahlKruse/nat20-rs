@@ -1,5 +1,5 @@
 use hecs::{Entity, World};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::{
     components::{
@@ -12,7 +12,7 @@ use crate::{
                 AreaShape, TargetInstance, TargetingContext, TargetingError, TargetingKind,
             },
         },
-        id::{ActionId, ResourceId},
+        id::{ActionId, ResourceId, ScriptId},
         items::equipment::loadout::Loadout,
         resource::{RechargeRule, ResourceAmountMap, ResourceMap},
         spells::spellbook::Spellbook,
@@ -90,11 +90,8 @@ pub fn set_cooldown(
 
 pub fn all_actions(world: &World, entity: Entity) -> ActionMap {
     let mut actions = systems::helpers::get_component_clone::<ActionMap>(world, entity);
-
     actions.extend(systems::helpers::get_component::<Spellbook>(world, entity).actions());
-
     actions.extend(systems::helpers::get_component::<Loadout>(world, entity).actions());
-
     actions
 }
 
@@ -174,38 +171,39 @@ pub fn available_actions(world: &World, entity: Entity) -> ActionMap {
 }
 
 pub fn perform_action(game_state: &mut GameState, action_data: &ActionData) {
-    let ActionData {
-        actor: performer,
-        action_id,
-        context,
-        resource_cost,
-        targets,
-    } = action_data;
     // TODO: Handle missing action
-    let mut action = get_action(action_id)
+    let mut action = get_action(&action_data.action_id)
         .cloned()
         .expect("Action not found in character's actions or registry");
     // Set the action on cooldown if applicable
     if let Some(cooldown) = action.cooldown {
-        set_cooldown(&mut game_state.world, *performer, action_id, cooldown);
+        set_cooldown(
+            &mut game_state.world,
+            action_data.actor,
+            &action_data.action_id,
+            cooldown,
+        );
     }
     // Determine which entities are being targeted
-    let entities = get_targeted_entities(game_state, performer, action_id, context, targets);
-    action.perform(game_state, *performer, &context, resource_cost, &entities);
+    let entities = get_targeted_entities(game_state, action_data);
+    debug!(
+        "Performing action {:?} by entity {:?} on targets {:?}",
+        action_data.action_id, action_data.actor, entities
+    );
+    action.perform(game_state, action_data, &entities);
 }
 
-fn get_targeted_entities(
-    game_state: &mut GameState,
-    performer: &Entity,
-    action_id: &ActionId,
-    context: &ActionContext,
-    targets: &Vec<TargetInstance>,
-) -> Vec<Entity> {
+fn get_targeted_entities(game_state: &mut GameState, action_data: &ActionData) -> Vec<Entity> {
     let mut entities = Vec::new();
-    let targeting_context = targeting_context(&game_state.world, *performer, action_id, context);
+    let targeting_context = targeting_context(
+        &game_state.world,
+        action_data.actor,
+        &action_data.action_id,
+        &action_data.context,
+    );
     match targeting_context.kind {
         TargetingKind::SelfTarget | TargetingKind::Single | TargetingKind::Multiple { .. } => {
-            for target in targets {
+            for target in &action_data.targets {
                 match target {
                     TargetInstance::Entity(entity) => entities.push(*entity),
                     TargetInstance::Point(point) => {
@@ -223,7 +221,7 @@ fn get_targeted_entities(
             shape,
             fixed_on_actor,
         } => {
-            for target in targets {
+            for target in &action_data.targets {
                 let point = match target {
                     TargetInstance::Entity(entity) => {
                         &systems::geometry::get_foot_position(&game_state.world, *entity).unwrap()
@@ -232,8 +230,12 @@ fn get_targeted_entities(
                     TargetInstance::Point(point) => point,
                 };
 
-                let (shape_hitbox, shape_pose) =
-                    shape.parry3d_shape(&game_state.world, *performer, fixed_on_actor, point);
+                let (shape_hitbox, shape_pose) = shape.parry3d_shape(
+                    &game_state.world,
+                    action_data.actor,
+                    fixed_on_actor,
+                    point,
+                );
 
                 let mut entities_in_shape = systems::geometry::entities_in_shape(
                     &game_state.world,
@@ -333,6 +335,15 @@ pub fn available_reactions_to_event(
             };
             if systems::scripts::evaluate_reaction_trigger(trigger, &context) {
                 for (context, resource_cost) in &contexts_and_costs {
+                    let self_target = matches!(
+                        targeting_context(world, reactor, &reaction_id, context).kind,
+                        TargetingKind::SelfTarget
+                    );
+                    let target = if self_target {
+                        TargetInstance::Entity(reactor)
+                    } else {
+                        TargetInstance::Entity(event.actor().unwrap())
+                    };
                     if action_usable_on_targets(
                         world,
                         world_geometry,
@@ -340,7 +351,7 @@ pub fn available_reactions_to_event(
                         &reaction_id,
                         context,
                         resource_cost,
-                        &[TargetInstance::Entity(event.actor().unwrap())],
+                        &[target.clone()],
                     )
                     .is_ok()
                     {
@@ -350,6 +361,7 @@ pub fn available_reactions_to_event(
                             reaction_id: reaction_id.clone(),
                             context: context.clone(),
                             resource_cost: resource_cost.clone(),
+                            target,
                         });
                     }
                 }
@@ -366,15 +378,37 @@ pub fn perform_reaction(game_state: &mut GameState, reaction_data: &ReactionData
 
     match &action.kind {
         ActionKind::Reaction { reaction } => {
-            let context = ScriptReactionBodyContext {
-                reaction_data: reaction_data.clone(),
-            };
-            let plan = systems::scripts::evaluate_reaction_body(reaction, &context);
-            systems::scripts::apply_reaction_plan(game_state, &context, plan);
+            evaluate_and_apply_reaction(game_state, reaction, reaction_data);
         }
-        _ => panic!(
-            "ReactionData refers to non-Reaction ActionKind: {:?}",
-            reaction_data.reaction_id
-        ),
+
+        ActionKind::Composite { actions } => {
+            for action in actions {
+                match action {
+                    ActionKind::Reaction { reaction } => {
+                        evaluate_and_apply_reaction(game_state, reaction, reaction_data);
+                    }
+
+                    _ => {
+                        perform_action(game_state, &ActionData::from(reaction_data));
+                    }
+                }
+            }
+        }
+
+        _ => {
+            perform_action(game_state, &ActionData::from(reaction_data));
+        }
     }
+}
+
+fn evaluate_and_apply_reaction(
+    game_state: &mut GameState,
+    reaction: &ScriptId,
+    reaction_data: &ReactionData,
+) {
+    let plan = systems::scripts::evaluate_reaction_body(
+        reaction,
+        &ScriptReactionBodyContext::from(reaction_data),
+    );
+    systems::scripts::apply_reaction_plan(game_state, reaction_data, plan);
 }

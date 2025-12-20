@@ -13,6 +13,7 @@ use crate::{
         actions::action::{ActionContext, DamageFunction, HealFunction},
         damage::{DamageRoll, DamageSource, DamageType},
         dice::{DiceSet, DiceSetRoll},
+        items::equipment::{slots::EquipmentSlot, weapon::WeaponKind},
         modifier::{Modifiable, ModifierSet, ModifierSource},
     },
     registry::serialize::{
@@ -84,7 +85,7 @@ impl FromStr for DamageEquation {
                         // TODO: Determine source properly
                         // Source is also included in AttackRoll, so maybe we only
                         // need one of them?
-                        DamageSource::Spell,
+                        DamageSource::from(action_context),
                     );
                     damage_roll
                         .primary
