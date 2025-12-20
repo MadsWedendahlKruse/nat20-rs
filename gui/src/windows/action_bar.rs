@@ -64,8 +64,6 @@ pub enum ActionBarState {
 pub struct ActionBarWindow {
     pub state: ActionBarState,
     pub entity: Entity,
-    // TOOD: In a way these seem tightly connected, but could also live somewhere else?
-    pub reaction_window: Option<ReactionsWindow>,
 }
 
 impl ActionBarWindow {
@@ -75,7 +73,6 @@ impl ActionBarWindow {
                 actions: systems::actions::all_actions(&game_state.world, entity),
             },
             entity,
-            reaction_window: None,
         }
     }
 
@@ -167,10 +164,6 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
         );
 
         disabled_token.end();
-
-        if let Some(reaction_window) = &mut self.reaction_window {
-            reaction_window.render_mut_with_context(ui, gui_state, game_state);
-        }
 
         if !opened {
             gui_state.selected_entity.take();

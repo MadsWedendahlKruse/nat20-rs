@@ -79,6 +79,10 @@ impl Encounter {
             .collect();
     }
 
+    pub fn id(&self) -> &EncounterId {
+        &self.id
+    }
+
     pub fn initiative_order(&self) -> &Vec<(Entity, D20CheckResult)> {
         &self.initiative_order
     }

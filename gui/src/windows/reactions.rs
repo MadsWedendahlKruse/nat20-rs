@@ -20,7 +20,7 @@ use crate::{
         },
     },
     state::gui_state::GuiState,
-    windows::anchor::{AUTO_RESIZE, BOTTOM_CENTER},
+    windows::anchor::{AUTO_RESIZE, BOTTOM_CENTER, CENTER},
 };
 
 pub enum ReactionWindowState {
@@ -80,7 +80,7 @@ impl RenderableMutWithContext<&mut GameState> for ReactionsWindow {
             } => gui_state.window_manager.render_window(
                 ui,
                 "Reactions",
-                &BOTTOM_CENTER,
+                &CENTER,
                 AUTO_RESIZE,
                 &mut true,
                 || {

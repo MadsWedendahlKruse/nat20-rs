@@ -333,6 +333,15 @@ pub enum ActionPromptKind {
     },
 }
 
+impl ActionPromptKind {
+    pub fn actors(&self) -> Vec<Entity> {
+        match self {
+            ActionPromptKind::Action { actor } => vec![*actor],
+            ActionPromptKind::Reactions { options, .. } => options.keys().cloned().collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ActionPrompt {
     pub id: ActionPromptId,
