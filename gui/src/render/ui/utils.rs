@@ -45,6 +45,21 @@ macro_rules! table_with_columns {
     }};
 }
 
+pub fn roman_numeral(level: u8) -> &'static str {
+    match level {
+        1 => "I",
+        2 => "II",
+        3 => "III",
+        4 => "IV",
+        5 => "V",
+        6 => "VI",
+        7 => "VII",
+        8 => "VIII",
+        9 => "IX",
+        _ => "?",
+    }
+}
+
 // TODO: Look into using imgui::Selectable instead
 pub static SELECTED_BUTTON_COLOR: [f32; 4] = [0.25, 0.6, 1.0, 1.0];
 
@@ -82,6 +97,15 @@ where
 }
 
 static DEFAULT_PADDING: [f32; 2] = [20.0, 5.0];
+
+pub fn render_button_with_padding(ui: &imgui::Ui, label: &str, padding: [f32; 2]) -> bool {
+    let text_size = ui.calc_text_size(label);
+    let size = [
+        text_size[0] + padding[0] * 2.0,
+        text_size[1] + padding[1] * 2.0,
+    ];
+    ui.button_with_size(label, size)
+}
 
 pub fn render_uniform_buttons<I, S>(ui: &imgui::Ui, labels: I) -> Option<usize>
 where

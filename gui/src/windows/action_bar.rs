@@ -34,7 +34,8 @@ use crate::{
             text::{TextKind, TextSegments},
             utils::{
                 ImguiRenderable, ImguiRenderableWithContext, ProgressBarColor,
-                render_button_disabled_conditionally, render_capacity_meter, render_progress_bar,
+                render_button_disabled_conditionally, render_button_with_padding,
+                render_capacity_meter, render_progress_bar, roman_numeral,
             },
         },
         world::mesh::MeshRenderMode,
@@ -319,7 +320,22 @@ fn render_context_selection(
             ui.same_line();
         }
 
-        if ui.button(format!("{:#?}", context)) {
+        let clicked = match context {
+            ActionContext::Weapon { slot } => {
+                render_button_with_padding(ui, format!("{}", slot).as_str(), [10.0, 10.0])
+            }
+
+            ActionContext::Spell { level, .. } => {
+                let style = ui.push_style_var(imgui::StyleVar::ButtonTextAlign([0.5, 0.5]));
+                let clicked = ui.button_with_size(roman_numeral(*level), [30.0, 30.0]);
+                style.pop();
+                clicked
+            }
+
+            ActionContext::Other => render_button_with_padding(ui, "Other", [10.0, 10.0]),
+        };
+
+        if clicked {
             *new_state = Some(ActionBarState::Targets {
                 action: ActionData {
                     actor,

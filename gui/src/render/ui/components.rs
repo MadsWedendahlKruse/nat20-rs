@@ -53,6 +53,7 @@ use crate::{
         utils::{
             ImguiRenderable, ImguiRenderableMutWithContext, ImguiRenderableWithContext,
             ProgressBarColor, SELECTED_BUTTON_COLOR, render_empty_button, render_progress_bar,
+            roman_numeral,
         },
     },
     table_with_columns,
@@ -434,21 +435,6 @@ impl ImguiRenderable for ResourceMap {
                 table.end();
             }
         }
-    }
-}
-
-fn roman_numeral(level: u8) -> &'static str {
-    match level {
-        1 => "I",
-        2 => "II",
-        3 => "III",
-        4 => "IV",
-        5 => "V",
-        6 => "VI",
-        7 => "VII",
-        8 => "VIII",
-        9 => "IX",
-        _ => "?",
     }
 }
 
