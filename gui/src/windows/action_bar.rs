@@ -41,10 +41,7 @@ use crate::{
         world::mesh::MeshRenderMode,
     },
     state::gui_state::GuiState,
-    windows::{
-        anchor::{AUTO_RESIZE, BOTTOM_CENTER, WindowManager},
-        reactions::ReactionsWindow,
-    },
+    windows::anchor::{AUTO_RESIZE, BOTTOM_CENTER, WindowManager},
 };
 
 #[derive(Debug, Clone)]

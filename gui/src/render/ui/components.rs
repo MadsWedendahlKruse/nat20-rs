@@ -712,6 +712,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for Armor {
 impl ImguiRenderable for ArmorDexterityBonus {
     fn render(&self, ui: &imgui::Ui) {
         if self != &ArmorDexterityBonus::Unlimited {
+            indent_text(ui, 1);
             let max_dexterity_bonus = self.max_bonus();
             if max_dexterity_bonus == 0 {
                 TextSegments::new(vec![
@@ -762,8 +763,6 @@ impl ImguiRenderable for ArmorClass {
                     (format!("({})", self.base.1), TextKind::Details),
                 ])
                 .render(ui);
-                //TODO: Fix indent
-                indent_text(ui, 1);
                 self.dexterity_bonus.render(ui);
                 if !self.modifiers.is_empty() {
                     self.modifiers
