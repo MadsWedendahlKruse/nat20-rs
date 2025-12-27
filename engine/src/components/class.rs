@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -6,7 +9,7 @@ use crate::{
     components::{
         ability::{Ability, AbilityScoreDistribution},
         dice::DieSize,
-        id::{ActionId, ClassId, EffectId, IdProvider, ResourceId, SubclassId},
+        id::{ActionId, ClassId, EffectId, IdProvider, ResourceId, SpellId, SubclassId},
         items::equipment::{armor::ArmorType, weapon::WeaponCategory},
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         modifier::ModifierSource,
@@ -35,7 +38,7 @@ pub struct ClassBase {
     /// This is usually defined by the class, but certain subclasses might want to override it.
     /// For example, a subclass of a Fighter might gain some spellcasting abilities.
     #[serde(default)]
-    pub spellcasting: SpellcastingProgression,
+    pub spellcasting: Option<SpellcastingRules>,
     /// Passive effects that are always active for the class or subclass.
     #[serde(default)]
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
@@ -51,7 +54,28 @@ pub struct ClassBase {
     pub actions_by_level: HashMap<u8, Vec<ActionId>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// How a class gets access to spells (i.e., what the "known pool" means).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpellAccessModel {
+    /// Known spells are explicitly selected over time (e.g. Sorcerer).
+    Learned,
+    /// Known spells are all spells on the class list, filtered by max spell level (e.g. Cleric/Paladin).
+    EntireClassList,
+}
+
+/// Whether a class must "prepare" a subset before casting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CastingReadinessModel {
+    /// Must prepare a subset before casting.
+    Prepared,
+    /// Can cast from known spells directly.
+    Known,
+}
+
+/// Defines how a class gains spellcasting abilities.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SpellcastingProgression {
     /// Full spellcasting progression, e.g. Wizard.
@@ -60,14 +84,29 @@ pub enum SpellcastingProgression {
     Half,
     /// Third spellcasting progression, e.g. Bard.
     Third,
-    /// No spellcasting progression, e.g. Fighter.
+    /// No spellcasting progression.
     None,
 }
 
-impl Default for SpellcastingProgression {
-    fn default() -> Self {
-        SpellcastingProgression::None
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpellReplacementModel {
+    LevelUp,
+    LongRest,
+}
+
+/// Rules that define a class’ spellcasting *mechanics*.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpellcastingRules {
+    pub progression: SpellcastingProgression,
+    pub spellcasting_ability: Ability,
+    pub access_model: SpellAccessModel,
+    pub readiness_model: CastingReadinessModel,
+    pub cantrips_per_level: HashMap<u8, usize>,
+    pub prepared_spells_per_level: HashMap<u8, usize>,
+    pub spell_replacement_model: SpellReplacementModel,
+    /// The universe of spells this class can ever touch.
+    pub spell_list: HashSet<SpellId>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -104,7 +143,7 @@ impl Class {
         skill_prompts: u8,
         armor_proficiencies: HashSet<ArmorType>,
         weapon_proficiencies: HashSet<WeaponCategory>,
-        spellcasting: SpellcastingProgression,
+        spellcasting: Option<SpellcastingRules>,
         effects_by_level: HashMap<u8, Vec<EffectId>>,
         resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
         mut prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
@@ -167,17 +206,19 @@ impl Class {
         SubclassesRegistry::get(subclass_id)
     }
 
-    pub fn spellcasting_progression(
+    pub fn spellcasting_rules(
         &self,
-        subclass_id: Option<&SubclassId>,
-    ) -> SpellcastingProgression {
-        if self.base.spellcasting != SpellcastingProgression::None {
-            return self.base.spellcasting.clone();
+        subclass_id: &Option<SubclassId>,
+    ) -> Option<&SpellcastingRules> {
+        // If the subclass has its own spellcasting rules, use those.
+        // Otherwise, fall back to the base class rules.
+        if let Some(subclass_id) = subclass_id
+            && let Some(subclass) = self.subclass(subclass_id)
+            && let Some(rules) = &subclass.base.spellcasting
+        {
+            return Some(rules);
         }
-        if let Some(subclass) = subclass_id.and_then(|name| self.subclass(name)) {
-            return subclass.base.spellcasting.clone();
-        }
-        SpellcastingProgression::None
+        self.base.spellcasting.as_ref()
     }
 
     pub fn base(&self) -> &ClassBase {
@@ -210,5 +251,31 @@ impl IdProvider for Subclass {
 
     fn id(&self) -> &Self::Id {
         &self.id
+    }
+}
+
+// TODO: Not the most elegant solution to just ignore the subclass in equality
+// and hashing, but it creates some problems in the spellbook where we use
+// ClassAndSubclass as a key but only really care about the class. When leveling
+// up and choosing a subclass, it breaks the subsequent lookups (e.g. determining
+// how many spells to select in a level up prompt) because the subclass (and thus
+// the key) is now different.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClassAndSubclass {
+    pub class: ClassId,
+    pub subclass: Option<SubclassId>,
+}
+
+impl PartialEq for ClassAndSubclass {
+    fn eq(&self, other: &Self) -> bool {
+        self.class == other.class
+    }
+}
+
+impl Eq for ClassAndSubclass {}
+
+impl Hash for ClassAndSubclass {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.class.hash(state);
     }
 }

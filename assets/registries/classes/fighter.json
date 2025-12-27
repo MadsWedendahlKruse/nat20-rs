@@ -50,7 +50,6 @@
         "simple",
         "martial"
     ],
-    "spellcasting": "none",
     "effects_by_level": {
         "5": [
             "nat20_rs::effect.extra_attack"

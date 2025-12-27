@@ -54,6 +54,10 @@ static REGISTRIES: LazyLock<RegistrySet> =
             Ok(set) => set,
             Err(error) => {
                 error!(path = ?&*REGISTRY_ROOT, %error, "Failed to load registries");
+                eprintln!(
+                    "Failed to load registries from {:?}: {}",
+                    &*REGISTRY_ROOT, error
+                );
                 panic!("Failed to load registries");
             }
         },

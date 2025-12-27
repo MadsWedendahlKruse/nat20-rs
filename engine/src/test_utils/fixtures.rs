@@ -57,6 +57,7 @@ pub mod creatures {
 
         use crate::{
             components::{
+                class::ClassAndSubclass,
                 id::{
                     BackgroundId, ClassId, EntityIdentifier, FeatId, ItemId, Name, SpeciesId,
                     SpellId, SubclassId, SubspeciesId,
@@ -64,7 +65,7 @@ pub mod creatures {
                 level_up::ChoiceItem,
                 modifier::KeyedModifiable,
                 skill::SkillSet,
-                spells::spellbook::Spellbook,
+                spells::spellbook::{SpellSource, Spellbook},
             },
             entities::character::Character,
             registry::registry::{ClassesRegistry, ItemsRegistry},
@@ -284,11 +285,33 @@ pub mod creatures {
                             money: "8 GP".to_string(),
                         },
                     ),
+                    LevelUpDecision::spells(
+                        "choice.cantrips",
+                        &ClassId::new("nat20_rs", "class.wizard"),
+                        &None,
+                        vec![
+                            SpellId::new("nat20_rs", "spell.fire_bolt"),
+                            SpellId::new("nat20_rs", "spell.acid_splash"),
+                            SpellId::new("nat20_rs", "spell.poison_spray"),
+                        ],
+                    ),
+                    LevelUpDecision::spells(
+                        "choice.spells",
+                        &ClassId::new("nat20_rs", "class.wizard"),
+                        &None,
+                        vec![SpellId::new("nat20_rs", "spell.magic_missile")],
+                    ),
                     // Level 2
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
                         "nat20_rs",
                         "class.wizard",
                     ))),
+                    LevelUpDecision::spells(
+                        "choice.spells",
+                        &ClassId::new("nat20_rs", "class.wizard"),
+                        &None,
+                        vec![SpellId::new("nat20_rs", "spell.shield")],
+                    ),
                     // Level 3
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
                         "nat20_rs",
@@ -298,6 +321,12 @@ pub mod creatures {
                         "nat20_rs",
                         "subclass.wizard.evoker",
                     ))),
+                    LevelUpDecision::spells(
+                        "choice.spells",
+                        &ClassId::new("nat20_rs", "class.wizard"),
+                        &None,
+                        vec![SpellId::new("nat20_rs", "spell.scorching_ray")],
+                    ),
                     // Level 4
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
                         "nat20_rs",
@@ -316,28 +345,16 @@ pub mod creatures {
                         "nat20_rs",
                         "class.wizard",
                     ))),
+                    LevelUpDecision::spells(
+                        "choice.spells",
+                        &ClassId::new("nat20_rs", "class.wizard"),
+                        &None,
+                        vec![
+                            SpellId::new("nat20_rs", "spell.fireball"),
+                            SpellId::new("nat20_rs", "spell.counterspell"),
+                        ],
+                    ),
                 ],
-            );
-
-            // TODO: Spellcasting ability should be set automatically based on class
-            let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
-            // TODO: This should be set automatically based on class
-            spellbook.set_max_prepared_spells(5);
-            spellbook.add_spell(
-                &SpellId::new("nat20_rs", "spell.magic_missile"),
-                Ability::Intelligence,
-            );
-            spellbook.add_spell(
-                &SpellId::new("nat20_rs", "spell.fireball"),
-                Ability::Intelligence,
-            );
-            spellbook.add_spell(
-                &SpellId::new("nat20_rs", "spell.counterspell"),
-                Ability::Intelligence,
-            );
-            spellbook.add_spell(
-                &SpellId::new("nat20_rs", "spell.shield"),
-                Ability::Intelligence,
             );
 
             EntityIdentifier::new(entity, name)
@@ -387,6 +404,21 @@ pub mod creatures {
                             money: "8 GP".to_string(),
                         },
                     ),
+                    LevelUpDecision::spells(
+                        "choice.cantrips",
+                        &ClassId::new("nat20_rs", "class.warlock"),
+                        &None,
+                        vec![
+                            SpellId::new("nat20_rs", "spell.eldritch_blast"),
+                            SpellId::new("nat20_rs", "spell.poison_spray"),
+                        ],
+                    ),
+                    // LevelUpDecision::spells(
+                    //     "choice.spells",
+                    //     &ClassId::new("nat20_rs", "class.warlock"),
+                    //     &None,
+                    //     vec![SpellId::new("nat20_rs", "spell.magic_missile")],
+                    // ),
                     // Level 2
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
                         "nat20_rs",
@@ -423,9 +455,12 @@ pub mod creatures {
             );
 
             let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
-            spellbook.add_spell(
+            let _ = spellbook.add_spell(
                 &SpellId::new("nat20_rs", "spell.eldritch_blast"),
-                Ability::Charisma,
+                &SpellSource::Class(ClassAndSubclass {
+                    class: ClassId::new("nat20_rs", "class.warlock"),
+                    subclass: None,
+                }),
             );
 
             EntityIdentifier::new(entity, name)

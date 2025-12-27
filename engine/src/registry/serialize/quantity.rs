@@ -131,7 +131,13 @@ pub type LengthExpressionDefinition = QuantityExpressionDefinition<LengthDim>;
 
 #[cfg(test)]
 mod tests {
-    use crate::{components::id::SpellId, registry::serialize::variables::PARSER_VARIABLES};
+    use crate::{
+        components::{
+            id::{ItemId, SpellId},
+            spells::spellbook::{GrantedSpellSource, SpellSource},
+        },
+        registry::serialize::variables::PARSER_VARIABLES,
+    };
 
     use super::*;
 
@@ -153,6 +159,10 @@ mod tests {
         let entity = world.spawn(());
 
         let action_context = ActionContext::Spell {
+            source: SpellSource::Granted(GrantedSpellSource::Item(ItemId::new(
+                "nat20_rs",
+                "item.wand_of_testing",
+            ))),
             level: 5,
             id: SpellId::new("nat20_rs", "spell.test"),
         };

@@ -1,121 +1,663 @@
+//! spellbook.rs
+//!
+//! A class-agnostic Spellbook that supports:
+//! - Learned casters (e.g., Sorcerer/Bard/Warlock) with optional “prepared” step
+//! - Prepared casters that know “entire class list up to max level” (e.g., Cleric/Paladin)
+//! - Always-prepared/granted spells that do not count against preparation limits
+//! - Clean “known vs castable” queries
+//! - ActionProvider implementation that generates spell actions with upcasting and slot costs
+//!
+//! Design principles:
+//! 1) Rules are per-class (ability, spell list, access model, readiness model).
+//! 2) Selections are per-class (chosen cantrips / learned / prepared / always-prepared).
+//! 3) “Known” is computed on demand for EntireClassList casters (not stored).
+
 use std::collections::{HashMap, HashSet};
+
+use serde::{Deserialize, Serialize};
 
 use crate::{
     components::{
-        ability::Ability,
         actions::action::{ActionContext, ActionMap, ActionProvider},
-        id::{ResourceId, SpellId},
-        resource::ResourceAmount,
+        class::{CastingReadinessModel, ClassAndSubclass, SpellAccessModel},
+        id::{ClassId, FeatId, ItemId, ResourceId, SpeciesId, SpellId},
+        resource::{ResourceAmount, ResourceAmountMap},
     },
-    registry::registry::SpellsRegistry,
-    systems,
+    registry::registry::{ClassesRegistry, SpellsRegistry},
 };
 
-#[derive(Debug, Clone)]
+/// A deterministic bounded set:
+/// - stable iteration order (insertion order)
+/// - stable truncation behavior when shrinking caps
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BoundedSpellSet {
+    max_size: usize,
+    spell_ids: Vec<SpellId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoundedSpellSetError {
+    MaxSizeReached,
+    SpellAlreadyPresent,
+    SpellNotFound,
+}
+
+impl BoundedSpellSet {
+    pub fn new(max_size: usize) -> Self {
+        Self {
+            max_size,
+            spell_ids: Vec::new(),
+        }
+    }
+
+    pub fn max_size(&self) -> usize {
+        self.max_size
+    }
+
+    pub fn len(&self) -> usize {
+        self.spell_ids.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.spell_ids.is_empty()
+    }
+
+    pub fn as_slice(&self) -> &[SpellId] {
+        &self.spell_ids
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &SpellId> {
+        self.spell_ids.iter()
+    }
+
+    pub fn contains(&self, spell_id: &SpellId) -> bool {
+        self.spell_ids.iter().any(|id| id == spell_id)
+    }
+
+    pub fn try_add(&mut self, spell_id: SpellId) -> Result<(), BoundedSpellSetError> {
+        if self.contains(&spell_id) {
+            return Err(BoundedSpellSetError::SpellAlreadyPresent);
+        }
+        if self.spell_ids.len() >= self.max_size {
+            return Err(BoundedSpellSetError::MaxSizeReached);
+        }
+        self.spell_ids.push(spell_id);
+        Ok(())
+    }
+
+    pub fn remove(&mut self, spell_id: &SpellId) -> Result<(), BoundedSpellSetError> {
+        let index = self
+            .spell_ids
+            .iter()
+            .position(|id| id == spell_id)
+            .ok_or(BoundedSpellSetError::SpellNotFound)?;
+        self.spell_ids.remove(index);
+        Ok(())
+    }
+
+    pub fn set_max_size(&mut self, new_max_size: usize) {
+        self.max_size = new_max_size;
+        if self.spell_ids.len() > self.max_size {
+            // Deterministic: remove newest picks first
+            self.spell_ids.truncate(self.max_size);
+        }
+    }
+}
+
+/// The per-class *mutable choices* the player (or progression) makes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClassSpellSelections {
+    pub cantrips: BoundedSpellSet,
+
+    /// Used when access_model == Learned
+    pub learned_spells: BoundedSpellSet,
+
+    /// Used when readiness_model == PreparedCaster
+    pub prepared_spells: BoundedSpellSet,
+
+    /// Always available, does not count against prepared cap.
+    pub always_prepared: HashSet<SpellId>,
+}
+
+impl ClassSpellSelections {
+    pub fn new(max_cantrips: usize, max_learned_spells: usize, max_prepared_spells: usize) -> Self {
+        Self {
+            cantrips: BoundedSpellSet::new(max_cantrips),
+            learned_spells: BoundedSpellSet::new(max_learned_spells),
+            prepared_spells: BoundedSpellSet::new(max_prepared_spells),
+            always_prepared: HashSet::new(),
+        }
+    }
+}
+
+/// The per-class caster state (rules + caps + level-derived info).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClassSpellcastingState {
+    pub selections: ClassSpellSelections,
+}
+
+impl ClassSpellcastingState {
+    pub fn new(max_cantrips: usize, max_learned_spells: usize, max_prepared_spells: usize) -> Self {
+        Self {
+            selections: ClassSpellSelections::new(
+                max_cantrips,
+                max_learned_spells,
+                max_prepared_spells,
+            ),
+        }
+    }
+
+    pub fn set_caps(
+        &mut self,
+        max_cantrips: usize,
+        max_learned_spells: usize,
+        max_prepared_spells: usize,
+    ) {
+        self.selections.cantrips.set_max_size(max_cantrips);
+        self.selections
+            .learned_spells
+            .set_max_size(max_learned_spells);
+        self.selections
+            .prepared_spells
+            .set_max_size(max_prepared_spells);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum GrantedSpellSource {
+    Item(ItemId),
+    Feat(FeatId),
+    Species(SpeciesId),
+    // add more as needed
+}
+
+/// A class-independent spell source (items/feats/race/boons).
+/// Keep this small at first; you can grow it later into “charges”, “once per rest”, etc.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrantedSpellSet {
+    /// Spells that are castable without being prepared/known by any class state.
+    pub spells: HashSet<SpellId>,
+}
+
+impl GrantedSpellSet {
+    pub fn new() -> Self {
+        Self {
+            spells: HashSet::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SpellSource {
+    Class(ClassAndSubclass),
+    Granted(GrantedSpellSource),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpellbookError {
+    ClassNotFound,
+    SpellNotOnClassList,
+    SpellTooHighLevel,
+    CannotLearnForThisClass,
+    CannotPrepareForThisClass,
+    NotKnownSoCannotPrepare,
+    NotACantrip,
+    NotALevelledSpell,
+    CapacityReached,
+    AlreadyPresent,
+    NotFound,
+}
+
+/// Resource id you use for slots.
+fn spell_slot_resource_id() -> ResourceId {
+    ResourceId::new("nat20_rs", "resource.spell_slot")
+}
+
+/// The main Spellbook container.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Spellbook {
-    /// Set of learned spells
-    spells: HashSet<SpellId>,
-    /// Spells that are currently prepared for casting.
-    // TODO: Default prepared spells?
-    prepared_spells: HashSet<SpellId>,
-    /// Maximum number of spells that can be prepared.
-    max_prepared_spells: usize,
-    /// Maximum level of spells that can be cast.
+    /// Per-class spellcasting state.
+    class_states: HashMap<ClassAndSubclass, ClassSpellcastingState>,
+    /// The highest max spell level that can be cast. Tih sis determined based on
+    /// the spellcaster level, which is a computed value across all classes.
     max_spell_level: u8,
-    /// The ability to use when casting the spell. This depends on the class the
-    /// spell was learned as
-    spellcasting_ability: HashMap<SpellId, Ability>,
+    /// External sources (items/feats/race).
+    granted: HashMap<GrantedSpellSource, GrantedSpellSet>,
 }
 
 impl Spellbook {
     pub fn new() -> Self {
         Self {
-            spells: HashSet::new(),
-            prepared_spells: HashSet::new(),
-            max_prepared_spells: 0,
+            class_states: HashMap::new(),
             max_spell_level: 0,
-            spellcasting_ability: HashMap::new(),
+            granted: HashMap::new(),
         }
     }
 
-    pub fn add_spell(&mut self, spell_id: &SpellId, spellcasting_ability: Ability) {
-        // TODO: Handle missing spells
+    pub fn insert_granted_spell_source(
+        &mut self,
+        source: GrantedSpellSource,
+        spell_set: GrantedSpellSet,
+    ) {
+        self.granted.insert(source, spell_set);
+    }
+
+    pub fn granted_spell_set(&self, source: &GrantedSpellSource) -> Option<&GrantedSpellSet> {
+        self.granted.get(source)
+    }
+
+    pub fn granted_spell_set_mut(
+        &mut self,
+        source: &GrantedSpellSource,
+    ) -> Option<&mut GrantedSpellSet> {
+        self.granted.get_mut(source)
+    }
+
+    pub fn insert_class_state(
+        &mut self,
+        class_and_subclass: ClassAndSubclass,
+        state: ClassSpellcastingState,
+    ) {
+        self.class_states.insert(class_and_subclass, state);
+    }
+
+    pub fn class_state(
+        &self,
+        class_and_subclass: &ClassAndSubclass,
+    ) -> Option<&ClassSpellcastingState> {
+        self.class_states.get(class_and_subclass)
+    }
+
+    pub fn class_state_mut(
+        &mut self,
+        class_and_subclass: &ClassAndSubclass,
+    ) -> Option<&mut ClassSpellcastingState> {
+        self.class_states.get_mut(class_and_subclass)
+    }
+
+    /// Computed known spells for a class:
+    /// - Learned: learned_spells (+ cantrips, always_prepared)
+    /// - EntireClassList: all spells from class list up to max_spell_level (+ cantrips, always_prepared)
+    pub fn known_spells_for_class(
+        &self,
+        class_and_subclass: &ClassAndSubclass,
+    ) -> Result<HashSet<SpellId>, SpellbookError> {
+        let state = self
+            .class_states
+            .get(class_and_subclass)
+            .ok_or(SpellbookError::ClassNotFound)?;
+
+        let mut known = HashSet::<SpellId>::new();
+
+        // Cantrips are always "known" in practice.
+        for cantrip_id in state.selections.cantrips.iter() {
+            known.insert(cantrip_id.clone());
+        }
+
+        // Always prepared is at least known.
+        known.extend(state.selections.always_prepared.iter().cloned());
+
+        if let Some(class) = ClassesRegistry::get(&class_and_subclass.class)
+            && let Some(spellcasting_rules) = class.spellcasting_rules(&class_and_subclass.subclass)
+        {
+            match spellcasting_rules.access_model {
+                SpellAccessModel::Learned => {
+                    for spell_id in state.selections.learned_spells.iter() {
+                        known.insert(spell_id.clone());
+                    }
+                }
+                SpellAccessModel::EntireClassList => {
+                    // Compute: all spells on the class list that are within max spell level.
+                    for spell_id in spellcasting_rules.spell_list.iter() {
+                        let spell = SpellsRegistry::get(spell_id)
+                            .unwrap_or_else(|| panic!("Missing spell in registry: {}", spell_id));
+
+                        if spell.base_level() <= self.max_spell_level {
+                            known.insert(spell_id.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(known)
+    }
+
+    /// Computed castable spells for a class:
+    /// - PreparedCaster: prepared_spells + always_prepared + cantrips
+    /// - KnownCaster: known spells directly
+    pub fn castable_spells_for_class(
+        &self,
+        class_and_subclass: &ClassAndSubclass,
+    ) -> Result<HashSet<SpellId>, SpellbookError> {
+        let state = self
+            .class_states
+            .get(class_and_subclass)
+            .ok_or(SpellbookError::ClassNotFound)?;
+
+        let mut castable = HashSet::<SpellId>::new();
+
+        // Cantrips are castable once known/chosen.
+        for cantrip_id in state.selections.cantrips.iter() {
+            castable.insert(cantrip_id.clone());
+        }
+
+        // Always prepared spells are castable.
+        castable.extend(state.selections.always_prepared.iter().cloned());
+
+        if let Some(class) = ClassesRegistry::get(&class_and_subclass.class)
+            && let Some(spellcasting_rules) = class.spellcasting_rules(&class_and_subclass.subclass)
+        {
+            match spellcasting_rules.readiness_model {
+                CastingReadinessModel::Prepared => {
+                    for prepared_id in state.selections.prepared_spells.iter() {
+                        castable.insert(prepared_id.clone());
+                    }
+                }
+                CastingReadinessModel::Known => {
+                    let known = self.known_spells_for_class(class_and_subclass)?;
+                    castable.extend(known);
+                }
+            }
+        }
+
+        Ok(castable)
+    }
+
+    /// Choose a cantrip for a class.
+    pub fn try_choose_cantrip(
+        &mut self,
+        class_and_subclass: &ClassAndSubclass,
+        spell_id: &SpellId,
+    ) -> Result<(), SpellbookError> {
+        let state = self
+            .class_states
+            .get_mut(class_and_subclass)
+            .ok_or(SpellbookError::ClassNotFound)?;
+
+        if let Some(class) = ClassesRegistry::get(&class_and_subclass.class)
+            && let Some(spellcasting_rules) = class.spellcasting_rules(&class_and_subclass.subclass)
+        {
+            if !spellcasting_rules.spell_list.contains(spell_id) {
+                return Err(SpellbookError::SpellNotOnClassList);
+            }
+        }
+
         let spell = SpellsRegistry::get(spell_id)
-            .expect(format!("Missing spell in registry: {} ", spell_id).as_str());
-        self.spells.insert(spell_id.clone());
-        self.spellcasting_ability
-            .insert(spell_id.clone(), spellcasting_ability);
-        if !spell.is_cantrip() && self.prepared_spells.len() < self.max_prepared_spells {
-            // Automatically prepare the spell if we have space
-            self.prepared_spells.insert(spell_id.clone());
+            .unwrap_or_else(|| panic!("Missing spell in registry: {}", spell_id));
+        if !spell.is_cantrip() {
+            return Err(SpellbookError::NotACantrip);
+        }
+
+        match state.selections.cantrips.try_add(spell_id.clone()) {
+            Ok(()) => Ok(()),
+            Err(BoundedSpellSetError::MaxSizeReached) => Err(SpellbookError::CapacityReached),
+            Err(BoundedSpellSetError::SpellAlreadyPresent) => Err(SpellbookError::AlreadyPresent),
+            Err(_) => Err(SpellbookError::NotFound),
         }
     }
 
-    pub fn remove_spell(&mut self, spell_id: &SpellId) {
-        self.spells.remove(spell_id);
-        self.spellcasting_ability.remove(spell_id);
-        self.prepared_spells.remove(spell_id);
+    /// Learn a levelled spell (only meaningful for Learned access model).
+    pub fn try_learn_spell(
+        &mut self,
+        class_and_subclass: &ClassAndSubclass,
+        spell_id: &SpellId,
+    ) -> Result<(), SpellbookError> {
+        let state = self
+            .class_states
+            .get_mut(class_and_subclass)
+            .ok_or(SpellbookError::ClassNotFound)?;
+
+        if let Some(class) = ClassesRegistry::get(&class_and_subclass.class)
+            && let Some(spellcasting_rules) = class.spellcasting_rules(&class_and_subclass.subclass)
+        {
+            if spellcasting_rules.access_model != SpellAccessModel::Learned {
+                return Err(SpellbookError::CannotLearnForThisClass);
+            }
+            if !spellcasting_rules.spell_list.contains(spell_id) {
+                return Err(SpellbookError::SpellNotOnClassList);
+            }
+        }
+
+        let spell = SpellsRegistry::get(spell_id)
+            .unwrap_or_else(|| panic!("Missing spell in registry: {}", spell_id));
+        if spell.is_cantrip() {
+            return Err(SpellbookError::NotALevelledSpell);
+        }
+        if spell.base_level() > self.max_spell_level {
+            return Err(SpellbookError::SpellTooHighLevel);
+        }
+
+        match state.selections.learned_spells.try_add(spell_id.clone()) {
+            Ok(()) => Ok(()),
+            Err(BoundedSpellSetError::MaxSizeReached) => Err(SpellbookError::CapacityReached),
+            Err(BoundedSpellSetError::SpellAlreadyPresent) => Err(SpellbookError::AlreadyPresent),
+            Err(_) => Err(SpellbookError::NotFound),
+        }
     }
 
-    pub fn has_spell(&self, spell_id: &SpellId) -> bool {
-        self.spells.contains(spell_id)
+    /// Prepare a spell (only meaningful for PreparedCaster readiness model).
+    pub fn try_prepare_spell(
+        &mut self,
+        class_and_subclass: &ClassAndSubclass,
+        spell_id: &SpellId,
+    ) -> Result<(), SpellbookError> {
+        let state = self
+            .class_states
+            .get_mut(class_and_subclass)
+            .ok_or(SpellbookError::ClassNotFound)?;
+        if let Some(class) = ClassesRegistry::get(&class_and_subclass.class)
+            && let Some(spellcasting_rules) = class.spellcasting_rules(&class_and_subclass.subclass)
+        {
+            if spellcasting_rules.readiness_model != CastingReadinessModel::Prepared {
+                return Err(SpellbookError::CannotPrepareForThisClass);
+            }
+            if !spellcasting_rules.spell_list.contains(spell_id) {
+                return Err(SpellbookError::SpellNotOnClassList);
+            }
+            // Must be "known" in the sense of your access model:
+            // - EntireClassList: anything on list within max level is known
+            // - Learned: must have been learned
+            let is_known_for_class = match spellcasting_rules.access_model {
+                SpellAccessModel::EntireClassList => true,
+                SpellAccessModel::Learned => state.selections.learned_spells.contains(spell_id),
+            };
+            if !is_known_for_class {
+                return Err(SpellbookError::NotKnownSoCannotPrepare);
+            }
+        }
+
+        let spell = SpellsRegistry::get(spell_id)
+            .unwrap_or_else(|| panic!("Missing spell in registry: {}", spell_id));
+        if spell.is_cantrip() {
+            // Cantrips are chosen, not prepared
+            return Err(SpellbookError::NotALevelledSpell);
+        }
+        if spell.base_level() > self.max_spell_level {
+            return Err(SpellbookError::SpellTooHighLevel);
+        }
+
+        // Always-prepared spells don't need to be in prepared_spells set.
+        if state.selections.always_prepared.contains(spell_id) {
+            return Ok(());
+        }
+
+        match state.selections.prepared_spells.try_add(spell_id.clone()) {
+            Ok(()) => Ok(()),
+            Err(BoundedSpellSetError::MaxSizeReached) => Err(SpellbookError::CapacityReached),
+            Err(BoundedSpellSetError::SpellAlreadyPresent) => Err(SpellbookError::AlreadyPresent),
+            Err(_) => Err(SpellbookError::NotFound),
+        }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.spells.is_empty()
+    pub fn add_spell(
+        &mut self,
+        spell_id: &SpellId,
+        source: &SpellSource,
+    ) -> Result<(), SpellbookError> {
+        match source {
+            SpellSource::Class(class_and_subclass) => {
+                if let Some(class) = ClassesRegistry::get(&class_and_subclass.class)
+                    && let Some(spellcasting_rules) =
+                        class.spellcasting_rules(&class_and_subclass.subclass)
+                {
+                    if SpellsRegistry::get(spell_id).unwrap().is_cantrip() {
+                        self.try_choose_cantrip(class_and_subclass, spell_id)?;
+                        return Ok(());
+                    }
+
+                    match spellcasting_rules.access_model {
+                        SpellAccessModel::Learned => {
+                            self.try_learn_spell(class_and_subclass, spell_id)?;
+                        }
+                        SpellAccessModel::EntireClassList => {
+                            // No action needed; all spells on class list are known.
+                        }
+                    }
+
+                    match spellcasting_rules.readiness_model {
+                        CastingReadinessModel::Prepared => {
+                            // TODO: Not sure if it's correct to (potentially) error here?
+                            self.try_prepare_spell(class_and_subclass, spell_id)?;
+                        }
+                        CastingReadinessModel::Known => {
+                            // No action needed; all known spells are castable.
+                        }
+                    }
+                }
+            }
+
+            SpellSource::Granted(granted_spell_source) => {
+                // TODO: Is this all we need here?
+                self.granted
+                    .entry(granted_spell_source.clone())
+                    .or_insert_with(GrantedSpellSet::new)
+                    .spells
+                    .insert(spell_id.clone());
+            }
+        }
+        Ok(())
     }
 
-    pub fn all_spells(&self) -> &HashSet<SpellId> {
-        &self.spells
+    pub fn unprepare_spell(
+        &mut self,
+        class_and_subclass: &ClassAndSubclass,
+        spell_id: &SpellId,
+    ) -> Result<(), SpellbookError> {
+        let state = self
+            .class_states
+            .get_mut(class_and_subclass)
+            .ok_or(SpellbookError::ClassNotFound)?;
+        if let Some(class) = ClassesRegistry::get(&class_and_subclass.class)
+            && let Some(spellcasting_rules) = class.spellcasting_rules(&class_and_subclass.subclass)
+        {
+            if spellcasting_rules.readiness_model != CastingReadinessModel::Prepared {
+                return Err(SpellbookError::CannotPrepareForThisClass);
+            }
+        }
+        if state.selections.always_prepared.contains(spell_id) {
+            // Always-prepared isn't removed here
+            return Ok(());
+        }
+        match state.selections.prepared_spells.remove(spell_id) {
+            Ok(()) => Ok(()),
+            Err(BoundedSpellSetError::SpellNotFound) => Err(SpellbookError::NotFound),
+            _ => Err(SpellbookError::NotFound),
+        }
     }
 
-    pub fn spellcasting_ability(&self, spell_id: &SpellId) -> Option<&Ability> {
-        self.spellcasting_ability.get(spell_id)
+    pub fn remove_spell(
+        &mut self,
+        spell_id: &SpellId,
+        source: &SpellSource,
+    ) -> Result<(), SpellbookError> {
+        match source {
+            SpellSource::Class(class_and_subclass) => {
+                let state = self
+                    .class_states
+                    .get_mut(class_and_subclass)
+                    .ok_or(SpellbookError::ClassNotFound)?;
+
+                if state.selections.cantrips.contains(spell_id) {
+                    match state.selections.cantrips.remove(spell_id) {
+                        Ok(()) => return Ok(()),
+                        Err(BoundedSpellSetError::SpellNotFound) => {
+                            return Err(SpellbookError::NotFound);
+                        }
+                        _ => return Err(SpellbookError::NotFound),
+                    }
+                }
+
+                if state.selections.learned_spells.contains(spell_id) {
+                    match state.selections.learned_spells.remove(spell_id) {
+                        Ok(()) => return Ok(()),
+                        Err(BoundedSpellSetError::SpellNotFound) => {
+                            return Err(SpellbookError::NotFound);
+                        }
+                        _ => return Err(SpellbookError::NotFound),
+                    }
+                }
+
+                if state.selections.prepared_spells.contains(spell_id) {
+                    match state.selections.prepared_spells.remove(spell_id) {
+                        Ok(()) => return Ok(()),
+                        Err(BoundedSpellSetError::SpellNotFound) => {
+                            return Err(SpellbookError::NotFound);
+                        }
+                        _ => return Err(SpellbookError::NotFound),
+                    }
+                }
+
+                Ok(())
+            }
+
+            SpellSource::Granted(granted_spell_source) => {
+                if let Some(granted_set) = self.granted.get_mut(granted_spell_source) {
+                    if granted_set.spells.remove(spell_id) {
+                        return Ok(());
+                    } else {
+                        return Err(SpellbookError::NotFound);
+                    }
+                }
+                Err(SpellbookError::NotFound)
+            }
+        }
     }
 
-    pub fn set_max_prepared_spells(&mut self, max: usize) {
-        self.max_prepared_spells = max;
-    }
+    /// Global list of castable spells across:
+    /// - all class states
+    /// - granted sources (items/feats)
+    pub fn all_castable_spells(&self) -> HashSet<(SpellId, SpellSource)> {
+        let mut castable = HashSet::new();
 
-    pub fn max_prepared_spells(&self) -> usize {
-        self.max_prepared_spells
-    }
+        // Granted cantrips/spells
+        for (source, granted_set) in self.granted.iter() {
+            for spell_id in granted_set.spells.iter() {
+                castable.insert((spell_id.clone(), SpellSource::Granted(source.clone())));
+            }
+        }
 
-    pub fn set_max_spell_level(&mut self, level: u8) {
-        self.max_spell_level = level;
+        // Per-class castables
+        for (class_and_subclass, state) in self.class_states.iter() {
+            if let Ok(class_castable) = self.castable_spells_for_class(class_and_subclass) {
+                for spell_id in class_castable.iter() {
+                    castable.insert((
+                        spell_id.clone(),
+                        SpellSource::Class(class_and_subclass.clone()),
+                    ));
+                }
+            }
+        }
+
+        castable
     }
 
     pub fn max_spell_level(&self) -> u8 {
         self.max_spell_level
     }
 
-    pub fn prepared_spells(&self) -> &HashSet<SpellId> {
-        &self.prepared_spells
-    }
-
-    pub fn is_spell_prepared(&self, spell_id: &SpellId) -> bool {
-        self.prepared_spells.contains(spell_id)
-    }
-
-    /// Prepare a spell for casting. Returns true if the spell was successfully prepared.
-    /// If the spell is already prepared, it will not be added again.
-    pub fn prepare_spell(&mut self, spell_id: &SpellId) -> bool {
-        if self.prepared_spells.len() < self.max_prepared_spells {
-            if self.spells.contains(spell_id) {
-                self.prepared_spells.insert(spell_id.clone());
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Unprepare a spell, removing it from the prepared spells.
-    /// Returns true if the spell was successfully unprepared.
-    pub fn unprepare_spell(&mut self, spell_id: &SpellId) -> bool {
-        if self.prepared_spells.remove(spell_id) {
-            return true;
-        }
-        false
+    pub fn set_max_spell_level(&mut self, new_max_spell_level: u8) {
+        self.max_spell_level = new_max_spell_level;
     }
 }
 
@@ -123,15 +665,22 @@ impl ActionProvider for Spellbook {
     fn actions(&self) -> ActionMap {
         let mut actions = ActionMap::new();
 
-        for spell_id in &self.spells {
-            let spell = SpellsRegistry::get(spell_id)
-                .expect(format!("Missing spell in registry: {} ", spell_id).as_str());
+        // 1) Build a set of all castable spells (class + granted).
+        let castable_spell_ids = self.all_castable_spells();
 
+        // 2) Emit actions for each spell.
+        for (spell_id, source) in castable_spell_ids.iter() {
+            let spell = SpellsRegistry::get(spell_id)
+                .unwrap_or_else(|| panic!("Missing spell in registry: {}", spell_id));
+
+            // Cantrips: single context, level 0.
             if spell.is_cantrip() {
                 let context = ActionContext::Spell {
                     id: spell_id.clone(),
+                    source: source.clone(),
                     level: 0,
                 };
+
                 actions.insert(
                     spell.action().id().clone(),
                     vec![(context, spell.action().resource_cost().clone())],
@@ -139,25 +688,29 @@ impl ActionProvider for Spellbook {
                 continue;
             }
 
-            if !self.prepared_spells.contains(spell_id) {
-                // Skip spells that are not prepared
-                continue;
-            }
+            let base_level = spell.base_level();
+            let max_spell_level = self.max_spell_level();
 
-            for level in spell.base_level()..=self.max_spell_level {
+            for cast_level in base_level..=max_spell_level {
                 let context = ActionContext::Spell {
                     id: spell_id.clone(),
-                    level,
+                    source: source.clone(),
+                    level: cast_level,
                 };
 
-                let mut resource_cost = spell.action().resource_cost().clone();
-                resource_cost.insert(
-                    ResourceId::new("nat20_rs", "resource.spell_slot"),
-                    ResourceAmount::Tiered {
-                        tier: level,
-                        amount: 1,
-                    },
-                );
+                let mut resource_cost: ResourceAmountMap = spell.action().resource_cost().clone();
+
+                // For now assume only spells cast via Class sources cost spell slots,
+                // i.e. spells cast via an item don't require a spell slot.
+                if matches!(source, SpellSource::Class(_)) {
+                    resource_cost.insert(
+                        spell_slot_resource_id(),
+                        ResourceAmount::Tiered {
+                            tier: cast_level,
+                            amount: 1,
+                        },
+                    );
+                }
 
                 actions
                     .entry(spell.action().id().clone())
@@ -167,75 +720,5 @@ impl ActionProvider for Spellbook {
         }
 
         actions
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn add_and_has_spell() {
-        let spell_id = &SpellId::new("nat20_rs", "spell.magic_missile");
-
-        let mut spellbook = Spellbook::new();
-        spellbook.add_spell(spell_id, Ability::Intelligence);
-
-        assert!(spellbook.has_spell(spell_id));
-        assert_eq!(
-            spellbook.spellcasting_ability(spell_id),
-            Some(&Ability::Intelligence)
-        );
-    }
-
-    #[test]
-    fn remove_spell() {
-        let spell_id = &SpellId::new("nat20_rs", "spell.magic_missile");
-
-        let mut spellbook = Spellbook::new();
-        spellbook.add_spell(spell_id, Ability::Wisdom);
-        assert!(spellbook.has_spell(spell_id));
-
-        spellbook.remove_spell(spell_id);
-        assert!(!spellbook.has_spell(spell_id));
-        assert!(spellbook.spellcasting_ability(spell_id).is_none());
-    }
-
-    #[test]
-    fn prepare_and_unprepare_spell() {
-        let spell_id = &SpellId::new("nat20_rs", "spell.magic_missile");
-
-        let mut spellbook = Spellbook::new();
-        spellbook.add_spell(spell_id, Ability::Charisma);
-        spellbook.set_max_prepared_spells(1);
-
-        assert!(spellbook.prepare_spell(spell_id));
-        assert!(spellbook.is_spell_prepared(spell_id));
-        assert!(!spellbook.prepare_spell(spell_id)); // Already prepared
-
-        assert!(spellbook.unprepare_spell(spell_id));
-        assert!(!spellbook.is_spell_prepared(spell_id));
-    }
-
-    #[test]
-    fn all_spells_and_prepared_spells() {
-        let spell_id1 = &SpellId::new("nat20_rs", "spell.magic_missile");
-        let spell_id2 = &SpellId::new("nat20_rs", "spell.fireball");
-
-        let mut spellbook = Spellbook::new();
-        spellbook.add_spell(spell_id1, Ability::Intelligence);
-        spellbook.add_spell(spell_id2, Ability::Wisdom);
-
-        let all_spells: HashSet<_> = spellbook.all_spells().clone();
-        assert!(all_spells.contains(spell_id1));
-        assert!(all_spells.contains(spell_id2));
-
-        spellbook.set_max_prepared_spells(2);
-        spellbook.prepare_spell(spell_id1);
-        spellbook.prepare_spell(spell_id2);
-
-        let prepared: HashSet<_> = spellbook.prepared_spells().clone();
-        assert!(prepared.contains(spell_id1));
-        assert!(prepared.contains(spell_id2));
     }
 }

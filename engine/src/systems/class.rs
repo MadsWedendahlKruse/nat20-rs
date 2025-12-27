@@ -1,6 +1,6 @@
 use crate::{
     components::{
-        class::ClassBase,
+        class::{ClassAndSubclass, ClassBase},
         id::{ClassId, FeatId, SubclassId},
         items::equipment::{armor::ArmorTrainingSet, weapon::WeaponProficiencyMap},
         level_up::ChoiceItem,
@@ -70,6 +70,7 @@ pub fn increment_class_level(
         (new_level, subclass)
     };
 
+    // TODO: Do we need to do this every time?
     for ability in class.saving_throw_proficiencies.iter() {
         systems::helpers::get_component_mut::<SavingThrowSet>(world, entity).set_proficiency(
             SavingThrowKind::Ability(*ability),
@@ -84,8 +85,6 @@ pub fn increment_class_level(
     // is selected, then the Constitution modifier might increase, in which case we need to
     // recalculate hit points.
     systems::health::update_hit_points(world, entity);
-
-    systems::spells::update_spell_slots(world, entity);
 
     let mut prompts = apply_class_base(
         world,
@@ -103,6 +102,16 @@ pub fn increment_class_level(
             new_level,
         ));
     }
+
+    prompts.extend(systems::spells::update_spellbook(
+        world,
+        entity,
+        ClassAndSubclass {
+            class: class_id.clone(),
+            subclass: subclass.as_ref().map(|s| s.id.clone()),
+        },
+        new_level,
+    ));
 
     // Feats need special handling since they can have prerequisites and
     // can (or can't) be repeatable.

@@ -11,8 +11,9 @@ use uuid::Uuid;
 use crate::{
     components::{
         ability::{Ability, AbilityScore, AbilityScoreDistribution, AbilityScoreMap},
+        class::ClassAndSubclass,
         health::hit_points::HitPoints,
-        id::{ActionId, ClassId, EffectId, Name, ResourceId},
+        id::{ActionId, ClassId, EffectId, Name, ResourceId, SpellId, SubclassId},
         items::{equipment::loadout::EquipmentInstance, money::MonetaryValue},
         level::CharacterLevels,
         level_up::{ChoiceItem, LevelUpPrompt},
@@ -20,6 +21,10 @@ use crate::{
         proficiency::{Proficiency, ProficiencyLevel},
         resource::ResourceBudgetKind,
         skill::{Skill, SkillSet},
+        spells::{
+            spell::Spell,
+            spellbook::{SpellSource, Spellbook},
+        },
     },
     registry::registry::{ClassesRegistry, ItemsRegistry},
     systems,
@@ -34,6 +39,10 @@ pub enum LevelUpDecision {
     AbilityScores(AbilityScoreDistribution),
     AbilityScoreImprovement(HashMap<Ability, u8>),
     SkillProficiency(HashSet<Skill>),
+    ReplaceSpells {
+        // Old spell, new spell
+        spells: Vec<(SpellId, SpellId)>,
+    },
 }
 
 impl LevelUpDecision {
@@ -48,6 +57,7 @@ impl LevelUpDecision {
             (LevelUpDecision::SkillProficiency(_), LevelUpPrompt::SkillProficiency(_, _, _)) => {
                 true
             }
+            (LevelUpDecision::ReplaceSpells { .. }, LevelUpPrompt::ReplaceSpells { .. }) => true,
             _ => false,
         }
     }
@@ -66,6 +76,25 @@ impl LevelUpDecision {
     pub fn single_choice(selected: ChoiceItem) -> Self {
         LevelUpDecision::single_choice_with_id(selected.id(), selected)
     }
+
+    pub fn spells(
+        id: &str,
+        class: &ClassId,
+        subclass: &Option<SubclassId>,
+        selected: Vec<SpellId>,
+    ) -> Self {
+        let source = SpellSource::Class(ClassAndSubclass {
+            class: class.clone(),
+            subclass: subclass.clone(),
+        });
+        LevelUpDecision::from_choice(
+            id.to_string(),
+            selected
+                .into_iter()
+                .map(|spell_id| ChoiceItem::Spell(spell_id, source.clone()))
+                .collect(),
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +102,7 @@ pub enum LevelUpError {
     InvalidDecision {
         prompt: LevelUpPrompt,
         decision: LevelUpDecision,
+        message: Option<String>,
     },
     PrompDecisionMismatch {
         prompt: LevelUpPrompt,
@@ -192,18 +222,40 @@ fn resolve_level_up_prompt(
             }
 
             if selected.len() as u8 != spec.picks {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
+                return Err(LevelUpError::InvalidDecision {
+                    prompt: prompt.clone(),
+                    decision: decision.clone(),
+                    message: Some(format!(
+                        "Invalid number of choices selected: expected {}, got {}",
+                        spec.picks,
+                        selected.len()
+                    )),
+                });
             }
 
             let mut seen = HashMap::new();
             for item in selected {
                 if !spec.options.contains(item) {
-                    return Err(LevelUpError::InvalidDecision { prompt, decision });
+                    return Err(LevelUpError::InvalidDecision {
+                        prompt,
+                        decision: decision.clone(),
+                        message: Some(format!(
+                            "Choice item {:?} does not exist in the options",
+                            item
+                        )),
+                    });
                 }
                 let count = seen.entry(item).or_insert(0);
                 *count += 1;
                 if !spec.allow_duplicates && *count > 1 {
-                    return Err(LevelUpError::InvalidDecision { prompt, decision });
+                    return Err(LevelUpError::InvalidDecision {
+                        prompt,
+                        decision: decision.clone(),
+                        message: Some(format!(
+                            "Duplicate choice item {:?} selected but duplicates are not allowed",
+                            item
+                        )),
+                    });
                 }
             }
 
@@ -218,20 +270,21 @@ fn resolve_level_up_prompt(
                             &ModifierSource::Base,
                         );
                     }
-
                     ChoiceItem::Feat(feat_id) => {
                         let result = systems::feats::add_feat(world, entity, feat_id);
                         if let Ok(new_prompts) = result {
                             prompts.extend(new_prompts);
                         } else {
-                            return Err(LevelUpError::InvalidDecision { prompt, decision });
+                            return Err(LevelUpError::InvalidDecision {
+                                prompt,
+                                decision,
+                                message: None,
+                            });
                         }
                     }
-
                     ChoiceItem::Action(action_id) => {
                         systems::actions::add_actions(world, entity, &[action_id.clone()]);
                     }
-
                     ChoiceItem::Background(background_id) => {
                         prompts.extend(systems::backgrounds::set_background(
                             world,
@@ -239,7 +292,6 @@ fn resolve_level_up_prompt(
                             background_id,
                         ));
                     }
-
                     ChoiceItem::Class(class_id) => {
                         // Special prompt when creating a new character
                         if systems::helpers::get_component::<CharacterLevels>(world, entity)
@@ -256,15 +308,12 @@ fn resolve_level_up_prompt(
                     ChoiceItem::Subclass(subclass_id) => {
                         systems::class::set_subclass(world, entity, subclass_id);
                     }
-
                     ChoiceItem::Species(species_id) => {
                         prompts.extend(systems::species::set_species(world, entity, species_id));
                     }
-
                     ChoiceItem::Subspecies(subspecies_id) => {
                         systems::species::set_subspecies(world, entity, subspecies_id);
                     }
-
                     ChoiceItem::Equipment { items, money } => {
                         for (count, item_id) in items {
                             // TODO: Not the most elegant solution
@@ -292,6 +341,26 @@ fn resolve_level_up_prompt(
                             systems::inventory::add_money(world, entity, money);
                         }
                     }
+                    ChoiceItem::Spell(spell_id, source) => {
+                        let result =
+                            systems::helpers::get_component_mut::<Spellbook>(world, entity)
+                                .add_spell(spell_id, source);
+                        match result {
+                            Ok(_) => {}
+                            Err(e) => {
+                                let error_message = format!(
+                                    "Failed to add spell {} to spellbook: {:?}",
+                                    spell_id, e
+                                );
+                                error!("{}", error_message);
+                                return Err(LevelUpError::InvalidDecision {
+                                    prompt,
+                                    decision: decision.clone(),
+                                    message: Some(error_message),
+                                });
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -301,12 +370,20 @@ fn resolve_level_up_prompt(
             LevelUpDecision::SkillProficiency(selected_skills),
         ) => {
             if selected_skills.len() != *num_prompts as usize {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
+                return Err(LevelUpError::InvalidDecision {
+                    prompt,
+                    decision,
+                    message: None,
+                });
             }
 
             for skill in selected_skills {
                 if !skills.contains(&skill) {
-                    return Err(LevelUpError::InvalidDecision { prompt, decision });
+                    return Err(LevelUpError::InvalidDecision {
+                        prompt,
+                        decision,
+                        message: None,
+                    });
                 }
                 // TODO: Expertise handling
                 systems::helpers::get_component_mut::<SkillSet>(world, entity).set_proficiency(
@@ -321,7 +398,11 @@ fn resolve_level_up_prompt(
             LevelUpDecision::AbilityScores(distribution),
         ) => {
             if distribution.scores.len() != Ability::iter().count() {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
+                return Err(LevelUpError::InvalidDecision {
+                    prompt,
+                    decision,
+                    message: None,
+                });
             }
 
             if distribution
@@ -329,7 +410,11 @@ fn resolve_level_up_prompt(
                 .values()
                 .any(|&score| !score_point_cost.contains_key(&score))
             {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
+                return Err(LevelUpError::InvalidDecision {
+                    prompt,
+                    decision,
+                    message: None,
+                });
             }
 
             let total_cost = distribution
@@ -343,7 +428,11 @@ fn resolve_level_up_prompt(
                 })
                 .sum::<u8>();
             if total_cost != *num_points {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
+                return Err(LevelUpError::InvalidDecision {
+                    prompt,
+                    decision,
+                    message: None,
+                });
             }
 
             let mut ability_score_set =
@@ -369,7 +458,11 @@ fn resolve_level_up_prompt(
             LevelUpDecision::AbilityScoreImprovement(decision_points),
         ) => {
             if decision_points.values().sum::<u8>() != *budget {
-                return Err(LevelUpError::InvalidDecision { prompt, decision });
+                return Err(LevelUpError::InvalidDecision {
+                    prompt,
+                    decision,
+                    message: None,
+                });
             }
 
             let mut ability_score_set =
@@ -377,11 +470,19 @@ fn resolve_level_up_prompt(
 
             for (ability, bonus) in decision_points {
                 if !abilities.contains(ability) {
-                    return Err(LevelUpError::InvalidDecision { prompt, decision });
+                    return Err(LevelUpError::InvalidDecision {
+                        prompt,
+                        decision,
+                        message: None,
+                    });
                 }
                 let current_score = ability_score_set.get(*ability).total() as u8;
                 if current_score + bonus > *max_score {
-                    return Err(LevelUpError::InvalidDecision { prompt, decision });
+                    return Err(LevelUpError::InvalidDecision {
+                        prompt,
+                        decision,
+                        message: None,
+                    });
                 }
 
                 // TODO: Not sure what the best way to apply the points is
@@ -392,6 +493,75 @@ fn resolve_level_up_prompt(
                     ModifierSource::FeatRepeatable(feat.clone(), Uuid::new_v4()),
                     *bonus as i32,
                 );
+            }
+        }
+
+        (
+            LevelUpPrompt::ReplaceSpells {
+                spells,
+                source,
+                replacements: num_replacements,
+            },
+            LevelUpDecision::ReplaceSpells {
+                spells: spell_replacements,
+            },
+        ) => {
+            if spell_replacements.len() != *num_replacements as usize {
+                return Err(LevelUpError::InvalidDecision {
+                    prompt: prompt.clone(),
+                    decision: decision.clone(),
+                    message: Some(format!(
+                        "Expected {} spell replacements, but got {}",
+                        num_replacements,
+                        spell_replacements.len()
+                    )),
+                });
+            }
+
+            for (old_spell, new_spell) in spell_replacements {
+                if !spells.contains(old_spell) {
+                    return Err(LevelUpError::InvalidDecision {
+                        prompt: prompt.clone(),
+                        decision: decision.clone(),
+                        message: Some(format!(
+                            "Unexpected spell to replace: {}. Expected one of: {:#?}",
+                            old_spell, spells
+                        )),
+                    });
+                }
+
+                if !spells.contains(new_spell) {
+                    return Err(LevelUpError::InvalidDecision {
+                        prompt: prompt.clone(),
+                        decision: decision.clone(),
+                        message: Some(format!(
+                            "Unexpected spell to add: {}. Expected one of: {:#?}",
+                            old_spell, spells
+                        )),
+                    });
+                }
+
+                let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
+                match spellbook.remove_spell(old_spell, source) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        return Err(LevelUpError::InvalidDecision {
+                            prompt: prompt.clone(),
+                            decision: decision.clone(),
+                            message: Some(format!("Failed to remove spell {}: {:?}", old_spell, e)),
+                        });
+                    }
+                }
+                match spellbook.add_spell(new_spell, source) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        return Err(LevelUpError::InvalidDecision {
+                            prompt: prompt.clone(),
+                            decision: decision.clone(),
+                            message: Some(format!("Failed to add spell {}: {:?}", new_spell, e)),
+                        });
+                    }
+                }
             }
         }
 
@@ -442,7 +612,7 @@ pub fn apply_level_up_decision(
                 }
                 _ => {
                     panic!(
-                        "Failed to apply level up response for {} at level {}: {:?}",
+                        "Failed to apply level up response for {} at level {}: {:#?}",
                         name.as_str(),
                         level,
                         result
@@ -458,7 +628,7 @@ pub fn apply_level_up_decision(
 
         if !level_up_session.is_complete() {
             panic!(
-                "Level up session for {} at level {} did not complete. Pending prompts: {:?}",
+                "Level up session for {} at level {} did not complete. Pending prompts: {:#?}",
                 name.as_str(),
                 level,
                 level_up_session.pending_prompts()

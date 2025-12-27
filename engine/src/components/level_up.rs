@@ -10,16 +10,17 @@ use serde::{Deserialize, Serialize};
 use crate::{
     components::{
         ability::Ability,
+        class::ClassAndSubclass,
         id::{
-            ActionId, BackgroundId, ClassId, EffectId, FeatId, ItemId, SpeciesId, SubclassId,
-            SubspeciesId,
+            ActionId, BackgroundId, ClassId, EffectId, FeatId, ItemId, SpeciesId, SpellId,
+            SubclassId, SubspeciesId,
         },
         modifier::ModifierSource,
         skill::Skill,
+        spells::spellbook::{SpellSource, Spellbook},
     },
-    registry::{
-        self,
-        registry::{BackgroundsRegistry, ClassesRegistry, FeatsRegistry, SpeciesRegistry},
+    registry::registry::{
+        BackgroundsRegistry, ClassesRegistry, FeatsRegistry, SpeciesRegistry, SpellsRegistry,
     },
     systems::{self},
 };
@@ -43,6 +44,7 @@ static ABILITY_SCORE_POINTS: u8 = 27;
 #[serde(rename_all = "snake_case")]
 pub enum ChoiceItem {
     Action(ActionId),
+    Spell(SpellId, SpellSource),
     Background(BackgroundId),
     Class(ClassId),
     Subclass(SubclassId),
@@ -53,15 +55,14 @@ pub enum ChoiceItem {
     Equipment {
         items: Vec<(u8, ItemId)>,
         money: String, // e.g., "10 GP"
-    }, // SubPrompt(Box<LevelUpPrompt>), // cascade
-       // Escape hatch if you need something truly custom
-       // Custom(String),
+    },
 }
 
 impl ChoiceItem {
     pub fn id(&self) -> &'static str {
         match self {
             ChoiceItem::Action(_) => "choice.action",
+            ChoiceItem::Spell(_, _) => "choice.spell",
             ChoiceItem::Background(_) => "choice.background",
             ChoiceItem::Class(_) => "choice.class",
             ChoiceItem::Subclass(_) => "choice.subclass",
@@ -83,6 +84,7 @@ impl ChoiceItem {
             ChoiceItem::Subclass(_) => 4,
             ChoiceItem::Equipment { .. } => 5,
             ChoiceItem::Action(_) => 6,
+            ChoiceItem::Spell(_, _) => 6,
             ChoiceItem::Effect(_) => 7,
             ChoiceItem::Feat(_) => 8,
         }
@@ -95,6 +97,7 @@ impl std::fmt::Display for ChoiceItem {
             ChoiceItem::Effect(id) => write!(f, "{}", id),
             ChoiceItem::Feat(id) => write!(f, "{}", id),
             ChoiceItem::Action(id) => write!(f, "{}", id),
+            ChoiceItem::Spell(id, _) => write!(f, "{}", id),
             ChoiceItem::Background(id) => write!(f, "{}", id),
             ChoiceItem::Class(id) => write!(f, "{}", id),
             ChoiceItem::Subclass(id) => write!(f, "{}", id),
@@ -166,8 +169,11 @@ pub enum LevelUpPrompt {
         max_score: u8,
     },
     SkillProficiency(HashSet<Skill>, u8, ModifierSource),
-    // SpellSelection(SpellcastingClass, Vec<SpellOption>),
-    // etc.
+    ReplaceSpells {
+        spells: Vec<SpellId>,
+        source: SpellSource,
+        replacements: u8,
+    },
 }
 
 impl LevelUpPrompt {
@@ -176,6 +182,7 @@ impl LevelUpPrompt {
             LevelUpPrompt::Choice(spec) => spec.priority(),
             LevelUpPrompt::AbilityScores(_, _) => 4,
             LevelUpPrompt::SkillProficiency(_, _, _) => 5,
+            LevelUpPrompt::ReplaceSpells { .. } => 7,
             LevelUpPrompt::AbilityScoreImprovement { .. } => 8,
         }
     }
@@ -213,7 +220,7 @@ impl LevelUpPrompt {
                 .filter_map(|feat_id| {
                     systems::feats::can_acquire_feat(world, entity, feat_id).ok()?;
                     // TODO: Bit of a dirty hack to remove fighting styles from the list of feats.
-                    if feat_id.to_string().starts_with("feat.fighting_style.") {
+                    if feat_id.id().starts_with("feat.fighting_style.") {
                         return None;
                     }
                     Some(ChoiceItem::Feat(feat_id.clone()))
@@ -240,6 +247,84 @@ impl LevelUpPrompt {
             subspecies.into_iter().map(ChoiceItem::Subspecies).collect(),
         ))
     }
+
+    pub fn spells(
+        world: &World,
+        entity: Entity,
+        class_and_subclass: &ClassAndSubclass,
+        cantrips: bool,
+        number_of_spells: u8,
+        max_spell_level: u8,
+    ) -> Self {
+        let source = SpellSource::Class(class_and_subclass.clone());
+        if let Some(class) = ClassesRegistry::get(&class_and_subclass.class)
+            && let Some(spellcasting_rules) = class.spellcasting_rules(&class_and_subclass.subclass)
+        {
+            let spellbook = systems::helpers::get_component::<Spellbook>(world, entity);
+            let known_spells = spellbook
+                .known_spells_for_class(class_and_subclass)
+                .unwrap();
+
+            let options = spellcasting_rules
+                .spell_list
+                .iter()
+                .filter_map(|spell_id| {
+                    if known_spells.contains(spell_id) {
+                        return None;
+                    }
+                    let spell = SpellsRegistry::get(spell_id)?;
+                    if spell.base_level() > max_spell_level {
+                        return None;
+                    } else if cantrips && spell.is_cantrip() {
+                        Some(ChoiceItem::Spell(spell_id.clone(), source.clone()))
+                    } else if !cantrips && !spell.is_cantrip() {
+                        Some(ChoiceItem::Spell(spell_id.clone(), source.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let (id, label) = if cantrips {
+                (
+                    "choice.cantrips".to_string(),
+                    "Cantrip Selection".to_string(),
+                )
+            } else {
+                ("choice.spells".to_string(), "Spell Selection".to_string())
+            };
+
+            LevelUpPrompt::Choice(ChoiceSpec {
+                id,
+                label,
+                options,
+                picks: number_of_spells,
+                allow_duplicates: false,
+            })
+        } else {
+            panic!(
+                "Class {:?} does not have spellcasting capabilities",
+                class_and_subclass
+            );
+        }
+    }
+
+    pub fn spell_replacement(
+        world: &World,
+        entity: Entity,
+        class_and_subclass: &ClassAndSubclass,
+        replacements: u8,
+    ) -> Self {
+        let spellbook = systems::helpers::get_component::<Spellbook>(world, entity);
+        let known_spells = spellbook
+            .known_spells_for_class(class_and_subclass)
+            .unwrap();
+
+        LevelUpPrompt::ReplaceSpells {
+            spells: known_spells.into_iter().collect(),
+            source: SpellSource::Class(class_and_subclass.clone()),
+            replacements,
+        }
+    }
 }
 
 impl Display for LevelUpPrompt {
@@ -252,6 +337,9 @@ impl Display for LevelUpPrompt {
             }
             LevelUpPrompt::SkillProficiency(_, _, _) => {
                 write!(f, "Skill Proficiency")
+            }
+            LevelUpPrompt::ReplaceSpells { .. } => {
+                write!(f, "Replace Spells")
             }
         }
     }

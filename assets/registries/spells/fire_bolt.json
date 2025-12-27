@@ -1,0 +1,21 @@
+{
+    "id": "nat20_rs::spell.fire_bolt",
+    "description": "You hurl a mote of fire at a creature or an object within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 Fire damage. A flammable object hit by this spell starts burning if it isn’t being worn or carried",
+    "base_level": 0,
+    "school": "evocation",
+    "kind": {
+        "attack_roll_damage": {
+            "attack_roll": "spell_attack_roll",
+            "damage": "(1 + (character_level + 1) / 6)d10;fire"
+        }
+    },
+    "resource_cost": {
+        "nat20_rs::resource.action": 1
+    },
+    "targeting": {
+        "kind": "single",
+        "range": "120 feet",
+        "require_line_of_sight": true,
+        "allowed_targets": "not_dead"
+    }
+}

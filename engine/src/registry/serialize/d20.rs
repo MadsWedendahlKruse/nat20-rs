@@ -13,8 +13,12 @@ use crate::{
         modifier::{Modifiable, ModifierSet, ModifierSource},
         proficiency::{Proficiency, ProficiencyLevel},
         saving_throw::{SavingThrowDC, SavingThrowKind},
-        spells::spellbook::Spellbook,
+        spells::{
+            spell::SPELL_CASTING_ABILITIES,
+            spellbook::{SpellSource, Spellbook},
+        },
     },
+    registry::registry::{ClassesRegistry, SpellsRegistry},
     systems,
 };
 
@@ -43,12 +47,13 @@ impl FromStr for AttackRollProvider {
             ) as Arc<AttackRollFunction>,
             "spell_attack_roll" => Arc::new({
                 |world: &World, entity: Entity, target: Entity, action_context: &ActionContext| {
-                    let spell_id = if let ActionContext::Spell { id, .. } = action_context {
-                        id
-                    } else {
-                        panic!("Action context must be Spell for spell_attack_roll");
-                    };
-                    spell_attack_roll(world, entity, target, &spell_id)
+                    let (source, id) =
+                        if let ActionContext::Spell { source, id, .. } = action_context {
+                            (source, id)
+                        } else {
+                            panic!("Action context must be Spell for spell_attack_roll");
+                        };
+                    spell_attack_roll(world, entity, target, source, id)
                 }
             }) as Arc<AttackRollFunction>,
             _ => {
@@ -89,17 +94,46 @@ fn weapon_attack_roll(
     panic!("Action context must be Weapon");
 }
 
+fn get_spellcasting_ability_from_source(
+    world: &World,
+    caster: Entity,
+    source: &SpellSource,
+) -> Ability {
+    match source {
+        SpellSource::Class(class_and_subclass) => {
+            if let Some(class) = ClassesRegistry::get(&class_and_subclass.class)
+                && let Some(spellcasting_rules) =
+                    class.spellcasting_rules(&class_and_subclass.subclass)
+            {
+                spellcasting_rules.spellcasting_ability
+            } else {
+                panic!(
+                    "Class {:?} does not have spellcasting capabilities",
+                    class_and_subclass
+                );
+            }
+        }
+        SpellSource::Granted(_) => {
+            // Use the highest spellcasting ability
+            systems::helpers::get_component::<AbilityScoreMap>(world, caster)
+                .get_max_score(SPELL_CASTING_ABILITIES)
+                .0
+        }
+    }
+}
+
 fn spell_attack_roll(
     world: &World,
     caster: Entity,
+    // TODO: Some weapons have a normal and max range. Target is needed for weapon
+    // attack rolls to check the range and apply disadvantage if out of normal range.
+    // Spells just have a single range, so target is not needed for spell attack rolls?
     target: Entity,
+    source: &SpellSource,
     spell_id: &SpellId,
 ) -> AttackRoll {
     let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, caster);
-    let spellcasting_ability = systems::helpers::get_component::<Spellbook>(world, caster)
-        .spellcasting_ability(spell_id)
-        .unwrap()
-        .clone();
+    let spellcasting_ability = get_spellcasting_ability_from_source(world, caster, source);
     let proficiency_bonus = systems::helpers::level(world, caster)
         .unwrap()
         .proficiency_bonus();
@@ -159,11 +193,12 @@ impl FromStr for SavingThrowProvider {
             "spell_save_dc" => Arc::new({
                 let ability = ability.clone();
                 move |world: &World, entity: Entity, action_context: &ActionContext| {
-                    if let ActionContext::Spell { id, .. } = action_context {
-                        spell_save_dc(world, entity, id, ability)
+                    let source = if let ActionContext::Spell { source, .. } = action_context {
+                        source
                     } else {
                         panic!("Action context must be Spell for spell_save_dc");
-                    }
+                    };
+                    spell_save_dc(world, entity, ability, source)
                 }
             }) as Arc<SavingThrowFunction>,
             _ => {
@@ -211,14 +246,11 @@ fn weapon_save_dc(
 fn spell_save_dc(
     world: &World,
     caster: Entity,
-    spell_id: &SpellId,
     saving_throw_ability: Ability,
+    source: &SpellSource,
 ) -> SavingThrowDC {
     let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, caster);
-    let spellcasting_ability = systems::helpers::get_component::<Spellbook>(world, caster)
-        .spellcasting_ability(spell_id)
-        .unwrap()
-        .clone();
+    let spellcasting_ability = get_spellcasting_ability_from_source(world, caster, source);
     let proficiency_bonus = systems::helpers::level(world, caster)
         .unwrap()
         .proficiency_bonus();

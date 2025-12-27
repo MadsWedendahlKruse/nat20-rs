@@ -7,11 +7,12 @@ use hecs::{Entity, World};
 use nat20_rs::{
     components::{
         ability::{Ability, AbilityScoreDistribution, AbilityScoreMap},
-        id::Name,
+        id::{Name, SpellId},
         level::CharacterLevels,
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
         proficiency::{Proficiency, ProficiencyLevel},
         skill::{Skill, SkillSet},
+        spells::spellbook::SpellSource,
     },
     entities::character::Character,
     registry::registry::ClassesRegistry,
@@ -60,6 +61,12 @@ enum LevelUpDecisionProgress {
         assignments: HashMap<Ability, u8>,
         remaining_points: u8,
     },
+    ReplaceSpells {
+        spells: Vec<SpellId>,
+        number_of_replacements: u8,
+        // Old spell, new spell
+        replacements: Vec<(SpellId, SpellId)>,
+    },
 }
 
 impl LevelUpDecisionProgress {
@@ -92,6 +99,11 @@ impl LevelUpDecisionProgress {
                 remaining_points,
                 ..
             } => remaining_points == &0 && !assignments.is_empty(),
+            LevelUpDecisionProgress::ReplaceSpells {
+                spells: _,
+                number_of_replacements,
+                replacements,
+            } => replacements.len() == *number_of_replacements as usize,
         }
     }
 
@@ -105,6 +117,7 @@ impl LevelUpDecisionProgress {
             LevelUpDecisionProgress::AbilityScoreImprovement { assignments, .. } => {
                 assignments.is_empty()
             }
+            LevelUpDecisionProgress::ReplaceSpells { replacements, .. } => replacements.is_empty(),
         }
     }
 
@@ -133,6 +146,11 @@ impl LevelUpDecisionProgress {
             }),
             LevelUpDecisionProgress::AbilityScoreImprovement { assignments, .. } => {
                 LevelUpDecision::AbilityScoreImprovement(assignments)
+            }
+            LevelUpDecisionProgress::ReplaceSpells { replacements, .. } => {
+                LevelUpDecision::ReplaceSpells {
+                    spells: replacements,
+                }
             }
         }
     }
@@ -164,6 +182,15 @@ impl LevelUpDecisionProgress {
                     remaining_points: *budget,
                 }
             }
+            LevelUpPrompt::ReplaceSpells {
+                spells,
+                replacements,
+                ..
+            } => LevelUpDecisionProgress::ReplaceSpells {
+                spells: spells.clone(),
+                number_of_replacements: *replacements,
+                replacements: Vec::new(),
+            },
         }
     }
 
@@ -864,6 +891,34 @@ impl ImguiRenderableMut for LevelUpPromptWithProgress {
                     }
                 } else {
                     ui.text("Mismatched progress type for Ability Score Improvement prompt");
+                }
+            }
+
+            LevelUpPrompt::ReplaceSpells {
+                spells,
+                replacements,
+                ..
+            } => {
+                if let LevelUpDecisionProgress::ReplaceSpells {
+                    ref spells,
+                    ref number_of_replacements,
+                    ref mut replacements,
+                } = self.progress
+                {
+                    ui.text(format!(
+                        "Select {} spell(s) to replace:",
+                        number_of_replacements
+                    ));
+
+                    if ui.button("Reset##ReplaceSpells") {
+                        replacements.clear();
+                    }
+
+                    ui.separator();
+
+                    ui.text("Figure out how to render this :^)");
+                } else {
+                    ui.text("Mismatched progress type for Replace Spells prompt");
                 }
             }
         }

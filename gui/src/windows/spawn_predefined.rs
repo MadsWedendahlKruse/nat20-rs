@@ -40,7 +40,7 @@ impl SpawnPredefinedWindow {
         let spawners = vec![
             fixtures::creatures::heroes::fighter,
             fixtures::creatures::heroes::wizard,
-            fixtures::creatures::heroes::warlock,
+            // fixtures::creatures::heroes::warlock,
             fixtures::creatures::monsters::goblin_warrior,
         ];
 

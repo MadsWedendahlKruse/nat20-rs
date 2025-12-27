@@ -22,6 +22,7 @@ use crate::{
         modifier::ModifierSource,
         resource::{RechargeRule, ResourceAmountMap},
         saving_throw::SavingThrowDC,
+        spells::spellbook::SpellSource,
     },
     engine::{
         event::{ActionData, Event},
@@ -33,19 +34,21 @@ use crate::{
 
 /// Represents the context in which an action is performed.
 /// This can be used to determine the type of action (e.g. weapon, spell, etc.)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActionContext {
     // TODO: Not sure if Weapon needs more info?
     Weapon {
         slot: EquipmentSlot,
     },
-    /// When casting a spell it is important to know the spell level, since
-    /// most spells have different effects based on the level at which they are cast.
-    /// For example, Fireball deals more damage when cast at a higher level.
     Spell {
-        /// Having the ID available here is useful for e.g. determining spell casting
-        /// ability for attack rolls and saving throw DCs.
         id: SpellId,
+        /// Having the source here allows us to track whether the spell is coming
+        /// from a class, subclass, item, feat, etc., which is useful for determining
+        /// e.g. spellcasting ability for spell save DCs and spell attack rolls.
+        source: SpellSource,
+        /// When casting a spell it is important to know the spell level, since
+        /// most spells have different effects based on the level at which they are cast.
+        /// For example, Fireball deals more damage when cast at a higher level.
         level: u8,
     },
     // TODO: Not sure if Other is needed

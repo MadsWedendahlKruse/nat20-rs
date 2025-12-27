@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     components::{
         ability::{Ability, AbilityScoreDistribution},
-        class::{Class, SpellcastingProgression, Subclass},
+        class::{Class, SpellcastingRules, Subclass},
         dice::DieSize,
         id::{ActionId, ClassId, EffectId, ResourceId, SubclassId},
         items::equipment::{armor::ArmorType, weapon::WeaponCategory},
@@ -32,7 +32,8 @@ pub struct ClassDefinition {
     pub skill_prompts: u8,
     pub armor_proficiencies: HashSet<ArmorType>,
     pub weapon_proficiencies: HashSet<WeaponCategory>,
-    pub spellcasting: SpellcastingProgression,
+    #[serde(default)]
+    pub spellcasting: Option<SpellcastingRules>,
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
     pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
     pub prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
@@ -103,6 +104,9 @@ impl RegistryReferenceCollector for ChoiceSpec {
             match option {
                 ChoiceItem::Action(action_id) => {
                     collector.add(RegistryReference::Action(action_id.clone()));
+                }
+                ChoiceItem::Spell(spell_id, _) => {
+                    collector.add(RegistryReference::Spell(spell_id.clone()));
                 }
                 ChoiceItem::Background(background_id) => {
                     collector.add(RegistryReference::Background(background_id.clone()));

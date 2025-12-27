@@ -1,0 +1,31 @@
+{
+    "id": "nat20_rs::spell.acid_splash",
+    "description": "You create an acidic bubble at a point within range, where it explodes in a 5-foot-radius Sphere. Each creature in that Sphere must succeed on a Dexterity saving throw or take 1d6 Acid damage",
+    "base_level": 0,
+    "school": "evocation",
+    "kind": {
+        "saving_throw_damage": {
+            "saving_throw": "spell_save_dc;dexterity",
+            "damage": "(1 + (character_level + 1) / 6)d6;acid",
+            "half_damage_on_save": true
+        }
+    },
+    "resource_cost": {
+        "nat20_rs::resource.action": 1
+    },
+    "targeting": {
+        "kind": {
+            "area": {
+                "shape": {
+                    "sphere": {
+                        "radius": "5 feet"
+                    }
+                },
+                "fixed_on_actor": false
+            }
+        },
+        "range": "60 feet",
+        "require_line_of_sight": true,
+        "allowed_targets": "not_dead"
+    }
+}

@@ -176,6 +176,19 @@ impl AbilityScoreMap {
     pub fn ability_modifier(&self, ability: Ability) -> ModifierSet {
         self.get(ability).ability_modifier()
     }
+
+    pub fn get_max_score(&self, abilities: &[Ability]) -> (Ability, i32) {
+        let mut max_ability = abilities[0];
+        let mut max_score = self.get(max_ability).base;
+        for &ability in abilities.iter().skip(1) {
+            let score = self.get(ability).base;
+            if score > max_score {
+                max_score = score;
+                max_ability = ability;
+            }
+        }
+        (max_ability, max_score)
+    }
 }
 
 impl KeyedModifiable<Ability> for AbilityScoreMap {

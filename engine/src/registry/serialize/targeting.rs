@@ -59,7 +59,7 @@ static TARGETING_DEFAULTS: LazyLock<HashMap<String, Arc<TargetingFunction>>> =
     });
 
 // TODO: Should this live somewhere else?
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct IntExpressionDefinition {
     pub raw: String,
@@ -105,6 +105,10 @@ pub enum AreaShapeDefinition {
     Sphere {
         radius: LengthExpressionDefinition,
     },
+    // Arc {
+    //     angle: IntExpressionDefinition,
+    //     length: LengthExpressionDefinition,
+    // },
     Cube {
         side: LengthExpressionDefinition,
     },
@@ -129,6 +133,13 @@ impl Evaluable for AreaShapeDefinition {
         variables: &VariableMap,
     ) -> Result<AreaShape, EvaluationError> {
         match self {
+            // AreaShapeDefinition::Arc {
+            //     angle,
+            //     length: radius,
+            // } => Ok(AreaShape::Arc {
+            //     angle: angle.evaluate(world, entity, context, variables)?,
+            //     length: radius.evaluate(world, entity, context, variables)?,
+            // }),
             AreaShapeDefinition::Sphere { radius } => Ok(AreaShape::Sphere {
                 radius: radius.evaluate(world, entity, context, variables)?,
             }),

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     components::{
+        ability::Ability,
         actions::action::{Action, ActionKind, TargetingFunction},
         id::{IdProvider, ResourceId, ScriptId, SpellId},
         resource::{ResourceAmount, ResourceAmountMap},
@@ -30,6 +31,7 @@ pub struct Spell {
     id: SpellId,
     school: MagicSchool,
     action: Action,
+    base_level: u8,
 }
 
 impl Spell {
@@ -41,7 +43,6 @@ impl Spell {
         kind: ActionKind,
         resource_cost: ResourceAmountMap,
         targeting: Arc<TargetingFunction>,
-        // reaction_trigger: Option<Arc<ReactionTriggerFunction>>,
         reaction_trigger: Option<ScriptId>,
     ) -> Self {
         let action_id = id.clone().into();
@@ -63,6 +64,7 @@ impl Spell {
         Self {
             id,
             school,
+            base_level,
             action: Action {
                 id: action_id,
                 description,
@@ -117,13 +119,5 @@ impl IdProvider for Spell {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SnapshotError {
-    /// Downcasting a spell to a lower level is not allowed, e.g. Fireball is a 3rd level spell
-    /// and cannot be downcast to a 1st or 2nd level spell.
-    /// (base_level, requested_level)
-    DowncastingNotAllowed(u8, u8),
-    /// Cantrips cannot be upcast, so this error is returned when trying to upcast a cantrip.
-    /// This is not supposed to be allowed, so the option should not be presented to the player.
-    UpcastingCantripNotAllowed,
-}
+pub const SPELL_CASTING_ABILITIES: &[Ability; 3] =
+    &[Ability::Intelligence, Ability::Wisdom, Ability::Charisma];

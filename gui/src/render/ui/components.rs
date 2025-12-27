@@ -458,116 +458,118 @@ fn render_spellbook_ui(
 ) -> Vec<SpellbookUiAction> {
     let mut actions = Vec::new();
 
-    if spellbook.is_empty() {
-        ui.text("No spells known.");
-        return actions;
-    }
+    ui.text(format!("{:#?}", spellbook));
 
-    // --- Cantrips ---
-    ui.separator_with_text("Cantrips");
-    for spell_id in spellbook.all_spells() {
-        let spell = SpellsRegistry::get(spell_id).unwrap();
-        if spell.is_cantrip() {
-            let _disabled = match mode {
-                RenderMode::ReadOnly => Some(ui.begin_disabled(true)),
-                RenderMode::Editable => None,
-            };
-            if ui.button(spell_id.to_string()) {
-                // (e.g. open inspector) -> if you later add an inspect action, push it here.
-            }
-        }
-    }
+    // if spellbook.is_empty() {
+    //     ui.text("No spells known.");
+    //     return actions;
+    // }
 
-    // --- Prepared Spells ---
-    ui.separator_with_text("Prepared Spells");
-    let prepared_spells: HashSet<SpellId> = spellbook.prepared_spells().clone();
-    let mut rendered = 0;
-    for spell_id in &prepared_spells {
-        let spell = SpellsRegistry::get(spell_id).unwrap();
-        let label = format!("{} ({})", spell_id, roman_numeral(spell.base_level()));
+    // // --- Cantrips ---
+    // ui.separator_with_text("Cantrips");
+    // for spell_id in spellbook.all_spells() {
+    //     let spell = SpellsRegistry::get(spell_id).unwrap();
+    //     if spell.is_cantrip() {
+    //         let _disabled = match mode {
+    //             RenderMode::ReadOnly => Some(ui.begin_disabled(true)),
+    //             RenderMode::Editable => None,
+    //         };
+    //         if ui.button(spell_id.to_string()) {
+    //             // (e.g. open inspector) -> if you later add an inspect action, push it here.
+    //         }
+    //     }
+    // }
 
-        let _disabled = match mode {
-            RenderMode::ReadOnly => Some(ui.begin_disabled(true)),
-            RenderMode::Editable => None,
-        };
-        if ui.button(label) {
-            if matches!(mode, RenderMode::Editable) {
-                actions.push(SpellbookUiAction::Unprepare(spell_id.clone()));
-            }
-        }
-        rendered += 1;
-    }
-    for i in rendered..spellbook.max_prepared_spells() {
-        render_empty_button(ui, &format!("Empty##{}", i));
-    }
+    // // --- Prepared Spells ---
+    // ui.separator_with_text("Prepared Spells");
+    // let prepared_spells: HashSet<SpellId> = spellbook.prepared_spells().clone();
+    // let mut rendered = 0;
+    // for spell_id in &prepared_spells {
+    //     let spell = SpellsRegistry::get(spell_id).unwrap();
+    //     let label = format!("{} ({})", spell_id, roman_numeral(spell.base_level()));
 
-    // --- All Spells ---
-    ui.separator_with_text("All Spells");
+    //     let _disabled = match mode {
+    //         RenderMode::ReadOnly => Some(ui.begin_disabled(true)),
+    //         RenderMode::Editable => None,
+    //     };
+    //     if ui.button(label) {
+    //         if matches!(mode, RenderMode::Editable) {
+    //             actions.push(SpellbookUiAction::Unprepare(spell_id.clone()));
+    //         }
+    //     }
+    //     rendered += 1;
+    // }
+    // for i in rendered..spellbook.max_prepared_spells() {
+    //     render_empty_button(ui, &format!("Empty##{}", i));
+    // }
 
-    if let Some(table) = table_with_columns!(ui, "Spells", "Level", "Spells", "Slots") {
-        // group by level
-        let mut spells_by_level: HashMap<u8, Vec<&SpellId>> = HashMap::new();
-        let all_spells = spellbook.all_spells().clone();
-        for spell_id in &all_spells {
-            let spell = SpellsRegistry::get(spell_id).unwrap();
-            spells_by_level
-                .entry(spell.base_level())
-                .or_default()
-                .push(spell_id);
-        }
-        let max_level = spells_by_level.keys().max().cloned().unwrap_or(0);
+    // // --- All Spells ---
+    // ui.separator_with_text("All Spells");
 
-        let slots = resources
-            .get(&ResourceId::new("nat20_rs", "resource.spell_slot"))
-            .and_then(|r| match r {
-                ResourceBudgetKind::Tiered(budgets) => Some(budgets),
-                _ => panic!("Expected ResourceKind::Tiered for SPELL_SLOT"),
-            })
-            .unwrap();
+    // if let Some(table) = table_with_columns!(ui, "Spells", "Level", "Spells", "Slots") {
+    //     // group by level
+    //     let mut spells_by_level: HashMap<u8, Vec<&SpellId>> = HashMap::new();
+    //     let all_spells = spellbook.all_spells().clone();
+    //     for spell_id in &all_spells {
+    //         let spell = SpellsRegistry::get(spell_id).unwrap();
+    //         spells_by_level
+    //             .entry(spell.base_level())
+    //             .or_default()
+    //             .push(spell_id);
+    //     }
+    //     let max_level = spells_by_level.keys().max().cloned().unwrap_or(0);
 
-        for level in 1..=max_level {
-            // Level
-            ui.table_next_column();
-            ui.text(roman_numeral(level));
+    //     let slots = resources
+    //         .get(&ResourceId::new("nat20_rs", "resource.spell_slot"))
+    //         .and_then(|r| match r {
+    //             ResourceBudgetKind::Tiered(budgets) => Some(budgets),
+    //             _ => panic!("Expected ResourceKind::Tiered for SPELL_SLOT"),
+    //         })
+    //         .unwrap();
 
-            // Spells
-            ui.table_next_column();
-            if let Some(spells) = spells_by_level.get(&level) {
-                for spell_id in spells {
-                    let label = spell_id.to_string();
-                    let is_prepared = spellbook.is_spell_prepared(spell_id);
+    //     for level in 1..=max_level {
+    //         // Level
+    //         ui.table_next_column();
+    //         ui.text(roman_numeral(level));
 
-                    let prepared_style = is_prepared.then(|| {
-                        ui.push_style_color(imgui::StyleColor::Button, SELECTED_BUTTON_COLOR)
-                    });
-                    let _disabled = match mode {
-                        RenderMode::ReadOnly => Some(ui.begin_disabled(true)),
-                        RenderMode::Editable => None,
-                    };
+    //         // Spells
+    //         ui.table_next_column();
+    //         if let Some(spells) = spells_by_level.get(&level) {
+    //             for spell_id in spells {
+    //                 let label = spell_id.to_string();
+    //                 let is_prepared = spellbook.is_spell_prepared(spell_id);
 
-                    if ui.button(label) {
-                        if matches!(mode, RenderMode::Editable) {
-                            actions.push(SpellbookUiAction::Prepare((*spell_id).clone()));
-                        }
-                    }
+    //                 let prepared_style = is_prepared.then(|| {
+    //                     ui.push_style_color(imgui::StyleColor::Button, SELECTED_BUTTON_COLOR)
+    //                 });
+    //                 let _disabled = match mode {
+    //                     RenderMode::ReadOnly => Some(ui.begin_disabled(true)),
+    //                     RenderMode::Editable => None,
+    //                 };
 
-                    if let Some(s) = prepared_style {
-                        s.pop();
-                    }
-                    ui.same_line();
-                }
-            }
+    //                 if ui.button(label) {
+    //                     if matches!(mode, RenderMode::Editable) {
+    //                         actions.push(SpellbookUiAction::Prepare((*spell_id).clone()));
+    //                     }
+    //                 }
 
-            // Slots
-            ui.table_next_column();
-            if let Some(budget) = slots.get(&level) {
-                ui.text(format!("{}/{}", budget.current_uses, budget.max_uses));
-            } else {
-                ui.text("0/0");
-            }
-        }
-        table.end();
-    }
+    //                 if let Some(s) = prepared_style {
+    //                     s.pop();
+    //                 }
+    //                 ui.same_line();
+    //             }
+    //         }
+
+    //         // Slots
+    //         ui.table_next_column();
+    //         if let Some(budget) = slots.get(&level) {
+    //             ui.text(format!("{}/{}", budget.current_uses, budget.max_uses));
+    //         } else {
+    //             ui.text("0/0");
+    //         }
+    //     }
+    //     table.end();
+    // }
 
     actions
 }
@@ -583,12 +585,12 @@ impl ImguiRenderableMutWithContext<&ResourceMap> for Spellbook {
     fn render_mut_with_context(&mut self, ui: &imgui::Ui, resources: &ResourceMap) {
         // Mutable: render, then apply the collected intents
         let actions = render_spellbook_ui(ui, self, resources, RenderMode::Editable);
-        for a in actions {
-            match a {
-                SpellbookUiAction::Prepare(id) => self.prepare_spell(&id),
-                SpellbookUiAction::Unprepare(id) => self.unprepare_spell(&id),
-            };
-        }
+        // for a in actions {
+        //     match a {
+        //         SpellbookUiAction::Prepare(id) => self.prepare_spell(&id),
+        //         SpellbookUiAction::Unprepare(id) => self.unprepare_spell(&id),
+        //     };
+        // }
     }
 }
 

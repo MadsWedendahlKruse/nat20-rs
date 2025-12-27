@@ -1,35 +1,37 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::{cmp::max, collections::HashMap, sync::LazyLock};
 
 use hecs::{Entity, World};
 
 use crate::{
     components::{
-        class::SpellcastingProgression,
+        class::{
+            ClassAndSubclass, SpellAccessModel, SpellReplacementModel, SpellcastingProgression,
+        },
         id::ResourceId,
         level::CharacterLevels,
+        level_up::LevelUpPrompt,
         resource::{ResourceAmount, ResourceBudgetKind, ResourceMap},
-        spells::spellbook::Spellbook,
+        spells::spellbook::{ClassSpellcastingState, SpellSource, Spellbook},
     },
     registry::registry::ClassesRegistry,
+    systems,
 };
 
 pub fn spellcaster_levels(world: &World, entity: Entity) -> u8 {
     let mut spellcaster_levels = 0.0;
     if let Ok(class_levels) = world.get::<&CharacterLevels>(entity) {
         for (class_id, level_progression) in class_levels.all_classes() {
-            if let Some(class) = ClassesRegistry::get(&class_id) {
-                let spellcasting_progression = class.spellcasting_progression(
-                    // TODO: Not entirely sure why it's necessary to do it like this
-                    level_progression.subclass(),
-                );
-
+            if let Some(class) = ClassesRegistry::get(&class_id)
+                && let Some(spellcasting_rules) =
+                    class.spellcasting_rules(&level_progression.subclass().cloned())
+            {
                 let level = level_progression.level() as f32;
 
-                spellcaster_levels += match spellcasting_progression {
-                    SpellcastingProgression::None => 0.0,
+                spellcaster_levels += match spellcasting_rules.progression {
                     SpellcastingProgression::Full => level,
                     SpellcastingProgression::Half => level / 2.0,
                     SpellcastingProgression::Third => level / 3.0,
+                    SpellcastingProgression::None => 0.0,
                 };
             }
         }
@@ -65,13 +67,21 @@ static SPELL_SLOTS_PER_LEVEL: LazyLock<HashMap<u8, Vec<u8>>> = LazyLock::new(|| 
     ])
 });
 
-pub fn update_spell_slots(world: &mut World, entity: Entity) {
+pub fn update_spellbook(
+    world: &mut World,
+    entity: Entity,
+    class_and_subclass: ClassAndSubclass,
+    level: u8,
+) -> Vec<LevelUpPrompt> {
+    let mut prompts = Vec::new();
+
     let spellcaster_levels = spellcaster_levels(world, entity);
-    if let Ok((resources, spellbook)) =
-        world.query_one_mut::<(&mut ResourceMap, &mut Spellbook)>(entity)
+    let slots_per_level = SPELL_SLOTS_PER_LEVEL.get(&spellcaster_levels).unwrap();
+    let max_spell_level = slots_per_level.len() as u8;
+
     {
-        let slots_vec = SPELL_SLOTS_PER_LEVEL.get(&spellcaster_levels).unwrap();
-        for (level, &num_slots) in slots_vec.iter().enumerate() {
+        let mut resources = systems::helpers::get_component_mut::<ResourceMap>(world, entity);
+        for (level, &num_slots) in slots_per_level.iter().enumerate() {
             let spellslot_level = level as u8 + 1;
             resources.add(
                 ResourceId::new("nat20_rs", "resource.spell_slot"),
@@ -81,9 +91,105 @@ pub fn update_spell_slots(world: &mut World, entity: Entity) {
                 }),
                 false,
             );
-            if spellbook.max_spell_level() < spellslot_level {
-                spellbook.set_max_spell_level(spellslot_level);
-            }
         }
+    }
+
+    {
+        let (new_cantrips, new_spells, replacement_model) = if let Some(spellcasting_rules) =
+            ClassesRegistry::get(&class_and_subclass.class)
+                .unwrap()
+                .spellcasting_rules(&class_and_subclass.subclass)
+        {
+            let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
+            if spellbook.max_spell_level() < max_spell_level {
+                spellbook.set_max_spell_level(max_spell_level);
+            }
+
+            let max_cantrips = spellcasting_rules.cantrips_per_level.get(&level).unwrap();
+            let max_prepared_spells = spellcasting_rules
+                .prepared_spells_per_level
+                .get(&level)
+                .unwrap();
+            let max_learned_spells = if spellcasting_rules.access_model == SpellAccessModel::Learned
+            {
+                max_prepared_spells
+            } else {
+                &0
+            };
+
+            let (new_cantrips, new_spells) =
+                if spellbook.class_state_mut(&class_and_subclass).is_none() {
+                    spellbook.insert_class_state(
+                        class_and_subclass.clone(),
+                        ClassSpellcastingState::new(
+                            *max_cantrips,
+                            *max_learned_spells,
+                            *max_prepared_spells,
+                        ),
+                    );
+
+                    (
+                        *max_cantrips,
+                        max(*max_prepared_spells, *max_learned_spells),
+                    )
+                } else {
+                    let class_state = spellbook.class_state_mut(&class_and_subclass).unwrap();
+                    let new_cantrips = *max_cantrips - class_state.selections.cantrips.max_size();
+                    let new_spells = match spellcasting_rules.access_model {
+                        SpellAccessModel::EntireClassList => {
+                            *max_prepared_spells - class_state.selections.prepared_spells.max_size()
+                        }
+                        SpellAccessModel::Learned => {
+                            *max_learned_spells - class_state.selections.learned_spells.max_size()
+                        }
+                    };
+                    spellbook
+                        .class_state_mut(&class_and_subclass)
+                        .unwrap()
+                        .set_caps(*max_cantrips, *max_learned_spells, *max_prepared_spells);
+
+                    (new_cantrips, new_spells)
+                };
+
+            (
+                new_cantrips,
+                new_spells,
+                Some(spellcasting_rules.spell_replacement_model.clone()),
+            )
+        } else {
+            (0, 0, None)
+        };
+
+        if new_cantrips > 0 {
+            prompts.push(LevelUpPrompt::spells(
+                world,
+                entity,
+                &class_and_subclass,
+                true,
+                new_cantrips as u8,
+                max_spell_level,
+            ));
+        }
+        if new_spells > 0 {
+            prompts.push(LevelUpPrompt::spells(
+                world,
+                entity,
+                &class_and_subclass,
+                false,
+                new_spells as u8,
+                max_spell_level,
+            ));
+        }
+        if let Some(replacement_model) = replacement_model
+            && matches!(replacement_model, SpellReplacementModel::LevelUp)
+        {
+            prompts.push(LevelUpPrompt::spell_replacement(
+                world,
+                entity,
+                &class_and_subclass,
+                1,
+            ));
+        }
+        prompts
     }
 }
