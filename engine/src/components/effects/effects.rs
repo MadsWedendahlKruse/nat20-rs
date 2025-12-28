@@ -5,11 +5,11 @@ use std::{
 };
 
 use hecs::{Entity, World};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     components::{
-        actions::action::{Action, ActionContext},
+        actions::action::ActionContext,
         damage::{
             AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
         },
@@ -72,10 +72,18 @@ impl Display for EffectDuration {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EffectKind {
+    Buff,
+    Debuff,
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(from = "EffectDefinition")]
 pub struct Effect {
     pub id: EffectId,
+    pub kind: EffectKind,
     pub description: String,
     pub source: ModifierSource,
     pub duration: EffectDuration,
@@ -100,16 +108,20 @@ pub struct Effect {
 }
 
 impl Effect {
-    pub fn new(id: EffectId, description: String, duration: EffectDuration) -> Self {
-        let noop = Arc::new(|_: &mut World, _: Entity| {}) as EffectHook;
-
+    pub fn new(
+        id: EffectId,
+        kind: EffectKind,
+        description: String,
+        duration: EffectDuration,
+    ) -> Self {
         Self {
             id,
+            kind,
             description,
             source: ModifierSource::None,
             duration,
-            on_apply: noop.clone(),
-            on_unapply: noop.clone(),
+            on_apply: Arc::new(|_: &mut World, _: Entity| {}) as EffectHook,
+            on_unapply: Arc::new(|_: &mut World, _: Entity| {}) as EffectHook,
             on_skill_check: HashMap::new(),
             on_saving_throw: HashMap::new(),
             pre_attack_roll: Arc::new(|_: &World, _: Entity, _: &mut AttackRoll| {})

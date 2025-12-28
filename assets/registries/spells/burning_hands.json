@@ -4,10 +4,14 @@
     "base_level": 1,
     "school": "evocation",
     "kind": {
-        "saving_throw_damage": {
-            "saving_throw": "spell_save_dc;dexterity",
-            "damage": "(3 + spell_level)d6;fire",
-            "half_damage_on_save": true
+        "standard": {
+            "condition": {
+                "saving_throw": "spell_save_dc;dexterity",
+                "damage_on_save": "half"
+            },
+            "payload": {
+                "damage": "(3 + spell_level)d6;fire"
+            }
         }
     },
     "resource_cost": {

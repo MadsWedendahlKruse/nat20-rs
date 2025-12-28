@@ -3,7 +3,7 @@ use imgui::{ChildFlags, MouseButton};
 use nat20_rs::{
     components::{
         actions::{
-            action::{ActionContext, ActionKind, ActionMap},
+            action::{ActionCondition, ActionContext, ActionKind, ActionMap},
             targeting::{AreaShape, TargetInstance, TargetingContext, TargetingKind},
         },
         d20::RollMode,
@@ -428,37 +428,40 @@ fn render_target_selection(
             .unwrap()
             .kind()
         {
-            ActionKind::AttackRollDamage { attack_roll, .. } => {
-                if let Some(potential_target) = &potential_target_instance
-                    && let TargetInstance::Entity(target) = potential_target
-                {
-                    let attack_roll =
-                        attack_roll(&game_state.world, action.actor, *target, &action.context);
-                    let target_ac = systems::loadout::armor_class(&game_state.world, *target);
-                    ui.tooltip(|| {
-                        ui.separator();
+            ActionKind::Standard { condition, .. } => match condition {
+                ActionCondition::AttackRoll { attack_roll, .. } => {
+                    if let Some(potential_target) = &potential_target_instance
+                        && let TargetInstance::Entity(target) = potential_target
+                    {
+                        let attack_roll =
+                            attack_roll(&game_state.world, action.actor, *target, &action.context);
+                        let target_ac = systems::loadout::armor_class(&game_state.world, *target);
+                        ui.tooltip(|| {
+                            ui.separator();
 
-                        let hitchance = attack_roll.hit_chance(
-                            &game_state.world,
-                            action.actor,
-                            target_ac.total() as u32,
-                        ) * 100.0;
+                            let hitchance = attack_roll.hit_chance(
+                                &game_state.world,
+                                action.actor,
+                                target_ac.total() as u32,
+                            ) * 100.0;
 
-                        let text_kind = match attack_roll.d20_check.advantage_tracker().roll_mode()
-                        {
-                            RollMode::Normal => TextKind::Normal,
-                            RollMode::Advantage => TextKind::Green,
-                            RollMode::Disadvantage => TextKind::Red,
-                        };
+                            let text_kind =
+                                match attack_roll.d20_check.advantage_tracker().roll_mode() {
+                                    RollMode::Normal => TextKind::Normal,
+                                    RollMode::Advantage => TextKind::Green,
+                                    RollMode::Disadvantage => TextKind::Red,
+                                };
 
-                        TextSegments::new(vec![
-                            ("Hit chance:", TextKind::Normal),
-                            (&format!("{:.0}%", hitchance), text_kind),
-                        ])
-                        .render(ui);
-                    });
+                            TextSegments::new(vec![
+                                ("Hit chance:", TextKind::Normal),
+                                (&format!("{:.0}%", hitchance), text_kind),
+                            ])
+                            .render(ui);
+                        });
+                    }
                 }
-            }
+                _ => {}
+            },
             _ => {}
         }
 

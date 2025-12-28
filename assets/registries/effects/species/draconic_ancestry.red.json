@@ -1,5 +1,6 @@
 {
     "id": "nat20_rs::effect.dragonborn.draconic_ancestry.red",
+    "kind": "buff",
     "description": "Your lineage stems from a dragon progenitor. You have resistance to fire damage.",
     "duration": "permanent",
     "modifiers": [

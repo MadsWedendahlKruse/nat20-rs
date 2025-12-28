@@ -1,6 +1,7 @@
 {
     "id": "nat20_rs::effect.item.ring_of_attacking",
-    "description": "While wearing this armor, you have advantage on Constitution saving throws.",
+    "kind": "buff",
+    "description": "While wearing this ring, you have advantage on attack rolls.",
     "duration": "conditional",
     "pre_attack_roll": [
         {

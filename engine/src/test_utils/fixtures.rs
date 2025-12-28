@@ -340,6 +340,12 @@ pub mod creatures {
                         Ability::Intelligence,
                         2,
                     )])),
+                    LevelUpDecision::spells(
+                        "choice.cantrips",
+                        &ClassId::new("nat20_rs", "class.wizard"),
+                        &None,
+                        vec![SpellId::new("nat20_rs", "spell.ray_of_frost")],
+                    ),
                     // Level 5
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
                         "nat20_rs",

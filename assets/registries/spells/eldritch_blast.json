@@ -4,9 +4,13 @@
     "base_level": 0,
     "school": "evocation",
     "kind": {
-        "attack_roll_damage": {
-            "attack_roll": "spell_attack_roll",
-            "damage": "1d10;force"
+        "standard": {
+            "condition": {
+                "attack_roll": "spell_attack_roll"
+            },
+            "payload": {
+                "damage": "1d10;force"
+            }
         }
     },
     "resource_cost": {

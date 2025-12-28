@@ -11,7 +11,7 @@ use crate::{
             DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
         },
         effects::{
-            effects::{Effect, EffectDuration},
+            effects::{Effect, EffectDuration, EffectKind},
             hooks::{
                 ActionHook, ArmorClassHook, AttackRollHook, DamageRollResultHook, DamageTakenHook,
                 ResourceCostHook,
@@ -23,6 +23,7 @@ use crate::{
         resource::{ResourceAmount, ResourceAmountMap, ResourceMap},
         saving_throw::SavingThrowSet,
         skill::SkillSet,
+        speed::Speed,
     },
     engine::event::ActionData,
     registry::{
@@ -30,7 +31,8 @@ use crate::{
         serialize::modifier::{
             AbilityModifierProvider, ArmorClassModifierProvider, AttackRollModifier,
             AttackRollModifierProvider, D20CheckModifierProvider, DamageResistanceProvider,
-            SavingThrowModifierProvider, SkillModifierProvider,
+            SavingThrowModifierProvider, SkillModifierProvider, SpeedModifier,
+            SpeedModifierProvider,
         },
     },
     scripts::{
@@ -46,6 +48,7 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EffectDefinition {
     pub id: EffectId,
+    pub kind: EffectKind,
     pub description: String,
     pub duration: EffectDurationDefinition,
 
@@ -89,6 +92,7 @@ impl From<EffectDefinition> for Effect {
 
         let mut effect = Effect::new(
             effect_id.clone(),
+            definition.kind,
             definition.description,
             definition.duration.into(),
         );
@@ -287,13 +291,13 @@ impl TryFrom<String> for EffectDurationDefinition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum EffectModifier {
-    AbilityModifier {
+    Ability {
         ability: AbilityModifierProvider,
     },
-    SkillModifier {
+    Skill {
         skill: SkillModifierProvider,
     },
-    SavingThrowModifier {
+    SavingThrow {
         saving_throw: SavingThrowModifierProvider,
     },
     DamageResistance {
@@ -302,6 +306,9 @@ pub enum EffectModifier {
     Resource {
         resource: ResourceId,
         amount: ResourceAmount,
+    },
+    Speed {
+        speed: SpeedModifierProvider,
     },
 }
 
@@ -321,7 +328,7 @@ impl EffectModifier {
     ) {
         let source = ModifierSource::Effect(effect_id.clone());
         match self {
-            EffectModifier::AbilityModifier { ability: modifier } => {
+            EffectModifier::Ability { ability: modifier } => {
                 let mut abilities =
                     systems::helpers::get_component_mut::<AbilityScoreMap>(world, entity);
                 match phase {
@@ -334,12 +341,12 @@ impl EffectModifier {
                 }
             }
 
-            EffectModifier::SkillModifier { skill: modifier } => {
+            EffectModifier::Skill { skill: modifier } => {
                 let mut skills = systems::helpers::get_component_mut::<SkillSet>(world, entity);
                 Self::apply_d20_check_modifier(&mut *skills, modifier, source, phase);
             }
 
-            EffectModifier::SavingThrowModifier {
+            EffectModifier::SavingThrow {
                 saving_throw: modifier,
             } => {
                 let mut saves =
@@ -376,6 +383,31 @@ impl EffectModifier {
                     EffectPhase::Unapply => {
                         resources.remove_uses(resource, amount);
                     }
+                }
+            }
+
+            EffectModifier::Speed { speed: modifier } => {
+                let mut speed = systems::helpers::get_component_mut::<Speed>(world, entity);
+                match phase {
+                    EffectPhase::Apply => match &modifier.modifier {
+                        SpeedModifier::Flat(bonus) => {
+                            speed.add_flat_modifier(
+                                source,
+                                bonus.evaluate_without_variables().unwrap().value,
+                            );
+                        }
+                        SpeedModifier::Multiplier(multiplier) => {
+                            speed.add_multiplier(source, *multiplier);
+                        }
+                    },
+                    EffectPhase::Unapply => match modifier.modifier {
+                        SpeedModifier::Flat(_) => {
+                            speed.remove_flat_modifier(&source);
+                        }
+                        SpeedModifier::Multiplier(_) => {
+                            speed.remove_multiplier(&source);
+                        }
+                    },
                 }
             }
         }

@@ -2,12 +2,15 @@ use std::{fmt::Display, str::FromStr};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::components::{
-    ability::Ability,
-    d20::AdvantageType,
-    damage::{DamageSource, DamageType, MitigationOperation},
-    saving_throw::SavingThrowKind,
-    skill::Skill,
+use crate::{
+    components::{
+        ability::Ability,
+        d20::AdvantageType,
+        damage::{DamageSource, DamageType, MitigationOperation},
+        saving_throw::SavingThrowKind,
+        skill::Skill,
+    },
+    registry::serialize::quantity::LengthExpressionDefinition,
 };
 
 /// For spec types that:
@@ -391,6 +394,71 @@ fn parse_delta_or_advantage(
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum SpeedModifier {
+    Flat(LengthExpressionDefinition),
+    Multiplier(f32),
+}
+
+impl Display for SpeedModifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SpeedModifier::Flat(value) => {
+                write!(f, "{}", value)
+            }
+            SpeedModifier::Multiplier(value) => {
+                write!(f, "x{}", value)
+            }
+        }
+    }
+}
+
+impl FromStr for SpeedModifier {
+    type Err = String;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let normalized = normalize_spec_string(input);
+
+        if normalized.starts_with('x') {
+            let multiplier_str = &normalized[1..];
+            let multiplier: f32 = multiplier_str
+                .parse()
+                .map_err(|_| format!("Invalid speed multiplier in '{}'", input))?;
+            Ok(SpeedModifier::Multiplier(multiplier))
+        } else {
+            let length_expr: LengthExpressionDefinition = normalized
+                .parse()
+                .map_err(|e| format!("Invalid length expression in '{}': {}", input, e))?;
+            Ok(SpeedModifier::Flat(length_expr))
+        }
+    }
+}
+
+impl_display_roundtrip_spec!(SpeedModifier);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct SpeedModifierProvider {
+    pub modifier: SpeedModifier,
+    pub raw: String,
+}
+
+impl FromStr for SpeedModifierProvider {
+    type Err = String;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let modifier: SpeedModifier = input.parse()?;
+
+        Ok(SpeedModifierProvider {
+            raw: input.to_string(),
+            modifier,
+        })
+    }
+}
+
+impl_string_backed_spec!(SpeedModifierProvider);
 
 #[cfg(test)]
 mod tests {

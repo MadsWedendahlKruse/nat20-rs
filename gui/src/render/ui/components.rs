@@ -5,7 +5,10 @@ use nat20_rs::{
     components::{
         ability::{Ability, AbilityScore, AbilityScoreMap},
         actions::{
-            action::{ActionContext, ActionKind, ActionKindResult, ActionResult, ReactionResult},
+            action::{
+                ActionCondition, ActionContext, ActionKind, ActionKindResult, ActionResult,
+                DamageResolutionKind, ReactionResult,
+            },
             targeting::{AreaShape, TargetInstance, TargetingKind, TargetingRange},
         },
         d20::{D20CheckDC, D20CheckResult, RollMode},
@@ -927,190 +930,139 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
                 character_name.as_str().to_string()
             }
             TargetInstance::Point(point) => todo!(),
-            // TargetTypeInstance::Area(area_shape) => {
-            //     todo!()
-            // }
-            // TargetTypeInstance::None => todo!(),
         };
 
         match &self.kind {
-            ActionKindResult::UnconditionalDamage {
-                damage_roll,
-                damage_taken,
-                new_life_state,
-            } => {
-                ui.group(|| {
-                    damage_taken.render_with_context(
-                        ui,
-                        (&target_name, indent_level + 1, "took no damage", None),
-                    );
-                    new_life_state.render_with_context(
-                        ui,
-                        (
-                            &target_name,
-                            Some(self.performer.name().as_str()),
-                            indent_level + 1,
-                        ),
-                    );
-                });
+            ActionKindResult::Standard(action_outcome) => {
+                if let Some(damage) = &action_outcome.damage {
+                    let no_damage_text = match damage.kind {
+                        DamageResolutionKind::Unconditional => "took no damage",
+                        DamageResolutionKind::AttackRoll { .. } => "was not hit",
+                        DamageResolutionKind::SavingThrow { .. } => "took no damage",
+                    };
 
-                if ui.is_item_hovered() {
-                    ui.tooltip(|| {
-                        (damage_roll, damage_taken).render(ui);
+                    ui.group(|| {
+                        damage.damage_taken.render_with_context(
+                            ui,
+                            (&target_name, indent_level + 1, no_damage_text, None),
+                        );
+                        damage.new_life_state.render_with_context(
+                            ui,
+                            (
+                                &target_name,
+                                Some(self.performer.name().as_str()),
+                                indent_level + 1,
+                            ),
+                        );
                     });
-                }
-            }
 
-            ActionKindResult::AttackRollDamage {
-                attack_roll,
-                armor_class,
-                damage_roll,
-                damage_taken,
-                new_life_state,
-            } => {
-                ui.group(|| {
-                    damage_taken.render_with_context(
-                        ui,
-                        (
-                            &target_name,
-                            indent_level + 1,
-                            "was not hit",
-                            Some(attack_roll.clone()),
-                        ),
-                    );
-                    new_life_state.render_with_context(
-                        ui,
-                        (
-                            &target_name,
-                            Some(self.performer.name().as_str()),
-                            indent_level + 1,
-                        ),
-                    );
-                });
+                    if ui.is_item_hovered() {
+                        ui.tooltip(|| {
+                            match damage.kind {
+                                DamageResolutionKind::Unconditional => {
+                                    (&damage.damage_roll, &damage.damage_taken)
+                                        .render(ui);
+                                }
 
-                if ui.is_item_hovered() {
-                    ui.tooltip(|| {
-                        TextSegment::new(format!("{}'s", target_name), TextKind::Target).render(ui);
-                        ui.same_line();
-                        ui.text("Armor Class:");
-                        ui.same_line();
-                        armor_class.render(ui);
-
-                        ui.text("");
-                        ui.text("Attack Roll:");
-                        ui.same_line();
-                        attack_roll.render(ui);
-
-                        if let Some(damage_taken) = damage_taken {
-                            ui.text("");
-                            ui.text("Damage Roll:");
-                            ui.same_line();
-                            damage_roll.as_ref().unwrap().render(ui);
-
-                            ui.text("");
-                            ui.text("Damage Taken:");
-                            ui.same_line();
-                            damage_taken.render(ui);
-                        } else {
-                            ui.text(format!("Attack did not hit. Attack roll ({}) was less than Armor Class ({})", 
-                                attack_roll.roll_result.total(), armor_class.total()));
-                        }
-                    });
-                }
-            }
-
-            ActionKindResult::SavingThrowDamage {
-                saving_throw_dc,
-                saving_throw_result,
-                half_damage_on_save,
-                damage_roll,
-                damage_taken,
-                new_life_state,
-            } => {
-                ui.group(|| {
-                    damage_taken.render_with_context(
-                        ui,
-                        (&target_name, indent_level + 1, "took no damage", None),
-                    );
-                    new_life_state.render_with_context(
-                        ui,
-                        (
-                            &target_name,
-                            Some(self.performer.name().as_str()),
-                            indent_level + 1,
-                        ),
-                    );
-                });
-
-                if ui.is_item_hovered() {
-                    ui.tooltip(|| {
-                        ui.text("Saving Throw DC:");
-                        ui.same_line();
-                        saving_throw_dc.render(ui);
-
-                        ui.text("");
-                        ui.text("Saving Throw:");
-                        ui.same_line();
-                        saving_throw_result.render(ui);
-
-                        if saving_throw_result.is_success(saving_throw_dc) {
-                            if *half_damage_on_save {
-                                ui.same_line();
-                                TextSegment::new("(Success - Half Damage)", TextKind::Details)
+                                DamageResolutionKind::AttackRoll {
+                                    ref attack_roll,
+                                    ref armor_class,
+                                } => {
+                                    TextSegment::new(
+                                        format!("{}'s", target_name),
+                                        TextKind::Target,
+                                    )
                                     .render(ui);
-                            } else {
-                                ui.same_line();
-                                TextSegment::new("(Success)", TextKind::Details).render(ui);
-                            }
-                        } else {
-                            ui.same_line();
-                            TextSegment::new("(Failure)", TextKind::Details).render(ui);
-                        }
+                                    ui.same_line();
+                                    ui.text("Armor Class:");
+                                    ui.same_line();
+                                    armor_class.render(ui);
 
-                        ui.text("");
-                        (damage_roll, damage_taken).render(ui);
+                                    ui.text("");
+                                    ui.text("Attack Roll:");
+                                    ui.same_line();
+                                    attack_roll.render(ui);
+
+                                    if let Some(damage_taken) = &damage.damage_taken {
+                                        ui.text("");
+                                        ui.text("Damage Roll:");
+                                        ui.same_line();
+                                        damage.damage_roll.as_ref().unwrap().render(ui);
+
+                                        ui.text("");
+                                        ui.text("Damage Taken:");
+                                        ui.same_line();
+                                        damage_taken.render(ui);
+                                    } else {
+                                        ui.text(format!("Attack did not hit. Attack roll ({}) was less than Armor Class ({})", 
+                                            attack_roll.roll_result.total(), armor_class.total()));
+                                    }
+                                }
+
+                                DamageResolutionKind::SavingThrow {
+                                    ref saving_throw_dc,
+                                    ref saving_throw_result,
+                                } => {
+                                    ui.text("Saving Throw DC:");
+                                    ui.same_line();
+                                    saving_throw_dc.render(ui);
+
+                                    ui.text("");
+                                    ui.text("Saving Throw:");
+                                    ui.same_line();
+                                    saving_throw_result.render(ui);
+
+                                    ui.same_line();
+                                    let label = if saving_throw_result.is_success(saving_throw_dc) {
+                                        "(Success)" } else {
+                                            "(Failure)"
+                                        };
+                                    TextSegment::new(label, TextKind::Details)
+                                        .render(ui);
+                                    
+                                    ui.text("");
+                                    (&damage.damage_roll, &damage.damage_taken)
+                                        .render(ui);
+                                }
+                            }
+                        });
+                    }
+                }
+
+                if let Some(healing) = &action_outcome.healing {
+                    ui.group(|| {
+                        TextSegments::new(vec![
+                            (target_name.as_str(), TextKind::Target),
+                            ("was healed for", TextKind::Normal),
+                            (&format!("{} HP", healing.healing), TextKind::Healing),
+                        ])
+                        .with_indent(indent_level + 1)
+                        .render(ui);
+                        healing.new_life_state.render_with_context(
+                            ui,
+                            (
+                                &target_name,
+                                Some(self.performer.name().as_str()),
+                                indent_level + 1,
+                            ),
+                        );
                     });
                 }
+
+                if let Some(effect) = &action_outcome.effect {
+                    if !effect.applied {
+                        return;
+                    }
+
+                    TextSegments::new(vec![
+                        (target_name.as_str(), TextKind::Target),
+                        ("gained effect", TextKind::Normal),
+                        (&effect.effect.to_string(), TextKind::Effect),
+                    ])
+                    .with_indent(indent_level + 1)
+                    .render(ui);
+                }
             }
-
-            ActionKindResult::UnconditionalEffect { effect, applied } => todo!(),
-
-            ActionKindResult::SavingThrowEffect {
-                saving_throw,
-                effect,
-                applied,
-            } => todo!(),
-
-            ActionKindResult::BeneficialEffect { effect, applied } => {
-                TextSegments::new(vec![
-                    (target_name.as_str(), TextKind::Target),
-                    ("gained effect", TextKind::Normal),
-                    (&effect.to_string(), TextKind::Effect),
-                ])
-                .with_indent(indent_level + 1)
-                .render(ui);
-            }
-
-            ActionKindResult::Healing {
-                healing,
-                new_life_state,
-            } => ui.group(|| {
-                TextSegments::new(vec![
-                    (target_name.as_str(), TextKind::Target),
-                    ("was healed for", TextKind::Normal),
-                    (&format!("{} HP", healing.subtotal), TextKind::Healing),
-                ])
-                .with_indent(indent_level + 1)
-                .render(ui);
-                new_life_state.render_with_context(
-                    ui,
-                    (
-                        &target_name,
-                        Some(self.performer.name().as_str()),
-                        indent_level + 1,
-                    ),
-                );
-            }),
 
             ActionKindResult::Utility => todo!(),
 
@@ -1313,9 +1265,14 @@ impl ImguiRenderableWithContext<(&str, Option<&str>, u8)> for Option<LifeState> 
     }
 }
 
-impl ImguiRenderable for (&DamageRollResult, &Option<DamageMitigationResult>) {
+impl ImguiRenderable for (&Option<DamageRollResult>, &Option<DamageMitigationResult>) {
     fn render(&self, ui: &imgui::Ui) {
         let (damage_roll, damage_taken) = self;
+
+        let Some(damage_roll) = damage_roll else {
+            ui.text("No damage roll.");
+            return;
+        };
 
         ui.text("Damage Roll:");
         ui.same_line();
@@ -1519,39 +1476,24 @@ impl ImguiRenderableWithContext<(&World, Entity, &ActionContext)> for ActionKind
     fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity, &ActionContext)) {
         let (world, entity, action_context) = context;
         match self {
-            ActionKind::UnconditionalDamage { damage } => {
-                damage(world, entity, action_context).render(ui);
-            }
+            ActionKind::Standard { payload, .. } => {
+                if let Some(damage) = &payload.damage() {
+                    damage(world, entity, action_context).render(ui);
+                }
 
-            ActionKind::AttackRollDamage { damage, .. } => {
-                damage(world, entity, action_context).render(ui);
-            }
+                if let Some(healing) = &payload.healing() {
+                    // TODO: More info? Modifiers?
+                    let healing = healing(world, entity, action_context);
+                    TextSegment::new(
+                        format!("{}-{} Healing", healing.min_roll(), healing.max_roll()),
+                        TextKind::Healing,
+                    )
+                    .render(ui);
+                }
 
-            ActionKind::SavingThrowDamage { damage, .. } => {
-                damage(world, entity, action_context).render(ui);
-            }
-
-            ActionKind::UnconditionalEffect { effect } => {
-                todo!()
-            }
-
-            ActionKind::SavingThrowEffect {
-                saving_throw,
-                effect,
-            } => todo!(),
-
-            ActionKind::BeneficialEffect { effect } => {
-                TextSegment::new(format!("{}", effect), TextKind::Effect).render(ui);
-            }
-
-            ActionKind::Healing { heal } => {
-                // TODO: More info? Modifiers?
-                let healing = heal(world, entity, action_context);
-                TextSegment::new(
-                    format!("{}-{} Healing", healing.min_roll(), healing.max_roll()),
-                    TextKind::Healing,
-                )
-                .render(ui);
+                if let Some(effect) = &payload.effect() {
+                    TextSegment::new(format!("{}", effect), TextKind::Effect).render(ui);
+                }
             }
 
             ActionKind::Composite { actions } => {
@@ -1607,21 +1549,24 @@ impl ImguiRenderableWithContext<(&World, Entity)>
                 targeting.kind.render(ui);
 
                 match action.kind() {
-                    ActionKind::AttackRollDamage { .. } => {
-                        TextSegment::new("Attack Roll", TextKind::Details).render(ui);
-                    }
-                    ActionKind::SavingThrowDamage { saving_throw, .. } => {
-                        let saving_throw = saving_throw(world, entity, &context);
-                        let saving_throw_ability = match saving_throw.key {
-                            SavingThrowKind::Ability(ability) => ability,
-                            SavingThrowKind::Death => todo!(),
-                        };
-                        TextSegments::new(vec![
-                            (saving_throw_ability.to_string(), TextKind::Ability),
-                            ("Saving Throw".to_string(), TextKind::Details),
-                        ])
-                        .render(ui);
-                    }
+                    ActionKind::Standard { condition, .. } => match condition {
+                        ActionCondition::AttackRoll { .. } => {
+                            TextSegment::new("Attack Roll", TextKind::Details).render(ui);
+                        }
+                        ActionCondition::SavingThrow { saving_throw, .. } => {
+                            let saving_throw = saving_throw(world, entity, &context);
+                            let saving_throw_ability = match saving_throw.key {
+                                SavingThrowKind::Ability(ability) => ability,
+                                SavingThrowKind::Death => todo!(),
+                            };
+                            TextSegments::new(vec![
+                                (saving_throw_ability.to_string(), TextKind::Ability),
+                                ("Saving Throw".to_string(), TextKind::Details),
+                            ])
+                            .render(ui);
+                        }
+                        _ => {}
+                    },
                     _ => {}
                 }
 

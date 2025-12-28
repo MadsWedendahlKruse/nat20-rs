@@ -12,8 +12,10 @@
                     }
                 },
                 {
-                    "beneficial_effect": {
-                        "effect": "nat20_rs::effect.spell.shield"
+                    "standard": {
+                        "payload": {
+                            "effect": "nat20_rs::effect.spell.shield"
+                        }
                     }
                 }
             ]

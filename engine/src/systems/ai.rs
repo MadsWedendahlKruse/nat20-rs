@@ -4,11 +4,13 @@ use crate::{
     components::{
         actions::action::ActionKind,
         ai::{AIDecision, PlayerControlledTag},
+        effects::effects::EffectKind,
         faction::Attitude,
         id::AIControllerId,
     },
     engine::{event::ActionPrompt, game_state::GameState},
-    registry, systems,
+    registry::{self, registry::EffectsRegistry},
+    systems,
 };
 
 pub fn is_player_controlled(world: &World, entity: Entity) -> bool {
@@ -35,30 +37,38 @@ pub fn recommeneded_target_attitude(
     action_kind: &ActionKind,
 ) -> Attitude {
     match action_kind {
-        ActionKind::AttackRollDamage { .. }
-            | ActionKind::UnconditionalDamage { .. }
-            | ActionKind::SavingThrowDamage { .. }
-            | ActionKind::SavingThrowEffect { .. }
-            // TODO: What to do with UnconditionalEffect?
-            | ActionKind::UnconditionalEffect { .. } => Attitude::Hostile,
-
-        ActionKind::Healing { .. } | ActionKind::BeneficialEffect { .. } => Attitude::Friendly,
+        ActionKind::Standard { payload, .. } => {
+            if payload.damage().is_some() {
+                return Attitude::Hostile;
+            }
+            if payload.healing().is_some() {
+                return Attitude::Friendly;
+            }
+            if let Some(effect) = payload.effect() {
+                let effect = EffectsRegistry::get(effect).unwrap();
+                return match effect.kind {
+                    EffectKind::Buff => Attitude::Friendly,
+                    EffectKind::Debuff => Attitude::Hostile,
+                };
+            }
+            return Attitude::Neutral;
+        }
 
         ActionKind::Composite { actions } => {
-                // TODO: Hopefully there's never a mix of friendly and hostile sub-actions?
-                // If any sub-action is hostile, be hostile; else friendly
-                let mut best = Attitude::Friendly;
-                for sub_action in actions {
-                    let attitude = recommeneded_target_attitude(world, actor, sub_action);
-                    best = best.max(attitude);
-                    if best == Attitude::Hostile {
-                        break;
-                    }
+            // TODO: Hopefully there's never a mix of friendly and hostile sub-actions?
+            // If any sub-action is hostile, be hostile; else friendly
+            let mut best = Attitude::Friendly;
+            for sub_action in actions {
+                let attitude = recommeneded_target_attitude(world, actor, sub_action);
+                best = best.max(attitude);
+                if best == Attitude::Hostile {
+                    break;
                 }
-                best
             }
+            best
+        }
 
-        ActionKind::Utility {  } => todo!(),
+        ActionKind::Utility {} => todo!(),
 
         ActionKind::Custom(_) => todo!(),
 

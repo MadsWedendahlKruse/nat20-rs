@@ -4,8 +4,10 @@
     "base_level": 1,
     "school": "evocation",
     "kind": {
-        "unconditional_damage": {
-            "damage": "1d4 + 1;force"
+        "standard": {
+            "payload": {
+                "damage": "1d4 + 1;force"
+            }
         }
     },
     "resource_cost": {

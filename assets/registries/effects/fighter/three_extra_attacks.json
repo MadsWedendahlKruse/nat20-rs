@@ -1,5 +1,6 @@
 {
     "id": "nat20_rs::effect.fighter.three_extra_attacks",
+    "kind": "buff",
     "description": "You can attack four times instead of once whenever you take the Attack action on your turn.",
     "duration": "permanent",
     "on_action": [

@@ -1,0 +1,26 @@
+{
+    "id": "nat20_rs::spell.ray_of_frost",
+    "description": "A frigid beam of blue-white light streaks toward a creature within range. Make a ranged spell attack against the target. On a hit, it takes 1d8 Cold damage, and its Speed is reduced by 10 feet until the start of your next turn.",
+    "base_level": 0,
+    "school": "evocation",
+    "kind": {
+        "standard": {
+            "condition": {
+                "attack_roll": "spell_attack_roll"
+            },
+            "payload": {
+                "damage": "(1 + (character_level + 1) / 6)d8;cold",
+                "effect": "nat20_rs::effect.spell.ray_of_frost"
+            }
+        }
+    },
+    "resource_cost": {
+        "nat20_rs::resource.action": 1
+    },
+    "targeting": {
+        "kind": "single",
+        "range": "60 feet",
+        "require_line_of_sight": true,
+        "allowed_targets": "not_dead"
+    }
+}

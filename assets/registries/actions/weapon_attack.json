@@ -2,9 +2,13 @@
     "id": "nat20_rs::action.weapon_attack",
     "description": "Make an attack with a weapon you are wielding. This can be a melee or ranged attack depending on the weapon.",
     "kind": {
-        "attack_roll_damage": {
-            "attack_roll": "weapon_attack_roll",
-            "damage": "weapon_damage_roll"
+        "standard": {
+            "condition": {
+                "attack_roll": "weapon_attack_roll"
+            },
+            "payload": {
+                "damage": "weapon_damage_roll"
+            }
         }
     },
     "targeting": "weapon_targeting",

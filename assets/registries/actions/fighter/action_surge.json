@@ -2,8 +2,10 @@
     "id": "nat20_rs::action.fighter.action_surge",
     "description": "You can push yourself beyond your normal limits for a moment. On your turn, you can take one additional action.",
     "kind": {
-        "beneficial_effect": {
-            "effect": "nat20_rs::effect.fighter.action_surge"
+        "standard": {
+            "payload": {
+                "effect": "nat20_rs::effect.fighter.action_surge"
+            }
         }
     },
     "targeting": "self",

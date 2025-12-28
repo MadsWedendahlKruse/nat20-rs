@@ -1,5 +1,6 @@
 {
     "id": "nat20_rs::effect.item.armor_of_sneaking",
+    "kind": "buff",
     "description": "While wearing this armor, you gain a +2 bonus to Stealth checks.",
     "duration": "conditional",
     "modifiers": [

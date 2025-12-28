@@ -192,7 +192,7 @@ impl DamageRoll {
         self.bonus.push(DamageComponent::new(dice, damage_type));
     }
 
-    pub(crate) fn roll_raw(&self, crit: bool) -> DamageRollResult {
+    pub fn roll_raw(&self, crit: bool) -> DamageRollResult {
         if crit {
             self.roll_internal(2)
         } else {

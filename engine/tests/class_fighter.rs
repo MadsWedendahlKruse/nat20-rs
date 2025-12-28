@@ -138,23 +138,17 @@ mod tests {
         );
 
         // Let the fighter take some damage
-        let damage_source = ActionKind::UnconditionalDamage {
-            damage: Arc::new(|_, _, _| {
-                DamageRoll::new(
-                    "1d4".parse().unwrap(),
-                    DamageType::Force,
-                    DamageSource::Spell(SpellId::new("nat20_rs", "test.spell")),
-                )
-            }),
-        };
-        let action_data = ActionData {
-            actor: fighter,
-            action_id: ActionId::new("nat20_rs", "action.test.unconditional_damage"),
-            context: ActionContext::Other,
-            resource_cost: ResourceAmountMap::new(),
-            targets: vec![TargetInstance::Entity(fighter)],
-        };
-        systems::health::damage(&mut game_state, &action_data, &damage_source, fighter);
+        systems::health::damage(
+            &mut game_state.world,
+            fighter,
+            &DamageRoll::new(
+                "1d4".parse().unwrap(),
+                DamageType::Force,
+                DamageSource::Spell(SpellId::new("nat20_rs", "test.spell")),
+            )
+            .roll_raw(false),
+            None,
+        );
 
         // Check that the fighter's HP is reduced
         let prev_hp = {

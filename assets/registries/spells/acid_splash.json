@@ -4,10 +4,13 @@
     "base_level": 0,
     "school": "evocation",
     "kind": {
-        "saving_throw_damage": {
-            "saving_throw": "spell_save_dc;dexterity",
-            "damage": "(1 + (character_level + 1) / 6)d6;acid",
-            "half_damage_on_save": true
+        "standard": {
+            "condition": {
+                "saving_throw": "spell_save_dc;dexterity"
+            },
+            "payload": {
+                "damage": "(1 + (character_level + 1) / 6)d6;acid"
+            }
         }
     },
     "resource_cost": {

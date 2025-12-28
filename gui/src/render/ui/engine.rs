@@ -1,10 +1,7 @@
 use hecs::World;
 use imgui::TreeNodeFlags;
 use nat20_rs::{
-    components::{
-        actions::{action::ActionKind, targeting::TargetInstance},
-        id::Name,
-    },
+    components::{actions::targeting::TargetInstance, id::Name},
     engine::event::{ActionData, EncounterEvent, Event, EventKind, EventLog},
     systems::{
         self,
@@ -101,19 +98,6 @@ pub fn events_match(event1: &Event, event2: &Event) -> bool {
             EventKind::ActionRequested { action: a1 },
             EventKind::ActionPerformed { action: a2, .. },
         ) => a1.actor == a2.actor && a1.action_id == a2.action_id && a1.targets == a2.targets,
-
-        (
-            EventKind::ActionPerformed { action: a1, .. },
-            EventKind::ActionPerformed { action: a2, .. },
-        ) => {
-            a1.actor == a2.actor
-                && a1.action_id == a2.action_id
-                && a1.targets == a2.targets
-                && matches!(
-                    systems::actions::get_action(&a1.action_id).unwrap().kind(),
-                    ActionKind::Composite { .. }
-                )
-        }
 
         (EventKind::D20CheckPerformed(e1, _, _), EventKind::D20CheckResolved(e2, _, _)) => e1 == e2,
 

@@ -6,7 +6,6 @@ use std::{
 
 use hecs::{Entity, World};
 use serde::Deserialize;
-use tracing_subscriber::filter::targets;
 
 use crate::{
     components::{
@@ -19,7 +18,6 @@ use crate::{
         health::life_state::LifeState,
         id::{ActionId, EffectId, EntityIdentifier, IdProvider, ScriptId, SpellId},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
-        modifier::ModifierSource,
         resource::{RechargeRule, ResourceAmountMap},
         saving_throw::SavingThrowDC,
         spells::spellbook::SpellSource,
@@ -29,7 +27,7 @@ use crate::{
         game_state::GameState,
     },
     registry::serialize::action::ActionDefinition,
-    systems::{self, d20::D20CheckDCKind},
+    systems::{self},
 };
 
 /// Represents the context in which an action is performed.
@@ -62,126 +60,221 @@ pub type SavingThrowFunction =
     dyn Fn(&World, Entity, &ActionContext) -> SavingThrowDC + Send + Sync;
 pub type HealFunction = dyn Fn(&World, Entity, &ActionContext) -> DiceSetRoll + Send + Sync;
 
-/// Represents the kind of action that can be performed.
+#[derive(Clone)]
+pub enum DamageOnFailure {
+    Half,
+    Custom(Arc<DamageFunction>),
+}
+
+#[derive(Clone)]
+pub enum ActionCondition {
+    None,
+    AttackRoll {
+        attack_roll: Arc<AttackRollFunction>,
+        damage_on_miss: Option<DamageOnFailure>,
+    },
+    SavingThrow {
+        saving_throw: Arc<SavingThrowFunction>,
+        damage_on_save: Option<DamageOnFailure>,
+    },
+}
+
+#[derive(Clone)]
+pub struct ActionPayload {
+    damage: Option<Arc<DamageFunction>>,
+    effect: Option<EffectId>,
+    healing: Option<Arc<HealFunction>>,
+}
+
+#[derive(Debug)]
+pub enum ActionPayloadError {
+    EmptyPayload,
+}
+
+impl ActionPayload {
+    pub fn new(
+        damage: Option<Arc<DamageFunction>>,
+        effect: Option<EffectId>,
+        healing: Option<Arc<HealFunction>>,
+    ) -> Result<Self, ActionPayloadError> {
+        let payload = ActionPayload {
+            damage,
+            effect,
+            healing,
+        };
+
+        if payload.is_empty() {
+            Err(ActionPayloadError::EmptyPayload)
+        } else {
+            Ok(payload)
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.damage.is_none() && self.effect.is_none() && self.healing.is_none()
+    }
+
+    pub fn with_damage(damage: Arc<DamageFunction>) -> Self {
+        Self {
+            damage: Some(damage),
+            effect: None,
+            healing: None,
+        }
+    }
+
+    pub fn with_effect(effect: EffectId) -> Self {
+        Self {
+            damage: None,
+            effect: Some(effect),
+            healing: None,
+        }
+    }
+
+    pub fn with_healing(healing: Arc<HealFunction>) -> Self {
+        Self {
+            damage: None,
+            effect: None,
+            healing: Some(healing),
+        }
+    }
+
+    pub fn damage(&self) -> &Option<Arc<DamageFunction>> {
+        &self.damage
+    }
+
+    pub fn effect(&self) -> &Option<EffectId> {
+        &self.effect
+    }
+
+    pub fn healing(&self) -> &Option<Arc<HealFunction>> {
+        &self.healing
+    }
+}
+
 #[derive(Clone)]
 pub enum ActionKind {
-    /// Actions that deal unconditional damage. Is this only Magic Missile?
-    UnconditionalDamage {
-        damage: Arc<DamageFunction>,
+    Standard {
+        condition: ActionCondition,
+        payload: ActionPayload,
     },
-    /// Actions that require an attack roll to hit a target, and deal damage on hit.
-    /// Some actions may have a damage roll on a failed attack roll (e.g. Acid Arrow)
-    AttackRollDamage {
-        attack_roll: Arc<AttackRollFunction>,
-        damage: Arc<DamageFunction>,
-        damage_on_miss: Option<Arc<DamageFunction>>,
-    },
-    /// Actions that require a saving throw to avoid or reduce damage.
-    /// Most of the time, these actions will deal damage on a failed save,
-    /// and half damage on a successful save.
-    SavingThrowDamage {
-        // TODO: Is action context ever relevant for saving throws?
-        saving_throw: Arc<SavingThrowFunction>,
-        half_damage_on_save: bool,
-        damage: Arc<DamageFunction>,
-    },
-    /// Actions that apply an effect to a target without requiring an attack roll or
-    /// saving throw. TODO: Not sure if this is actually needed, since most effects
-    /// will require either an attack roll or a saving throw.
-    UnconditionalEffect {
-        effect: EffectId,
-    },
-    /// Actions that require a saving throw to avoid or reduce an effect.
-    SavingThrowEffect {
-        saving_throw: Arc<SavingThrowFunction>,
-        effect: EffectId,
-    },
-    /// Actions that apply a beneficial effect to a target, and therefore do not require
-    /// an attack roll or saving throw (e.g. Bless, Shield of Faith).
-    BeneficialEffect {
-        effect: EffectId,
-    },
-    /// Actions that heal a target. These actions do not require an attack roll or saving throw.
-    /// They simply heal the target for a certain amount of hit points.
-    Healing {
-        heal: Arc<HealFunction>,
-    },
-    /// Utility actions that do not deal damage or heal, but have some other effect.
-    /// These actions may include buffs, debuffs, or other effects that do not fit into the
-    /// other categories (e.g. teleportation, Knock, etc.).
-    Utility {
-        // E.g. Arcane Lock, Invisibility, etc.
-        // Add hooks or custom closures as needed
-    },
-    /// A composite action that combines multiple actions into one.
-    /// This can be used for actions that have multiple effects, such as a spell
-    /// that deals damage and applies a beneficial effect.
+    Utility {/* ... */},
     Composite {
         actions: Vec<ActionKind>,
     },
-
     Reaction {
         reaction: ScriptId,
     },
-    /// Custom actions can have any kind of effect, including damage, healing, or utility.
-    /// Please note that this should only be used for actions that don't fit into the
-    /// standard categories.
     Custom(Arc<dyn Fn(&World, Entity, &ActionContext) + Send + Sync>),
 }
 
-/// The result of applying an action to a target.
-/// This is the final result of the action, which includes any damage dealt,
-/// effects applied, or healing done.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ActionKindResult {
-    UnconditionalDamage {
-        damage_roll: DamageRollResult,
-        damage_taken: Option<DamageMitigationResult>,
-        new_life_state: Option<LifeState>,
-    },
-    AttackRollDamage {
+pub enum DamageResolutionKind {
+    Unconditional,
+    AttackRoll {
         attack_roll: AttackRollResult,
-        /// Armor class of the target being attacked
         armor_class: ArmorClass,
+    },
+    SavingThrow {
+        saving_throw_dc: SavingThrowDC,
+        saving_throw_result: D20CheckResult,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DamageOutcome {
+    pub kind: DamageResolutionKind, // Unconditional / AttackRoll / SavingThrow
+    pub damage_roll: Option<DamageRollResult>,
+    pub damage_taken: Option<DamageMitigationResult>,
+    pub new_life_state: Option<LifeState>,
+}
+
+impl DamageOutcome {
+    pub fn unconditional(
         damage_roll: Option<DamageRollResult>,
         damage_taken: Option<DamageMitigationResult>,
         new_life_state: Option<LifeState>,
-    },
-    SavingThrowDamage {
-        saving_throw_dc: SavingThrowDC,
-        saving_throw_result: D20CheckResult,
-        half_damage_on_save: bool,
-        damage_roll: DamageRollResult,
+    ) -> Self {
+        DamageOutcome {
+            kind: DamageResolutionKind::Unconditional,
+            damage_roll,
+            damage_taken,
+            new_life_state,
+        }
+    }
+
+    pub fn attack_roll(
+        damage_roll: Option<DamageRollResult>,
         damage_taken: Option<DamageMitigationResult>,
         new_life_state: Option<LifeState>,
-    },
-    UnconditionalEffect {
-        effect: EffectId,
-        applied: bool,
-    },
-    SavingThrowEffect {
-        saving_throw: SavingThrowDC,
-        effect: EffectId,
-        applied: bool,
-    },
-    BeneficialEffect {
-        effect: EffectId,
-        applied: bool,
-    },
-    Healing {
-        healing: DiceSetRollResult,
+        attack_roll: AttackRollResult,
+        armor_class: ArmorClass,
+    ) -> Self {
+        DamageOutcome {
+            kind: DamageResolutionKind::AttackRoll {
+                attack_roll,
+                armor_class,
+            },
+            damage_roll,
+            damage_taken,
+            new_life_state,
+        }
+    }
+
+    pub fn saving_throw(
+        damage_roll: Option<DamageRollResult>,
+        damage_taken: Option<DamageMitigationResult>,
         new_life_state: Option<LifeState>,
-    },
+        saving_throw_dc: SavingThrowDC,
+        saving_throw_result: D20CheckResult,
+    ) -> Self {
+        DamageOutcome {
+            kind: DamageResolutionKind::SavingThrow {
+                saving_throw_dc,
+                saving_throw_result,
+            },
+            damage_roll,
+            damage_taken,
+            new_life_state,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EffectOutcome {
+    pub effect: EffectId,
+    pub applied: bool,
+    pub rule: EffectApplyRule, // useful for debugging/telemetry
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EffectApplyRule {
+    Unconditional,
+    OnHit,
+    OnMiss,
+    OnFailedSave,
+    OnSuccessfulSave,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HealingOutcome {
+    pub healing: DiceSetRollResult,
+    pub new_life_state: Option<LifeState>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActionOutcomeBundle {
+    pub damage: Option<DamageOutcome>,
+    pub effect: Option<EffectOutcome>,
+    pub healing: Option<HealingOutcome>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ActionKindResult {
+    Standard(ActionOutcomeBundle),
     Utility,
-    Composite {
-        actions: Vec<ActionKindResult>,
-    },
-    Reaction {
-        result: ReactionResult,
-    },
-    Custom {
-        // TODO: Add more fields as needed for custom spells
-    },
+    Composite { actions: Vec<ActionKindResult> },
+    Reaction { result: ReactionResult },
+    Custom {/* ... */},
 }
 
 #[derive(Clone)]
@@ -275,107 +368,15 @@ impl ActionKind {
         targets: &[Entity],
     ) {
         match self {
-            ActionKind::UnconditionalDamage { .. }
-            | ActionKind::AttackRollDamage { .. }
-            | ActionKind::SavingThrowDamage { .. } => {
+            ActionKind::Standard { .. } => {
                 for target in targets {
-                    systems::health::damage(game_state, action_data, self, *target);
-                }
-            }
-
-            ActionKind::UnconditionalEffect { effect } => {
-                for target in targets {
-                    systems::effects::add_effect(
-                        &mut game_state.world,
-                        *target,
-                        effect,
-                        &ModifierSource::Action(action_data.action_id.clone()),
-                    );
-                }
-                let _ = game_state.process_event(Event::action_performed_event(
-                    &game_state,
-                    action_data,
-                    targets
-                        .iter()
-                        .map(|target| {
-                            (
-                                *target,
-                                ActionKindResult::UnconditionalEffect {
-                                    effect: effect.clone(),
-                                    applied: true, // TODO: Unconditional effects are always applied?
-                                },
-                            )
-                        })
-                        .collect(),
-                ));
-            }
-
-            ActionKind::SavingThrowEffect {
-                saving_throw,
-                effect,
-            } => {
-                for target in targets {
-                    let saving_throw =
-                        saving_throw(&game_state.world, action_data.actor, &action_data.context);
-                    let saving_throw_result = systems::d20::check(
+                    systems::actions::perform_standard_action(
                         game_state,
+                        self,
+                        action_data,
                         *target,
-                        &D20CheckDCKind::SavingThrow(saving_throw),
-                    );
-                    todo!("Implement saving throw effect application logic (callbacks, etc.)");
-                }
-            }
-
-            ActionKind::BeneficialEffect { effect } => {
-                for target in targets {
-                    systems::effects::add_effect(
-                        &mut game_state.world,
-                        *target,
-                        effect,
-                        &ModifierSource::Action(action_data.action_id.clone()),
                     );
                 }
-                let _ = game_state.process_event(Event::action_performed_event(
-                    &game_state,
-                    action_data,
-                    targets
-                        .iter()
-                        .map(|target| {
-                            (
-                                *target,
-                                ActionKindResult::BeneficialEffect {
-                                    effect: effect.clone(),
-                                    applied: true, // TODO: Beneficial effects are always applied?
-                                },
-                            )
-                        })
-                        .collect(),
-                ));
-            }
-
-            ActionKind::Healing { heal } => {
-                let mut results = Vec::new();
-                for target in targets {
-                    let healing =
-                        heal(&game_state.world, action_data.actor, &action_data.context).roll();
-                    let new_life_state = systems::health::heal(
-                        &mut game_state.world,
-                        *target,
-                        healing.subtotal as u32,
-                    );
-                    results.push((
-                        *target,
-                        ActionKindResult::Healing {
-                            healing,
-                            new_life_state,
-                        },
-                    ));
-                }
-                let _ = game_state.process_event(Event::action_performed_event(
-                    &game_state,
-                    action_data,
-                    results,
-                ));
             }
 
             ActionKind::Utility { .. } => {
@@ -419,17 +420,7 @@ impl ActionKind {
 impl Debug for ActionKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ActionKind::UnconditionalDamage { .. } => write!(f, "UnconditionalDamage"),
-            ActionKind::AttackRollDamage { .. } => write!(f, "AttackRollDamage"),
-            ActionKind::SavingThrowDamage { .. } => write!(f, "SavingThrowDamage"),
-            ActionKind::UnconditionalEffect { effect } => {
-                write!(f, "UnconditionalEffect({})", effect)
-            }
-            ActionKind::SavingThrowEffect { effect, .. } => {
-                write!(f, "SavingThrowEffect({})", effect)
-            }
-            ActionKind::BeneficialEffect { effect } => write!(f, "BeneficialEffect({})", effect),
-            ActionKind::Healing { .. } => write!(f, "Healing"),
+            ActionKind::Standard { .. } => write!(f, "Standard"),
             ActionKind::Utility { .. } => write!(f, "Utility"),
             ActionKind::Composite { actions } => write!(f, "Composite({:?})", actions),
             ActionKind::Reaction { .. } => write!(f, "Reaction"),
