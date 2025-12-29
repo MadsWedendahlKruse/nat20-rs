@@ -1,0 +1,31 @@
+{
+    "id": "nat20_rs::spell.expeditious_retreat",
+    "description": "You take the Dash action, and until the spell ends, you can take that action again as a Bonus Action.",
+    "base_level": 1,
+    "school": "transmutation",
+    "concentration": true,
+    "kind": {
+        "composite": {
+            "actions": [
+                {
+                    "standard": {
+                        "payload": {
+                            "effect": "nat20_rs::effect.dash"
+                        }
+                    }
+                },
+                {
+                    "standard": {
+                        "payload": {
+                            "effect": "nat20_rs::effect.expeditious_retreat"
+                        }
+                    }
+                }
+            ]
+        }
+    },
+    "targeting": "self",
+    "resource_cost": {
+        "nat20_rs::resource.action": 1
+    }
+}

@@ -1,0 +1,11 @@
+{
+    "id": "nat20_rs::effect.expeditious_retreat",
+    "kind": "buff",
+    "description": "You can take the Dash action as a Bonus Action.",
+    "duration": "temporary(100)",
+    "on_resource_cost": [
+        {
+            "script": "nat20_rs::script.effect.spell.expeditious_retreat"
+        }
+    ]
+}

@@ -1,5 +1,5 @@
-export const EXTRA_ATTACK_RESOURCE_ID = "resource.extra_attack";
-export const ACTION_RESOURCE_ID = "resource.action";
+export const EXTRA_ATTACK_RESOURCE_ID = "nat20_rs::resource.extra_attack";
+export const ACTION_RESOURCE_ID = "nat20_rs::resource.action";
 
 private fn should_apply_extra_attack(action_view) {
     // 1. Only apply to weapon attacks
@@ -40,6 +40,4 @@ fn resource_cost_hook(action_view, entity_view) {
             "1"
         );
     }
-
-    return;
 }

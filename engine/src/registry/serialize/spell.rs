@@ -19,6 +19,8 @@ pub struct SpellDefinition {
     pub description: String,
     pub base_level: u8,
     pub school: MagicSchool,
+    #[serde(default)]
+    pub concentration: bool,
     pub kind: ActionKindDefinition,
     pub resource_cost: ResourceAmountMap,
     pub targeting: TargetingDefinition,
@@ -33,6 +35,7 @@ impl From<SpellDefinition> for Spell {
             value.description,
             value.base_level,
             value.school,
+            value.concentration,
             value.kind.into(),
             value.resource_cost,
             value.targeting.function(),

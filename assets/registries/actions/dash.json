@@ -1,0 +1,15 @@
+{
+    "id": "nat20_rs::action.dash",
+    "description": "You double your movement speed until the end of the turn.",
+    "kind": {
+        "standard": {
+            "payload": {
+                "effect": "nat20_rs::effect.dash"
+            }
+        }
+    },
+    "targeting": "self",
+    "resource_cost": {
+        "nat20_rs::resource.action": 1
+    }
+}

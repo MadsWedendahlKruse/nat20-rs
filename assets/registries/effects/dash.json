@@ -1,0 +1,11 @@
+{
+    "id": "nat20_rs::effect.dash",
+    "kind": "buff",
+    "description": "Your movement speed is doubled until the end of your turn.",
+    "duration": "temporary(1)",
+    "modifiers": [
+        {
+            "speed": "x2"
+        }
+    ]
+}

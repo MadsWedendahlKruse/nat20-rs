@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{cmp::max, ops::Deref, sync::Arc};
 
 use hecs::{Entity, World};
 use tracing::debug;
@@ -6,14 +6,21 @@ use tracing::debug;
 use crate::{
     components::{
         ability::{Ability, AbilityScoreMap},
+        d20::D20CheckDC,
         damage::{AttackRollResult, DamageMitigationResult, DamageResistances, DamageRollResult},
         health::{hit_points::HitPoints, life_state::LifeState},
         level::CharacterLevels,
-        modifier::Modifiable,
+        modifier::{Modifiable, ModifierSet, ModifierSource},
+        saving_throw::SavingThrowKind,
+        spells::{spell::CONCENTRATION_SAVING_THROW_DC_DEFAULT, spellbook::Spellbook},
+    },
+    engine::{
+        event::{CallbackResult, EventCallback, EventKind},
+        game_state::GameState,
     },
     entities::{character::CharacterTag, monster::MonsterTag},
     registry::registry::ClassesRegistry,
-    systems::{self},
+    systems::{self, d20::D20CheckDCKind},
 };
 
 pub fn heal(world: &mut World, target: Entity, amount: u32) -> Option<LifeState> {
@@ -44,25 +51,28 @@ pub fn heal_full(world: &mut World, target: Entity) -> Option<LifeState> {
 }
 
 pub fn damage(
-    world: &mut World,
+    game_state: &mut GameState,
     target: Entity,
     damage_roll_result: &DamageRollResult,
     attack_roll: Option<&AttackRollResult>,
 ) -> (Option<DamageMitigationResult>, Option<LifeState>) {
-    let resistances = if let Ok(resistances) = &world.get::<&mut DamageResistances>(target) {
-        resistances.deref().clone()
-    } else {
-        DamageResistances::new()
-    };
+    let resistances =
+        if let Ok(resistances) = game_state.world.get::<&mut DamageResistances>(target) {
+            resistances.deref().clone()
+        } else {
+            DamageResistances::new()
+        };
 
     let mut mitigation_result = resistances.apply(damage_roll_result);
 
-    for effect in systems::effects::effects(world, target).iter() {
-        (effect.damage_taken)(&world, target, &mut mitigation_result);
+    for effect in systems::effects::effects(&game_state.world, target).iter() {
+        (effect.damage_taken)(&game_state.world, target, &mut mitigation_result);
     }
 
-    let (killed_by_damage, mut new_life_state) = if let Ok((hit_points, life_state)) =
-        world.query_one_mut::<(&mut HitPoints, &mut LifeState)>(target)
+    let (damage_taken, killed_by_damage, mut new_life_state) = if let Ok((hit_points, life_state)) =
+        game_state
+            .world
+            .query_one_mut::<(&mut HitPoints, &mut LifeState)>(target)
     {
         // Track any changes to the life state of the target
         let mut new_life_state = None;
@@ -100,16 +110,19 @@ pub fn damage(
             }
         }
 
-        hit_points.damage(mitigation_result.total.max(0) as u32);
+        let damage_taken = mitigation_result.total.max(0) as u32;
+
+        hit_points.damage(damage_taken);
         debug!(
             "Entity {:?} took {} damage (HP: {} -> {})",
             target,
-            mitigation_result.total.max(0),
+            damage_taken,
             hp_before_damage,
             hit_points.current()
         );
 
         (
+            damage_taken,
             hp_before_damage > 0 && hit_points.current() == 0,
             new_life_state,
         )
@@ -119,19 +132,59 @@ pub fn damage(
 
     if killed_by_damage {
         // Monsters and Characters 'die' differently
-        if let Ok(_) = world.get::<&MonsterTag>(target) {
+        if let Ok(_) = game_state.world.get::<&MonsterTag>(target) {
             new_life_state = Some(LifeState::Dead);
         }
 
-        if let Ok(_) = world.get::<&CharacterTag>(target) {
+        if let Ok(_) = game_state.world.get::<&CharacterTag>(target) {
             new_life_state = Some(LifeState::unconscious());
         }
     }
 
     if let Some(new_life_state) = new_life_state {
-        if let Ok(mut life_state) = world.get::<&mut LifeState>(target) {
+        if let Ok(mut life_state) = game_state.world.get::<&mut LifeState>(target) {
             *life_state = new_life_state;
         }
+    }
+
+    let is_concentrating = {
+        let spellbook = systems::helpers::get_component::<Spellbook>(&game_state.world, target);
+        spellbook.concentration_tracker().is_concentrating()
+    };
+
+    if is_concentrating {
+        debug!(
+            "Entity {:?} is concentrating; checking for concentration break due to damage",
+            target
+        );
+
+        let dc = max(
+            CONCENTRATION_SAVING_THROW_DC_DEFAULT,
+            damage_taken as i32 / 2,
+        );
+        let saving_throw_dc = D20CheckDC {
+            key: SavingThrowKind::Concentration,
+            dc: ModifierSet::from(ModifierSource::Base, dc),
+        };
+        let saving_throw_event = systems::d20::check(
+            game_state,
+            target,
+            &D20CheckDCKind::SavingThrow(saving_throw_dc),
+        );
+        let callback: EventCallback = Arc::new({
+            move |game_state, event| {
+                match &event.kind {
+                    EventKind::D20CheckResolved(_, check_result, dc) => {
+                        if !check_result.is_success(dc) {
+                            systems::spells::break_concentration(&mut game_state.world, target);
+                        }
+                    }
+                    _ => {}
+                }
+                CallbackResult::None
+            }
+        });
+        game_state.process_event_with_callback(saving_throw_event, callback);
     }
 
     (Some(mitigation_result), new_life_state)

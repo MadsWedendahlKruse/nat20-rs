@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::Arc};
+use std::sync::Arc;
 
 use hecs::{Entity, World};
 use tracing::{debug, warn};
@@ -9,20 +9,19 @@ use crate::{
             action::{
                 Action, ActionCondition, ActionContext, ActionCooldownMap, ActionKind,
                 ActionKindResult, ActionMap, ActionOutcomeBundle, ActionPayload, ActionProvider,
-                AttackRollFunction, DamageFunction, DamageOnFailure, DamageOutcome,
-                DamageResolutionKind, EffectApplyRule, EffectOutcome, HealingOutcome, ReactionSet,
-                SavingThrowFunction,
+                AttackRollFunction, DamageOnFailure, DamageOutcome, EffectApplyRule, EffectOutcome,
+                HealingOutcome, SavingThrowFunction,
             },
             targeting::{
                 AreaShape, TargetInstance, TargetingContext, TargetingError, TargetingKind,
             },
         },
-        damage::{self, DamageResistances, DamageRollResult},
-        id::{ActionId, ResourceId, ScriptId},
+        damage::DamageRollResult,
+        id::{ActionId, EffectId, ResourceId, ScriptId},
         items::equipment::loadout::Loadout,
         modifier::ModifierSource,
         resource::{RechargeRule, ResourceAmountMap, ResourceMap},
-        spells::spellbook::Spellbook,
+        spells::{spell::ConcentrationInstance, spellbook::Spellbook},
     },
     engine::{
         event::{
@@ -295,29 +294,6 @@ pub fn targeting_context(
     get_action(action_id).unwrap().targeting()(world, entity, context)
 }
 
-fn filter_reactions(actions: &ActionMap) -> ReactionSet {
-    actions
-        .iter()
-        .filter_map(|(action_id, _)| {
-            if let Some(action) = get_action(action_id) {
-                if action.reaction_trigger.is_some() {
-                    return Some(action_id.clone());
-                }
-            }
-            None
-        })
-        .collect()
-}
-
-// TODO: Unused?
-// pub fn all_reactions(world: &World, entity: Entity) -> ReactionSet {
-//     filter_reactions(&all_actions(world, entity))
-// }
-
-// pub fn available_reactions(world: &World, entity: Entity) -> ReactionSet {
-//     filter_reactions(&available_actions(world, entity))
-// }
-
 pub fn available_reactions_to_event(
     world: &World,
     world_geometry: &WorldGeometry,
@@ -475,20 +451,13 @@ fn perform_unconditional(
     payload: &ActionPayload,
 ) -> Result<(), ActionError> {
     // Apply effect immediately (no gating for unconditional).
-    let effect_outcome: Option<EffectOutcome> = payload.effect().as_ref().map(|effect_id| {
-        systems::effects::add_effect(
-            &mut game_state.world,
-            target,
-            &effect_id,
-            &ModifierSource::Action(action_data.action_id.clone()),
-        );
-
-        EffectOutcome {
-            effect: effect_id.clone(),
-            applied: true,
-            rule: EffectApplyRule::Unconditional,
-        }
-    });
+    let effect_outcome: Option<EffectOutcome> = get_effect_outcome(
+        &mut game_state.world,
+        target,
+        &action_data,
+        &payload,
+        EffectApplyRule::Unconditional,
+    );
 
     // Apply healing immediately (no gating for unconditional).
     let healing_outcome: Option<HealingOutcome> =
@@ -537,12 +506,8 @@ fn perform_unconditional(
 
         move |game_state, event| match &event.kind {
             EventKind::DamageRollResolved(_, damage_roll_result) => {
-                let (damage_taken, new_life_state) = systems::health::damage(
-                    &mut game_state.world,
-                    target,
-                    damage_roll_result,
-                    None,
-                );
+                let (damage_taken, new_life_state) =
+                    systems::health::damage(game_state, target, damage_roll_result, None);
 
                 let damage_outcome = DamageOutcome::unconditional(
                     Some(damage_roll_result.clone()),
@@ -616,20 +581,13 @@ fn perform_attack_roll(
 
                 // Decide effect application
                 let effect_result: Option<EffectOutcome> = if hit {
-                    payload.effect().as_ref().map(|effect_id| {
-                        systems::effects::add_effect(
-                            &mut game_state.world,
-                            target,
-                            &effect_id,
-                            &ModifierSource::Action(action_data.action_id.clone()),
-                        );
-
-                        EffectOutcome {
-                            effect: effect_id.clone(),
-                            applied: true,
-                            rule: EffectApplyRule::OnHit,
-                        }
-                    })
+                    get_effect_outcome(
+                        &mut game_state.world,
+                        target,
+                        &action_data,
+                        &payload,
+                        EffectApplyRule::OnHit,
+                    )
                 } else {
                     None
                 };
@@ -683,7 +641,7 @@ fn perform_attack_roll(
                             EventKind::DamageRollResolved(_, damage_roll_result) => {
                                 let (damage_taken, new_life_state) = if hit {
                                     systems::health::damage(
-                                        &mut game_state.world,
+                                        game_state,
                                         target,
                                         damage_roll_result,
                                         Some(&attack_roll),
@@ -759,20 +717,13 @@ fn perform_saving_throw(
                 let effect_result: Option<EffectOutcome> = if save_success {
                     None
                 } else {
-                    payload.effect().as_ref().map(|effect_id| {
-                        systems::effects::add_effect(
-                            &mut game_state.world,
-                            target,
-                            &effect_id,
-                            &ModifierSource::Action(action_data.action_id.clone()),
-                        );
-
-                        EffectOutcome {
-                            effect: effect_id.clone(),
-                            applied: true,
-                            rule: EffectApplyRule::OnFailedSave,
-                        }
-                    })
+                    get_effect_outcome(
+                        &mut game_state.world,
+                        target,
+                        &action_data,
+                        &payload,
+                        EffectApplyRule::OnFailedSave,
+                    )
                 };
 
                 // If no damage, emit effect result immediately.
@@ -814,7 +765,7 @@ fn perform_saving_throw(
                         move |game_state, event| match &event.kind {
                             EventKind::DamageRollResolved(_, damage_roll_result) => {
                                 let (damage_taken, new_life_state) = systems::health::damage(
-                                    &mut game_state.world,
+                                    game_state,
                                     target,
                                     damage_roll_result,
                                     None,
@@ -900,4 +851,42 @@ fn get_damage_roll(
     } else {
         None
     }
+}
+
+fn get_effect_outcome(
+    world: &mut World,
+    target: Entity,
+    action_data: &ActionData,
+    payload: &ActionPayload,
+    apply_rule: EffectApplyRule,
+) -> Option<EffectOutcome> {
+    payload.effect().as_ref().map(|effect_id| {
+        systems::effects::add_effect(
+            world,
+            target,
+            &effect_id,
+            &ModifierSource::Action(action_data.action_id.clone()),
+        );
+
+        // Add concentration tracking if needed
+        let spell_id = action_data.action_id.clone().into();
+        if let Some(spell) = SpellsRegistry::get(&spell_id) {
+            if spell.requires_concentration() {
+                systems::spells::add_concentration_instance(
+                    world,
+                    action_data.actor,
+                    ConcentrationInstance::Effect {
+                        entity: target,
+                        effect: effect_id.clone(),
+                    },
+                );
+            }
+        }
+
+        EffectOutcome {
+            effect: effect_id.clone(),
+            applied: true,
+            rule: apply_rule,
+        }
+    })
 }

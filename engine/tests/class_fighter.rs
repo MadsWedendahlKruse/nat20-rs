@@ -139,7 +139,7 @@ mod tests {
 
         // Let the fighter take some damage
         systems::health::damage(
-            &mut game_state.world,
+            &mut game_state,
             fighter,
             &DamageRoll::new(
                 "1d4".parse().unwrap(),

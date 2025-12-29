@@ -18,6 +18,7 @@ use crate::{
 pub enum SavingThrowKind {
     Ability(Ability),
     Death, // sounds a bit edgy lol
+    Concentration,
 }
 
 impl Default for SavingThrowKind {
@@ -30,8 +31,9 @@ impl IntoEnumIterator for SavingThrowKind {
     type Iterator = std::vec::IntoIter<SavingThrowKind>;
 
     fn iter() -> Self::Iterator {
-        let mut v = Vec::with_capacity(1 + Ability::iter().len());
+        let mut v = Vec::with_capacity(2 + Ability::iter().len());
         v.push(SavingThrowKind::Death);
+        v.push(SavingThrowKind::Concentration);
         v.extend(Ability::iter().map(SavingThrowKind::Ability));
         v.into_iter()
     }
@@ -42,6 +44,7 @@ impl Display for SavingThrowKind {
         match self {
             SavingThrowKind::Ability(ability) => write!(f, "{}", ability),
             SavingThrowKind::Death => write!(f, "Death"),
+            SavingThrowKind::Concentration => write!(f, "Concentration"),
         }
     }
 }
@@ -52,6 +55,9 @@ impl FromStr for SavingThrowKind {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.eq_ignore_ascii_case("death") {
             return Ok(SavingThrowKind::Death);
+        }
+        if s.eq_ignore_ascii_case("concentration") {
+            return Ok(SavingThrowKind::Concentration);
         }
         for ability in Ability::iter() {
             if let Ok(parsed_ability) = s.parse::<Ability>() {
@@ -100,6 +106,7 @@ impl Default for SavingThrowSet {
             |kind| match kind {
                 SavingThrowKind::Ability(ability) => Some(ability),
                 SavingThrowKind::Death => None,
+                SavingThrowKind::Concentration => Some(Ability::Constitution),
             },
             get_saving_throw_hooks,
         )

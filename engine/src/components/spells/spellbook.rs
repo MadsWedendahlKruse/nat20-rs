@@ -20,8 +20,9 @@ use crate::{
     components::{
         actions::action::{ActionContext, ActionMap, ActionProvider},
         class::{CastingReadinessModel, ClassAndSubclass, SpellAccessModel},
-        id::{ClassId, FeatId, ItemId, ResourceId, SpeciesId, SpellId},
+        id::{FeatId, ItemId, ResourceId, SpeciesId, SpellId},
         resource::{ResourceAmount, ResourceAmountMap},
+        spells::spell::ConcentrationTracker,
     },
     registry::registry::{ClassesRegistry, SpellsRegistry},
 };
@@ -223,6 +224,8 @@ pub struct Spellbook {
     max_spell_level: u8,
     /// External sources (items/feats/race).
     granted: HashMap<GrantedSpellSource, GrantedSpellSet>,
+    /// Concentration tracking state.
+    concentration: ConcentrationTracker,
 }
 
 impl Spellbook {
@@ -231,6 +234,7 @@ impl Spellbook {
             class_states: HashMap::new(),
             max_spell_level: 0,
             granted: HashMap::new(),
+            concentration: ConcentrationTracker::default(),
         }
     }
 
@@ -658,6 +662,14 @@ impl Spellbook {
 
     pub fn set_max_spell_level(&mut self, new_max_spell_level: u8) {
         self.max_spell_level = new_max_spell_level;
+    }
+
+    pub fn concentration_tracker(&self) -> &ConcentrationTracker {
+        &self.concentration
+    }
+
+    pub fn concentration_tracker_mut(&mut self) -> &mut ConcentrationTracker {
+        &mut self.concentration
     }
 }
 

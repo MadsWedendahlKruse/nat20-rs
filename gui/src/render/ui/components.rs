@@ -1557,7 +1557,7 @@ impl ImguiRenderableWithContext<(&World, Entity)>
                             let saving_throw = saving_throw(world, entity, &context);
                             let saving_throw_ability = match saving_throw.key {
                                 SavingThrowKind::Ability(ability) => ability,
-                                SavingThrowKind::Death => todo!(),
+                                _ => todo!()
                             };
                             TextSegments::new(vec![
                                 (saving_throw_ability.to_string(), TextKind::Ability),
@@ -1568,6 +1568,11 @@ impl ImguiRenderableWithContext<(&World, Entity)>
                         _ => {}
                     },
                     _ => {}
+                }
+
+                let spell_id: SpellId = action.id.clone().into();
+                if let Some(spell) = SpellsRegistry::get(&spell_id) && spell.requires_concentration(){
+                    TextSegment::new("Concentration", TextKind::Details).render(ui);
                 }
 
                 ui.separator();

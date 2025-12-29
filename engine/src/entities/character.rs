@@ -5,7 +5,7 @@ use hecs::Bundle;
 use crate::{
     components::{
         ability::AbilityScoreMap,
-        actions::action::{ActionCooldownMap, ActionMap},
+        actions::action::{ActionCooldownMap, ActionMap, default_actions},
         ai::PlayerControlledTag,
         damage::DamageResistances,
         effects::effects::Effect,
@@ -17,10 +17,10 @@ use crate::{
             inventory::Inventory,
         },
         level::CharacterLevels,
-        species::{CreatureSize, CreatureType},
         resource::ResourceMap,
         saving_throw::SavingThrowSet,
         skill::SkillSet,
+        species::{CreatureSize, CreatureType},
         speed::Speed,
         spells::spellbook::Spellbook,
     },
@@ -79,9 +79,9 @@ impl Character {
             brain: registry::ai::RANDOM_CONTROLLER_ID.clone(),
             pose: CreaturePose::identity(),
             name,
-            species: SpeciesId::new("nat20_rs",""),
+            species: SpeciesId::new("nat20_rs", ""),
             subspecies: None,
-            background: BackgroundId::new("nat20_rs",""),
+            background: BackgroundId::new("nat20_rs", ""),
             size: CreatureSize::Medium,
             creature_type: CreatureType::Humanoid,
             speed: Speed::default(),
@@ -100,10 +100,9 @@ impl Character {
             resources: ResourceMap::default(),
             effects: Vec::new(),
             feats: Vec::new(),
-            // TODO: Default actions like jump, dash, help, etc.
-            actions: ActionMap::new(),
+            actions: default_actions(),
             cooldowns: HashMap::new(),
-            factions: FactionSet::from([FactionId::new("nat20_rs","faction.players")]),
+            factions: FactionSet::from([FactionId::new("nat20_rs", "faction.players")]),
         }
     }
 }

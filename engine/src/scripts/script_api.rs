@@ -402,11 +402,10 @@ impl ScriptResourceCost {
                 cost.entry(from.clone())
                     .and_modify(|e| *e -= amount.clone());
             }
+            cost.entry(to.clone())
+                .and_modify(|e| *e += amount.clone())
+                .or_insert(amount);
         }
-
-        cost.entry(to.clone())
-            .and_modify(|e| *e += amount.clone())
-            .or_insert(amount);
     }
 }
 

@@ -299,7 +299,10 @@ pub mod creatures {
                         "choice.spells",
                         &ClassId::new("nat20_rs", "class.wizard"),
                         &None,
-                        vec![SpellId::new("nat20_rs", "spell.magic_missile")],
+                        vec![
+                            SpellId::new("nat20_rs", "spell.magic_missile"),
+                            SpellId::new("nat20_rs", "spell.expeditious_retreat"),
+                        ],
                     ),
                     // Level 2
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(

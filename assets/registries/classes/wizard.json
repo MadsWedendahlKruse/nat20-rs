@@ -72,11 +72,11 @@
             "20": 5
         },
         "prepared_spells_per_level": {
-            "1": 1,
-            "2": 2,
-            "3": 3,
-            "4": 3,
-            "5": 5,
+            "1": 2,
+            "2": 3,
+            "3": 4,
+            "4": 4,
+            "5": 6,
             "6": 5,
             "7": 5,
             "8": 5,
@@ -119,6 +119,7 @@
         "spell_list": [
             "nat20_rs::spell.acid_splash",
             "nat20_rs::spell.counterspell",
+            "nat20_rs::spell.expeditious_retreat",
             "nat20_rs::spell.fire_bolt",
             "nat20_rs::spell.fireball",
             "nat20_rs::spell.magic_missile",

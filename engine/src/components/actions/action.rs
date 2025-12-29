@@ -26,7 +26,7 @@ use crate::{
         event::{ActionData, Event},
         game_state::GameState,
     },
-    registry::serialize::action::ActionDefinition,
+    registry::{registry::ActionsRegistry, serialize::action::ActionDefinition},
     systems::{self},
 };
 
@@ -519,3 +519,13 @@ pub type ActionMap = HashMap<ActionId, Vec<(ActionContext, ResourceAmountMap)>>;
 pub type ActionCooldownMap = HashMap<ActionId, RechargeRule>;
 
 pub type ReactionSet = HashSet<ActionId>;
+
+// TODO: Not sure if this is the best solution
+pub fn default_actions() -> ActionMap {
+    let mut actions = ActionMap::new();
+    for action in [ActionId::new("nat20_rs", "action.dash")] {
+        let resource_cost = ActionsRegistry::get(&action).unwrap().resource_cost.clone();
+        actions.insert(action.clone(), vec![(ActionContext::Other, resource_cost)]);
+    }
+    actions
+}

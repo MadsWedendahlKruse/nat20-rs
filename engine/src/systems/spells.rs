@@ -11,7 +11,10 @@ use crate::{
         level::CharacterLevels,
         level_up::LevelUpPrompt,
         resource::{ResourceAmount, ResourceBudgetKind, ResourceMap},
-        spells::spellbook::{ClassSpellcastingState, SpellSource, Spellbook},
+        spells::{
+            spell::ConcentrationInstance,
+            spellbook::{ClassSpellcastingState, Spellbook},
+        },
     },
     registry::registry::ClassesRegistry,
     systems,
@@ -191,5 +194,28 @@ pub fn update_spellbook(
             ));
         }
         prompts
+    }
+}
+
+pub fn add_concentration_instance(
+    world: &mut World,
+    caster: Entity,
+    instance: ConcentrationInstance,
+) {
+    let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, caster);
+    spellbook
+        .concentration_tracker_mut()
+        .instances
+        .push(instance);
+}
+
+pub fn break_concentration(world: &mut World, target: Entity) {
+    let instances_to_break: Vec<ConcentrationInstance> = {
+        let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, target);
+        std::mem::take(&mut spellbook.concentration_tracker_mut().instances)
+    };
+
+    for instance in instances_to_break {
+        instance.break_concentration(world);
     }
 }
