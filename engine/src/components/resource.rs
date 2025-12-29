@@ -31,6 +31,16 @@ impl RechargeRule {
         }
         *other >= *self
     }
+
+    pub fn turns(&self) -> Option<u32> {
+        match self {
+            RechargeRule::Turn => Some(1),
+            RechargeRule::ShortRest => Some(600), // 1 hour
+            RechargeRule::LongRest => Some(4800), // 8 hours
+            RechargeRule::Daily => Some(14400),   // 24 hours
+            RechargeRule::Never => None,
+        }
+    }
 }
 
 impl Display for RechargeRule {

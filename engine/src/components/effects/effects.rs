@@ -36,16 +36,16 @@ pub enum EffectDuration {
     Instant,
     Temporary {
         /// Number of turns the effect lasts
-        duration: u8,
+        duration: u32,
         /// Number of turns that have passed since the effect was applied
-        turns_elapsed: u8,
+        turns_elapsed: u32,
     },
     Conditional,
     Permanent,
 }
 
 impl EffectDuration {
-    pub fn temporary(duration: u8) -> Self {
+    pub fn temporary(duration: u32) -> Self {
         Self::Temporary {
             duration,
             turns_elapsed: 0,
@@ -149,14 +149,18 @@ impl Effect {
         }
     }
 
-    pub fn increment_turns(&mut self) {
+    pub fn increment_turns_amount(&mut self, amount: u32) {
         if let EffectDuration::Temporary {
             duration: _,
             ref mut turns_elapsed,
         } = self.duration
         {
-            *turns_elapsed += 1;
+            *turns_elapsed += amount;
         }
+    }
+
+    pub fn increment_turns(&mut self) {
+        self.increment_turns_amount(1);
     }
 
     pub fn is_expired(&self) -> bool {

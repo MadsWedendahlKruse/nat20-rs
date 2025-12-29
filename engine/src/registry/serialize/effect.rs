@@ -239,7 +239,7 @@ impl RegistryReferenceCollector for EffectDefinition {
 #[serde(try_from = "String", into = "String", rename_all = "snake_case")]
 pub enum EffectDurationDefinition {
     Instant,
-    Temporary { duration: u8 },
+    Temporary { duration: u32 },
     Conditional,
     Permanent,
 }
@@ -283,7 +283,7 @@ impl TryFrom<String> for EffectDurationDefinition {
                 if value.starts_with("temporary(") && value.ends_with(')') {
                     let inner = &value["temporary(".len()..value.len() - 1];
                     let duration = inner
-                        .parse::<u8>()
+                        .parse::<u32>()
                         .map_err(|e| format!("Failed to parse duration in temporary(): {}", e))?;
                     Ok(EffectDurationDefinition::Temporary { duration })
                 } else {

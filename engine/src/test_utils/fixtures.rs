@@ -302,6 +302,7 @@ pub mod creatures {
                         vec![
                             SpellId::new("nat20_rs", "spell.magic_missile"),
                             SpellId::new("nat20_rs", "spell.expeditious_retreat"),
+                            SpellId::new("nat20_rs", "spell.longstrider"),
                         ],
                     ),
                     // Level 2

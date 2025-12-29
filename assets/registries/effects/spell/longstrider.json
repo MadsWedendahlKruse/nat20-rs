@@ -1,0 +1,11 @@
+{
+    "id": "nat20_rs::effect.longstrider",
+    "kind": "buff",
+    "description": "Your movement speed is increased by 10 feet until the spell ends.",
+    "duration": "temporary(600)",
+    "modifiers": [
+        {
+            "speed": "10 ft"
+        }
+    ]
+}

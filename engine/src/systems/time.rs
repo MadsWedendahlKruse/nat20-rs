@@ -17,7 +17,7 @@ pub fn pass_time(world: &mut World, entity: Entity, passed_time: &RechargeRule) 
         let mut effects = systems::effects::effects_mut(world, entity);
 
         for effect in effects.iter_mut() {
-            effect.increment_turns();
+            effect.increment_turns_amount(passed_time.turns().unwrap_or(0));
         }
 
         // Collect expired effects first to avoid double mutable borrow

@@ -377,6 +377,13 @@ pub fn line_of_sight_entity_entity(
     from_entity: Entity,
     to_entity: Entity,
 ) -> LineOfSightResult {
+    if from_entity == to_entity {
+        return LineOfSightResult {
+            has_line_of_sight: true,
+            raycast_result: None,
+        };
+    }
+
     if let Some(from_eye_pos) = get_eye_position(world, from_entity)
         && let Some(to_eye_pos) = get_eye_position(world, to_entity)
         && let Some(result) = raycast_point_point(
