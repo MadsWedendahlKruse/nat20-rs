@@ -167,6 +167,7 @@ impl ImguiRenderable for HitPoints {
             ui,
             self.current(),
             self.max(),
+            self.temp().map(|temp| temp.amount()),
             self.current() as f32 / self.max() as f32,
             150.0,
             "HP",
@@ -1538,10 +1539,20 @@ impl ImguiRenderableWithContext<(&World, Entity)>
             .build(|| {
                 ui.separator_with_text(&action_id.to_string());
 
+                let spell_id: SpellId = action.id.clone().into();
+                let spell = SpellsRegistry::get(&spell_id);
+                if let Some(spell) = spell {
+                    if spell.base_level() > 0 {
+                        TextSegment::new(format!("Level {} {} Spell", spell.base_level(), spell.school()), TextKind::Details).render(ui);
+                    } else {
+                        TextSegment::new(format!("{} Cantrip", spell.school()), TextKind::Details).render(ui);
+                    }
+                }
+
                 action
                     .kind
                     .render_with_context(ui, (world, entity, context));
-
+                
                 ui.separator();
 
                 let targeting = (action.targeting)(world, entity, context);
@@ -1570,8 +1581,7 @@ impl ImguiRenderableWithContext<(&World, Entity)>
                     _ => {}
                 }
 
-                let spell_id: SpellId = action.id.clone().into();
-                if let Some(spell) = SpellsRegistry::get(&spell_id) && spell.requires_concentration(){
+                if let Some(spell) = spell && spell.requires_concentration(){
                     TextSegment::new("Concentration", TextKind::Details).render(ui);
                 }
 

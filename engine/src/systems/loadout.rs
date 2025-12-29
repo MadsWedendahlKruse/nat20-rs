@@ -44,7 +44,13 @@ where
         .unwrap()
         .effects()
         .clone();
-    systems::effects::add_effects(world, entity, &effects, &ModifierSource::Item(item_id));
+    systems::effects::add_effects(
+        world,
+        entity,
+        &effects,
+        &ModifierSource::Item(item_id),
+        None,
+    );
     Ok(unequipped_items)
 }
 
@@ -64,7 +70,13 @@ where
     for item in &unequipped_items {
         systems::effects::remove_effects(world, entity, item.effects());
     }
-    systems::effects::add_effects(world, entity, &effects, &ModifierSource::Item(item_id));
+    systems::effects::add_effects(
+        world,
+        entity,
+        &effects,
+        &ModifierSource::Item(item_id),
+        None,
+    );
     Ok(unequipped_items)
 }
 

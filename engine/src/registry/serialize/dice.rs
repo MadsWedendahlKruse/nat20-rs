@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fmt::Display,
+    fmt::{self, Display},
     str::FromStr,
     sync::{Arc, LazyLock},
 };
@@ -173,5 +173,13 @@ impl TryFrom<String> for HealEquation {
 impl From<HealEquation> for String {
     fn from(equation: HealEquation) -> Self {
         equation.raw
+    }
+}
+
+impl fmt::Debug for HealEquation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HealEquation")
+            .field("raw", &self.raw)
+            .finish()
     }
 }

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{
     components::{
         ability::AbilityScoreMap,
-        actions::action::{Action, ActionContext},
+        actions::action::ActionContext,
         d20::{D20CheckKey, D20CheckSet},
         damage::{
             DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
@@ -17,6 +17,7 @@ use crate::{
                 ResourceCostHook,
             },
         },
+        health::hit_points::{HitPoints, TemporaryHitPoints},
         id::{ActionId, EffectId, ResourceId, ScriptId},
         items::equipment::armor::ArmorClass,
         modifier::{KeyedModifiable, Modifiable, ModifierSource},
@@ -28,11 +29,14 @@ use crate::{
     engine::event::ActionData,
     registry::{
         registry_validation::{ReferenceCollector, RegistryReference, RegistryReferenceCollector},
-        serialize::modifier::{
-            AbilityModifierProvider, ArmorClassModifierProvider, AttackRollModifier,
-            AttackRollModifierProvider, D20CheckModifierProvider, DamageResistanceProvider,
-            SavingThrowModifierProvider, SkillModifierProvider, SpeedModifier,
-            SpeedModifierProvider,
+        serialize::{
+            dice::HealEquation,
+            modifier::{
+                AbilityModifierProvider, ArmorClassModifierProvider, AttackRollModifier,
+                AttackRollModifierProvider, D20CheckModifierProvider, DamageResistanceProvider,
+                SavingThrowModifierProvider, SkillModifierProvider, SpeedModifier,
+                SpeedModifierProvider,
+            },
         },
     },
     scripts::{
@@ -102,11 +106,13 @@ impl From<EffectDefinition> for Effect {
         {
             let effect_id = effect_id.clone();
             let modifiers = definition.modifiers.clone();
-            effect.on_apply = Arc::new(move |world: &mut World, entity: Entity| {
-                for modifier in &modifiers {
-                    modifier.evaluate(world, entity, &effect_id, EffectPhase::Apply);
-                }
-            });
+            effect.on_apply = Arc::new(
+                move |world: &mut World, entity: Entity, context: Option<&ActionContext>| {
+                    for modifier in &modifiers {
+                        modifier.evaluate(world, entity, &effect_id, EffectPhase::Apply, context);
+                    }
+                },
+            );
         }
 
         // Build on_unapply from the *same* modifiers, but different phase
@@ -115,7 +121,7 @@ impl From<EffectDefinition> for Effect {
             let modifiers_for_unapply = definition.modifiers;
             effect.on_unapply = Arc::new(move |world: &mut World, entity: Entity| {
                 for modifier in &modifiers_for_unapply {
-                    modifier.evaluate(world, entity, &effect_id, EffectPhase::Unapply);
+                    modifier.evaluate(world, entity, &effect_id, EffectPhase::Unapply, None);
                 }
             });
         }
@@ -310,6 +316,9 @@ pub enum EffectModifier {
     Speed {
         speed: SpeedModifierProvider,
     },
+    TemporaryHitPoints {
+        temporary_hit_points: HealEquation,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -325,6 +334,7 @@ impl EffectModifier {
         entity: Entity,
         effect_id: &EffectId,
         phase: EffectPhase,
+        context: Option<&ActionContext>,
     ) {
         let source = ModifierSource::Effect(effect_id.clone());
         match self {
@@ -408,6 +418,27 @@ impl EffectModifier {
                             speed.remove_multiplier(&source);
                         }
                     },
+                }
+            }
+
+            EffectModifier::TemporaryHitPoints {
+                temporary_hit_points,
+            } => {
+                if let Some(context) = context {
+                    let amount = (temporary_hit_points.function)(world, entity, context)
+                        .roll()
+                        .subtotal as u32;
+                    let mut hit_points =
+                        systems::helpers::get_component_mut::<HitPoints>(world, entity);
+                    let source = ModifierSource::Effect(effect_id.clone());
+                    match phase {
+                        EffectPhase::Apply => {
+                            hit_points.set_temp(TemporaryHitPoints::new(amount, &source));
+                        }
+                        EffectPhase::Unapply => {
+                            hit_points.clear_temp(&source);
+                        }
+                    }
                 }
             }
         }

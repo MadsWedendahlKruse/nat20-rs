@@ -349,6 +349,12 @@ pub mod creatures {
                         &None,
                         vec![SpellId::new("nat20_rs", "spell.ray_of_frost")],
                     ),
+                    LevelUpDecision::spells(
+                        "choice.spells",
+                        &ClassId::new("nat20_rs", "class.wizard"),
+                        &None,
+                        vec![SpellId::new("nat20_rs", "spell.false_life")],
+                    ),
                     // Level 5
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
                         "nat20_rs",

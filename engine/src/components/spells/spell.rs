@@ -2,6 +2,7 @@ use std::{hash::Hash, sync::Arc};
 
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
+use strum::Display;
 
 use crate::{
     components::{
@@ -14,7 +15,7 @@ use crate::{
     systems,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Display, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MagicSchool {
     Abjuration,

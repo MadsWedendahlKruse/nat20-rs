@@ -4,7 +4,7 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        actions::action::{Action, ActionContext},
+        actions::action::ActionContext,
         d20::{D20Check, D20CheckResult},
         damage::{
             AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
@@ -16,7 +16,8 @@ use crate::{
     engine::event::ActionData,
 };
 
-pub type EffectHook = Arc<dyn Fn(&mut World, Entity) + Send + Sync>;
+pub type ApplyEffectHook = Arc<dyn Fn(&mut World, Entity, Option<&ActionContext>) + Send + Sync>;
+pub type UnapplyEffectHook = Arc<dyn Fn(&mut World, Entity) + Send + Sync>;
 pub type AttackRollHook = Arc<dyn Fn(&World, Entity, &mut AttackRoll) + Send + Sync>;
 pub type AttackRollResultHook = Arc<dyn Fn(&World, Entity, &mut AttackRollResult) + Send + Sync>;
 pub type ArmorClassHook = Arc<dyn Fn(&World, Entity, &mut ArmorClass) + Send + Sync>;

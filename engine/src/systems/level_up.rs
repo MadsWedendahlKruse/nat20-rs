@@ -268,6 +268,7 @@ fn resolve_level_up_prompt(
                             effect_id,
                             // TODO: Determine proper source
                             &ModifierSource::Base,
+                            None,
                         );
                     }
                     ChoiceItem::Feat(feat_id) => {

@@ -1,0 +1,17 @@
+{
+    "id": "nat20_rs::spell.false_life",
+    "description": "You bolster yourself with a necromantic facsimile of life, granting you 2d4 + 4 temporary hit points for the duration.",
+    "base_level": 1,
+    "school": "necromancy",
+    "kind": {
+        "standard": {
+            "payload": {
+                "effect": "nat20_rs::effect.false_life"
+            }
+        }
+    },
+    "targeting": "self",
+    "resource_cost": {
+        "nat20_rs::resource.action": 1
+    }
+}

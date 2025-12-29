@@ -220,18 +220,20 @@ pub fn render_progress_bar<T: Display>(
     ui: &imgui::Ui,
     current: T,
     max: T,
+    temp_bonus: Option<T>,
     fraction: f32,
     width: f32,
     label: &str,
     units: Option<&str>,
     progress_bar_color: Option<ProgressBarColor>,
 ) {
-    let hp_text = if let Some(units) = units {
-        format!("{} / {} {}", current, max, units)
-    } else {
-        format!("{} / {}", current, max)
-    };
-
+    let mut text = format!("{} / {}", current, max);
+    if let Some(temp) = temp_bonus {
+        text = format!("{} (+{})", text, temp);
+    }
+    if let Some(units) = units {
+        text = format!("{} {}", text, units);
+    }
     // Reserve vertical space for the taller widget (the progress bar)
     let line_height = ui.text_line_height_with_spacing();
     let bar_height = line_height;
@@ -268,7 +270,7 @@ pub fn render_progress_bar<T: Display>(
 
     imgui::ProgressBar::new(fraction)
         .size([width, bar_height])
-        .overlay_text(&hp_text)
+        .overlay_text(&text)
         .build(ui);
 
     // Pop the style colors

@@ -62,6 +62,7 @@ pub fn add_feat(
             entity,
             effect,
             &ModifierSource::Feat(feat.id().clone()),
+            None,
         );
     }
 

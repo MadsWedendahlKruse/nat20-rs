@@ -16,6 +16,7 @@ use crate::{
         effects::hooks::{
             ActionHook, ArmorClassHook, AttackRollHook, AttackRollResultHook, D20CheckHooks,
             DamageRollHook, DamageRollResultHook, DamageTakenHook, ResourceCostHook,
+            UnapplyEffectHook,
         },
         id::{ActionId, EffectId, IdProvider},
         items::equipment::armor::ArmorClass,
@@ -28,7 +29,7 @@ use crate::{
     registry::serialize::effect::EffectDefinition,
 };
 
-use super::hooks::EffectHook;
+use super::hooks::ApplyEffectHook;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EffectDuration {
@@ -88,13 +89,12 @@ pub struct Effect {
     pub source: ModifierSource,
     pub duration: EffectDuration,
     pub replaces: Option<EffectId>,
-    // TODO: description?
-    pub on_apply: EffectHook,
+    pub on_apply: ApplyEffectHook,
     // on_turn_start: EffectHook,
     // TODO: Do we need to differentiate between when an effect explicitly expires and when
     // the effect is removed from the character?
     // pub on_expire: EffectHook,
-    pub on_unapply: EffectHook,
+    pub on_unapply: UnapplyEffectHook,
     pub on_skill_check: HashMap<Skill, D20CheckHooks>,
     pub on_saving_throw: HashMap<SavingThrowKind, D20CheckHooks>,
     pub pre_attack_roll: AttackRollHook,
@@ -120,8 +120,9 @@ impl Effect {
             description,
             source: ModifierSource::None,
             duration,
-            on_apply: Arc::new(|_: &mut World, _: Entity| {}) as EffectHook,
-            on_unapply: Arc::new(|_: &mut World, _: Entity| {}) as EffectHook,
+            on_apply: Arc::new(|_: &mut World, _: Entity, _: Option<&ActionContext>| {})
+                as ApplyEffectHook,
+            on_unapply: Arc::new(|_: &mut World, _: Entity| {}) as UnapplyEffectHook,
             on_skill_check: HashMap::new(),
             on_saving_throw: HashMap::new(),
             pre_attack_roll: Arc::new(|_: &World, _: Entity, _: &mut AttackRoll| {})

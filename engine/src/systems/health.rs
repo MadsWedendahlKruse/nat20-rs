@@ -69,66 +69,67 @@ pub fn damage(
         (effect.damage_taken)(&game_state.world, target, &mut mitigation_result);
     }
 
-    let (damage_taken, killed_by_damage, mut new_life_state) = if let Ok((hit_points, life_state)) =
-        game_state
+    let (damage_taken, killed_by_damage, mut new_life_state, removed_temp_hp_source) =
+        if let Ok((hit_points, life_state)) = game_state
             .world
             .query_one_mut::<(&mut HitPoints, &mut LifeState)>(target)
-    {
-        // Track any changes to the life state of the target
-        let mut new_life_state = None;
-        // Check if the target is already at 0 HP
-        let hp_before_damage = hit_points.current();
-        if hit_points.current() == 0 {
-            match life_state {
-                LifeState::Stable => {
-                    new_life_state = Some(LifeState::unconscious());
-                }
+        {
+            // Track any changes to the life state of the target
+            let mut new_life_state = None;
+            // Check if the target is already at 0 HP
+            let hp_before_damage = hit_points.current();
+            if hit_points.current() == 0 {
+                match life_state {
+                    LifeState::Stable => {
+                        new_life_state = Some(LifeState::unconscious());
+                    }
 
-                LifeState::Unconscious(death_saving_throws) => {
-                    if let Some(attack_roll) = attack_roll {
-                        if attack_roll.roll_result.is_crit {
-                            death_saving_throws.record_failure(2);
+                    LifeState::Unconscious(death_saving_throws) => {
+                        if let Some(attack_roll) = attack_roll {
+                            if attack_roll.roll_result.is_crit {
+                                death_saving_throws.record_failure(2);
+                            } else {
+                                death_saving_throws.record_failure(1);
+                            }
                         } else {
                             death_saving_throws.record_failure(1);
                         }
-                    } else {
-                        death_saving_throws.record_failure(1);
+
+                        let next_state = death_saving_throws.next_state();
+                        if !matches!(next_state, LifeState::Unconscious(_)) {
+                            // If the next state is not still unconscious, we need to update it
+                            new_life_state = Some(next_state);
+                        }
                     }
 
-                    let next_state = death_saving_throws.next_state();
-                    if !matches!(next_state, LifeState::Unconscious(_)) {
-                        // If the next state is not still unconscious, we need to update it
-                        new_life_state = Some(next_state);
+                    _ => {
+                        // Other valid states where HP would be zero are some form of
+                        // dead, so no-op
+                        // TODO: Validate that this is the case?
                     }
-                }
-
-                _ => {
-                    // Other valid states where HP would be zero are some form of
-                    // dead, so no-op
-                    // TODO: Validate that this is the case?
                 }
             }
-        }
 
-        let damage_taken = mitigation_result.total.max(0) as u32;
+            let damage_taken = mitigation_result.total.max(0) as u32;
 
-        hit_points.damage(damage_taken);
-        debug!(
-            "Entity {:?} took {} damage (HP: {} -> {})",
-            target,
-            damage_taken,
-            hp_before_damage,
-            hit_points.current()
-        );
+            let removed_temp_hp = hit_points.damage(damage_taken);
+            debug!(
+                "Entity {:?} took {} damage (HP: {} -> {})",
+                target,
+                damage_taken,
+                hp_before_damage,
+                hit_points.current()
+            );
 
-        (
-            damage_taken,
-            hp_before_damage > 0 && hit_points.current() == 0,
-            new_life_state,
-        )
-    } else {
-        return (None, None);
-    };
+            (
+                damage_taken,
+                hp_before_damage > 0 && hit_points.current() == 0,
+                new_life_state,
+                removed_temp_hp,
+            )
+        } else {
+            return (None, None);
+        };
 
     if killed_by_damage {
         // Monsters and Characters 'die' differently
@@ -144,6 +145,19 @@ pub fn damage(
     if let Some(new_life_state) = new_life_state {
         if let Ok(mut life_state) = game_state.world.get::<&mut LifeState>(target) {
             *life_state = new_life_state;
+        }
+    }
+
+    if let Some(source) = &removed_temp_hp_source {
+        debug!(
+            "Entity {:?} lost temporary hit points from source {:?}",
+            target, source
+        );
+        match source {
+            ModifierSource::Effect(effect_id) => {
+                systems::effects::remove_effect(&mut game_state.world, target, effect_id);
+            }
+            _ => { /* Other sources don't need to be removed? */ }
         }
     }
 

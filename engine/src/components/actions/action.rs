@@ -138,16 +138,16 @@ impl ActionPayload {
         }
     }
 
-    pub fn damage(&self) -> &Option<Arc<DamageFunction>> {
-        &self.damage
+    pub fn damage(&self) -> Option<&Arc<DamageFunction>> {
+        self.damage.as_ref()
     }
 
-    pub fn effect(&self) -> &Option<EffectId> {
-        &self.effect
+    pub fn effect(&self) -> Option<&EffectId> {
+        self.effect.as_ref()
     }
 
-    pub fn healing(&self) -> &Option<Arc<HealFunction>> {
-        &self.healing
+    pub fn healing(&self) -> Option<&Arc<HealFunction>> {
+        self.healing.as_ref()
     }
 }
 

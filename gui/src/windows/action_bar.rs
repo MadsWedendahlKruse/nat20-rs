@@ -287,6 +287,7 @@ fn render_resources(ui: &imgui::Ui, game_state: &mut GameState, entity: Entity) 
                 ui,
                 remaining_speed.value,
                 total_speed.value,
+                None,
                 remaining_speed.value / total_speed.value,
                 150.0,
                 "Speed",

@@ -460,21 +460,20 @@ fn perform_unconditional(
     );
 
     // Apply healing immediately (no gating for unconditional).
-    let healing_outcome: Option<HealingOutcome> =
-        payload.healing().as_ref().map(|healing_amount| {
-            let healing_amount =
-                healing_amount(&game_state.world, action_data.actor, &action_data.context).roll();
-            let new_life_state = systems::health::heal(
-                &mut game_state.world,
-                target,
-                healing_amount.subtotal as u32,
-            );
+    let healing_outcome: Option<HealingOutcome> = payload.healing().map(|healing_amount| {
+        let healing_amount =
+            healing_amount(&game_state.world, action_data.actor, &action_data.context).roll();
+        let new_life_state = systems::health::heal(
+            &mut game_state.world,
+            target,
+            healing_amount.subtotal as u32,
+        );
 
-            HealingOutcome {
-                healing: healing_amount,
-                new_life_state,
-            }
-        });
+        HealingOutcome {
+            healing: healing_amount,
+            new_life_state,
+        }
+    });
 
     // If there is no damage, we can emit the ActionPerformed immediately.
     let Some(damage_function) = payload.damage() else {
@@ -820,11 +819,11 @@ fn get_damage_roll(
         && !success
     {
         match damage_on_failure {
-            DamageOnFailure::Half => payload.damage().as_ref().cloned(),
+            DamageOnFailure::Half => payload.damage().cloned(),
             DamageOnFailure::Custom(func) => Some(func.clone()),
         }
     } else {
-        payload.damage().as_ref().cloned()
+        payload.damage().cloned()
     };
 
     if let Some(damage_function) = damage_function {
@@ -860,12 +859,13 @@ fn get_effect_outcome(
     payload: &ActionPayload,
     apply_rule: EffectApplyRule,
 ) -> Option<EffectOutcome> {
-    payload.effect().as_ref().map(|effect_id| {
+    payload.effect().map(|effect_id| {
         systems::effects::add_effect(
             world,
             target,
             &effect_id,
             &ModifierSource::Action(action_data.action_id.clone()),
+            Some(&action_data.context),
         );
 
         // Add concentration tracking if needed

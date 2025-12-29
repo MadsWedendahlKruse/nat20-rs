@@ -1,7 +1,10 @@
 use hecs::{Entity, Ref, World};
 
 use crate::{
-    components::{effects::effects::Effect, id::EffectId, modifier::ModifierSource},
+    components::{
+        actions::action::ActionContext, effects::effects::Effect, id::EffectId,
+        modifier::ModifierSource,
+    },
     registry::registry::EffectsRegistry,
     systems,
 };
@@ -29,10 +32,11 @@ pub fn add_effect(
     entity: Entity,
     effect_id: &EffectId,
     source: &ModifierSource,
+    context: Option<&ActionContext>,
 ) {
     let mut effect = get_effect(effect_id);
     effect.source = source.clone();
-    (effect.on_apply)(world, entity);
+    (effect.on_apply)(world, entity, context);
     if let Some(replaces) = &effect.replaces {
         remove_effect(world, entity, replaces);
     }
@@ -44,9 +48,10 @@ pub fn add_effects(
     entity: Entity,
     effects: &Vec<EffectId>,
     source: &ModifierSource,
+    context: Option<&ActionContext>,
 ) {
     for effect in effects {
-        add_effect(world, entity, effect, source);
+        add_effect(world, entity, effect, source, context);
     }
 }
 
