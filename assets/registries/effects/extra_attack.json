@@ -2,7 +2,6 @@
     "id": "nat20_rs::effect.extra_attack",
     "kind": "buff",
     "description": "You can attack twice, instead of once, whenever you take the Attack action on your turn.",
-    "duration": "permanent",
     "on_action": [
         {
             "script": "nat20_rs::script.effect.extra_attack"
