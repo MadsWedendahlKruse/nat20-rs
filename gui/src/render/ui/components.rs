@@ -1037,7 +1037,7 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
                         TextSegments::new(vec![
                             (target_name.as_str(), TextKind::Target),
                             ("was healed for", TextKind::Normal),
-                            (&format!("{} HP", healing.healing), TextKind::Healing),
+                            (&format!("{} HP", healing.healing.subtotal), TextKind::Healing),
                         ])
                         .with_indent(indent_level + 1)
                         .render(ui);
@@ -1050,6 +1050,17 @@ impl ImguiRenderableWithContext<(&World, u8)> for ActionResult {
                             ),
                         );
                     });
+
+                    if ui.is_item_hovered() {
+                        ui.tooltip(|| {
+                            ui.text("Healing:");
+                            ui.same_line();
+                            TextSegment::new(
+                                &format!("{} HP", healing.healing),
+                                TextKind::Healing,
+                            ).render(ui);
+                        });
+                    }
                 }
 
                 if let Some(effect) = &action_outcome.effect {
