@@ -61,7 +61,7 @@ impl Feat {
         }
     }
 
-    pub fn effects(&self) -> &[EffectId] {
+    pub fn effects(&self) -> &Vec<EffectId> {
         &self.effects
     }
 

@@ -152,11 +152,11 @@ impl Modifiable for ModifierSet {
 }
 
 pub trait KeyedModifiable<K> {
-    fn add_modifier<T>(&mut self, key: K, source: ModifierSource, value: T)
+    fn add_modifier<T>(&mut self, key: &K, source: ModifierSource, value: T)
     where
         T: Into<i32>;
-    fn remove_modifier(&mut self, key: K, source: &ModifierSource);
-    fn total(&self, key: K) -> i32;
+    fn remove_modifier(&mut self, key: &K, source: &ModifierSource);
+    fn total(&self, key: &K) -> i32;
 }
 
 impl fmt::Display for ModifierSet {

@@ -257,7 +257,7 @@ impl LevelUpDecisionProgress {
                     LevelUpPrompt::SkillProficiency(_, num_options, _) => {
                         let skill_set = systems::helpers::get_component::<SkillSet>(world, entity);
                         let all_skills = Skill::iter()
-                            .map(|skill| (skill, skill_set.get(skill).proficiency().clone()))
+                            .map(|skill| (skill, skill_set.get(&skill).proficiency().clone()))
                             .collect();
                         return LevelUpDecisionProgress::SkillProficiency {
                             selected: HashSet::new(),

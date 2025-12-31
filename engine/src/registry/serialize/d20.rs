@@ -143,7 +143,7 @@ fn spell_attack_roll(
         ModifierSource::None,
     ));
     let spellcasting_modifier = ability_scores
-        .ability_modifier(spellcasting_ability)
+        .ability_modifier(&spellcasting_ability)
         .total();
     roll.add_modifier(
         ModifierSource::Ability(spellcasting_ability),
@@ -258,7 +258,7 @@ fn spell_save_dc(
     let mut spell_save_dc = ModifierSet::new();
     spell_save_dc.add_modifier(ModifierSource::Base, BASE_SAVE_DC);
     let spellcasting_modifier = ability_scores
-        .ability_modifier(spellcasting_ability)
+        .ability_modifier(&spellcasting_ability)
         .total();
     spell_save_dc.add_modifier(
         ModifierSource::Ability(spellcasting_ability),

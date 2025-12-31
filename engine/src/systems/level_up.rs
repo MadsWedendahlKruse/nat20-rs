@@ -262,10 +262,10 @@ fn resolve_level_up_prompt(
             for item in selected {
                 match item {
                     ChoiceItem::Effect(effect_id) => {
-                        systems::effects::add_effect(
+                        systems::effects::add_permanent_effect(
                             world,
                             entity,
-                            effect_id,
+                            effect_id.clone(),
                             // TODO: Determine proper source
                             &ModifierSource::Base,
                             None,
@@ -388,7 +388,7 @@ fn resolve_level_up_prompt(
                 }
                 // TODO: Expertise handling
                 systems::helpers::get_component_mut::<SkillSet>(world, entity).set_proficiency(
-                    *skill,
+                    skill,
                     Proficiency::new(ProficiencyLevel::Proficient, source.clone()),
                 );
             }
@@ -477,7 +477,7 @@ fn resolve_level_up_prompt(
                         message: None,
                     });
                 }
-                let current_score = ability_score_set.get(*ability).total() as u8;
+                let current_score = ability_score_set.get(ability).total() as u8;
                 if current_score + bonus > *max_score {
                     return Err(LevelUpError::InvalidDecision {
                         prompt,
@@ -488,7 +488,7 @@ fn resolve_level_up_prompt(
 
                 // TODO: Not sure what the best way to apply the points is
                 ability_score_set.add_modifier(
-                    *ability,
+                    ability,
                     // Since some feats are repeatable, we can't use the same source
                     // every time, so we'll have to make it unique
                     ModifierSource::FeatRepeatable(feat.clone(), Uuid::new_v4()),

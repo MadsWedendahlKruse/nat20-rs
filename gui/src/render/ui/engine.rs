@@ -1,3 +1,4 @@
+use chrono::format;
 use hecs::World;
 use imgui::TreeNodeFlags;
 use nat20_rs::{
@@ -34,7 +35,12 @@ impl From<usize> for LogLevel {
 
 pub fn event_log_level(event: &Event) -> LogLevel {
     match &event.kind {
-        EventKind::Encounter(_) => LogLevel::Info,
+        EventKind::Encounter(encounter_event) => match encounter_event {
+            EncounterEvent::EncounterStarted { .. } => LogLevel::Info,
+            EncounterEvent::EncounterEnded { .. } => LogLevel::Info,
+            EncounterEvent::NewRound { .. } => LogLevel::Info,
+            EncounterEvent::TurnBoundary { .. } => LogLevel::Debug,
+        },
         EventKind::ActionRequested { .. } => LogLevel::Info,
         EventKind::ReactionRequested { .. } => LogLevel::Info,
         EventKind::ActionPerformed { .. } => LogLevel::Info,
@@ -47,6 +53,8 @@ pub fn event_log_level(event: &Event) -> LogLevel {
         },
         EventKind::DamageRollPerformed(_, _) => LogLevel::Debug,
         EventKind::DamageRollResolved(_, _) => LogLevel::Debug,
+        EventKind::RestStarted { .. } => LogLevel::Info,
+        EventKind::RestFinished { .. } => LogLevel::Info,
     }
 }
 
@@ -147,7 +155,6 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                 EncounterEvent::EncounterStarted(encounter_id) => {
                     ui.separator_with_text(&format!("Encounter {}", encounter_id));
                 }
-
                 EncounterEvent::EncounterEnded(encounter_id, combat_log) => {
                     if ui.collapsing_header(format!("Log##{}", encounter_id), TreeNodeFlags::FRAMED)
                     {
@@ -155,16 +162,23 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                     }
                     ui.separator();
                 }
-
                 EncounterEvent::NewRound(encounter_id, round) => {
                     ui.separator_with_text(format!("Round {}", round));
                 }
+                EncounterEvent::TurnBoundary {
+                    encounter_id,
+                    entity,
+                    boundary,
+                    round,
+                    turn_index,
+                } => {
+                    // TODO:
+                    ui.text(format!("{:#?}", encounter_event));
+                }
             },
-
             EventKind::ActionRequested { action } => {
                 action.render_with_context(ui, world);
             }
-
             EventKind::ReactionRequested { reaction } => {
                 ActionData::from(reaction).render_with_context(ui, world);
 
@@ -172,7 +186,6 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                 ui.same_line();
                 render_event_description(ui, &reaction.event, world);
             }
-
             EventKind::ActionPerformed { action, results } => {
                 TextSegments::new(vec![
                     (
@@ -209,7 +222,6 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                     result.render_with_context(ui, (&world, 0));
                 }
             }
-
             EventKind::ReactionTriggered {
                 trigger_event,
                 reactors,
@@ -227,7 +239,6 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                     .collect::<Vec<_>>()
                     .render_with_context(ui, &world);
             }
-
             EventKind::LifeStateChanged {
                 entity,
                 new_state,
@@ -242,7 +253,6 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                 let segments = new_life_state_text(&entity_name, new_state, actor_name.as_deref());
                 TextSegments::new(segments).render(ui);
             }
-
             EventKind::D20CheckResolved(entity, result_kind, dc_kind)
             | EventKind::D20CheckPerformed(entity, result_kind, dc_kind) => {
                 let dc_text_segments = get_dc_description(world, dc_kind);
@@ -301,6 +311,37 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                         damage_roll_result.render(ui);
                     });
                 }
+            }
+            // TODO: Improve rest event rendering
+            EventKind::RestStarted { kind, participants } => {
+                TextSegments::new(vec![
+                    ("Started".to_string(), TextKind::Normal),
+                    (format!("{:?} rest for", kind), TextKind::Normal),
+                ])
+                .render(ui);
+
+                ui.same_line();
+
+                participants
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .render_with_context(ui, &world);
+            }
+            EventKind::RestFinished { kind, participants } => {
+                TextSegments::new(vec![
+                    ("Finished".to_string(), TextKind::Normal),
+                    (format!("{:?} rest for", kind), TextKind::Normal),
+                ])
+                .render(ui);
+
+                ui.same_line();
+
+                participants
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .render_with_context(ui, &world);
             }
         }
 

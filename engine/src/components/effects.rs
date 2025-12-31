@@ -1,2 +1,2 @@
-pub mod effects;
+pub mod effect;
 pub mod hooks;

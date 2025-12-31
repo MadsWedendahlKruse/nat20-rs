@@ -180,7 +180,7 @@ impl Armor {
             self.dexterity_bonus,
         );
         let dex_bonus = ability_scores
-            .get(Ability::Dexterity)
+            .get(&Ability::Dexterity)
             .ability_modifier()
             .total();
         armor_class.add_modifier(ModifierSource::Ability(Ability::Dexterity), dex_bonus);

@@ -119,7 +119,7 @@ mod tests {
         let _ = systems::loadout::equip(&mut world, entity, armor);
 
         let check = systems::helpers::get_component::<SkillSet>(&world, entity).check(
-            Skill::Stealth,
+            &Skill::Stealth,
             &world,
             entity,
         );
@@ -129,7 +129,7 @@ mod tests {
             .expect("Failed to unequip armor");
 
         let check = systems::helpers::get_component::<SkillSet>(&world, entity).check(
-            Skill::Stealth,
+            &Skill::Stealth,
             &world,
             entity,
         );
@@ -160,7 +160,7 @@ mod tests {
         let _ = systems::loadout::equip(&mut world, entity, armor);
 
         let throw = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
-            SavingThrowKind::Ability(Ability::Constitution),
+            &SavingThrowKind::Ability(Ability::Constitution),
             &world,
             entity,
         );
@@ -170,7 +170,7 @@ mod tests {
             .expect("Failed to unequip armor");
 
         let throw = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
-            SavingThrowKind::Ability(Ability::Constitution),
+            &SavingThrowKind::Ability(Ability::Constitution),
             &world,
             entity,
         );

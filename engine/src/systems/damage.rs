@@ -16,13 +16,13 @@ pub fn damage_roll(
     crit: bool,
 ) -> DamageRollResult {
     for effect in systems::effects::effects(world, entity).iter() {
-        (effect.pre_damage_roll)(world, entity, &mut damage_roll);
+        (effect.effect().pre_damage_roll)(world, entity, &mut damage_roll);
     }
 
     let mut result = damage_roll.roll_raw(crit);
 
     for effect in systems::effects::effects(world, entity).iter() {
-        (effect.post_damage_roll)(world, entity, &mut result);
+        (effect.effect().post_damage_roll)(world, entity, &mut result);
     }
 
     result
@@ -41,7 +41,7 @@ pub fn damage_roll_fn(
 
 pub fn attack_roll(mut attack_roll: AttackRoll, world: &World, entity: Entity) -> AttackRollResult {
     for effect in systems::effects::effects(world, entity).iter() {
-        (effect.pre_attack_roll)(world, entity, &mut attack_roll);
+        (effect.effect().pre_attack_roll)(world, entity, &mut attack_roll);
     }
 
     let mut result = {
@@ -51,7 +51,7 @@ pub fn attack_roll(mut attack_roll: AttackRoll, world: &World, entity: Entity) -
     };
 
     for effect in systems::effects::effects(world, entity).iter() {
-        (effect.post_attack_roll)(world, entity, &mut result);
+        (effect.effect().post_attack_roll)(world, entity, &mut result);
     }
 
     result

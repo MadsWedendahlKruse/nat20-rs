@@ -11,7 +11,7 @@ use crate::{
             DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
         },
         effects::{
-            effects::{Effect, EffectDuration, EffectKind},
+            effect::{Effect, EffectKind},
             hooks::{
                 ActionHook, ArmorClassHook, AttackRollHook, DamageRollResultHook, DamageTakenHook,
                 ResourceCostHook,
@@ -54,7 +54,6 @@ pub struct EffectDefinition {
     pub id: EffectId,
     pub kind: EffectKind,
     pub description: String,
-    pub duration: EffectDurationDefinition,
 
     /// If present, this effect replaces another effect with the given id
     #[serde(default)]
@@ -94,12 +93,7 @@ impl From<EffectDefinition> for Effect {
     fn from(definition: EffectDefinition) -> Self {
         let effect_id = definition.id.clone();
 
-        let mut effect = Effect::new(
-            effect_id.clone(),
-            definition.kind,
-            definition.description,
-            definition.duration.into(),
-        );
+        let mut effect = Effect::new(effect_id.clone(), definition.kind, definition.description);
 
         // 1. Simple persistent modifiers
         // Build on_apply from all modifiers
@@ -236,65 +230,6 @@ impl RegistryReferenceCollector for EffectDefinition {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String", rename_all = "snake_case")]
-pub enum EffectDurationDefinition {
-    Instant,
-    Temporary { duration: u32 },
-    Conditional,
-    Permanent,
-}
-
-impl Into<EffectDuration> for EffectDurationDefinition {
-    fn into(self) -> EffectDuration {
-        match self {
-            EffectDurationDefinition::Instant => EffectDuration::Instant,
-            EffectDurationDefinition::Conditional => EffectDuration::Conditional,
-            EffectDurationDefinition::Permanent => EffectDuration::Permanent,
-            EffectDurationDefinition::Temporary { duration } => EffectDuration::Temporary {
-                duration,
-                turns_elapsed: 0,
-            },
-        }
-    }
-}
-
-impl Into<String> for EffectDurationDefinition {
-    fn into(self) -> String {
-        match self {
-            EffectDurationDefinition::Instant => "instant".to_string(),
-            EffectDurationDefinition::Conditional => "conditional".to_string(),
-            EffectDurationDefinition::Permanent => "permanent".to_string(),
-            EffectDurationDefinition::Temporary { duration } => {
-                format!("temporary({})", duration)
-            }
-        }
-    }
-}
-
-impl TryFrom<String> for EffectDurationDefinition {
-    type Error = String;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        match value.as_str() {
-            "instant" => Ok(EffectDurationDefinition::Instant),
-            "conditional" => Ok(EffectDurationDefinition::Conditional),
-            "permanent" => Ok(EffectDurationDefinition::Permanent),
-            _ => {
-                if value.starts_with("temporary(") && value.ends_with(')') {
-                    let inner = &value["temporary(".len()..value.len() - 1];
-                    let duration = inner
-                        .parse::<u32>()
-                        .map_err(|e| format!("Failed to parse duration in temporary(): {}", e))?;
-                    Ok(EffectDurationDefinition::Temporary { duration })
-                } else {
-                    Err(format!("Unknown effect duration: {}", value))
-                }
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum EffectModifier {
     Ability {
@@ -343,10 +278,10 @@ impl EffectModifier {
                     systems::helpers::get_component_mut::<AbilityScoreMap>(world, entity);
                 match phase {
                     EffectPhase::Apply => {
-                        abilities.add_modifier(modifier.ability, source, modifier.delta);
+                        abilities.add_modifier(&modifier.ability, source, modifier.delta);
                     }
                     EffectPhase::Unapply => {
-                        abilities.remove_modifier(modifier.ability, &source);
+                        abilities.remove_modifier(&modifier.ability, &source);
                     }
                 }
             }
@@ -455,15 +390,21 @@ impl EffectModifier {
         match phase {
             EffectPhase::Apply => {
                 if let Some(delta) = modifier.delta {
-                    modifiable.add_modifier(modifier.kind, source.clone(), delta);
+                    for kind in &modifier.kind {
+                        modifiable.add_modifier(kind, source.clone(), delta);
+                    }
                 }
                 if let Some(advantage_type) = modifier.advantage {
-                    modifiable.add_advantage(modifier.kind, advantage_type, source);
+                    for kind in &modifier.kind {
+                        modifiable.add_advantage(kind, advantage_type, source.clone());
+                    }
                 }
             }
             EffectPhase::Unapply => {
-                modifiable.remove_modifier(modifier.kind, &source);
-                modifiable.remove_advantage(modifier.kind, &source);
+                for kind in &modifier.kind {
+                    modifiable.remove_modifier(kind, &source);
+                    modifiable.remove_advantage(kind, &source);
+                }
             }
         }
     }

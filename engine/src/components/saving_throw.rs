@@ -89,13 +89,13 @@ pub type SavingThrowSet = D20CheckSet<SavingThrowKind>;
 pub type SavingThrowDC = D20CheckDC<SavingThrowKind>;
 
 pub fn get_saving_throw_hooks(
-    kind: SavingThrowKind,
+    kind: &SavingThrowKind,
     world: &World,
     entity: Entity,
 ) -> Vec<D20CheckHooks> {
     systems::effects::effects(world, entity)
         .iter()
-        .filter_map(|e| e.on_saving_throw.get(&kind))
+        .filter_map(|e| e.effect().on_saving_throw.get(&kind))
         .cloned()
         .collect()
 }
@@ -104,7 +104,7 @@ impl Default for SavingThrowSet {
     fn default() -> Self {
         Self::new(
             |kind| match kind {
-                SavingThrowKind::Ability(ability) => Some(ability),
+                SavingThrowKind::Ability(ability) => Some(*ability),
                 SavingThrowKind::Death => None,
                 SavingThrowKind::Concentration => Some(Ability::Constitution),
             },

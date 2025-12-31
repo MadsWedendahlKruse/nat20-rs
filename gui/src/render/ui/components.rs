@@ -17,7 +17,7 @@ use nat20_rs::{
             DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRoll,
             DamageRollResult, MitigationOperation,
         },
-        effects::effects::{Effect, EffectDuration},
+        effects::effect::{EffectInstance, EffectLifetime},
         health::{hit_points::HitPoints, life_state::LifeState},
         id::{ActionId, FeatId, Name, ResourceId, SpeciesId, SpellId, SubspeciesId},
         items::{
@@ -273,16 +273,16 @@ impl ImguiRenderable for AbilityScore {
 }
 
 impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreMap {
-    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
+    fn render_with_context(&self, ui: &imgui::Ui, (world, entity): (&World, Entity)) {
         ui.separator_with_text("Abilities");
 
-        let saving_throws = systems::helpers::get_component::<SavingThrowSet>(context.0, context.1);
+        let saving_throws = systems::helpers::get_component::<SavingThrowSet>(world, entity);
 
         let style = ui.push_style_var(imgui::StyleVar::ButtonTextAlign([0.5, 0.5]));
         for (i, ability) in Ability::iter().enumerate() {
-            let ability_score = self.get(ability);
+            let ability_score = self.get(&ability);
             let saving_throw_kind = SavingThrowKind::Ability(ability);
-            let saving_throw_proficiency = saving_throws.get(saving_throw_kind).proficiency();
+            let saving_throw_proficiency = saving_throws.get(&saving_throw_kind).proficiency();
 
             if i > 0 {
                 ui.same_line();
@@ -310,7 +310,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreMap {
                         ])
                         .render(ui);
                     }
-                    let result = saving_throws.check(saving_throw_kind, context.0, context.1);
+                    let result = saving_throws.check(&saving_throw_kind, world, entity);
                     let modifiers = &result.modifier_breakdown;
                     let total = modifiers.total();
                     ui.text(format!("Bonus: {}{}", sign(total), total.abs()));
@@ -323,7 +323,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for AbilityScoreMap {
 }
 
 impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
-    fn render_with_context(&self, ui: &imgui::Ui, context: (&World, Entity)) {
+    fn render_with_context(&self, ui: &imgui::Ui, (world, entity): (&World, Entity)) {
         // Empty column is for proficiency
         if let Some(table) = table_with_columns!(ui, "Skills", "", "Skill", "Bonus") {
             // Skills are ordered by ability, so if the ability changes, we can
@@ -332,7 +332,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
             let mut prev_ability = Ability::Charisma;
 
             for skill in Skill::iter() {
-                let ability = skill_ability(skill).unwrap();
+                let ability = skill_ability(&skill).unwrap();
 
                 // If the ability has changed, render a separator
                 if ability != prev_ability {
@@ -349,7 +349,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
 
                 // Proficiency column
                 ui.table_next_column();
-                let proficiency = self.get(skill).proficiency();
+                let proficiency = self.get(&skill).proficiency();
                 proficiency.render(ui);
                 // Skill name
                 ui.table_next_column();
@@ -357,7 +357,7 @@ impl ImguiRenderableWithContext<(&World, Entity)> for SkillSet {
                 // Bonus column
                 ui.table_next_column();
                 // TODO: Avoid doing an actual skill check here every time
-                let result = self.check(skill, context.0, context.1);
+                let result = self.check(&skill, world, entity);
                 result
                     .modifier_breakdown
                     .render_with_context(ui, ModifierSetRenderMode::Hoverable);
@@ -598,35 +598,37 @@ impl ImguiRenderableMutWithContext<&ResourceMap> for Spellbook {
     }
 }
 
-impl ImguiRenderable for Vec<Effect> {
+impl ImguiRenderable for Vec<EffectInstance> {
     fn render(&self, ui: &imgui::Ui) {
-        if let Some(table) = table_with_columns!(ui, "Effects", "Effect", "Source") {
-            // Sort by duration
-            let mut sorted_effects = self.clone();
-            sorted_effects.sort_by_key(|effect| effect.duration().clone());
+        let (permanent_effects, temporary_effects): (Vec<&EffectInstance>, Vec<&EffectInstance>) =
+            self.iter()
+                .partition(|e| matches!(e.lifetime, EffectLifetime::Permanent));
 
-            let mut prev_duration: Option<EffectDuration> = None;
-
-            for effect in &sorted_effects {
-                // If the duration has changed, render a separator
-                if prev_duration.is_none() || effect.duration() != prev_duration.as_ref().unwrap() {
-                    ui.table_next_row_with_flags(imgui::TableRowFlags::empty());
-                    ui.table_next_column();
-
-                    let label = format!("{}", effect.duration());
-                    // ui.set_cursor_pos([ui.cursor_pos()[0] + 10.0, ui.cursor_pos()[1]]);
-                    ui.text_colored([0.7, 0.7, 0.7, 1.0], &label);
-                    prev_duration = Some(effect.duration().clone());
-
-                    ui.table_next_column();
-                }
-
+        ui.separator_with_text("Conditions");
+        if let Some(table) = table_with_columns!(ui, "Conditions", "Effect", "Source", "Duration") {
+            for effect in &temporary_effects {
                 // Effect ID column
                 ui.table_next_column();
-                ui.text(effect.id().to_string());
+                ui.text(effect.effect_id.to_string());
                 // Source column
                 ui.table_next_column();
-                ui.text(effect.source().to_string());
+                ui.text(effect.source.to_string());
+                // Duration column
+                ui.table_next_column();
+                effect.lifetime.render(ui);
+            }
+            table.end();
+        }
+
+        ui.separator_with_text("Permanent Effects");
+        if let Some(table) = table_with_columns!(ui, "Permanent Effects", "Effect", "Source") {
+            for effect in &permanent_effects {
+                // Effect ID column
+                ui.table_next_column();
+                ui.text(effect.effect_id.to_string());
+                // Source column
+                ui.table_next_column();
+                ui.text(effect.source.to_string());
             }
             table.end();
         }
@@ -1413,17 +1415,15 @@ impl ImguiRenderable for DamageMitigationEffect {
     }
 }
 
-impl ImguiRenderable for EffectDuration {
+impl ImguiRenderable for EffectLifetime {
     fn render(&self, ui: &imgui::Ui) {
         match self {
-            EffectDuration::Temporary {
-                duration,
-                turns_elapsed,
-            } => {
-                let remaining = duration - turns_elapsed;
-                if remaining > 0 {
-                    ui.text(format!("{} turns", remaining));
-                }
+            EffectLifetime::AtTurnBoundary { remaining, .. } => {
+                // TODO: Consider if we want to show more details here
+                TextSegment::new(
+                    format!("{} turns remaining", remaining), TextKind::Details,
+                )
+                .render(ui);
             }
             // TODO: Does it make sense to render the other durations?
             _ => {}
@@ -1493,7 +1493,7 @@ impl ImguiRenderableWithContext<(&World, Entity, &ActionContext)> for ActionKind
                 }
 
                 if let Some(effect) = &payload.effect() {
-                    TextSegment::new(format!("{}", effect), TextKind::Effect).render(ui);
+                    TextSegment::new(format!("{}", effect.effect_id), TextKind::Effect).render(ui);
                 }
             }
 

@@ -1,17 +1,13 @@
 use crate::{
     components::{
         class::{ClassAndSubclass, ClassBase},
-        id::{ClassId, FeatId, SubclassId},
+        id::{ClassId, SubclassId},
         items::equipment::{armor::ArmorTrainingSet, weapon::WeaponProficiencyMap},
-        level_up::ChoiceItem,
         proficiency::ProficiencyLevel,
         resource::ResourceMap,
         saving_throw::SavingThrowKind,
     },
-    registry::{
-        self,
-        registry::{ClassesRegistry, FeatsRegistry},
-    },
+    registry::registry::ClassesRegistry,
 };
 use hecs::{Entity, World};
 
@@ -73,7 +69,7 @@ pub fn increment_class_level(
     // TODO: Do we need to do this every time?
     for ability in class.saving_throw_proficiencies.iter() {
         systems::helpers::get_component_mut::<SavingThrowSet>(world, entity).set_proficiency(
-            SavingThrowKind::Ability(*ability),
+            &SavingThrowKind::Ability(*ability),
             Proficiency::new(
                 ProficiencyLevel::Proficient,
                 ModifierSource::ClassFeature(class_id.clone()),
@@ -166,9 +162,13 @@ fn apply_class_base(
 ) -> Vec<LevelUpPrompt> {
     // Effect
     if let Some(effects_for_level) = class_base.effects_by_level.get(&level) {
-        for effect in effects_for_level {
-            systems::effects::add_effect(world, entity, effect, &id.modifier_source(), None);
-        }
+        systems::effects::add_permanent_effects(
+            world,
+            entity,
+            effects_for_level.clone(),
+            &id.modifier_source(),
+            None,
+        );
     }
 
     // Resources

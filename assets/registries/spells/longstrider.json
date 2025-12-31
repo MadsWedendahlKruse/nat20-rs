@@ -6,7 +6,16 @@
     "kind": {
         "standard": {
             "payload": {
-                "effect": "nat20_rs::effect.longstrider"
+                "effect": {
+                    "effect_id": "nat20_rs::effect.spell.longstrider",
+                    "lifetime": {
+                        "at_turn_boundary": {
+                            "entity": "applier",
+                            "boundary": "start",
+                            "duration": 600
+                        }
+                    }
+                }
             }
         }
     },

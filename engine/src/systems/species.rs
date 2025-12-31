@@ -2,16 +2,13 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        id::{EffectId, SpeciesId, SubspeciesId},
-        level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
+        id::{SpeciesId, SubspeciesId},
+        level_up::LevelUpPrompt,
         modifier::ModifierSource,
         species::{CreatureSize, CreatureType, SpeciesBase},
         speed::Speed,
     },
-    registry::{
-        self,
-        registry::{SpeciesRegistry, SubspeciesRegistry},
-    },
+    registry::registry::{SpeciesRegistry, SubspeciesRegistry},
     systems,
 };
 
@@ -96,7 +93,13 @@ fn apply_species_base(
     level: u8,
 ) {
     if let Some(effects) = base.effects_by_level.get(&level) {
-        systems::effects::add_effects(world, entity, effects, &id.modifier_source(), None);
+        systems::effects::add_permanent_effects(
+            world,
+            entity,
+            effects.clone(),
+            &id.modifier_source(),
+            None,
+        );
     }
     if let Some(actions) = base.actions_by_level.get(&level) {
         systems::actions::add_actions(world, entity, actions);

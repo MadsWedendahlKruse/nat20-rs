@@ -75,7 +75,7 @@ pub mod creatures {
 
         pub fn add_initiative(world: &mut World, entity: Entity) {
             systems::helpers::get_component_mut::<SkillSet>(world, entity).add_modifier(
-                Skill::Initiative,
+                &Skill::Initiative,
                 ModifierSource::Custom("Admin testing".to_string()),
                 20,
             );
@@ -303,6 +303,7 @@ pub mod creatures {
                             SpellId::new("nat20_rs", "spell.magic_missile"),
                             SpellId::new("nat20_rs", "spell.expeditious_retreat"),
                             SpellId::new("nat20_rs", "spell.longstrider"),
+                            SpellId::new("nat20_rs", "spell.ray_of_sickness"),
                         ],
                     ),
                     // Level 2

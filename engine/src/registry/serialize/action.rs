@@ -3,9 +3,11 @@ use serde::{Deserialize, Serialize};
 use crate::{
     components::{
         actions::action::{Action, ActionCondition, ActionKind, ActionPayload, DamageOnFailure},
+        effects::effect::{EffectInstance, EffectInstanceTemplate, EffectLifetimeTemplate},
         id::{ActionId, EffectId, ScriptId},
         resource::{RechargeRule, ResourceAmountMap},
     },
+    engine::time::TurnBoundary,
     registry::{
         registry_validation::{ReferenceCollector, RegistryReference, RegistryReferenceCollector},
         serialize::{
@@ -39,6 +41,13 @@ pub enum ActionConditionDefinition {
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EffectInstanceDefinition {
+    pub effect_id: EffectId,
+    pub lifetime: EffectLifetimeTemplate,
+    pub children: Vec<(EffectId, EffectLifetimeTemplate)>,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ActionPayloadDefinition {
     #[serde(default)]
@@ -46,7 +55,7 @@ pub struct ActionPayloadDefinition {
     #[serde(default)]
     pub healing: Option<HealEquation>,
     #[serde(default)]
-    pub effect: Option<EffectId>,
+    pub effect: Option<EffectInstanceTemplate>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -131,8 +140,8 @@ impl RegistryReferenceCollector for ActionKindDefinition {
     fn collect_registry_references(&self, collector: &mut ReferenceCollector) {
         match self {
             ActionKindDefinition::Standard { payload, .. } => {
-                if let Some(effect_id) = &payload.effect {
-                    collector.add(RegistryReference::Effect(effect_id.clone()));
+                if let Some(effect) = &payload.effect {
+                    collector.add(RegistryReference::Effect(effect.effect_id.clone()));
                 }
             }
             ActionKindDefinition::Composite { actions } => {

@@ -10,14 +10,32 @@
                 {
                     "standard": {
                         "payload": {
-                            "effect": "nat20_rs::effect.dash"
+                            "effect": {
+                                "effect_id": "nat20_rs::effect.dash",
+                                "lifetime": {
+                                    "at_turn_boundary": {
+                                        "entity": "applier",
+                                        "boundary": "start",
+                                        "duration": 1
+                                    }
+                                }
+                            }
                         }
                     }
                 },
                 {
                     "standard": {
                         "payload": {
-                            "effect": "nat20_rs::effect.expeditious_retreat"
+                            "effect": {
+                                "effect_id": "nat20_rs::effect.spell.expeditious_retreat",
+                                "lifetime": {
+                                    "at_turn_boundary": {
+                                        "entity": "applier",
+                                        "boundary": "start",
+                                        "duration": 100
+                                    }
+                                }
+                            }
                         }
                     }
                 }

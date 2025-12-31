@@ -42,7 +42,7 @@ pub fn set_background(
     let mut skill_set = systems::helpers::get_component_mut::<SkillSet>(world, entity);
     for skill in background.skill_proficiencies {
         skill_set.set_proficiency(
-            skill,
+            &skill,
             Proficiency::new(
                 ProficiencyLevel::Proficient,
                 ModifierSource::Background(background_id.clone()),

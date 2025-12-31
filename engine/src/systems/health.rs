@@ -66,7 +66,7 @@ pub fn damage(
     let mut mitigation_result = resistances.apply(damage_roll_result);
 
     for effect in systems::effects::effects(&game_state.world, target).iter() {
-        (effect.damage_taken)(&game_state.world, target, &mut mitigation_result);
+        (effect.effect().damage_taken)(&game_state.world, target, &mut mitigation_result);
     }
 
     let (damage_taken, killed_by_damage, mut new_life_state, removed_temp_hp_source) =
@@ -234,7 +234,7 @@ pub fn update_hit_points(world: &mut World, entity: Entity) {
 
             let constitution_modifier =
                 systems::helpers::get_component::<AbilityScoreMap>(world, entity)
-                    .get(Ability::Constitution)
+                    .get(&Ability::Constitution)
                     .ability_modifier()
                     .total();
 

@@ -30,15 +30,15 @@ mod tests {
                 systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity);
             ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
             ability_scores.add_modifier(
-                Ability::Strength,
-                ModifierSource::Item(ItemId::new("nat20_rs","item.ring_of_strength")),
+                &Ability::Strength,
+                ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_strength")),
                 2,
             );
-            assert_eq!(ability_scores.get(Ability::Strength).total(), 19);
+            assert_eq!(ability_scores.get(&Ability::Strength).total(), 19);
         }
 
         let result = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
-            SavingThrowKind::Ability(Ability::Strength),
+            &SavingThrowKind::Ability(Ability::Strength),
             &world,
             entity,
         );
@@ -57,12 +57,12 @@ mod tests {
         systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity)
             .set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
         systems::helpers::get_component_mut::<SavingThrowSet>(&mut world, entity).set_proficiency(
-            SavingThrowKind::Ability(Ability::Strength),
+            &SavingThrowKind::Ability(Ability::Strength),
             Proficiency::new(ProficiencyLevel::Proficient, ModifierSource::None),
         );
 
         let result = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
-            SavingThrowKind::Ability(Ability::Strength),
+            &SavingThrowKind::Ability(Ability::Strength),
             &world,
             entity,
         );
@@ -81,12 +81,12 @@ mod tests {
         systems::helpers::get_component_mut::<AbilityScoreMap>(&mut world, entity)
             .set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
         systems::helpers::get_component_mut::<SavingThrowSet>(&mut world, entity).set_proficiency(
-            SavingThrowKind::Ability(Ability::Strength),
+            &SavingThrowKind::Ability(Ability::Strength),
             Proficiency::new(ProficiencyLevel::Expertise, ModifierSource::None),
         );
 
         let result = systems::helpers::get_component::<SavingThrowSet>(&world, entity).check(
-            SavingThrowKind::Ability(Ability::Strength),
+            &SavingThrowKind::Ability(Ability::Strength),
             &world,
             entity,
         );
@@ -101,13 +101,13 @@ mod tests {
         let _ = systems::loadout::equip(
             &mut world,
             character,
-            ItemsRegistry::get(&ItemId::new("nat20_rs","item.chainmail"))
+            ItemsRegistry::get(&ItemId::new("nat20_rs", "item.chainmail"))
                 .unwrap()
                 .clone(),
         );
 
         let result = systems::helpers::get_component::<SkillSet>(&world, character).check(
-            Skill::Stealth,
+            &Skill::Stealth,
             &world,
             character,
         );

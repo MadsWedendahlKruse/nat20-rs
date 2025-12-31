@@ -17,10 +17,11 @@ use crate::{
         id::ActionId,
         resource::{ResourceAmountMap, ResourceError},
     },
-    engine::{encounter::EncounterId, game_state::GameState},
+    engine::{encounter::EncounterId, game_state::GameState, time::TurnBoundary},
     systems::{
         actions::ActionUsabilityError,
         d20::{D20CheckDCKind, D20ResultKind},
+        time::RestKind,
     },
 };
 
@@ -70,6 +71,9 @@ impl Event {
             EventKind::DamageRollPerformed(entity, _) => Some(*entity),
             EventKind::DamageRollResolved(entity, _) => Some(*entity),
             EventKind::Encounter(_) => None,
+            // TODO: Same problem as ReactionTriggered
+            EventKind::RestStarted { participants, .. } => Some(*participants.first()?),
+            EventKind::RestFinished { participants, .. } => Some(*participants.first()?),
         }
     }
 
@@ -114,6 +118,7 @@ impl Event {
 #[derive(Debug, Clone, PartialEq)]
 pub enum EventKind {
     Encounter(EncounterEvent),
+
     /// An entity has declared they want to take an action. The engine can then
     /// validate that the entity can perform the action and either approve or
     /// deny it. Other entities might also react to the request, e.g. if someone
@@ -148,6 +153,15 @@ pub enum EventKind {
     D20CheckResolved(Entity, D20ResultKind, D20CheckDCKind),
     DamageRollPerformed(Entity, DamageRollResult),
     DamageRollResolved(Entity, DamageRollResult),
+
+    RestStarted {
+        kind: RestKind,
+        participants: Vec<Entity>,
+    },
+    RestFinished {
+        kind: RestKind,
+        participants: Vec<Entity>,
+    },
 }
 
 impl EventKind {
@@ -163,16 +177,25 @@ impl EventKind {
             EventKind::D20CheckResolved(_, _, _) => "D20CheckResolved",
             EventKind::DamageRollPerformed(_, _) => "DamageRollPerformed",
             EventKind::DamageRollResolved(_, _) => "DamageRollResolved",
+            EventKind::RestStarted { .. } => "RestStarted",
+            EventKind::RestFinished { .. } => "RestFinished",
         }
     }
 }
 
-// TODO: Do we need this?
 #[derive(Debug, Clone, PartialEq)]
 pub enum EncounterEvent {
     EncounterStarted(EncounterId),
     EncounterEnded(EncounterId, EventLog),
     NewRound(EncounterId, usize),
+
+    TurnBoundary {
+        encounter_id: EncounterId,
+        entity: Entity,
+        boundary: TurnBoundary,
+        round: usize,
+        turn_index: usize,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

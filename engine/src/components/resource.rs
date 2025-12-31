@@ -8,16 +8,53 @@ use std::{
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::components::id::{IdProvider, ResourceId};
+use crate::{
+    components::id::{IdProvider, ResourceId},
+    systems::time::RestKind,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(try_from = "String", into = "String")]
 pub enum RechargeRule {
     Turn,
-    ShortRest,
-    LongRest,
+    Rest(RestKind),
     Daily,
     Never,
+}
+
+impl FromStr for RechargeRule {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "turn" => Ok(RechargeRule::Turn),
+            "short_rest" => Ok(RechargeRule::Rest(RestKind::Short)),
+            "long_rest" => Ok(RechargeRule::Rest(RestKind::Long)),
+            "daily" => Ok(RechargeRule::Daily),
+            "never" => Ok(RechargeRule::Never),
+            _ => Err(format!("Invalid RechargeRule: {}", s)),
+        }
+    }
+}
+
+impl TryFrom<String> for RechargeRule {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl Into<String> for RechargeRule {
+    fn into(self) -> String {
+        match self {
+            RechargeRule::Turn => "turn".to_string(),
+            RechargeRule::Rest(RestKind::Short) => "short_rest".to_string(),
+            RechargeRule::Rest(RestKind::Long) => "long_rest".to_string(),
+            RechargeRule::Daily => "daily".to_string(),
+            RechargeRule::Never => "never".to_string(),
+        }
+    }
 }
 
 impl RechargeRule {
@@ -29,17 +66,13 @@ impl RechargeRule {
         if self == &RechargeRule::Never {
             return false;
         }
-        *other >= *self
-    }
-
-    pub fn turns(&self) -> Option<u32> {
-        match self {
-            RechargeRule::Turn => Some(1),
-            RechargeRule::ShortRest => Some(600), // 1 hour
-            RechargeRule::LongRest => Some(4800), // 8 hours
-            RechargeRule::Daily => Some(14400),   // 24 hours
-            RechargeRule::Never => None,
+        match (self, other) {
+            (RechargeRule::Rest(self_rest), RechargeRule::Rest(other_rest)) => {
+                return other_rest >= self_rest;
+            }
+            _ => {}
         }
+        *other >= *self
     }
 }
 
@@ -823,9 +856,9 @@ mod tests {
 
     #[test]
     fn flat_recharge_rule_order() {
-        assert!(RechargeRule::ShortRest > RechargeRule::Turn);
-        assert!(RechargeRule::LongRest > RechargeRule::ShortRest);
-        assert!(RechargeRule::Daily > RechargeRule::LongRest);
+        assert!(RechargeRule::Rest(RestKind::Short) > RechargeRule::Turn);
+        assert!(RechargeRule::Rest(RestKind::Long) > RechargeRule::Rest(RestKind::Short));
+        assert!(RechargeRule::Daily > RechargeRule::Rest(RestKind::Long));
         assert!(RechargeRule::Never > RechargeRule::Daily);
     }
 

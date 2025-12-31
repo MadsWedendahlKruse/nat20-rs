@@ -35,7 +35,7 @@ mod tests {
         let effects = systems::effects::effects(&game_state.world, character);
         assert!(!effects.is_empty());
         assert!(effects.iter().any(|e| {
-            *e.id() == EffectId::new("nat20_rs", "effect.item.armor_stealth_disadvantage")
+            e.effect_id == EffectId::new("nat20_rs", "effect.item.armor_stealth_disadvantage")
         }));
     }
 
@@ -55,7 +55,7 @@ mod tests {
                 AbilityScore::new(Ability::Dexterity, 15),
             );
             ability_scores.add_modifier(
-                Ability::Dexterity,
+                &Ability::Dexterity,
                 ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_dexterity")),
                 2,
             );

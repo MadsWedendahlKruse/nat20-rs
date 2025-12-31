@@ -1,18 +1,16 @@
-use std::sync::Arc;
-
 use hecs::{Entity, World};
 
 use crate::{
     components::{
         d20::{D20CheckDC, D20CheckResult},
         damage::AttackRollResult,
-        items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
+        items::equipment::armor::ArmorClass,
         modifier::Modifiable,
         saving_throw::{SavingThrowKind, SavingThrowSet},
         skill::{Skill, SkillSet},
     },
     engine::{
-        event::{Event, EventId, EventKind},
+        event::{Event, EventKind},
         game_state::GameState,
     },
     systems,

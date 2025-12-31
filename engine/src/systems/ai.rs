@@ -4,12 +4,12 @@ use crate::{
     components::{
         actions::action::ActionKind,
         ai::{AIDecision, PlayerControlledTag},
-        effects::effects::EffectKind,
+        effects::effect::EffectKind,
         faction::Attitude,
         id::AIControllerId,
     },
     engine::{event::ActionPrompt, game_state::GameState},
-    registry::{self, registry::EffectsRegistry},
+    registry::{self},
     systems,
 };
 
@@ -45,8 +45,7 @@ pub fn recommeneded_target_attitude(
                 return Attitude::Friendly;
             }
             if let Some(effect) = payload.effect() {
-                let effect = EffectsRegistry::get(effect).unwrap();
-                return match effect.kind {
+                return match effect.effect().kind {
                     EffectKind::Buff => Attitude::Friendly,
                     EffectKind::Debuff => Attitude::Hostile,
                 };

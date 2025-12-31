@@ -20,6 +20,7 @@ use crate::{
         },
         game_state::GameState,
         interaction::InteractionScopeId,
+        time::TurnBoundary,
     },
     entities::{character::CharacterTag, monster::MonsterTag},
     systems::{self, d20::D20CheckDCKind},
@@ -64,7 +65,7 @@ impl Encounter {
             .iter()
             .map(|entity| {
                 let roll = systems::helpers::get_component::<SkillSet>(world, *entity).check(
-                    Skill::Initiative,
+                    &Skill::Initiative,
                     world,
                     *entity,
                 );
@@ -139,10 +140,9 @@ impl Encounter {
     }
 
     fn start_turn(&mut self, game_state: &mut GameState) {
-        systems::time::pass_time(
-            &mut game_state.world,
-            self.current_entity(),
-            &RechargeRule::Turn,
+        game_state.process_event_scoped(
+            InteractionScopeId::Encounter(self.id),
+            self.turn_boundary_event(self.current_entity(), TurnBoundary::Start),
         );
 
         if self.should_skip_turn(game_state) {
@@ -166,6 +166,11 @@ impl Encounter {
         if entity != self.current_entity() {
             panic!("Cannot end turn for entity that is not the current entity");
         }
+
+        game_state.process_event_scoped(
+            InteractionScopeId::Encounter(self.id),
+            self.turn_boundary_event(entity, TurnBoundary::End),
+        );
 
         let session = game_state
             .interaction_engine
@@ -273,6 +278,16 @@ impl Encounter {
 
     pub(crate) fn log_event(&mut self, event: Event) {
         self.event_log.push(event);
+    }
+
+    fn turn_boundary_event(&self, entity: Entity, boundary: TurnBoundary) -> Event {
+        Event::encounter_event(EncounterEvent::TurnBoundary {
+            encounter_id: self.id.clone(),
+            entity,
+            boundary,
+            round: self.round,
+            turn_index: self.turn_index,
+        })
     }
 
     pub fn combat_log(&self) -> &EventLog {

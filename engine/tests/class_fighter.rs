@@ -1,18 +1,14 @@
 extern crate nat20_rs;
 
 mod tests {
-    use std::sync::Arc;
 
     use nat20_rs::{
         components::{
-            actions::{
-                action::{Action, ActionContext, ActionKind},
-                targeting::TargetInstance,
-            },
+            actions::targeting::TargetInstance,
             damage::{DamageRoll, DamageSource, DamageType},
             health::hit_points::HitPoints,
             id::{ActionId, EffectId, ResourceId, SpellId},
-            resource::{RechargeRule, ResourceAmount, ResourceAmountMap, ResourceMap},
+            resource::{ResourceAmount, ResourceMap},
         },
         engine::event::{ActionData, ActionDecision, ActionDecisionKind},
         systems,
@@ -65,7 +61,7 @@ mod tests {
             let effects = systems::effects::effects(&game_state.world, fighter);
             let action_surge_effect = effects
                 .iter()
-                .find(|e| *e.id() == EffectId::new("nat20_rs", "effect.fighter.action_surge"));
+                .find(|e| e.effect_id == EffectId::new("nat20_rs", "effect.fighter.action_surge"));
             assert!(
                 action_surge_effect.is_some(),
                 "Action Surge effect should be applied"
@@ -84,13 +80,13 @@ mod tests {
         assert!(systems::actions::on_cooldown(&game_state.world, fighter, &action_id).is_some());
 
         // Simulate the start of the turn to remove the Action Surge effect
-        systems::time::pass_time(&mut game_state.world, fighter, &RechargeRule::Turn);
+        systems::time::on_turn_start(&mut game_state.world, fighter);
 
         // Check that the Action Surge effect is removed after the turn starts
         let effects = systems::effects::effects(&game_state.world, fighter);
         let action_surge_effect = effects
             .iter()
-            .find(|e| *e.id() == EffectId::new("nat20_rs", "effect.fighter.action_surge"));
+            .find(|e| e.effect_id == EffectId::new("nat20_rs", "effect.fighter.action_surge"));
         assert!(
             action_surge_effect.is_none(),
             "Action Surge effect should be removed"
@@ -188,7 +184,7 @@ mod tests {
             let effects = systems::effects::effects(&game_state.world, fighter);
             let extra_attack_effect = effects
                 .iter()
-                .find(|e| *e.id() == EffectId::new("nat20_rs", "effect.extra_attack"));
+                .find(|e| e.effect_id == EffectId::new("nat20_rs", "effect.extra_attack"));
             assert!(
                 extra_attack_effect.is_some(),
                 "Fighter should have Extra Attack effect"

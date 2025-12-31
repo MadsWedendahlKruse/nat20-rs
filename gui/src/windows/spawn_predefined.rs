@@ -3,13 +3,13 @@ use core::f32;
 use hecs::{Entity, World};
 use imgui::MouseButton;
 use nat20_rs::{
-    components::{id::Name, resource::RechargeRule},
+    components::id::Name,
     engine::game_state::GameState,
     entities::{
         character::{Character, CharacterTag},
         monster::{Monster, MonsterTag},
     },
-    systems::{self},
+    systems::{self, time::RestKind},
     test_utils::fixtures,
 };
 use parry3d::na::Point3;
@@ -48,7 +48,7 @@ impl SpawnPredefinedWindow {
             let entity = spawner(&mut world).id();
             info!("Spawned predefined entity: {:?}", entity);
             // Ensure all resources are fully recharged
-            systems::time::pass_time(&mut world, entity, &RechargeRule::LongRest);
+            systems::time::on_rest_end(&mut world, &[entity], &RestKind::Long);
         }
 
         Self {

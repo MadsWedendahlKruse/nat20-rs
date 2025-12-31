@@ -4,12 +4,11 @@ use nat20_rs::{
         ai::PlayerControlledTag,
         d20::D20CheckDC,
         modifier::{ModifierSet, ModifierSource},
-        resource::RechargeRule,
         saving_throw::SavingThrowKind,
         skill::Skill,
     },
     engine::game_state::GameState,
-    systems::{self, d20::D20CheckDCKind, geometry::CreaturePose},
+    systems::{self, d20::D20CheckDCKind, geometry::CreaturePose, time::RestKind},
 };
 use parry3d::na::UnitQuaternion;
 use strum::IntoEnumIterator;
@@ -183,14 +182,22 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                     ["New Turn", "Short Rest", "Long Rest"],
                     [20.0, 5.0],
                 ) {
-                    let passed_time = match index {
-                        0 => RechargeRule::Turn,
-                        1 => RechargeRule::ShortRest,
-                        2 => RechargeRule::LongRest,
+                    match index {
+                        0 => systems::time::on_turn_start(&mut game_state.world, self.creature),
+                        1 | 2 => {
+                            let rest_kind = match index {
+                                1 => RestKind::Short,
+                                2 => RestKind::Long,
+                                _ => unreachable!(),
+                            };
+                            systems::time::start_rest(game_state, vec![self.creature], &rest_kind)
+                                .unwrap();
+                            // For debugging, immediately finish the rest
+                            systems::time::finish_rest(game_state, vec![self.creature]).unwrap();
+                        }
                         _ => unreachable!(),
                     };
 
-                    systems::time::pass_time(&mut game_state.world, self.creature, &passed_time);
                     ui.close_current_popup();
                 }
             }

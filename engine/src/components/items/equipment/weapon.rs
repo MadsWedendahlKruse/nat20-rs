@@ -328,7 +328,7 @@ impl Weapon {
         let ability = self.determine_ability(ability_scores);
         modifiers.add_modifier(
             ModifierSource::Ability(ability),
-            ability_scores.ability_modifier(ability).total(),
+            ability_scores.ability_modifier(&ability).total(),
         );
     }
 
@@ -348,8 +348,8 @@ impl Weapon {
     pub fn determine_ability(&self, ability_scores: &AbilityScoreMap) -> Ability {
         if self.has_property(&WeaponProperties::Finesse) {
             // Return the higher of the two abilities
-            let str = ability_scores.total(Ability::Strength);
-            let dex = ability_scores.total(Ability::Dexterity);
+            let str = ability_scores.total(&Ability::Strength);
+            let dex = ability_scores.total(&Ability::Dexterity);
             if str > dex {
                 Ability::Strength
             } else {

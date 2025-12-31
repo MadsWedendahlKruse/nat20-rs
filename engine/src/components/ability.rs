@@ -161,11 +161,11 @@ impl AbilityScoreMap {
         Self { scores }
     }
 
-    pub fn get(&self, ability: Ability) -> &AbilityScore {
+    pub fn get(&self, ability: &Ability) -> &AbilityScore {
         self.scores.get(&ability).unwrap()
     }
 
-    fn get_mut(&mut self, ability: Ability) -> &mut AbilityScore {
+    fn get_mut(&mut self, ability: &Ability) -> &mut AbilityScore {
         self.scores.get_mut(&ability).unwrap()
     }
 
@@ -173,15 +173,15 @@ impl AbilityScoreMap {
         self.scores.insert(ability, score);
     }
 
-    pub fn ability_modifier(&self, ability: Ability) -> ModifierSet {
+    pub fn ability_modifier(&self, ability: &Ability) -> ModifierSet {
         self.get(ability).ability_modifier()
     }
 
     pub fn get_max_score(&self, abilities: &[Ability]) -> (Ability, i32) {
         let mut max_ability = abilities[0];
-        let mut max_score = self.get(max_ability).base;
+        let mut max_score = self.get(&max_ability).base;
         for &ability in abilities.iter().skip(1) {
-            let score = self.get(ability).base;
+            let score = self.get(&ability).base;
             if score > max_score {
                 max_score = score;
                 max_ability = ability;
@@ -192,18 +192,18 @@ impl AbilityScoreMap {
 }
 
 impl KeyedModifiable<Ability> for AbilityScoreMap {
-    fn add_modifier<T>(&mut self, ability: Ability, source: ModifierSource, value: T)
+    fn add_modifier<T>(&mut self, ability: &Ability, source: ModifierSource, value: T)
     where
         T: Into<i32>,
     {
         self.get_mut(ability).modifiers.add_modifier(source, value);
     }
 
-    fn remove_modifier(&mut self, ability: Ability, source: &ModifierSource) {
+    fn remove_modifier(&mut self, ability: &Ability, source: &ModifierSource) {
         self.get_mut(ability).modifiers.remove_modifier(source);
     }
 
-    fn total(&self, ability: Ability) -> i32 {
+    fn total(&self, ability: &Ability) -> i32 {
         self.get(ability).total()
     }
 }
@@ -268,14 +268,14 @@ mod tests {
             AbilityScore::new(Ability::Dexterity, 15),
         );
         ability_scores.add_modifier(
-            Ability::Dexterity,
+            &Ability::Dexterity,
             ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_dexterity")),
             2,
         );
 
-        assert_eq!(ability_scores.total(Ability::Dexterity), 17);
+        assert_eq!(ability_scores.total(&Ability::Dexterity), 17);
         assert_eq!(
-            ability_scores.ability_modifier(Ability::Dexterity).total(),
+            ability_scores.ability_modifier(&Ability::Dexterity).total(),
             3
         );
     }
@@ -285,14 +285,14 @@ mod tests {
         let mut ability_scores = AbilityScoreMap::new();
         ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
         ability_scores.add_modifier(
-            Ability::Strength,
+            &Ability::Strength,
             ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_strength")),
             2,
         );
 
-        assert_eq!(ability_scores.total(Ability::Strength), 19);
+        assert_eq!(ability_scores.total(&Ability::Strength), 19);
         assert_eq!(
-            ability_scores.ability_modifier(Ability::Strength).total(),
+            ability_scores.ability_modifier(&Ability::Strength).total(),
             4
         );
     }
@@ -307,9 +307,9 @@ mod tests {
         ability_scores.set(Ability::Strength, AbilityScore::new(Ability::Strength, 17));
         ability_scores.set(Ability::Charisma, AbilityScore::new(Ability::Charisma, 8));
 
-        assert_eq!(ability_scores.total(Ability::Dexterity), 15);
-        assert_eq!(ability_scores.total(Ability::Strength), 17);
-        assert_eq!(ability_scores.total(Ability::Charisma), 8);
+        assert_eq!(ability_scores.total(&Ability::Dexterity), 15);
+        assert_eq!(ability_scores.total(&Ability::Strength), 17);
+        assert_eq!(ability_scores.total(&Ability::Charisma), 8);
     }
 
     #[test]
@@ -320,16 +320,16 @@ mod tests {
             AbilityScore::new(Ability::Dexterity, 15),
         );
         ability_scores.add_modifier(
-            Ability::Dexterity,
+            &Ability::Dexterity,
             ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_dexterity")),
             2,
         );
 
-        assert_eq!(ability_scores.total(Ability::Dexterity), 17);
+        assert_eq!(ability_scores.total(&Ability::Dexterity), 17);
         ability_scores.remove_modifier(
-            Ability::Dexterity,
+            &Ability::Dexterity,
             &ModifierSource::Item(ItemId::new("nat20_rs", "item.ring_of_dexterity")),
         );
-        assert_eq!(ability_scores.total(Ability::Dexterity), 15);
+        assert_eq!(ability_scores.total(&Ability::Dexterity), 15);
     }
 }

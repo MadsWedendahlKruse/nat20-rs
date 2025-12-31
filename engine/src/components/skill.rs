@@ -58,7 +58,7 @@ impl Default for Skill {
 #[macro_export]
 macro_rules! skill_ability_map {
     ( $( $skill:ident => $ability:ident ),* $(,)? ) => {
-        pub const fn skill_ability(skill: Skill) -> Option<Ability> {
+        pub const fn skill_ability(skill: &Skill) -> Option<Ability> {
             match skill {
                 $( Skill::$skill => Some(Ability::$ability) ),*
             }
@@ -97,10 +97,10 @@ pub type SkillSet = D20CheckSet<Skill>;
 
 pub type SkillCheckDC = D20CheckDC<Skill>;
 
-pub fn get_skill_hooks(skill: Skill, world: &World, entity: Entity) -> Vec<D20CheckHooks> {
+pub fn get_skill_hooks(skill: &Skill, world: &World, entity: Entity) -> Vec<D20CheckHooks> {
     systems::effects::effects(world, entity)
         .iter()
-        .filter_map(|e| e.on_skill_check.get(&skill))
+        .filter_map(|e| e.effect().on_skill_check.get(&skill))
         .cloned()
         .collect()
 }

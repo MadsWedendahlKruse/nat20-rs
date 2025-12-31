@@ -1,6 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use strum::IntoEnumIterator;
 
 use crate::{
     components::{
@@ -58,9 +59,9 @@ macro_rules! impl_display_roundtrip_spec {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
-pub struct D20CheckModifierProvider<T: Clone + DeserializeOwned> {
+pub struct D20CheckModifierProvider<T: Clone + DeserializeOwned + IntoEnumIterator> {
     #[serde(skip)]
-    pub kind: T,
+    pub kind: Vec<T>,
     #[serde(skip)]
     pub delta: Option<i32>,
     #[serde(skip)]
@@ -70,7 +71,7 @@ pub struct D20CheckModifierProvider<T: Clone + DeserializeOwned> {
 
 impl<T> FromStr for D20CheckModifierProvider<T>
 where
-    T: Clone + DeserializeOwned,
+    T: Clone + DeserializeOwned + IntoEnumIterator,
 {
     type Err = String;
 
@@ -86,13 +87,24 @@ where
         let (check_str, modifier_str) =
             split_first_delimiter(&normalized, &[' ', '+', '-'], "D20CheckModifierProvider")?;
 
+        if check_str.to_lowercase().eq("all") {
+            let (delta, advantage) = parse_delta_or_advantage(modifier_str, &normalized)?;
+
+            return Ok(D20CheckModifierProvider {
+                raw: normalized,
+                kind: T::iter().collect(),
+                delta,
+                advantage,
+            });
+        }
+
         let kind: T = parse_plain_enum(check_str, "check kind", &normalized)?;
 
         let (delta, advantage) = parse_delta_or_advantage(modifier_str, &normalized)?;
 
         Ok(D20CheckModifierProvider {
             raw: normalized,
-            kind,
+            kind: vec![kind],
             delta,
             advantage,
         })
@@ -101,7 +113,7 @@ where
 
 impl<T> TryFrom<String> for D20CheckModifierProvider<T>
 where
-    T: Clone + DeserializeOwned,
+    T: Clone + DeserializeOwned + IntoEnumIterator,
 {
     type Error = String;
 
@@ -112,7 +124,7 @@ where
 
 impl<T> From<D20CheckModifierProvider<T>> for String
 where
-    T: Clone + DeserializeOwned,
+    T: Clone + DeserializeOwned + IntoEnumIterator,
 {
     fn from(spec: D20CheckModifierProvider<T>) -> Self {
         spec.raw
@@ -467,30 +479,45 @@ mod tests {
     #[test]
     fn test_skill_modifier_provider_parsing() {
         let spec: SkillModifierProvider = "stealth+2".parse().unwrap();
-        assert_eq!(spec.kind, Skill::Stealth);
+        assert_eq!(spec.kind[0], Skill::Stealth);
         assert_eq!(spec.delta, Some(2));
 
         let spec: SkillModifierProvider = "athletics-1".parse().unwrap();
-        assert_eq!(spec.kind, Skill::Athletics);
+        assert_eq!(spec.kind[0], Skill::Athletics);
         assert_eq!(spec.delta, Some(-1));
+
+        let spec: SkillModifierProvider = "perception advantage".parse().unwrap();
+        assert_eq!(spec.kind[0], Skill::Perception);
+        assert_eq!(spec.advantage, Some(AdvantageType::Advantage));
+
+        let spec: SkillModifierProvider = "all disadvantage".parse().unwrap();
+        assert_eq!(spec.kind.len(), Skill::iter().count());
+        assert_eq!(spec.advantage, Some(AdvantageType::Disadvantage));
     }
 
     #[test]
     fn test_saving_throw_modifier_provider_parsing() {
         let spec: SavingThrowModifierProvider = "constitution advantage".parse().unwrap();
-        assert_eq!(spec.kind, SavingThrowKind::Ability(Ability::Constitution));
+        assert_eq!(
+            spec.kind[0],
+            SavingThrowKind::Ability(Ability::Constitution)
+        );
         assert_eq!(spec.advantage, Some(AdvantageType::Advantage));
         assert_eq!(spec.delta, None);
 
         let spec: SavingThrowModifierProvider = "dex disadvantage".parse().unwrap();
-        assert_eq!(spec.kind, SavingThrowKind::Ability(Ability::Dexterity));
+        assert_eq!(spec.kind[0], SavingThrowKind::Ability(Ability::Dexterity));
         assert_eq!(spec.advantage, Some(AdvantageType::Disadvantage));
         assert_eq!(spec.delta, None);
 
         let spec: SavingThrowModifierProvider = "wis+2".parse().unwrap();
-        assert_eq!(spec.kind, SavingThrowKind::Ability(Ability::Wisdom));
+        assert_eq!(spec.kind[0], SavingThrowKind::Ability(Ability::Wisdom));
         assert_eq!(spec.delta, Some(2));
         assert_eq!(spec.advantage, None);
+
+        let spec: SavingThrowModifierProvider = "all-1".parse().unwrap();
+        assert_eq!(spec.kind.len(), SavingThrowKind::iter().count());
+        assert_eq!(spec.delta, Some(-1));
     }
 
     #[test]

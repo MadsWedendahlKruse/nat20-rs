@@ -14,7 +14,16 @@
                 {
                     "standard": {
                         "payload": {
-                            "effect": "nat20_rs::effect.spell.shield"
+                            "effect": {
+                                "effect_id": "nat20_rs::effect.spell.shield",
+                                "lifetime": {
+                                    "at_turn_boundary": {
+                                        "entity": "applier",
+                                        "boundary": "start",
+                                        "duration": 1
+                                    }
+                                }
+                            }
                         }
                     }
                 }

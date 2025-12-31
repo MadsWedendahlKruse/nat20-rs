@@ -56,15 +56,13 @@ pub fn add_feat(
     can_acquire_feat(world, entity, feat_id)?;
     let feat = FeatsRegistry::get(feat_id).unwrap();
 
-    for effect in feat.effects() {
-        systems::effects::add_effect(
-            world,
-            entity,
-            effect,
-            &ModifierSource::Feat(feat.id().clone()),
-            None,
-        );
-    }
+    systems::effects::add_permanent_effects(
+        world,
+        entity,
+        feat.effects().clone(),
+        &ModifierSource::Feat(feat.id().clone()),
+        None,
+    );
 
     prompts.extend(feat.prompts().iter().cloned());
 

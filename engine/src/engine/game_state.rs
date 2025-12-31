@@ -18,10 +18,12 @@ use crate::{
         },
         geometry::WorldGeometry,
         interaction::{InteractionEngine, InteractionScopeId, InteractionSession},
+        time::TurnScheduler,
     },
     systems::{
         self,
         movement::{MovementError, PathResult},
+        time::RestKind,
     },
 };
 
@@ -32,9 +34,12 @@ pub struct GameState {
 
     pub encounters: HashMap<EncounterId, Encounter>,
     pub in_combat: HashMap<Entity, EncounterId>,
+    pub resting: HashMap<Entity, RestKind>,
     pub interaction_engine: InteractionEngine,
     pub event_log: EventLog,
     event_listeners: HashMap<EventId, EventListener>,
+
+    pub turn_scheduler: TurnScheduler,
 }
 
 impl GameState {
@@ -43,10 +48,12 @@ impl GameState {
             world: World::new(),
             encounters: HashMap::new(),
             in_combat: HashMap::new(),
+            resting: HashMap::new(),
             interaction_engine: InteractionEngine::default(),
             event_log: EventLog::new(),
             event_listeners: HashMap::new(),
             geometry,
+            turn_scheduler: TurnScheduler::default(),
         }
     }
 
@@ -234,7 +241,6 @@ impl GameState {
             let prompt = session
                 .and_then(|s| s.pending_prompts().iter().find(|p| p.id == prompt_id))
                 .cloned()
-                // .ok_or_else(|| anyhow::anyhow!("Prompt disappeared")) // or custom error
                 .ok_or_else(|| panic!("Prompt disappeared"))
                 .unwrap();
 
@@ -313,12 +319,14 @@ impl GameState {
         }
     }
 
-    fn process_event_scoped(
+    pub(crate) fn process_event_scoped(
         &mut self,
         scope: InteractionScopeId,
         event: Event,
     ) -> Result<(), ActionError> {
-        self.log_event(event.clone());
+        self.log_event(&scope, event.clone());
+
+        self.turn_scheduler.on_event(&mut self.world, scope, &event);
 
         if let Some(event_id) = event.response_to {
             if let Some(listener) = self.event_listeners.get(&event_id) {
@@ -630,19 +638,17 @@ impl GameState {
         }
     }
 
-    fn log_event(&mut self, event: Event) {
-        // If the actor is in combat log it in the encounter log, otherwise in
-        // the global log
-        if let Some(actor) = event.actor()
-            && let Some(encounter_id) = self.in_combat.get(&actor)
-        {
-            if let Some(encounter) = self.encounters.get_mut(encounter_id) {
-                encounter.log_event(event);
-            } else {
-                panic!("Inconsistent state: entity is in combat but encounter not found");
+    fn log_event(&mut self, scope: &InteractionScopeId, event: Event) {
+        match scope {
+            InteractionScopeId::Global => self.event_log.push(event),
+            InteractionScopeId::Encounter(encounter_id) => {
+                if let Some(encounter) = self.encounters.get_mut(&encounter_id) {
+                    encounter.log_event(event);
+                } else {
+                    // In case the encounter is gone or doesn't exist yet, log globally
+                    self.event_log.push(event);
+                }
             }
-        } else {
-            self.event_log.push(event);
         }
     }
 

@@ -23,7 +23,7 @@ use nat20_rs::{
     },
 };
 use parry3d::na::Point3;
-use tracing::{debug, info};
+use tracing::{info, trace};
 use uom::si::length::meter;
 
 use crate::{
@@ -201,7 +201,7 @@ fn render_actions(
                 let mut action_usable = false;
                 for (context, cost) in contexts_and_costs.iter_mut() {
                     for effect in systems::effects::effects(&game_state.world, entity).iter() {
-                        (effect.on_resource_cost)(
+                        (effect.effect().on_resource_cost)(
                             &game_state.world,
                             entity,
                             action_id,
@@ -434,8 +434,17 @@ fn render_target_selection(
                     if let Some(potential_target) = &potential_target_instance
                         && let TargetInstance::Entity(target) = potential_target
                     {
-                        let attack_roll =
+                        let mut attack_roll =
                             attack_roll(&game_state.world, action.actor, *target, &action.context);
+                        for effect in
+                            systems::effects::effects(&game_state.world, action.actor).iter()
+                        {
+                            (effect.effect().pre_attack_roll)(
+                                &game_state.world,
+                                action.actor,
+                                &mut attack_roll,
+                            );
+                        }
                         let target_ac = systems::loadout::armor_class(&game_state.world, *target);
                         ui.tooltip(|| {
                             ui.separator();
@@ -753,14 +762,14 @@ fn update_potential_target(
     };
 
     if is_new_target {
-        debug!("Finding path to new target {:?}", closest_target);
+        trace!("Finding path to new target {:?}", closest_target);
         match systems::movement::path_to_target(game_state, &potential_action, true) {
             Ok(result) => {
-                debug!("Found path to target {:?}: {:?}", closest_target, result);
+                trace!("Found path to target {:?}: {:?}", closest_target, result);
                 *potential_target = Some((closest_target, result));
             }
             Err(err) => {
-                debug!(
+                trace!(
                     "Error finding path to target {:?}: {:?}",
                     closest_target, err
                 );

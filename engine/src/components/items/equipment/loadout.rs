@@ -254,7 +254,7 @@ impl Loadout {
             let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, entity);
             let mut armor_class = armor.armor_class(&ability_scores);
             for effect in systems::effects::effects(world, entity).iter() {
-                (effect.on_armor_class)(world, entity, &mut armor_class);
+                (effect.effect().on_armor_class)(world, entity, &mut armor_class);
             }
             armor_class
         } else {

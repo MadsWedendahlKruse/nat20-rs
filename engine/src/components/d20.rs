@@ -297,8 +297,8 @@ where
     K: D20CheckKey,
 {
     checks: HashMap<K, D20Check>,
-    ability_mapper: fn(K) -> Option<Ability>,
-    get_hooks: fn(K, &World, Entity) -> Vec<D20CheckHooks>,
+    ability_mapper: fn(&K) -> Option<Ability>,
+    get_hooks: fn(&K, &World, Entity) -> Vec<D20CheckHooks>,
 }
 
 impl<K> D20CheckSet<K>
@@ -306,8 +306,8 @@ where
     K: D20CheckKey,
 {
     pub fn new(
-        ability_mapper: fn(K) -> Option<Ability>,
-        get_hooks: fn(K, &World, Entity) -> Vec<D20CheckHooks>,
+        ability_mapper: fn(&K) -> Option<Ability>,
+        get_hooks: fn(&K, &World, Entity) -> Vec<D20CheckHooks>,
     ) -> Self {
         let checks = K::iter()
             .map(|k| {
@@ -327,33 +327,33 @@ where
         }
     }
 
-    pub fn get(&self, key: K) -> &D20Check {
+    pub fn get(&self, key: &K) -> &D20Check {
         self.checks.get(&key).unwrap()
     }
 
-    pub fn get_mut(&mut self, key: K) -> &mut D20Check {
-        self.checks.get_mut(&key).unwrap()
+    pub fn get_mut(&mut self, key: &K) -> &mut D20Check {
+        self.checks.get_mut(key).unwrap()
     }
 
-    pub fn set_proficiency(&mut self, key: K, proficiency: Proficiency) {
+    pub fn set_proficiency(&mut self, key: &K, proficiency: Proficiency) {
         self.get_mut(key).set_proficiency(proficiency);
     }
 
-    pub fn add_advantage(&mut self, key: K, kind: AdvantageType, source: ModifierSource) {
+    pub fn add_advantage(&mut self, key: &K, kind: AdvantageType, source: ModifierSource) {
         self.get_mut(key).advantage_tracker_mut().add(kind, source);
     }
 
-    pub fn remove_advantage(&mut self, key: K, source: &ModifierSource) {
+    pub fn remove_advantage(&mut self, key: &K, source: &ModifierSource) {
         self.get_mut(key).advantage_tracker_mut().remove(source);
     }
 
-    pub fn check(&self, key: K, world: &World, entity: Entity) -> D20CheckResult {
+    pub fn check(&self, key: &K, world: &World, entity: Entity) -> D20CheckResult {
         let mut d20 = self.get(key).clone();
         if let Some(ability) = (self.ability_mapper)(key) {
             let ability_scores = systems::helpers::get_component::<AbilityScoreMap>(world, entity);
             d20.add_modifier(
                 ModifierSource::Ability(ability),
-                ability_scores.ability_modifier(ability).total(),
+                ability_scores.ability_modifier(&ability).total(),
             );
         }
 
@@ -361,7 +361,7 @@ where
     }
 
     pub fn check_dc(&self, dc: &D20CheckDC<K>, world: &World, entity: Entity) -> D20CheckResult {
-        let mut result = self.check(dc.key, world, entity);
+        let mut result = self.check(&dc.key, world, entity);
         result.success |= result.total() >= dc.dc.total() as u32;
         result.success &= !result.is_crit_fail; // Critical failure cannot be a success
 
@@ -373,18 +373,18 @@ impl<K> KeyedModifiable<K> for D20CheckSet<K>
 where
     K: D20CheckKey,
 {
-    fn add_modifier<T>(&mut self, key: K, source: ModifierSource, value: T)
+    fn add_modifier<T>(&mut self, key: &K, source: ModifierSource, value: T)
     where
         T: Into<i32>,
     {
         self.get_mut(key).add_modifier(source, value.into());
     }
 
-    fn remove_modifier(&mut self, key: K, source: &ModifierSource) {
+    fn remove_modifier(&mut self, key: &K, source: &ModifierSource) {
         self.get_mut(key).remove_modifier(source);
     }
 
-    fn total(&self, key: K) -> i32 {
+    fn total(&self, key: &K) -> i32 {
         self.get(key).modifiers().total()
     }
 }

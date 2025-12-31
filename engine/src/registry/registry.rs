@@ -16,7 +16,7 @@ use crate::{
         actions::action::Action,
         background::Background,
         class::{Class, Subclass},
-        effects::effects::Effect,
+        effects::effect::Effect,
         faction::Faction,
         feat::Feat,
         id::{

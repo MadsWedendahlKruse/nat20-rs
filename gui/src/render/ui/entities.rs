@@ -3,7 +3,7 @@ use nat20_rs::{
     components::{
         ability::AbilityScoreMap,
         damage::DamageResistances,
-        effects::effects::{Effect, EffectDuration},
+        effects::effect::{Effect, EffectInstance, EffectLifetime},
         health::{hit_points::HitPoints, life_state::LifeState},
         id::{FeatId, Name, SpeciesId, SubspeciesId},
         level::{ChallengeRating, CharacterLevels},
@@ -57,7 +57,7 @@ impl ImguiRenderableWithContext<(&World, &CreatureRenderMode)> for Entity {
                     }
 
                     if let Some(tab) = ui.tab_item("Effects") {
-                        render_if_present::<Vec<Effect>>(ui, world, entity);
+                        render_if_present::<Vec<EffectInstance>>(ui, world, entity);
                         render_if_present::<Vec<FeatId>>(ui, world, entity);
                         tab.end();
                     }
@@ -102,7 +102,7 @@ impl ImguiRenderableWithContext<(&World, &CreatureRenderMode)> for Entity {
                     }
 
                     if let Some(tab) = ui.tab_item("Effects") {
-                        render_if_present::<Vec<Effect>>(ui, world, entity);
+                        render_if_present::<Vec<EffectInstance>>(ui, world, entity);
                         render_if_present::<Vec<FeatId>>(ui, world, entity);
                         tab.end();
                     }
@@ -117,7 +117,7 @@ impl ImguiRenderableWithContext<(&World, &CreatureRenderMode)> for Entity {
                 render_if_present::<ChallengeRating>(ui, world, *self);
                 render_if_present::<LifeState>(ui, world, *self);
                 render_if_present::<HitPoints>(ui, world, *self);
-                if let Ok(effects) = world.get::<&Vec<Effect>>(*self) {
+                if let Ok(effects) = world.get::<&Vec<EffectInstance>>(*self) {
                     render_effects_compact(ui, &effects);
                 }
             }
@@ -169,24 +169,19 @@ fn render_overview(ui: &imgui::Ui, world: &World, entity: Entity, mode: &Creatur
     }
 }
 
-fn render_effects_compact(ui: &imgui::Ui, effects: &[Effect]) {
+fn render_effects_compact(ui: &imgui::Ui, effects: &[EffectInstance]) {
     let conditions = effects
         .iter()
-        .filter(|e| {
-            matches!(
-                e.duration(),
-                EffectDuration::Temporary { .. } | EffectDuration::Conditional
-            )
-        })
+        .filter(|e| !matches!(e.lifetime, EffectLifetime::Permanent))
         .collect::<Vec<_>>();
     ui.separator_with_text("Conditions");
     if !conditions.is_empty() {
         if let Some(table) = table_with_columns!(ui, "Conditions", "Condition", "Duration") {
             for effect in conditions {
                 ui.table_next_column();
-                ui.text(effect.id().to_string());
+                ui.text(effect.effect_id.to_string());
                 ui.table_next_column();
-                effect.duration().render(ui);
+                effect.lifetime.render(ui);
             }
             table.end();
         }
@@ -207,7 +202,7 @@ impl ImguiRenderableMutWithContext<&mut World> for Entity {
             }
 
             if let Some(tab) = ui.tab_item("Effects") {
-                render_if_present::<Vec<Effect>>(ui, world, entity);
+                render_if_present::<Vec<EffectInstance>>(ui, world, entity);
                 render_if_present::<Vec<FeatId>>(ui, world, entity);
                 tab.end();
             }

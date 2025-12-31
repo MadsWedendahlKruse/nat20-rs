@@ -4,7 +4,16 @@
     "kind": {
         "standard": {
             "payload": {
-                "effect": "nat20_rs::effect.fighter.action_surge"
+                "effect": {
+                    "effect_id": "nat20_rs::effect.fighter.action_surge",
+                    "lifetime": {
+                        "at_turn_boundary": {
+                            "entity": "applier",
+                            "boundary": "start",
+                            "duration": 1
+                        }
+                    }
+                }
             }
         }
     },

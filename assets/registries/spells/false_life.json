@@ -6,7 +6,10 @@
     "kind": {
         "standard": {
             "payload": {
-                "effect": "nat20_rs::effect.false_life"
+                "effect": {
+                    "effect_id": "nat20_rs::effect.dash",
+                    "lifetime": "permanent"
+                }
             }
         }
     },

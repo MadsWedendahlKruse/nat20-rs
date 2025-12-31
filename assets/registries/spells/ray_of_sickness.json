@@ -1,17 +1,17 @@
 {
-    "id": "nat20_rs::spell.ray_of_frost",
-    "description": "A frigid beam of blue-white light streaks toward a creature within range. Make a ranged spell attack against the target. On a hit, it takes 1d8 Cold damage, and its Speed is reduced by 10 feet until the start of your next turn.",
-    "base_level": 0,
-    "school": "evocation",
+    "id": "nat20_rs::spell.ray_of_sickness",
+    "description": "You shoot a greenish ray at a creature within range. Make a ranged spell attack against the target. On a hit, the target takes 2d8 Poison damage and has the Poisoned condition until the end of your next turn.",
+    "base_level": 1,
+    "school": "necromancy",
     "kind": {
         "standard": {
             "condition": {
                 "attack_roll": "spell_attack_roll"
             },
             "payload": {
-                "damage": "(1 + (character_level + 1) / 6)d8;cold",
+                "damage": "(2 + (spell_level - 1))d8;poison",
                 "effect": {
-                    "effect_id": "nat20_rs::effect.spell.ray_of_frost",
+                    "effect_id": "nat20_rs::effect.condition.poisoned",
                     "lifetime": {
                         "at_turn_boundary": {
                             "entity": "applier",

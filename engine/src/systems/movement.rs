@@ -5,7 +5,7 @@ use parry3d::{
     query::{Ray, RayCast},
     shape::Ball,
 };
-use tracing::debug;
+use tracing::trace;
 use uom::si::{f32::Length, length::meter};
 
 use crate::{
@@ -108,7 +108,7 @@ pub fn path_in_range_of_point(
     line_of_sight: bool,
     spend_movement: bool,
 ) -> Result<PathResult, MovementError> {
-    debug!(
+    trace!(
         "Attempting to path entity {:?} to within {:?} of point {:?}",
         entity, range, target
     );
@@ -134,12 +134,12 @@ pub fn path_in_range_of_point(
             .has_line_of_sight
         {
             // Already in range
-            debug!("Entity is already in range of target point.");
+            trace!("Entity is already in range of target point.");
             return Ok(PathResult::empty());
         }
     }
 
-    debug!("Distance to target: {:?}", distance_to_target);
+    trace!("Distance to target: {:?}", distance_to_target);
 
     let path_to_target = path(game_state, entity, &target, true, false, spend_movement)?;
 
@@ -163,7 +163,7 @@ pub fn path_in_range_of_point(
 
     if allow_partial {
         // Return the partial path even if we couldn't get in range
-        debug!("No intersection found, but allowing partial path.");
+        trace!("No intersection found, but allowing partial path.");
         return Ok(path_to_target);
     }
 
@@ -183,7 +183,7 @@ fn determine_path_sphere_intersections(
     // If an entity is standing on the end of the path, that's probably who we're
     // trying to target, so don't let them block line of sight either
     if let Some(occupant) = systems::geometry::get_entity_at_point(&game_state.world, *target) {
-        debug!(
+        trace!(
             "Excluding occupant {:?} at path end from LOS checks",
             occupant
         );
@@ -207,24 +207,24 @@ fn determine_path_sphere_intersections(
             true,
         ) {
             let intersection_point = ray.point_at(toi);
-            debug!(
+            trace!(
                 "Found an intersection between sphere at {:?} with radius {:?} and path segment {:?} -> {:?}",
                 target, range, start, end
             );
-            debug!("Intersection point: {:?}", intersection_point);
+            trace!("Intersection point: {:?}", intersection_point);
             let ground_at_intersection =
                 systems::geometry::ground_position(&game_state.geometry, &intersection_point)?;
-            debug!("Ground at intersection point: {:?}", ground_at_intersection);
+            trace!("Ground at intersection point: {:?}", ground_at_intersection);
             let eye_pos_at_intersection = systems::geometry::get_eye_position_at_point(
                 &game_state.world,
                 entity,
                 &ground_at_intersection,
             )?;
-            debug!(
+            trace!(
                 "Eye position at intersection point: {:?}",
                 eye_pos_at_intersection
             );
-            debug!(
+            trace!(
                 "Line of sight from eye position at intersection point {:?} to target {:?}: {}",
                 eye_pos_at_intersection,
                 target,

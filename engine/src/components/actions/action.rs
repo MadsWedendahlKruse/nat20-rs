@@ -15,6 +15,7 @@ use crate::{
             AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
         },
         dice::{DiceSetRoll, DiceSetRollResult},
+        effects::effect::EffectInstanceTemplate,
         health::life_state::LifeState,
         id::{ActionId, EffectId, EntityIdentifier, IdProvider, ScriptId, SpellId},
         items::equipment::{armor::ArmorClass, slots::EquipmentSlot},
@@ -82,7 +83,7 @@ pub enum ActionCondition {
 #[derive(Clone)]
 pub struct ActionPayload {
     damage: Option<Arc<DamageFunction>>,
-    effect: Option<EffectId>,
+    effect: Option<EffectInstanceTemplate>,
     healing: Option<Arc<HealFunction>>,
 }
 
@@ -94,7 +95,7 @@ pub enum ActionPayloadError {
 impl ActionPayload {
     pub fn new(
         damage: Option<Arc<DamageFunction>>,
-        effect: Option<EffectId>,
+        effect: Option<EffectInstanceTemplate>,
         healing: Option<Arc<HealFunction>>,
     ) -> Result<Self, ActionPayloadError> {
         let payload = ActionPayload {
@@ -122,7 +123,7 @@ impl ActionPayload {
         }
     }
 
-    pub fn with_effect(effect: EffectId) -> Self {
+    pub fn with_effect(effect: EffectInstanceTemplate) -> Self {
         Self {
             damage: None,
             effect: Some(effect),
@@ -142,7 +143,7 @@ impl ActionPayload {
         self.damage.as_ref()
     }
 
-    pub fn effect(&self) -> Option<&EffectId> {
+    pub fn effect(&self) -> Option<&EffectInstanceTemplate> {
         self.effect.as_ref()
     }
 
@@ -444,7 +445,7 @@ impl Action {
         // on_action component it'll be cheap to clone
         let hooks: Vec<_> = systems::effects::effects(&game_state.world, action_data.actor)
             .iter()
-            .filter_map(|effect| Some(effect.on_action.clone()))
+            .filter_map(|effect| Some(effect.effect().on_action.clone()))
             .collect();
 
         for hook in hooks {

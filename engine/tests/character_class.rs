@@ -125,7 +125,7 @@ mod tests {
 
         {
             let effects = systems::effects::effects(&mut world, character);
-            let effect_ids: HashSet<&EffectId> = effects.iter().map(|e| e.id()).collect();
+            let effect_ids: HashSet<&EffectId> = effects.iter().map(|e| &e.effect_id).collect();
             for effect_id in [
                 EffectId::new("nat20_rs", "effect.fighting_style.great_weapon_fighting"),
                 EffectId::new("nat20_rs", "effect.fighter.champion.improved_critical"),
@@ -143,7 +143,7 @@ mod tests {
             let skills = systems::helpers::get_component::<SkillSet>(&mut world, character);
             for skill in [Skill::Athletics, Skill::Perception] {
                 assert_eq!(
-                    skills.get(skill).proficiency().level(),
+                    skills.get(&skill).proficiency().level(),
                     &ProficiencyLevel::Proficient
                 );
             }
@@ -155,7 +155,7 @@ mod tests {
             for ability in [Ability::Strength, Ability::Constitution] {
                 assert_eq!(
                     saving_throws
-                        .get(SavingThrowKind::Ability(ability))
+                        .get(&SavingThrowKind::Ability(ability))
                         .proficiency()
                         .level(),
                     &ProficiencyLevel::Proficient
