@@ -1,17 +1,13 @@
-use core::panic;
-use std::sync::Arc;
-
 use hecs::{Entity, Ref, World};
 use tracing::debug;
 
 use crate::{
     components::{
         actions::action::ActionContext,
-        effects::effect::{EffectInstance, EffectInstanceTemplate, EffectLifetime},
+        effects::effect::{EffectInstance, EffectInstanceTemplate},
         id::EffectId,
         modifier::ModifierSource,
     },
-    engine::{game_state::GameState, time::TurnKey},
     registry::registry::EffectsRegistry,
     systems,
 };
@@ -25,50 +21,8 @@ pub fn effects_mut(world: &mut World, entity: Entity) -> hecs::RefMut<'_, Vec<Ef
     systems::helpers::get_component_mut::<Vec<EffectInstance>>(world, entity)
 }
 
-fn add_effect_instance(
-    game_state: &mut GameState,
-    entity: Entity,
-    effect_instance: EffectInstance,
-    context: Option<&ActionContext>,
-) {
-    apply_and_replace(&mut game_state.world, entity, &effect_instance, context);
-
-    match effect_instance.lifetime {
-        EffectLifetime::AtTurnBoundary {
-            entity: entity_anchor,
-            boundary,
-            remaining,
-        } => {
-            let turn_key = TurnKey {
-                encounter_id: *game_state
-                    .encounter_for_entity(&entity_anchor)
-                    .expect("Entity with turn-boundary effect must be in an encounter"),
-                entity: entity_anchor,
-                boundary,
-            };
-
-            game_state.turn_scheduler.register(
-                turn_key,
-                remaining,
-                Arc::new({
-                    let effect_id = effect_instance.effect_id.clone();
-                    move |world: &mut World| {
-                        remove_effect(world, entity, &effect_id);
-                    }
-                }),
-            );
-        }
-        EffectLifetime::Permanent => {
-            panic!("Permanent effects be added with add_permanent_effect()");
-        }
-        _ => {}
-    }
-
-    effects_mut(&mut game_state.world, entity).push(effect_instance);
-}
-
 pub fn add_effect_template(
-    game_state: &mut GameState,
+    world: &mut World,
     applier: Entity,
     target: Entity,
     source: ModifierSource,
@@ -80,7 +34,7 @@ pub fn add_effect_template(
         "Entity {:?} is adding effect instance {:?} to entity {:?}",
         applier, effect_instance, target
     );
-    add_effect_instance(game_state, target, effect_instance, context);
+    add_effect_instance(world, target, effect_instance, context);
 }
 
 pub fn add_permanent_effect(
@@ -105,6 +59,16 @@ pub fn add_permanent_effects(
     for effect_id in effects {
         add_permanent_effect(world, entity, effect_id, source, context);
     }
+}
+
+fn add_effect_instance(
+    world: &mut World,
+    entity: Entity,
+    effect_instance: EffectInstance,
+    context: Option<&ActionContext>,
+) {
+    apply_and_replace(world, entity, &effect_instance, context);
+    effects_mut(world, entity).push(effect_instance);
 }
 
 fn apply_and_replace(

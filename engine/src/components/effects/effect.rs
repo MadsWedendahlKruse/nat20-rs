@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
 
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use crate::{
     components::{
@@ -20,12 +21,13 @@ use crate::{
         resource::ResourceAmountMap,
         saving_throw::SavingThrowKind,
         skill::Skill,
+        time::{TimeDuration, TimeStep, TurnBoundary},
     },
-    engine::{event::ActionData, time::TurnBoundary},
+    engine::event::ActionData,
     registry::{registry::EffectsRegistry, serialize::effect::EffectDefinition},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EffectLifetime {
     Permanent,
 
@@ -34,13 +36,8 @@ pub enum EffectLifetime {
     AtTurnBoundary {
         entity: Entity,
         boundary: TurnBoundary,
-        remaining: u32,
-    },
-
-    /// World-time expiration (optional; stub for later).
-    /// If you don’t want world-time yet, leave this unused.
-    AtWorldTime {
-        expires_at_seconds: u64,
+        duration: TimeDuration,
+        remaining: TimeDuration,
     },
 }
 
@@ -54,17 +51,14 @@ pub enum EffectLifetimeEntiy {
 /// Effect lifetimes are unique in the sense that they can refer to different entities,
 /// but those entities are only known at runtime. Therefore, we need a template
 /// that can be instantiated into a concrete `EffectLifetime` when the effect is applied.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EffectLifetimeTemplate {
     Permanent,
     AtTurnBoundary {
         entity: EffectLifetimeEntiy,
         boundary: TurnBoundary,
-        duration: u32,
-    },
-    AtWorldTime {
-        expires_at_seconds: u64,
+        duration: TimeDuration,
     },
 }
 
@@ -85,13 +79,8 @@ impl EffectLifetimeTemplate {
                 EffectLifetime::AtTurnBoundary {
                     entity,
                     boundary: *boundary,
+                    duration: *duration,
                     remaining: *duration,
-                }
-            }
-
-            EffectLifetimeTemplate::AtWorldTime { expires_at_seconds } => {
-                EffectLifetime::AtWorldTime {
-                    expires_at_seconds: *expires_at_seconds,
                 }
             }
         }
@@ -211,9 +200,45 @@ impl EffectInstance {
         EffectsRegistry::get(&self.effect_id)
             .expect(format!("Effect definition not found for ID `{}`", self.effect_id).as_str())
     }
+
+    pub fn advance_time(&mut self, time_step: TimeStep) {
+        match self.lifetime {
+            EffectLifetime::Permanent => { /* Do nothing */ }
+
+            EffectLifetime::AtTurnBoundary {
+                entity: life_time_entity,
+                boundary: lifetime_boundary,
+                ref mut remaining,
+                ..
+            } => {
+                match time_step {
+                    TimeStep::TurnBoundary {
+                        entity: time_step_entity,
+                        boundary: time_step_boundary,
+                    } => {
+                        if !(time_step_entity == life_time_entity
+                            && time_step_boundary == lifetime_boundary)
+                        {
+                            return;
+                        }
+                    }
+                    _ => { /* Do nothing */ }
+                }
+                remaining.decrement(&time_step);
+            }
+        }
+    }
+
+    pub fn is_expired(&self) -> bool {
+        match self.lifetime {
+            EffectLifetime::Permanent => false,
+
+            EffectLifetime::AtTurnBoundary { ref remaining, .. } => remaining.as_turns() == 0,
+        }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EffectInstanceTemplate {
     pub effect_id: EffectId,
     pub lifetime: EffectLifetimeTemplate,

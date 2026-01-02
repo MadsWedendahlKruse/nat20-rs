@@ -16,7 +16,9 @@
                                     "at_turn_boundary": {
                                         "entity": "applier",
                                         "boundary": "start",
-                                        "duration": 1
+                                        "duration": {
+                                            "turns": 1
+                                        }
                                     }
                                 }
                             }
@@ -32,7 +34,9 @@
                                     "at_turn_boundary": {
                                         "entity": "applier",
                                         "boundary": "start",
-                                        "duration": 100
+                                        "duration": {
+                                            "time": "10 minutes"
+                                        }
                                     }
                                 }
                             }

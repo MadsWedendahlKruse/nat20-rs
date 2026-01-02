@@ -19,6 +19,7 @@ use crate::{
         species::{CreatureSize, CreatureType},
         speed::Speed,
         spells::spellbook::Spellbook,
+        time::EntityClock,
     },
     from_world,
     systems::geometry::CreaturePose,
@@ -35,6 +36,7 @@ from_world!(
         // TODO: Can monsters be player controlled?
         pub brain: AIControllerId,
         pub pose: CreaturePose,
+        pub time: EntityClock,
         pub challenge_rating: ChallengeRating,
         pub hit_points: HitPoints,
         pub life_state: LifeState,
@@ -76,6 +78,7 @@ impl Monster {
             name,
             brain,
             pose: CreaturePose::default(),
+            time: EntityClock::new(),
             challenge_rating,
             hit_points,
             life_state: LifeState::Normal,

@@ -133,6 +133,8 @@ impl MainMenuWindow {
                 navigation_debug,
                 line_of_sight_debug,
             } => {
+                game_state.update(ui.io().delta_time);
+
                 navigation_debug.render_mut_with_context(ui, gui_state, game_state);
                 line_of_sight_debug.render_mut_with_context(ui, gui_state, game_state);
 
@@ -453,7 +455,7 @@ impl MainMenuWindow {
                     )
                     .size([0.0, 200.0])
                     .build(|| {
-                        event_log.render_with_context(ui, &(&game_state.world, log_level));
+                        event_log.render_with_context(ui, &(&game_state.world, &*log_level));
 
                         if *auto_scroll_event_log && ui.scroll_y() >= ui.scroll_max_y() - 5.0 {
                             ui.set_scroll_here_y_with_ratio(1.0);

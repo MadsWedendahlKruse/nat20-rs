@@ -37,7 +37,7 @@ use nat20_rs::{
         skill::{Skill, SkillSet, skill_ability},
         species::{CreatureSize, CreatureType},
         speed::Speed,
-        spells::spellbook::Spellbook,
+        spells::spellbook::Spellbook, time::{TimeDuration, TimeMode},
     },
     registry::{self, registry::SpellsRegistry},
     systems::{
@@ -598,8 +598,8 @@ impl ImguiRenderableMutWithContext<&ResourceMap> for Spellbook {
     }
 }
 
-impl ImguiRenderable for Vec<EffectInstance> {
-    fn render(&self, ui: &imgui::Ui) {
+impl ImguiRenderableWithContext<&TimeMode> for Vec<EffectInstance> {
+    fn render_with_context(&self, ui: &imgui::Ui, time_mode: &TimeMode) {
         let (permanent_effects, temporary_effects): (Vec<&EffectInstance>, Vec<&EffectInstance>) =
             self.iter()
                 .partition(|e| matches!(e.lifetime, EffectLifetime::Permanent));
@@ -615,7 +615,7 @@ impl ImguiRenderable for Vec<EffectInstance> {
                 ui.text(effect.source.to_string());
                 // Duration column
                 ui.table_next_column();
-                effect.lifetime.render(ui);
+                effect.lifetime.render_with_context(ui, time_mode);
             }
             table.end();
         }
@@ -1426,21 +1426,70 @@ impl ImguiRenderable for DamageMitigationEffect {
     }
 }
 
-impl ImguiRenderable for EffectLifetime {
-    fn render(&self, ui: &imgui::Ui) {
+impl ImguiRenderableWithContext<&TimeMode> for EffectLifetime {
+    fn render_with_context(&self, ui: &imgui::Ui, time_mode: &TimeMode) {
         match self {
-            EffectLifetime::AtTurnBoundary { remaining, .. } => {
-                // TODO: Consider if we want to show more details here
-                TextSegment::new(
-                    format!("{} turns remaining", remaining), TextKind::Details,
-                )
-                .render(ui);
+            EffectLifetime::AtTurnBoundary { remaining, duration, .. } => {
+                remaining.render_with_context(ui, time_mode);
+                ui.same_line();
+                TextSegment::new("/", TextKind::Details).render(ui);
+                ui.same_line();
+                duration.render_with_context(ui, time_mode);
             }
             // TODO: Does it make sense to render the other durations?
             _ => {}
         }
     }
 }
+
+impl ImguiRenderableWithContext<&TimeMode> for TimeDuration {
+    fn render_with_context(&self, ui: &imgui::Ui, time_mode: &TimeMode) {
+        match time_mode {
+            TimeMode::RealTime => {
+                let seconds = self.as_seconds();
+                render_seconds(ui, &seconds);
+            }
+
+            TimeMode::TurnBased { .. } => {
+                let turns = self.as_turns();
+                render_turns(ui, &turns);
+            }
+            
+            TimeMode::Paused => {
+                let turns = self.as_turns();
+                render_turns(ui, &turns);
+            }
+        }
+    }
+}
+
+fn render_seconds(ui: &imgui::Ui, seconds: &f32) {
+    let seconds = *seconds as u32;
+    let minutes = seconds / 60;
+    let remaining_seconds = seconds % 60;
+    if minutes > 0 {
+        TextSegment::new(
+            format!("{} minutes, {} seconds", minutes, remaining_seconds),
+            TextKind::Details,
+        )
+        .render(ui);
+    } else {
+        TextSegment::new(
+            format!("{} seconds", remaining_seconds),
+            TextKind::Details,
+        )
+        .render(ui);
+    }
+}
+
+fn render_turns(ui: &imgui::Ui, turns: &u32) {
+    TextSegment::new(
+        format!("{} turns", turns),
+        TextKind::Details,
+    )
+    .render(ui);
+}
+
 
 impl ImguiRenderable for CreatureSize {
     fn render(&self, ui: &imgui::Ui) {

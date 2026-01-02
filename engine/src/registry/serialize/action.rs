@@ -3,11 +3,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     components::{
         actions::action::{Action, ActionCondition, ActionKind, ActionPayload, DamageOnFailure},
-        effects::effect::{EffectInstance, EffectInstanceTemplate, EffectLifetimeTemplate},
+        effects::effect::{EffectInstanceTemplate, EffectLifetimeTemplate},
         id::{ActionId, EffectId, ScriptId},
         resource::{RechargeRule, ResourceAmountMap},
     },
-    engine::time::TurnBoundary,
     registry::{
         registry_validation::{ReferenceCollector, RegistryReference, RegistryReferenceCollector},
         serialize::{

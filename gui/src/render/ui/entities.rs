@@ -12,6 +12,7 @@ use nat20_rs::{
         species::{CreatureSize, CreatureType},
         speed::Speed,
         spells::spellbook::Spellbook,
+        time::{EntityClock, TimeMode},
     },
     systems,
 };
@@ -57,7 +58,7 @@ impl ImguiRenderableWithContext<(&World, &CreatureRenderMode)> for Entity {
                     }
 
                     if let Some(tab) = ui.tab_item("Effects") {
-                        render_if_present::<Vec<EffectInstance>>(ui, world, entity);
+                        render_effects(ui, world, entity);
                         render_if_present::<Vec<FeatId>>(ui, world, entity);
                         tab.end();
                     }
@@ -102,7 +103,7 @@ impl ImguiRenderableWithContext<(&World, &CreatureRenderMode)> for Entity {
                     }
 
                     if let Some(tab) = ui.tab_item("Effects") {
-                        render_if_present::<Vec<EffectInstance>>(ui, world, entity);
+                        render_effects(ui, world, entity);
                         render_if_present::<Vec<FeatId>>(ui, world, entity);
                         tab.end();
                     }
@@ -117,9 +118,7 @@ impl ImguiRenderableWithContext<(&World, &CreatureRenderMode)> for Entity {
                 render_if_present::<ChallengeRating>(ui, world, *self);
                 render_if_present::<LifeState>(ui, world, *self);
                 render_if_present::<HitPoints>(ui, world, *self);
-                if let Ok(effects) = world.get::<&Vec<EffectInstance>>(*self) {
-                    render_effects_compact(ui, &effects);
-                }
+                render_effects_compact(ui, world, *self);
             }
         }
     }
@@ -169,7 +168,16 @@ fn render_overview(ui: &imgui::Ui, world: &World, entity: Entity, mode: &Creatur
     }
 }
 
-fn render_effects_compact(ui: &imgui::Ui, effects: &[EffectInstance]) {
+fn render_effects(ui: &imgui::Ui, world: &World, entity: Entity) {
+    let time_mode = systems::helpers::get_component::<EntityClock>(world, entity).mode();
+    if let Ok(effects) = world.get::<&Vec<EffectInstance>>(entity) {
+        effects.render_with_context(ui, &time_mode);
+    }
+}
+
+fn render_effects_compact(ui: &imgui::Ui, world: &World, entity: Entity) {
+    let time_mode = systems::helpers::get_component::<EntityClock>(world, entity).mode();
+    let effects = systems::helpers::get_component::<Vec<EffectInstance>>(world, entity);
     let conditions = effects
         .iter()
         .filter(|e| !matches!(e.lifetime, EffectLifetime::Permanent))
@@ -181,7 +189,7 @@ fn render_effects_compact(ui: &imgui::Ui, effects: &[EffectInstance]) {
                 ui.table_next_column();
                 ui.text(effect.effect_id.to_string());
                 ui.table_next_column();
-                effect.lifetime.render(ui);
+                effect.lifetime.render_with_context(ui, &time_mode);
             }
             table.end();
         }
@@ -202,7 +210,7 @@ impl ImguiRenderableMutWithContext<&mut World> for Entity {
             }
 
             if let Some(tab) = ui.tab_item("Effects") {
-                render_if_present::<Vec<EffectInstance>>(ui, world, entity);
+                render_effects(ui, world, entity);
                 render_if_present::<Vec<FeatId>>(ui, world, entity);
                 tab.end();
             }

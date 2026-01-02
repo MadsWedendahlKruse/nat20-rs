@@ -3,8 +3,9 @@ use std::{fmt::Display, marker::PhantomData, str::FromStr};
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
 use uom::si::{
-    f32::Length,
+    f32::{Length, Time},
     length::{foot, meter},
+    time::{hour, minute, second},
 };
 
 use crate::{
@@ -36,6 +37,22 @@ impl QuantityDimension for LengthDim {
             "m" | "meter" | "meters" => Ok(Length::new::<meter>(value)),
             "ft" | "foot" | "feet" => Ok(Length::new::<foot>(value)),
             other => Err(format!("Unknown length unit: '{}'", other)),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TimeDim;
+
+impl QuantityDimension for TimeDim {
+    type Quantity = Time;
+
+    fn make_quantity(value: f32, unit_name: &str) -> Result<Self::Quantity, String> {
+        match unit_name.to_ascii_lowercase().as_str() {
+            "s" | "sec" | "second" | "seconds" => Ok(Time::new::<second>(value)),
+            "min" | "minute" | "minutes" => Ok(Time::new::<minute>(value)),
+            "hr" | "hour" | "hours" => Ok(Time::new::<hour>(value)),
+            other => Err(format!("Unknown time unit: '{}'", other)),
         }
     }
 }
@@ -128,6 +145,7 @@ impl<D: QuantityDimension> QuantityExpressionDefinition<D> {
 }
 
 pub type LengthExpressionDefinition = QuantityExpressionDefinition<LengthDim>;
+pub type TimeExpressionDefinition = QuantityExpressionDefinition<TimeDim>;
 
 #[cfg(test)]
 mod tests {
@@ -142,7 +160,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_length_expression_parsing() {
+    fn length_expression_parsing() {
         let expr_str = "10 + spell_level ft";
         let expr: LengthExpressionDefinition = expr_str.parse().unwrap();
 
@@ -151,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn test_length_expression_evaluation() {
+    fn length_expression_evaluation() {
         let expr_str = "10 + spell_level ft";
         let expr: LengthExpressionDefinition = expr_str.parse().unwrap();
 
@@ -172,5 +190,38 @@ mod tests {
             .unwrap();
 
         assert_eq!(length.get::<foot>(), 15.0);
+    }
+
+    #[test]
+    fn time_expression_parsing() {
+        let expr_str = "2 * spell_level minutes";
+        let expr: QuantityExpressionDefinition<TimeDim> = expr_str.parse().unwrap();
+
+        assert_eq!(expr.raw, expr_str);
+        assert_eq!(expr.unit_name, "minutes");
+    }
+
+    #[test]
+    fn time_expression_evaluation() {
+        let expr_str = "2 * spell_level minutes";
+        let expr: QuantityExpressionDefinition<TimeDim> = expr_str.parse().unwrap();
+
+        let mut world = World::new();
+        let entity = world.spawn(());
+
+        let action_context = ActionContext::Spell {
+            source: SpellSource::Granted(GrantedSpellSource::Item(ItemId::new(
+                "nat20_rs",
+                "item.wand_of_testing",
+            ))),
+            level: 3,
+            id: SpellId::new("nat20_rs", "spell.test"),
+        };
+
+        let time = expr
+            .evaluate(&world, entity, &action_context, &PARSER_VARIABLES)
+            .unwrap();
+
+        assert_eq!(time.get::<minute>(), 6.0);
     }
 }

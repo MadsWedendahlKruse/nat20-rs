@@ -137,7 +137,10 @@ impl CustomType for ScriptActionView {
             // Expose the actor as a numeric entity id
             .with_get("actor", |s: &mut Self| u64::from(s.actor.to_bits()))
             .with_get("action_context", |s: &mut Self| s.action_context.clone())
-            .with_get("resource_cost", |s: &mut Self| s.resource_cost.clone());
+            .with_get("resource_cost", |s: &mut Self| s.resource_cost.clone())
+            .with_fn("is_targetting_entity", |s: &mut Self, entity_id: u64| {
+                s.targets.iter().any(|t| t.id == entity_id)
+            });
     }
 }
 
@@ -151,8 +154,12 @@ impl CustomType for ScriptEventView {
             .with_fn("as_d20_check_performed", |s: &mut Self| {
                 s.as_d20_check_performed().clone()
             })
-            .with_fn("is_action", |s: &mut Self| s.is_action())
-            .with_fn("as_action", |s: &mut Self| s.as_action().clone());
+            .with_fn("is_action_requested", |s: &mut Self| {
+                s.is_action_requested()
+            })
+            .with_fn("as_action_requested", |s: &mut Self| {
+                s.as_action_requested().clone()
+            });
     }
 }
 

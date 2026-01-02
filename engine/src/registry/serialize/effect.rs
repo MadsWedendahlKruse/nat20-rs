@@ -25,6 +25,7 @@ use crate::{
         saving_throw::SavingThrowSet,
         skill::SkillSet,
         speed::Speed,
+        time::TimeDuration,
     },
     engine::event::ActionData,
     registry::{
@@ -37,6 +38,7 @@ use crate::{
                 SavingThrowModifierProvider, SkillModifierProvider, SpeedModifier,
                 SpeedModifierProvider,
             },
+            quantity::TimeExpressionDefinition,
         },
     },
     scripts::{
@@ -48,6 +50,46 @@ use crate::{
     },
     systems,
 };
+
+// TODO: Should this be it's own time module?
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum TimeDurationDefinition {
+    RealTime { time: TimeExpressionDefinition },
+    Turns { turns: u32 },
+}
+
+// impl Evaluable for TimeDurationDefinition {
+//     type Output = TimeDuration;
+
+//     fn evaluate(
+//         &self,
+//         world: &World,
+//         entity: Entity,
+//         action_context: &ActionContext,
+//         variables: &VariableMap,
+//     ) -> Result<Self::Output, EvaluationError> {
+//         match self {
+//             TimeDurationDefinition::RealTime { time } => Ok(TimeDuration::RealTime {
+//                 seconds: time
+//                     .evaluate(world, entity, action_context, variables)?
+//                     .value,
+//             }),
+//             TimeDurationDefinition::Turns { turns } => Ok(TimeDuration::Turns { turns: *turns }),
+//         }
+//     }
+// }
+
+impl From<TimeDurationDefinition> for TimeDuration {
+    fn from(definition: TimeDurationDefinition) -> Self {
+        match definition {
+            TimeDurationDefinition::RealTime { time } => {
+                TimeDuration::from_seconds(time.evaluate_without_variables().unwrap().value)
+            }
+            TimeDurationDefinition::Turns { turns } => TimeDuration::from_turns(turns),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EffectDefinition {

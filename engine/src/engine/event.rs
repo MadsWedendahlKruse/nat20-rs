@@ -16,8 +16,9 @@ use crate::{
         health::life_state::LifeState,
         id::ActionId,
         resource::{ResourceAmountMap, ResourceError},
+        time::TurnBoundary,
     },
-    engine::{encounter::EncounterId, game_state::GameState, time::TurnBoundary},
+    engine::{encounter::EncounterId, game_state::GameState},
     systems::{
         actions::ActionUsabilityError,
         d20::{D20CheckDCKind, D20ResultKind},
@@ -188,14 +189,6 @@ pub enum EncounterEvent {
     EncounterStarted(EncounterId),
     EncounterEnded(EncounterId, EventLog),
     NewRound(EncounterId, usize),
-
-    TurnBoundary {
-        encounter_id: EncounterId,
-        entity: Entity,
-        boundary: TurnBoundary,
-        round: usize,
-        turn_index: usize,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

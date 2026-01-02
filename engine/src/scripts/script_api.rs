@@ -8,7 +8,10 @@ use hecs::{Entity, World};
 
 use crate::{
     components::{
-        actions::{action::ActionContext, targeting::TargetInstance},
+        actions::{
+            action::{ActionContext, ActionResult},
+            targeting::TargetInstance,
+        },
         damage::{
             DamageMitigationEffect, DamageMitigationResult, DamageRollResult, MitigationOperation,
         },
@@ -280,6 +283,7 @@ impl ScriptD20Result {
 #[derive(Clone)]
 pub enum ScriptEventView {
     ActionRequested(ScriptActionView),
+    ActionPerformed(ScriptActionView, Vec<ActionResult>),
     D20CheckPerformed(ScriptD20CheckView),
 }
 
@@ -304,6 +308,10 @@ impl ScriptEventView {
                     &action,
                 )))
             }
+
+            EventKind::ActionPerformed { action, results } => Some(
+                ScriptEventView::ActionPerformed(ScriptActionView::from(action), results.clone()),
+            ),
 
             _ => None, // extend with more variants as needed
         }
@@ -336,7 +344,8 @@ macro_rules! impl_event_accessors {
 
 impl_event_accessors!(ScriptEventView {
     is_d20_check_performed => as_d20_check_performed: D20CheckPerformed(ScriptD20CheckView),
-    is_action              => as_action:              ActionRequested(ScriptActionView),
+    is_action_requested    => as_action_requested:    ActionRequested(ScriptActionView),
+    // is_action_performed    => as_action_performed:    ActionPerformed(ScriptActionView, Vec<ActionResult>),
 });
 
 /// View of a "D20CheckPerformed" event.
@@ -462,6 +471,11 @@ impl From<&ActionData> for ScriptActionView {
                 .collect(),
         }
     }
+}
+
+pub struct ScriptActionResult {
+    pub performer: ScriptEntity,
+    pub target: ScriptEntity,
 }
 
 /// Which entity are we talking about? We keep this abstract so scripts do

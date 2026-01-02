@@ -97,6 +97,7 @@
         "spell_replacement_model": "level_up",
         "spell_list": [
             "nat20_rs::spell.eldritch_blast",
+            "nat20_rs::spell.expeditious_retreat",
             "nat20_rs::spell.poison_spray"
         ]
     },

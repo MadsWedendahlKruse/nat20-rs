@@ -23,6 +23,7 @@ use crate::{
         species::{CreatureSize, CreatureType},
         speed::Speed,
         spells::spellbook::Spellbook,
+        time::EntityClock,
     },
     from_world, registry,
     systems::geometry::CreaturePose,
@@ -42,6 +43,7 @@ from_world!(
         /// AI controller for this character. Ignored if `player_controlled` is present.
         pub brain: AIControllerId,
         pub pose: CreaturePose,
+        pub time: EntityClock,
         pub name: Name,
         pub species: SpeciesId,
         pub subspecies: Option<SubspeciesId>,
@@ -78,6 +80,7 @@ impl Character {
             // TODO: Update to an actual ID
             brain: registry::ai::RANDOM_CONTROLLER_ID.clone(),
             pose: CreaturePose::identity(),
+            time: EntityClock::new(),
             name,
             species: SpeciesId::new("nat20_rs", ""),
             subspecies: None,

@@ -1,8 +1,8 @@
 fn reaction_trigger(context) {
     let event = context.event;
 
-    if event.is_action() {
-        let action = event.as_action();
+    if event.is_action_requested() {
+        let action = event.as_action_requested();
         // Cannot use Shield as a reaction to your own spell
         if action.actor == context.reactor {
             return false;

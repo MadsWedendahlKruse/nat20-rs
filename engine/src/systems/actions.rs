@@ -17,6 +17,7 @@ use crate::{
             },
         },
         damage::DamageRollResult,
+        health::life_state::LifeState,
         id::{ActionId, ResourceId, ScriptId},
         items::equipment::loadout::Loadout,
         modifier::ModifierSource,
@@ -109,6 +110,7 @@ pub fn all_actions(world: &World, entity: Entity) -> ActionMap {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActionUsabilityError {
+    EntityNotAlive(Entity),
     OnCooldown(RechargeRule),
     NotEnoughResources(ResourceAmountMap),
     ResourceNotFound(ResourceId),
@@ -123,6 +125,10 @@ pub fn action_usable(
     action_context: &ActionContext,
     resource_cost: &ResourceAmountMap,
 ) -> Result<(), ActionUsabilityError> {
+    if !systems::health::is_alive(world, entity) {
+        return Err(ActionUsabilityError::EntityNotAlive(entity));
+    }
+
     if let Some(cooldown) = on_cooldown(world, entity, action_id) {
         return Err(ActionUsabilityError::OnCooldown(cooldown));
     }
@@ -458,7 +464,7 @@ fn perform_unconditional(
 ) -> Result<(), ActionError> {
     // Apply effect immediately (no gating for unconditional).
     let effect_outcome: Option<EffectOutcome> = get_effect_outcome(
-        game_state,
+        &mut game_state.world,
         target,
         &action_data,
         &payload,
@@ -587,7 +593,7 @@ fn perform_attack_roll(
                 // Decide effect application
                 let effect_result: Option<EffectOutcome> = if hit {
                     get_effect_outcome(
-                        game_state,
+                        &mut game_state.world,
                         target,
                         &action_data,
                         &payload,
@@ -723,7 +729,7 @@ fn perform_saving_throw(
                     None
                 } else {
                     get_effect_outcome(
-                        game_state,
+                        &mut game_state.world,
                         target,
                         &action_data,
                         &payload,
@@ -859,7 +865,7 @@ fn get_damage_roll(
 }
 
 fn get_effect_outcome(
-    game_state: &mut GameState,
+    world: &mut World,
     target: Entity,
     action_data: &ActionData,
     payload: &ActionPayload,
@@ -867,7 +873,7 @@ fn get_effect_outcome(
 ) -> Option<EffectOutcome> {
     payload.effect().map(|effect| {
         systems::effects::add_effect_template(
-            game_state,
+            world,
             action_data.actor,
             target,
             ModifierSource::Action(action_data.action_id.clone()),
@@ -880,7 +886,7 @@ fn get_effect_outcome(
         if let Some(spell) = SpellsRegistry::get(&spell_id) {
             if spell.requires_concentration() {
                 systems::spells::add_concentration_instance(
-                    &mut game_state.world,
+                    world,
                     action_data.actor,
                     ConcentrationInstance::Effect {
                         entity: target,

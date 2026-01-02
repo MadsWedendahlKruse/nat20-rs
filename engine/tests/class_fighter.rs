@@ -9,6 +9,7 @@ mod tests {
             health::hit_points::HitPoints,
             id::{ActionId, EffectId, ResourceId, SpellId},
             resource::{ResourceAmount, ResourceMap},
+            time::{EntityClock, TimeMode, TimeStep, TurnBoundary},
         },
         engine::event::{ActionData, ActionDecision, ActionDecisionKind},
         systems,
@@ -80,7 +81,16 @@ mod tests {
         assert!(systems::actions::on_cooldown(&game_state.world, fighter, &action_id).is_some());
 
         // Simulate the start of the turn to remove the Action Surge effect
-        systems::time::on_turn_start(&mut game_state.world, fighter);
+        systems::helpers::get_component_mut::<EntityClock>(&mut game_state.world, fighter)
+            .set_mode(TimeMode::TurnBased { encounter_id: None });
+        systems::time::advance_time(
+            &mut game_state.world,
+            fighter,
+            TimeStep::TurnBoundary {
+                entity: fighter,
+                boundary: TurnBoundary::Start,
+            },
+        );
 
         // Check that the Action Surge effect is removed after the turn starts
         let effects = systems::effects::effects(&game_state.world, fighter);
@@ -89,7 +99,8 @@ mod tests {
             .find(|e| e.effect_id == EffectId::new("nat20_rs", "effect.fighter.action_surge"));
         assert!(
             action_surge_effect.is_none(),
-            "Action Surge effect should be removed"
+            "Action Surge effect should be removed. Remaining duration: {:?}",
+            action_surge_effect.unwrap().lifetime
         );
 
         let resources = systems::helpers::get_component::<ResourceMap>(&game_state.world, fighter);

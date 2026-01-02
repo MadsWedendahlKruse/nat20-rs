@@ -35,12 +35,7 @@ impl From<usize> for LogLevel {
 
 pub fn event_log_level(event: &Event) -> LogLevel {
     match &event.kind {
-        EventKind::Encounter(encounter_event) => match encounter_event {
-            EncounterEvent::EncounterStarted { .. } => LogLevel::Info,
-            EncounterEvent::EncounterEnded { .. } => LogLevel::Info,
-            EncounterEvent::NewRound { .. } => LogLevel::Info,
-            EncounterEvent::TurnBoundary { .. } => LogLevel::Debug,
-        },
+        EventKind::Encounter(encounter_event) => LogLevel::Info,
         EventKind::ActionRequested { .. } => LogLevel::Info,
         EventKind::ReactionRequested { .. } => LogLevel::Info,
         EventKind::ActionPerformed { .. } => LogLevel::Info,
@@ -164,16 +159,6 @@ impl ImguiRenderableWithContext<&(&World, &LogLevel)> for Event {
                 }
                 EncounterEvent::NewRound(encounter_id, round) => {
                     ui.separator_with_text(format!("Round {}", round));
-                }
-                EncounterEvent::TurnBoundary {
-                    encounter_id,
-                    entity,
-                    boundary,
-                    round,
-                    turn_index,
-                } => {
-                    // TODO:
-                    ui.text(format!("{:#?}", encounter_event));
                 }
             },
             EventKind::ActionRequested { action } => {

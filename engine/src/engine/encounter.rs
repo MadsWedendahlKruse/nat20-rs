@@ -9,9 +9,9 @@ use crate::{
         d20::{D20CheckDC, D20CheckResult},
         health::life_state::{DEATH_SAVING_THROW_DC, LifeState},
         modifier::{ModifierSet, ModifierSource},
-        resource::RechargeRule,
         saving_throw::SavingThrowKind,
         skill::{Skill, SkillSet},
+        time::{TimeStep, TurnBoundary},
     },
     engine::{
         event::{
@@ -20,7 +20,6 @@ use crate::{
         },
         game_state::GameState,
         interaction::InteractionScopeId,
-        time::TurnBoundary,
     },
     entities::{character::CharacterTag, monster::MonsterTag},
     systems::{self, d20::D20CheckDCKind},
@@ -140,10 +139,7 @@ impl Encounter {
     }
 
     fn start_turn(&mut self, game_state: &mut GameState) {
-        game_state.process_event_scoped(
-            InteractionScopeId::Encounter(self.id),
-            self.turn_boundary_event(self.current_entity(), TurnBoundary::Start),
-        );
+        self.advance_time(game_state, TurnBoundary::Start);
 
         if self.should_skip_turn(game_state) {
             self.end_turn(game_state, self.current_entity());
@@ -167,10 +163,7 @@ impl Encounter {
             panic!("Cannot end turn for entity that is not the current entity");
         }
 
-        game_state.process_event_scoped(
-            InteractionScopeId::Encounter(self.id),
-            self.turn_boundary_event(entity, TurnBoundary::End),
-        );
+        self.advance_time(game_state, TurnBoundary::End);
 
         let session = game_state
             .interaction_engine
@@ -280,14 +273,26 @@ impl Encounter {
         self.event_log.push(event);
     }
 
-    fn turn_boundary_event(&self, entity: Entity, boundary: TurnBoundary) -> Event {
-        Event::encounter_event(EncounterEvent::TurnBoundary {
-            encounter_id: self.id.clone(),
-            entity,
-            boundary,
-            round: self.round,
-            turn_index: self.turn_index,
-        })
+    fn advance_time(&mut self, game_state: &mut GameState, boundary: TurnBoundary) {
+        // TODO: Not sure if this is the correct place to do it?
+        match boundary {
+            TurnBoundary::Start => {
+                systems::time::on_turn_start(&mut game_state.world, self.current_entity());
+            }
+            TurnBoundary::End => {
+                systems::time::on_turn_end(&mut game_state.world, self.current_entity());
+            }
+        }
+        for entity in self.participants(&game_state.world, EntityFilter::All) {
+            systems::time::advance_time(
+                &mut game_state.world,
+                entity,
+                TimeStep::TurnBoundary {
+                    entity: self.current_entity(),
+                    boundary,
+                },
+            );
+        }
     }
 
     pub fn combat_log(&self) -> &EventLog {

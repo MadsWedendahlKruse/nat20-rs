@@ -5,9 +5,12 @@ use parry3d::{na::Point3, shape::Ball};
 use tracing::{info, warn};
 
 use crate::{
-    components::actions::{
-        action::{ActionKindResult, ReactionResult},
-        targeting::EntityFilter,
+    components::{
+        actions::{
+            action::{ActionKindResult, ReactionResult},
+            targeting::EntityFilter,
+        },
+        time::{EntityClock, TimeMode, TimeStep},
     },
     engine::{
         encounter::{Encounter, EncounterId},
@@ -16,9 +19,9 @@ use crate::{
             ActionPromptId, ActionPromptKind, EncounterEvent, Event, EventCallback, EventId,
             EventKind, EventListener, EventLog, ReactionData,
         },
+        game_state,
         geometry::WorldGeometry,
         interaction::{InteractionEngine, InteractionScopeId, InteractionSession},
-        time::TurnScheduler,
     },
     systems::{
         self,
@@ -38,22 +41,19 @@ pub struct GameState {
     pub interaction_engine: InteractionEngine,
     pub event_log: EventLog,
     event_listeners: HashMap<EventId, EventListener>,
-
-    pub turn_scheduler: TurnScheduler,
 }
 
 impl GameState {
     pub fn new(geometry: WorldGeometry) -> Self {
         Self {
             world: World::new(),
+            geometry,
             encounters: HashMap::new(),
             in_combat: HashMap::new(),
             resting: HashMap::new(),
             interaction_engine: InteractionEngine::default(),
             event_log: EventLog::new(),
             event_listeners: HashMap::new(),
-            geometry,
-            turn_scheduler: TurnScheduler::default(),
         }
     }
 
@@ -64,6 +64,13 @@ impl GameState {
     ) -> EncounterId {
         for entity in &participants {
             self.in_combat.insert(*entity, encounter_id.clone());
+            systems::time::set_time_mode(
+                &mut self.world,
+                *entity,
+                TimeMode::TurnBased {
+                    encounter_id: Some(encounter_id.clone()),
+                },
+            );
         }
 
         self.event_log
@@ -97,6 +104,7 @@ impl GameState {
         if let Some(mut encounter) = self.encounters.remove(encounter_id) {
             for entity in encounter.participants(&self.world, EntityFilter::All) {
                 self.in_combat.remove(&entity);
+                systems::time::set_time_mode(&mut self.world, entity, TimeMode::RealTime);
             }
             self.event_log
                 .push(Event::encounter_event(EncounterEvent::EncounterEnded(
@@ -263,12 +271,6 @@ impl GameState {
             return Ok(());
         }
 
-        // Pop prompt & clear decisions
-        {
-            let session = self.interaction_engine.session_mut(scope);
-            session.pop_prompt_by_id(&prompt_id);
-        }
-
         // Convert decisions → actions / reactions and validate/execute
         for (_actor, decision) in decisions {
             match &decision.kind {
@@ -302,6 +304,12 @@ impl GameState {
             }
         }
 
+        // Pop prompt & clear decisions
+        {
+            let session = self.interaction_engine.session_mut(scope);
+            session.pop_prompt_by_id(&prompt_id);
+        }
+
         // If we are in encounter scope, validate the next prompt (reactions may prune options)
         self.validate_or_refill_prompt_queue(scope);
 
@@ -325,8 +333,6 @@ impl GameState {
         event: Event,
     ) -> Result<(), ActionError> {
         self.log_event(&scope, event.clone());
-
-        self.turn_scheduler.on_event(&mut self.world, scope, &event);
 
         if let Some(event_id) = event.response_to {
             if let Some(listener) = self.event_listeners.get(&event_id) {
@@ -670,6 +676,16 @@ impl GameState {
                 "Cannot process event with callback for event without actor: {:#?}",
                 event
             );
+        }
+    }
+
+    pub fn update(&mut self, delta_time: f32) {
+        let time_step = TimeStep::RealTime {
+            delta_seconds: delta_time,
+        };
+        let entities = self.world.iter().map(|e| e.entity()).collect::<Vec<_>>();
+        for entity in entities {
+            systems::time::advance_time(&mut self.world, entity, time_step);
         }
     }
 }

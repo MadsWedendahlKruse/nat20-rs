@@ -12,7 +12,9 @@
                         "at_turn_boundary": {
                             "entity": "applier",
                             "boundary": "start",
-                            "duration": 600
+                            "duration": {
+                                "time": "1 hour"
+                            }
                         }
                     }
                 }

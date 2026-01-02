@@ -2,11 +2,11 @@ fn reaction_trigger(context) {
     let event = context.event;
 
     // Only care about "action-like" events (ActionRequested / ReactionRequested)
-    if !event.is_action() {
+    if !event.is_action_requested() {
         return false;
     }
 
-    let action = event.as_action();
+    let action = event.as_action_requested();
 
     // Cannot counterspell yourself
     if action.actor == context.reactor {

@@ -6,6 +6,7 @@ use nat20_rs::{
         modifier::{ModifierSet, ModifierSource},
         saving_throw::SavingThrowKind,
         skill::Skill,
+        time::{EntityClock, TimeStep, TurnBoundary},
     },
     engine::game_state::GameState,
     systems::{self, d20::D20CheckDCKind, geometry::CreaturePose, time::RestKind},
@@ -28,7 +29,7 @@ pub enum CreatureDebugState {
         kind: CheckKind,
         dc_value: i32,
     },
-    PassTime,
+    Clock,
     TogglePlayerControl,
     MoveTo {
         starting_pose: CreaturePose,
@@ -59,7 +60,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                     [
                         "Despawn",
                         "Heal Full",
-                        "Pass Time (Rest etc.)",
+                        "Clock (Advance Time)",
                         "Toggle Player Control",
                         "Saving Throw",
                         "Skill Check",
@@ -77,7 +78,7 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                             ui.close_current_popup();
                         }
                         2 => {
-                            self.state = CreatureDebugState::PassTime;
+                            self.state = CreatureDebugState::Clock;
                         }
                         3 => {
                             self.state = CreatureDebugState::TogglePlayerControl;
@@ -176,14 +177,39 @@ impl ImguiRenderableMutWithContext<&mut GameState> for CreatureDebugWindow {
                 }
             },
 
-            CreatureDebugState::PassTime => {
+            CreatureDebugState::Clock => {
+                {
+                    let clock = systems::helpers::get_component::<EntityClock>(
+                        &game_state.world,
+                        self.creature,
+                    );
+                    ui.separator_with_text("Creature Clock");
+                    ui.text(format!("Mode: {:?}", clock.mode()));
+                    ui.text(format!(
+                        "Local Time: {:.2} seconds",
+                        clock.local_time_seconds()
+                    ));
+                    ui.separator();
+                }
+
                 if let Some(index) = render_uniform_buttons_with_padding(
                     ui,
                     ["New Turn", "Short Rest", "Long Rest"],
                     [20.0, 5.0],
                 ) {
                     match index {
-                        0 => systems::time::on_turn_start(&mut game_state.world, self.creature),
+                        0 => {
+                            systems::time::advance_time(
+                                &mut game_state.world,
+                                self.creature,
+                                TimeStep::TurnBoundary {
+                                    entity: self.creature,
+                                    boundary: TurnBoundary::Start,
+                                },
+                            );
+                            // TODO: Temporary, should be handled in advance_time
+                            systems::time::on_turn_start(&mut game_state.world, self.creature);
+                        }
                         1 | 2 => {
                             let rest_kind = match index {
                                 1 => RestKind::Short,

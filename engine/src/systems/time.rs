@@ -6,13 +6,66 @@ use tracing::{debug, error, info};
 use tracing_subscriber::field::debug;
 
 use crate::{
-    components::{health::hit_points::HitPoints, resource::RechargeRule},
+    components::{
+        health::hit_points::HitPoints,
+        resource::RechargeRule,
+        time::{EntityClock, TimeMode, TimeStep},
+    },
     engine::{
         event::{ActionError, Event, EventKind},
         game_state::GameState,
     },
     systems,
 };
+
+pub fn set_time_mode(world: &mut World, entity: Entity, mode: TimeMode) {
+    let mut clock = systems::helpers::get_component_mut::<EntityClock>(world, entity);
+    clock.set_mode(mode);
+}
+
+pub fn advance_time(world: &mut World, entity: Entity, time_step: TimeStep) {
+    // TODO: Recharge resources on time advance?
+    {
+        let mut clock = systems::helpers::get_component_mut::<EntityClock>(world, entity);
+
+        if clock.mode() == TimeMode::Paused {
+            return;
+        }
+
+        match (clock.mode(), time_step) {
+            (TimeMode::RealTime, TimeStep::TurnBoundary { .. })
+            | (TimeMode::TurnBased { .. }, TimeStep::RealTime { .. }) => {
+                return;
+            }
+            _ => { /* valid combination, continue */ }
+        }
+
+        clock.update(time_step);
+    }
+
+    match time_step {
+        TimeStep::TurnBoundary {
+            entity: turn_entity,
+            boundary,
+        } => {
+            debug!(
+                "Advancing turn-based time for entity {:?} at turn boundary {:?} of entity {:?}",
+                entity, boundary, turn_entity
+            );
+        }
+        _ => { /* no special logging for other time steps */ }
+    }
+
+    let mut expired_effects = Vec::new();
+    for effect in systems::effects::effects_mut(world, entity).iter_mut() {
+        effect.advance_time(time_step);
+        if effect.is_expired() {
+            expired_effects.push(effect.effect_id.clone());
+        }
+    }
+
+    systems::effects::remove_effects(world, entity, &expired_effects);
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -136,6 +189,7 @@ pub fn on_rest_end(world: &mut World, participants: &[Entity], kind: &RestKind) 
                     systems::helpers::get_component::<HitPoints>(world, entity).max() / 2;
                 systems::health::heal(world, entity, half_max_hp);
             }
+
             RestKind::Long => {
                 systems::resources::recharge(world, entity, &RechargeRule::Rest(RestKind::Long));
                 systems::health::heal_full(world, entity);

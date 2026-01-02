@@ -22,3 +22,4 @@ pub mod skill;
 pub mod species;
 pub mod speed;
 pub mod spells;
+pub mod time;
