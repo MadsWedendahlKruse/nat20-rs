@@ -20,7 +20,7 @@ use crate::{
         health::life_state::LifeState,
         id::{ActionId, ResourceId, ScriptId},
         items::equipment::loadout::Loadout,
-        modifier::ModifierSource,
+        modifier::{Modifiable, ModifierSource},
         resource::{RechargeRule, ResourceAmountMap, ResourceMap},
         spells::{spell::ConcentrationInstance, spellbook::Spellbook},
     },
@@ -103,8 +103,10 @@ pub fn set_cooldown(
 
 pub fn all_actions(world: &World, entity: Entity) -> ActionMap {
     let mut actions = systems::helpers::get_component_clone::<ActionMap>(world, entity);
-    actions.extend(systems::helpers::get_component::<Spellbook>(world, entity).actions());
-    actions.extend(systems::helpers::get_component::<Loadout>(world, entity).actions());
+    actions
+        .extend(systems::helpers::get_component::<Spellbook>(world, entity).actions(world, entity));
+    actions
+        .extend(systems::helpers::get_component::<Loadout>(world, entity).actions(world, entity));
     actions
 }
 
@@ -323,11 +325,11 @@ pub fn available_reactions_to_event(
 
         if let Some(trigger) = &reaction.reaction_trigger {
             let Some(script_event) = ScriptEventView::from_event(event) else {
-                warn!(
-                    "Event {:?} could not be converted to ScriptEventView for reaction trigger {:?}",
-                    event.kind.name(),
-                    reaction_id
-                );
+                // warn!(
+                //     "Event {:?} could not be converted to ScriptEventView for reaction trigger {:?}",
+                //     event.kind.name(),
+                //     reaction_id
+                // );
                 continue;
             };
             let context = ScriptReactionTriggerContext {
@@ -608,6 +610,7 @@ fn perform_attack_roll(
                     action_data.actor,
                     &payload,
                     &damage_on_miss,
+                    "Attack Miss".to_string(),
                     &action_data.context,
                     hit,
                     is_crit,
@@ -743,6 +746,7 @@ fn perform_saving_throw(
                     action_data.actor,
                     &payload,
                     &damage_on_save,
+                    "Successful Save".to_string(),
                     &action_data.context,
                     !save_success,
                     false,
@@ -823,6 +827,7 @@ fn get_damage_roll(
     entity: Entity,
     payload: &ActionPayload,
     damage_on_failure: &Option<DamageOnFailure>,
+    failure_label: String,
     context: &ActionContext,
     success: bool,
     crit: bool,
@@ -838,29 +843,31 @@ fn get_damage_roll(
         payload.damage().cloned()
     };
 
-    if let Some(damage_function) = damage_function {
-        let damage_roll =
-            systems::damage::damage_roll_fn(damage_function.as_ref(), world, entity, context, crit);
+    let Some(damage_function) = damage_function else {
+        return None;
+    };
 
-        if let Some(damage_on_failure) = damage_on_failure {
-            match damage_on_failure {
-                DamageOnFailure::Half if !success => {
-                    let mut half_damage_roll = damage_roll.clone();
-                    for component in half_damage_roll.components.iter_mut() {
-                        for roll in component.result.rolls.iter_mut() {
-                            *roll /= 2;
-                        }
-                    }
-                    half_damage_roll.recalculate_total();
-                    Some(half_damage_roll)
+    let damage_roll =
+        systems::damage::damage_roll_fn(damage_function.as_ref(), world, entity, context, crit);
+
+    if let Some(damage_on_failure) = damage_on_failure {
+        match damage_on_failure {
+            DamageOnFailure::Half if !success => {
+                let mut half_damage_roll = damage_roll.clone();
+                for component in half_damage_roll.components.iter_mut() {
+                    let total = component.result.subtotal;
+                    component.result.modifiers.add_modifier(
+                        ModifierSource::Custom(failure_label.clone()),
+                        -(total as f32 / 2.0).ceil() as i32,
+                    );
                 }
-                _ => Some(damage_roll),
+                half_damage_roll.recalculate_total();
+                Some(half_damage_roll)
             }
-        } else {
-            Some(damage_roll)
+            _ => Some(damage_roll),
         }
     } else {
-        None
+        Some(damage_roll)
     }
 }
 

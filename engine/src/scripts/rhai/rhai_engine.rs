@@ -9,11 +9,14 @@ use crate::{
         rhai::rhai_types,
         script::{Script, ScriptError, ScriptFunction},
         script_api::{
-            ScriptActionContext, ScriptActionView, ScriptD20CheckDCKind, ScriptD20CheckView,
-            ScriptD20Result, ScriptDamageMitigationResult, ScriptDamageRollResult, ScriptEntity,
-            ScriptEntityView, ScriptEventView, ScriptLoadoutView, ScriptReactionBodyContext,
-            ScriptReactionPlan, ScriptReactionTriggerContext, ScriptResourceCost,
-            ScriptResourceView, ScriptSavingThrow,
+            ScriptActionContext, ScriptActionKindResultView, ScriptActionOutcomeBundleView,
+            ScriptActionPerformedView, ScriptActionResultView, ScriptActionView,
+            ScriptD20CheckDCKind, ScriptD20CheckView, ScriptD20Result,
+            ScriptDamageMitigationResult, ScriptDamageOutcomeView, ScriptDamageResolutionKindView,
+            ScriptDamageRollResult, ScriptEntity, ScriptEntityView, ScriptEventView,
+            ScriptLoadoutView, ScriptReactionBodyContext, ScriptReactionPlan,
+            ScriptReactionTriggerContext, ScriptResourceCost, ScriptResourceView,
+            ScriptSavingThrow,
         },
         script_engine::ScriptEngine,
     },
@@ -29,20 +32,26 @@ impl RhaiScriptEngine {
         let mut engine = Engine::new();
 
         engine
-            .build_type::<ScriptDamageRollResult>()
-            .build_type::<ScriptDamageMitigationResult>()
             .build_type::<ScriptActionContext>()
             .build_type::<ScriptActionView>()
+            .build_type::<ScriptActionResultView>()
+            .build_type::<ScriptActionKindResultView>()
+            .build_type::<ScriptActionOutcomeBundleView>()
+            .build_type::<ScriptActionPerformedView>()
             .build_type::<ScriptD20CheckDCKind>()
             .build_type::<ScriptD20CheckView>()
             .build_type::<ScriptD20Result>()
+            .build_type::<ScriptDamageMitigationResult>()
+            .build_type::<ScriptDamageOutcomeView>()
+            .build_type::<ScriptDamageRollResult>()
+            .build_type::<ScriptDamageResolutionKindView>()
             .build_type::<ScriptEntity>()
             .build_type::<ScriptEntityView>()
             .build_type::<ScriptEventView>()
             .build_type::<ScriptLoadoutView>()
+            .build_type::<ScriptReactionBodyContext>()
             .build_type::<ScriptReactionPlan>()
             .build_type::<ScriptReactionTriggerContext>()
-            .build_type::<ScriptReactionBodyContext>()
             .build_type::<ScriptResourceCost>()
             .build_type::<ScriptResourceView>()
             .build_type::<ScriptSavingThrow>();

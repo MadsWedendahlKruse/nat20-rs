@@ -177,10 +177,10 @@ mod tests {
         let entity = world.spawn(());
 
         let action_context = ActionContext::Spell {
-            source: SpellSource::Granted(GrantedSpellSource::Item(ItemId::new(
-                "nat20_rs",
-                "item.wand_of_testing",
-            ))),
+            source: SpellSource::Granted {
+                source: GrantedSpellSource::Item(ItemId::new("nat20_rs", "item.wand_of_testing")),
+                level: 5,
+            },
             level: 5,
             id: SpellId::new("nat20_rs", "spell.test"),
         };
@@ -210,10 +210,10 @@ mod tests {
         let entity = world.spawn(());
 
         let action_context = ActionContext::Spell {
-            source: SpellSource::Granted(GrantedSpellSource::Item(ItemId::new(
-                "nat20_rs",
-                "item.wand_of_testing",
-            ))),
+            source: SpellSource::Granted {
+                source: GrantedSpellSource::Item(ItemId::new("nat20_rs", "item.wand_of_testing")),
+                level: 3,
+            },
             level: 3,
             id: SpellId::new("nat20_rs", "spell.test"),
         };

@@ -43,7 +43,7 @@ pub struct ClassBase {
     #[serde(default)]
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
     #[serde(default)]
-    pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
+    pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind, bool)>>,
     /// Class specific prompts that can be made at each level.
     /// For example, a Fighter might choose a fighting style at level 1.
     /// TODO: Include subclass prompts?
@@ -100,6 +100,7 @@ pub enum SpellReplacementModel {
 pub struct SpellcastingRules {
     pub progression: SpellcastingProgression,
     pub spellcasting_ability: Ability,
+    pub spellcasting_resource: ResourceId,
     pub access_model: SpellAccessModel,
     pub readiness_model: CastingReadinessModel,
     pub cantrips_per_level: HashMap<u8, usize>,
@@ -145,7 +146,7 @@ impl Class {
         weapon_proficiencies: HashSet<WeaponCategory>,
         spellcasting: Option<SpellcastingRules>,
         effects_by_level: HashMap<u8, Vec<EffectId>>,
-        resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
+        resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind, bool)>>,
         mut prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
         actions_by_level: HashMap<u8, Vec<ActionId>>,
     ) -> Self {

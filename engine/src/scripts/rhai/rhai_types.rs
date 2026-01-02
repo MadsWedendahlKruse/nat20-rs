@@ -1,15 +1,15 @@
-use std::str::FromStr;
-
 use rhai::{Array, CustomType, TypeBuilder, plugin::*};
 
 use crate::{
     components::id::ResourceId,
     scripts::script_api::{
-        ScriptActionContext, ScriptActionView, ScriptD20CheckDCKind, ScriptD20CheckView,
-        ScriptD20Result, ScriptDamageMitigationResult, ScriptDamageRollResult, ScriptEntity,
-        ScriptEntityView, ScriptEventRef, ScriptEventView, ScriptLoadoutView,
-        ScriptReactionBodyContext, ScriptReactionPlan, ScriptReactionTriggerContext,
-        ScriptResourceCost, ScriptResourceView, ScriptSavingThrow,
+        ScriptActionContext, ScriptActionKindResultView, ScriptActionOutcomeBundleView,
+        ScriptActionPerformedView, ScriptActionResultView, ScriptActionView, ScriptD20CheckDCKind,
+        ScriptD20CheckView, ScriptD20Result, ScriptDamageMitigationResult, ScriptDamageOutcomeView,
+        ScriptDamageResolutionKindView, ScriptDamageRollResult, ScriptEntity, ScriptEntityView,
+        ScriptEventRef, ScriptEventView, ScriptLoadoutView, ScriptReactionBodyContext,
+        ScriptReactionPlan, ScriptReactionTriggerContext, ScriptResourceCost, ScriptResourceView,
+        ScriptSavingThrow,
     },
 };
 
@@ -144,6 +144,79 @@ impl CustomType for ScriptActionView {
     }
 }
 
+impl CustomType for ScriptDamageResolutionKindView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("DamageResolutionKindView")
+            .with_fn("is_unconditional", |s: &mut Self| s.is_unconditional())
+            .with_fn("is_attack_roll", |s: &mut Self| s.is_attack_roll())
+            .with_fn("is_saving_throw", |s: &mut Self| s.is_saving_throw());
+    }
+}
+
+impl CustomType for ScriptDamageOutcomeView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("DamageOutcomeView")
+            .with_fn("has_damage_roll", |s: &mut Self| s.has_damage_roll())
+            .with_fn("get_damage_roll", |s: &mut Self| {
+                s.get_damage_roll().clone()
+            })
+            .with_fn("has_damage_taken", |s: &mut Self| s.has_damage_taken())
+            .with_fn("get_damage_taken", |s: &mut Self| {
+                s.get_damage_taken().clone()
+            })
+            .with_fn("damage_roll_total", |s: &mut Self| {
+                s.damage_roll_total() as i64
+            })
+            .with_fn("damage_taken_total", |s: &mut Self| {
+                s.damage_taken_total() as i64
+            });
+    }
+}
+
+impl CustomType for ScriptActionOutcomeBundleView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("ActionOutcomeBundleView")
+            .with_fn("has_damage", |s: &mut Self| s.has_damage())
+            .with_fn("get_damage", |s: &mut Self| s.get_damage().clone());
+    }
+}
+
+impl CustomType for ScriptActionKindResultView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("ActionKindResultView")
+            .with_fn("is_standard", |s: &mut Self| s.is_standard())
+            .with_fn("as_standard", |s: &mut Self| s.as_standard().clone());
+    }
+}
+
+impl CustomType for ScriptActionResultView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("ActionKindResultView")
+            .with_get("performer", |s: &mut Self| s.performer.clone())
+            .with_get("target", |s: &mut Self| s.target.id)
+            .with_get("kind", |s: &mut Self| s.kind.clone());
+    }
+}
+
+impl CustomType for ScriptActionPerformedView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("ActionPerformedView")
+            .with_get("action", |s: &mut Self| s.action.clone())
+            .with_fn("results", |s: &mut Self| {
+                s.results()
+                    .iter()
+                    .map(|value| Dynamic::from(value.clone()))
+                    .collect::<Vec<_>>()
+            });
+    }
+}
+
 impl CustomType for ScriptEventView {
     fn build(mut builder: TypeBuilder<Self>) {
         builder
@@ -159,6 +232,12 @@ impl CustomType for ScriptEventView {
             })
             .with_fn("as_action_requested", |s: &mut Self| {
                 s.as_action_requested().clone()
+            })
+            .with_fn("is_action_performed", |s: &mut Self| {
+                s.is_action_performed()
+            })
+            .with_fn("as_action_performed", |s: &mut Self| {
+                s.as_action_performed().clone()
             });
     }
 }

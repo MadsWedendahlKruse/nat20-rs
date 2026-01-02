@@ -12,19 +12,24 @@
 //! 2) Selections are per-class (chosen cantrips / learned / prepared / always-prepared).
 //! 3) “Known” is computed on demand for EntireClassList casters (not stored).
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    cmp::max,
+    collections::{HashMap, HashSet},
+};
 
+use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     components::{
         actions::action::{ActionContext, ActionMap, ActionProvider},
-        class::{CastingReadinessModel, ClassAndSubclass, SpellAccessModel},
+        class::{CastingReadinessModel, ClassAndSubclass, SpellAccessModel, SpellcastingRules},
         id::{FeatId, ItemId, ResourceId, SpeciesId, SpellId},
-        resource::{ResourceAmount, ResourceAmountMap},
+        resource::{ResourceAmount, ResourceAmountMap, ResourceBudgetKind, ResourceMap},
         spells::spell::ConcentrationTracker,
     },
     registry::registry::{ClassesRegistry, SpellsRegistry},
+    systems,
 };
 
 /// A deterministic bounded set:
@@ -175,15 +180,17 @@ pub enum GrantedSpellSource {
 /// A class-independent spell source (items/feats/race/boons).
 /// Keep this small at first; you can grow it later into “charges”, “once per rest”, etc.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GrantedSpellSet {
+pub struct GrantedSpellMap {
     /// Spells that are castable without being prepared/known by any class state.
-    pub spells: HashSet<SpellId>,
+    /// These do not consume spell slots. The value is the level at which they are
+    /// castable
+    pub spells: HashMap<SpellId, u8>,
 }
 
-impl GrantedSpellSet {
+impl GrantedSpellMap {
     pub fn new() -> Self {
         Self {
-            spells: HashSet::new(),
+            spells: HashMap::new(),
         }
     }
 }
@@ -191,7 +198,10 @@ impl GrantedSpellSet {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SpellSource {
     Class(ClassAndSubclass),
-    Granted(GrantedSpellSource),
+    Granted {
+        source: GrantedSpellSource,
+        level: u8,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -209,21 +219,13 @@ pub enum SpellbookError {
     NotFound,
 }
 
-/// Resource id you use for slots.
-fn spell_slot_resource_id() -> ResourceId {
-    ResourceId::new("nat20_rs", "resource.spell_slot")
-}
-
 /// The main Spellbook container.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Spellbook {
     /// Per-class spellcasting state.
     class_states: HashMap<ClassAndSubclass, ClassSpellcastingState>,
-    /// The highest max spell level that can be cast. Tih sis determined based on
-    /// the spellcaster level, which is a computed value across all classes.
-    max_spell_level: u8,
     /// External sources (items/feats/race).
-    granted: HashMap<GrantedSpellSource, GrantedSpellSet>,
+    granted: HashMap<GrantedSpellSource, GrantedSpellMap>,
     /// Concentration tracking state.
     concentration: ConcentrationTracker,
 }
@@ -232,7 +234,6 @@ impl Spellbook {
     pub fn new() -> Self {
         Self {
             class_states: HashMap::new(),
-            max_spell_level: 0,
             granted: HashMap::new(),
             concentration: ConcentrationTracker::default(),
         }
@@ -241,19 +242,19 @@ impl Spellbook {
     pub fn insert_granted_spell_source(
         &mut self,
         source: GrantedSpellSource,
-        spell_set: GrantedSpellSet,
+        spell_set: GrantedSpellMap,
     ) {
         self.granted.insert(source, spell_set);
     }
 
-    pub fn granted_spell_set(&self, source: &GrantedSpellSource) -> Option<&GrantedSpellSet> {
+    pub fn granted_spell_set(&self, source: &GrantedSpellSource) -> Option<&GrantedSpellMap> {
         self.granted.get(source)
     }
 
     pub fn granted_spell_set_mut(
         &mut self,
         source: &GrantedSpellSource,
-    ) -> Option<&mut GrantedSpellSet> {
+    ) -> Option<&mut GrantedSpellMap> {
         self.granted.get_mut(source)
     }
 
@@ -285,6 +286,7 @@ impl Spellbook {
     pub fn known_spells_for_class(
         &self,
         class_and_subclass: &ClassAndSubclass,
+        resources: &ResourceMap,
     ) -> Result<HashSet<SpellId>, SpellbookError> {
         let state = self
             .class_states
@@ -316,7 +318,12 @@ impl Spellbook {
                         let spell = SpellsRegistry::get(spell_id)
                             .unwrap_or_else(|| panic!("Missing spell in registry: {}", spell_id));
 
-                        if spell.base_level() <= self.max_spell_level {
+                        if spell.base_level()
+                            <= Self::max_spell_level(
+                                &spellcasting_rules.spellcasting_resource,
+                                resources,
+                            )
+                        {
                             known.insert(spell_id.clone());
                         }
                     }
@@ -333,6 +340,7 @@ impl Spellbook {
     pub fn castable_spells_for_class(
         &self,
         class_and_subclass: &ClassAndSubclass,
+        resources: &ResourceMap,
     ) -> Result<HashSet<SpellId>, SpellbookError> {
         let state = self
             .class_states
@@ -359,7 +367,7 @@ impl Spellbook {
                     }
                 }
                 CastingReadinessModel::Known => {
-                    let known = self.known_spells_for_class(class_and_subclass)?;
+                    let known = self.known_spells_for_class(class_and_subclass, resources)?;
                     castable.extend(known);
                 }
             }
@@ -406,6 +414,7 @@ impl Spellbook {
         &mut self,
         class_and_subclass: &ClassAndSubclass,
         spell_id: &SpellId,
+        resources: &ResourceMap,
     ) -> Result<(), SpellbookError> {
         let state = self
             .class_states
@@ -421,15 +430,17 @@ impl Spellbook {
             if !spellcasting_rules.spell_list.contains(spell_id) {
                 return Err(SpellbookError::SpellNotOnClassList);
             }
-        }
 
-        let spell = SpellsRegistry::get(spell_id)
-            .unwrap_or_else(|| panic!("Missing spell in registry: {}", spell_id));
-        if spell.is_cantrip() {
-            return Err(SpellbookError::NotALevelledSpell);
-        }
-        if spell.base_level() > self.max_spell_level {
-            return Err(SpellbookError::SpellTooHighLevel);
+            let spell = SpellsRegistry::get(spell_id)
+                .unwrap_or_else(|| panic!("Missing spell in registry: {}", spell_id));
+            if spell.is_cantrip() {
+                return Err(SpellbookError::NotALevelledSpell);
+            }
+            if spell.base_level()
+                > Self::max_spell_level(&spellcasting_rules.spellcasting_resource, resources)
+            {
+                return Err(SpellbookError::SpellTooHighLevel);
+            }
         }
 
         match state.selections.learned_spells.try_add(spell_id.clone()) {
@@ -445,6 +456,7 @@ impl Spellbook {
         &mut self,
         class_and_subclass: &ClassAndSubclass,
         spell_id: &SpellId,
+        resources: &ResourceMap,
     ) -> Result<(), SpellbookError> {
         let state = self
             .class_states
@@ -469,16 +481,18 @@ impl Spellbook {
             if !is_known_for_class {
                 return Err(SpellbookError::NotKnownSoCannotPrepare);
             }
-        }
 
-        let spell = SpellsRegistry::get(spell_id)
-            .unwrap_or_else(|| panic!("Missing spell in registry: {}", spell_id));
-        if spell.is_cantrip() {
-            // Cantrips are chosen, not prepared
-            return Err(SpellbookError::NotALevelledSpell);
-        }
-        if spell.base_level() > self.max_spell_level {
-            return Err(SpellbookError::SpellTooHighLevel);
+            let spell = SpellsRegistry::get(spell_id)
+                .unwrap_or_else(|| panic!("Missing spell in registry: {}", spell_id));
+            if spell.is_cantrip() {
+                // Cantrips are chosen, not prepared
+                return Err(SpellbookError::NotALevelledSpell);
+            }
+            if spell.base_level()
+                > Self::max_spell_level(&spellcasting_rules.spellcasting_resource, resources)
+            {
+                return Err(SpellbookError::SpellTooHighLevel);
+            }
         }
 
         // Always-prepared spells don't need to be in prepared_spells set.
@@ -498,6 +512,7 @@ impl Spellbook {
         &mut self,
         spell_id: &SpellId,
         source: &SpellSource,
+        resources: &ResourceMap,
     ) -> Result<(), SpellbookError> {
         match source {
             SpellSource::Class(class_and_subclass) => {
@@ -512,7 +527,7 @@ impl Spellbook {
 
                     match spellcasting_rules.access_model {
                         SpellAccessModel::Learned => {
-                            self.try_learn_spell(class_and_subclass, spell_id)?;
+                            self.try_learn_spell(class_and_subclass, spell_id, resources)?;
                         }
                         SpellAccessModel::EntireClassList => {
                             // No action needed; all spells on class list are known.
@@ -522,7 +537,7 @@ impl Spellbook {
                     match spellcasting_rules.readiness_model {
                         CastingReadinessModel::Prepared => {
                             // TODO: Not sure if it's correct to (potentially) error here?
-                            self.try_prepare_spell(class_and_subclass, spell_id)?;
+                            self.try_prepare_spell(class_and_subclass, spell_id, resources)?;
                         }
                         CastingReadinessModel::Known => {
                             // No action needed; all known spells are castable.
@@ -531,13 +546,13 @@ impl Spellbook {
                 }
             }
 
-            SpellSource::Granted(granted_spell_source) => {
+            SpellSource::Granted { source, level } => {
                 // TODO: Is this all we need here?
                 self.granted
-                    .entry(granted_spell_source.clone())
-                    .or_insert_with(GrantedSpellSet::new)
+                    .entry(source.clone())
+                    .or_insert_with(GrantedSpellMap::new)
                     .spells
-                    .insert(spell_id.clone());
+                    .insert(spell_id.clone(), *level);
             }
         }
         Ok(())
@@ -615,9 +630,9 @@ impl Spellbook {
                 Ok(())
             }
 
-            SpellSource::Granted(granted_spell_source) => {
-                if let Some(granted_set) = self.granted.get_mut(granted_spell_source) {
-                    if granted_set.spells.remove(spell_id) {
+            SpellSource::Granted { source, level } => {
+                if let Some(granted_set) = self.granted.get_mut(source) {
+                    if let Some(_) = granted_set.spells.remove(spell_id) {
                         return Ok(());
                     } else {
                         return Err(SpellbookError::NotFound);
@@ -631,19 +646,27 @@ impl Spellbook {
     /// Global list of castable spells across:
     /// - all class states
     /// - granted sources (items/feats)
-    pub fn all_castable_spells(&self) -> HashSet<(SpellId, SpellSource)> {
+    pub fn all_castable_spells(&self, resources: &ResourceMap) -> HashSet<(SpellId, SpellSource)> {
         let mut castable = HashSet::new();
 
         // Granted cantrips/spells
         for (source, granted_set) in self.granted.iter() {
-            for spell_id in granted_set.spells.iter() {
-                castable.insert((spell_id.clone(), SpellSource::Granted(source.clone())));
+            for (spell_id, level) in granted_set.spells.iter() {
+                castable.insert((
+                    spell_id.clone(),
+                    SpellSource::Granted {
+                        source: source.clone(),
+                        level: *level,
+                    },
+                ));
             }
         }
 
         // Per-class castables
         for (class_and_subclass, state) in self.class_states.iter() {
-            if let Ok(class_castable) = self.castable_spells_for_class(class_and_subclass) {
+            if let Ok(class_castable) =
+                self.castable_spells_for_class(class_and_subclass, resources)
+            {
                 for spell_id in class_castable.iter() {
                     castable.insert((
                         spell_id.clone(),
@@ -656,12 +679,14 @@ impl Spellbook {
         castable
     }
 
-    pub fn max_spell_level(&self) -> u8 {
-        self.max_spell_level
-    }
-
-    pub fn set_max_spell_level(&mut self, new_max_spell_level: u8) {
-        self.max_spell_level = new_max_spell_level;
+    pub fn max_spell_level(spellcasting_resource: &ResourceId, resources: &ResourceMap) -> u8 {
+        resources
+            .get(spellcasting_resource)
+            .and_then(|budget| match budget {
+                ResourceBudgetKind::Tiered(tiers) => tiers.keys().cloned().max(),
+                _ => None,
+            })
+            .unwrap_or(0)
     }
 
     pub fn concentration_tracker(&self) -> &ConcentrationTracker {
@@ -674,11 +699,12 @@ impl Spellbook {
 }
 
 impl ActionProvider for Spellbook {
-    fn actions(&self) -> ActionMap {
+    fn actions(&self, world: &World, entity: Entity) -> ActionMap {
         let mut actions = ActionMap::new();
 
         // 1) Build a set of all castable spells (class + granted).
-        let castable_spell_ids = self.all_castable_spells();
+        let resources = systems::helpers::get_component::<ResourceMap>(world, entity);
+        let castable_spell_ids = self.all_castable_spells(&resources);
 
         // 2) Emit actions for each spell.
         for (spell_id, source) in castable_spell_ids.iter() {
@@ -700,34 +726,70 @@ impl ActionProvider for Spellbook {
                 continue;
             }
 
-            let base_level = spell.base_level();
-            let max_spell_level = self.max_spell_level();
+            match source {
+                SpellSource::Granted { level, .. } => {
+                    let context = ActionContext::Spell {
+                        id: spell_id.clone(),
+                        source: source.clone(),
+                        level: *level,
+                    };
 
-            for cast_level in base_level..=max_spell_level {
-                let context = ActionContext::Spell {
-                    id: spell_id.clone(),
-                    source: source.clone(),
-                    level: cast_level,
-                };
-
-                let mut resource_cost: ResourceAmountMap = spell.action().resource_cost().clone();
-
-                // For now assume only spells cast via Class sources cost spell slots,
-                // i.e. spells cast via an item don't require a spell slot.
-                if matches!(source, SpellSource::Class(_)) {
-                    resource_cost.insert(
-                        spell_slot_resource_id(),
-                        ResourceAmount::Tiered {
-                            tier: cast_level,
-                            amount: 1,
-                        },
+                    actions.insert(
+                        spell.action().id().clone(),
+                        vec![(context, spell.action().resource_cost().clone())],
                     );
+                    continue;
                 }
 
-                actions
-                    .entry(spell.action().id().clone())
-                    .or_insert_with(Vec::new)
-                    .push((context, resource_cost));
+                SpellSource::Class(class_and_subclass) => {
+                    let class = ClassesRegistry::get(&class_and_subclass.class).unwrap();
+                    let spellcasting_rules = class
+                        .spellcasting_rules(&class_and_subclass.subclass)
+                        .unwrap();
+                    let spellcasting_resource = &spellcasting_rules.spellcasting_resource;
+
+                    let Some(spellcasting_resource_budget) = resources.get(spellcasting_resource)
+                    else {
+                        continue;
+                    };
+
+                    let available_spell_levels = match spellcasting_resource_budget {
+                        ResourceBudgetKind::Tiered(tiers) => {
+                            tiers.keys().cloned().collect::<Vec<_>>()
+                        }
+                        _ => continue,
+                    };
+
+                    let min_spell_level = max(
+                        *available_spell_levels.iter().min().unwrap_or(&0),
+                        spell.base_level(),
+                    );
+                    let max_spell_level = available_spell_levels.iter().max().unwrap_or(&0);
+
+                    for cast_level in min_spell_level..=*max_spell_level {
+                        let context = ActionContext::Spell {
+                            id: spell_id.clone(),
+                            source: source.clone(),
+                            level: cast_level,
+                        };
+
+                        let mut resource_cost: ResourceAmountMap =
+                            spell.action().resource_cost().clone();
+
+                        resource_cost.insert(
+                            spellcasting_rules.spellcasting_resource.clone(),
+                            ResourceAmount::Tiered {
+                                tier: cast_level,
+                                amount: 1,
+                            },
+                        );
+
+                        actions
+                            .entry(spell.action().id().clone())
+                            .or_insert_with(Vec::new)
+                            .push((context, resource_cost));
+                    }
+                }
             }
         }
 

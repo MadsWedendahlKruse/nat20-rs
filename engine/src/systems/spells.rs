@@ -80,7 +80,6 @@ pub fn update_spellbook(
 
     let spellcaster_levels = spellcaster_levels(world, entity);
     let slots_per_level = SPELL_SLOTS_PER_LEVEL.get(&spellcaster_levels).unwrap();
-    let max_spell_level = slots_per_level.len() as u8;
 
     {
         let mut resources = systems::helpers::get_component_mut::<ResourceMap>(world, entity);
@@ -98,30 +97,29 @@ pub fn update_spellbook(
     }
 
     {
-        let (new_cantrips, new_spells, replacement_model) = if let Some(spellcasting_rules) =
-            ClassesRegistry::get(&class_and_subclass.class)
+        let (new_cantrips, new_spells, replacement_model, spellcasting_resource) =
+            if let Some(spellcasting_rules) = ClassesRegistry::get(&class_and_subclass.class)
                 .unwrap()
                 .spellcasting_rules(&class_and_subclass.subclass)
-        {
-            let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
-            if spellbook.max_spell_level() < max_spell_level {
-                spellbook.set_max_spell_level(max_spell_level);
-            }
-
-            let max_cantrips = spellcasting_rules.cantrips_per_level.get(&level).unwrap();
-            let max_prepared_spells = spellcasting_rules
-                .prepared_spells_per_level
-                .get(&level)
-                .unwrap();
-            let max_learned_spells = if spellcasting_rules.access_model == SpellAccessModel::Learned
             {
-                max_prepared_spells
-            } else {
-                &0
-            };
+                let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
 
-            let (new_cantrips, new_spells) =
-                if spellbook.class_state_mut(&class_and_subclass).is_none() {
+                let max_cantrips = spellcasting_rules.cantrips_per_level.get(&level).unwrap();
+                let max_prepared_spells = spellcasting_rules
+                    .prepared_spells_per_level
+                    .get(&level)
+                    .unwrap();
+                let max_learned_spells =
+                    if spellcasting_rules.access_model == SpellAccessModel::Learned {
+                        max_prepared_spells
+                    } else {
+                        &0
+                    };
+
+                let (new_cantrips, new_spells) = if spellbook
+                    .class_state_mut(&class_and_subclass)
+                    .is_none()
+                {
                     spellbook.insert_class_state(
                         class_and_subclass.clone(),
                         ClassSpellcastingState::new(
@@ -154,13 +152,23 @@ pub fn update_spellbook(
                     (new_cantrips, new_spells)
                 };
 
-            (
-                new_cantrips,
-                new_spells,
-                Some(spellcasting_rules.spell_replacement_model.clone()),
+                (
+                    new_cantrips,
+                    new_spells,
+                    Some(spellcasting_rules.spell_replacement_model.clone()),
+                    Some(spellcasting_rules.spellcasting_resource.clone()),
+                )
+            } else {
+                (0, 0, None, None)
+            };
+
+        let max_spell_level = if let Some(spellcasting_resource) = spellcasting_resource {
+            Spellbook::max_spell_level(
+                &spellcasting_resource,
+                &systems::helpers::get_component::<ResourceMap>(world, entity),
             )
         } else {
-            (0, 0, None)
+            0
         };
 
         if new_cantrips > 0 {

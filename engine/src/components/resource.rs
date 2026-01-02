@@ -642,6 +642,10 @@ impl ResourceMap {
         }
     }
 
+    pub fn remove(&mut self, id: &ResourceId) {
+        self.resources.remove(id);
+    }
+
     pub fn get(&self, id: &ResourceId) -> Option<&ResourceBudgetKind> {
         self.resources.get(id)
     }

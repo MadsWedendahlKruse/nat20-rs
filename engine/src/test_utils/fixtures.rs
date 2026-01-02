@@ -430,17 +430,22 @@ pub mod creatures {
                             SpellId::new("nat20_rs", "spell.poison_spray"),
                         ],
                     ),
-                    // LevelUpDecision::spells(
-                    //     "choice.spells",
-                    //     &ClassId::new("nat20_rs", "class.warlock"),
-                    //     &None,
-                    //     vec![SpellId::new("nat20_rs", "spell.magic_missile")],
-                    // ),
+                    LevelUpDecision::spells(
+                        "choice.spells",
+                        &ClassId::new("nat20_rs", "class.warlock"),
+                        &None,
+                        vec![
+                            SpellId::new("nat20_rs", "spell.expeditious_retreat"),
+                            SpellId::new("nat20_rs", "spell.hellish_rebuke"),
+                        ],
+                    ),
+                    LevelUpDecision::ReplaceSpells { spells: Vec::new() },
                     // Level 2
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
                         "nat20_rs",
                         "class.warlock",
                     ))),
+                    LevelUpDecision::ReplaceSpells { spells: Vec::new() },
                     // Level 3
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
                         "nat20_rs",
@@ -450,6 +455,7 @@ pub mod creatures {
                         "nat20_rs",
                         "subclass.warlock.fiend_patron",
                     ))),
+                    LevelUpDecision::ReplaceSpells { spells: Vec::new() },
                     // Level 4
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
                         "nat20_rs",
@@ -463,21 +469,14 @@ pub mod creatures {
                         Ability::Charisma,
                         2,
                     )])),
+                    LevelUpDecision::ReplaceSpells { spells: Vec::new() },
                     // Level 5
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(
                         "nat20_rs",
                         "class.warlock",
                     ))),
+                    LevelUpDecision::ReplaceSpells { spells: Vec::new() },
                 ],
-            );
-
-            let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
-            let _ = spellbook.add_spell(
-                &SpellId::new("nat20_rs", "spell.eldritch_blast"),
-                &SpellSource::Class(ClassAndSubclass {
-                    class: ClassId::new("nat20_rs", "class.warlock"),
-                    subclass: None,
-                }),
             );
 
             EntityIdentifier::new(entity, name)

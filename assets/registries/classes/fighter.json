@@ -63,50 +63,50 @@
     },
     "resources_by_level": {
         "1": [
-            [
-                "nat20_rs::resource.fighter.second_wind",
-                "2"
-            ]
+            {
+                "id": "nat20_rs::resource.fighter.second_wind",
+                "budget": "2"
+            }
         ],
         "2": [
-            [
-                "nat20_rs::resource.fighter.action_surge",
-                "1"
-            ]
+            {
+                "id": "nat20_rs::resource.fighter.action_surge",
+                "budget": "1"
+            }
         ],
         "4": [
-            [
-                "nat20_rs::resource.fighter.second_wind",
-                "3"
-            ]
+            {
+                "id": "nat20_rs::resource.fighter.second_wind",
+                "budget": "3"
+            }
         ],
         "9": [
-            [
-                "nat20_rs::resource.fighter.indomitable",
-                "1"
-            ]
+            {
+                "id": "nat20_rs::resource.fighter.indomitable",
+                "budget": "1"
+            }
         ],
         "10": [
-            [
-                "nat20_rs::resource.fighter.second_wind",
-                "4"
-            ]
+            {
+                "id": "nat20_rs::resource.fighter.second_wind",
+                "budget": "4"
+            }
         ],
         "13": [
-            [
-                "nat20_rs::resource.fighter.indomitable",
-                "2"
-            ]
+            {
+                "id": "nat20_rs::resource.fighter.indomitable",
+                "budget": "2"
+            }
         ],
         "17": [
-            [
-                "nat20_rs::resource.fighter.action_surge",
-                "2"
-            ],
-            [
-                "nat20_rs::resource.fighter.indomitable",
-                "3"
-            ]
+            {
+                "id": "nat20_rs::resource.fighter.action_surge",
+                "budget": "2"
+            },
+            {
+                "id": "nat20_rs::resource.fighter.indomitable",
+                "budget": "3"
+            }
         ]
     },
     "prompts_by_level": {

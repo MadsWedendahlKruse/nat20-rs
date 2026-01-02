@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -10,13 +10,30 @@ use crate::{
         id::{ActionId, ClassId, EffectId, ResourceId, SubclassId},
         items::equipment::{armor::ArmorType, weapon::WeaponCategory},
         level_up::{ChoiceItem, ChoiceSpec, LevelUpPrompt},
-        resource::ResourceBudgetKind,
+        resource::{ResourceBudget, ResourceBudgetKind},
         skill::Skill,
     },
     registry::registry_validation::{
         ReferenceCollector, RegistryReference, RegistryReferenceCollector,
     },
 };
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ResourceBudgetKindDefinition {
+    Flat(ResourceBudget),
+    // Tier keys should be the level (u8), but serde only supports string keys in maps
+    // so we need this intermediate representation
+    Tiered(BTreeMap<String, ResourceBudget>),
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ClassResourceDefinition {
+    pub id: ResourceId,
+    pub budget: ResourceBudgetKindDefinition,
+    #[serde(default, rename(deserialize = "override"))]
+    pub override_existing: bool,
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ClassDefinition {
@@ -35,13 +52,45 @@ pub struct ClassDefinition {
     #[serde(default)]
     pub spellcasting: Option<SpellcastingRules>,
     pub effects_by_level: HashMap<u8, Vec<EffectId>>,
-    pub resources_by_level: HashMap<u8, Vec<(ResourceId, ResourceBudgetKind)>>,
+    pub resources_by_level: HashMap<u8, Vec<ClassResourceDefinition>>,
     pub prompts_by_level: HashMap<u8, Vec<LevelUpPrompt>>,
     pub actions_by_level: HashMap<u8, Vec<ActionId>>,
 }
 
 impl From<ClassDefinition> for Class {
     fn from(def: ClassDefinition) -> Self {
+        let resources_by_level = def
+            .resources_by_level
+            .into_iter()
+            .map(|(level, resources)| {
+                (
+                    level,
+                    resources
+                        .into_iter()
+                        .map(|res_def| {
+                            (
+                                res_def.id,
+                                match res_def.budget {
+                                    ResourceBudgetKindDefinition::Flat(resource_budget) => {
+                                        ResourceBudgetKind::Flat(resource_budget)
+                                    }
+                                    ResourceBudgetKindDefinition::Tiered(btree_map) => {
+                                        let mut tiered_map = BTreeMap::new();
+                                        for (tier_str, budget) in btree_map {
+                                            let tier: u8 = tier_str.parse().unwrap_or(0);
+                                            tiered_map.insert(tier, budget);
+                                        }
+                                        ResourceBudgetKind::Tiered(tiered_map)
+                                    }
+                                },
+                                res_def.override_existing,
+                            )
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+
         Class::new(
             def.id,
             def.hit_die,
@@ -57,7 +106,7 @@ impl From<ClassDefinition> for Class {
             def.weapon_proficiencies,
             def.spellcasting,
             def.effects_by_level,
-            def.resources_by_level,
+            resources_by_level,
             def.prompts_by_level,
             def.actions_by_level,
         )

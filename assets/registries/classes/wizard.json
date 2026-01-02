@@ -47,6 +47,7 @@
     "spellcasting": {
         "progression": "full",
         "spellcasting_ability": "intelligence",
+        "spellcasting_resource": "nat20_rs::resource.spell_slot",
         "access_model": "learned",
         "readiness_model": "prepared",
         "cantrips_per_level": {

@@ -358,7 +358,7 @@ impl Loadout {
 }
 
 impl ActionProvider for Loadout {
-    fn actions(&self) -> ActionMap {
+    fn actions(&self, world: &World, entity: Entity) -> ActionMap {
         let mut actions = ActionMap::new();
 
         // TODO: There has to be a nicer way to do this
@@ -585,14 +585,20 @@ mod tests {
 
     #[test]
     fn available_actions_no_weapons() {
+        let mut world = World::new();
+        let entity = world.spawn(());
+
         // TODO: Should return unarmed attack
         let loadout = Loadout::new();
-        let actions = loadout.actions();
+        let actions = loadout.actions(&world, entity);
         assert_eq!(actions.len(), 0);
     }
 
     #[test]
     fn available_actions_melee_and_ranged_weapon() {
+        let mut world = World::new();
+        let entity = world.spawn(());
+
         let mut loadout = Loadout::new();
 
         let weapon1 = ItemsRegistry::get(&ItemId::new("nat20_rs", "item.dagger"))
@@ -605,7 +611,7 @@ mod tests {
             .clone();
         loadout.equip(weapon2);
 
-        let actions = loadout.actions();
+        let actions = loadout.actions(&world, entity);
         for action in &actions {
             println!("{:?}", action);
         }

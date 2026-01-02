@@ -16,6 +16,7 @@ use crate::{
             SubclassId, SubspeciesId,
         },
         modifier::ModifierSource,
+        resource::ResourceMap,
         skill::Skill,
         spells::spellbook::{SpellSource, Spellbook},
     },
@@ -261,8 +262,9 @@ impl LevelUpPrompt {
             && let Some(spellcasting_rules) = class.spellcasting_rules(&class_and_subclass.subclass)
         {
             let spellbook = systems::helpers::get_component::<Spellbook>(world, entity);
+            let resources = systems::helpers::get_component::<ResourceMap>(world, entity);
             let known_spells = spellbook
-                .known_spells_for_class(class_and_subclass)
+                .known_spells_for_class(class_and_subclass, &resources)
                 .unwrap();
 
             let options = spellcasting_rules
@@ -315,8 +317,9 @@ impl LevelUpPrompt {
         replacements: u8,
     ) -> Self {
         let spellbook = systems::helpers::get_component::<Spellbook>(world, entity);
+        let resources = systems::helpers::get_component::<ResourceMap>(world, entity);
         let known_spells = spellbook
-            .known_spells_for_class(class_and_subclass)
+            .known_spells_for_class(class_and_subclass, &resources)
             .unwrap();
 
         LevelUpPrompt::ReplaceSpells {

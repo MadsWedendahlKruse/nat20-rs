@@ -69,7 +69,7 @@ pub fn render_action_description(ui: &imgui::Ui, action: &ActionData, world: &Wo
 
 pub fn render_event_description(ui: &imgui::Ui, event: &Event, world: &World) {
     match &event.kind {
-        EventKind::ActionRequested { action } => {
+        EventKind::ActionRequested { action } | EventKind::ActionPerformed { action, .. } => {
             render_action_description(ui, action, world);
         }
         EventKind::ReactionRequested { reaction } => {

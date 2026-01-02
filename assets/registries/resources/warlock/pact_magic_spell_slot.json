@@ -1,0 +1,5 @@
+{
+    "id": "nat20_rs::resource.warlock.pact_magic_spell_slot",
+    "kind": "tiered",
+    "recharge": "short_rest"
+}

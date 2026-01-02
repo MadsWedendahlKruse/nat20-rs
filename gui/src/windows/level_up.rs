@@ -950,7 +950,7 @@ impl ImguiRenderable for LevelUpGains {
 
         if !self.resources.is_empty() {
             ui.separator();
-            for (resource, amount) in &self.resources {
+            for (resource, amount, override_existing) in &self.resources {
                 ui.bullet_text(format!("Resource: {}", resource));
             }
         }

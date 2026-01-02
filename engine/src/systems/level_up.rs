@@ -1,3 +1,4 @@
+use core::panic;
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
@@ -19,12 +20,9 @@ use crate::{
         level_up::{ChoiceItem, LevelUpPrompt},
         modifier::{KeyedModifiable, ModifierSource},
         proficiency::{Proficiency, ProficiencyLevel},
-        resource::ResourceBudgetKind,
+        resource::{ResourceBudgetKind, ResourceMap},
         skill::{Skill, SkillSet},
-        spells::{
-            spell::Spell,
-            spellbook::{SpellSource, Spellbook},
-        },
+        spells::spellbook::{SpellSource, Spellbook},
     },
     registry::registry::{ClassesRegistry, ItemsRegistry},
     systems,
@@ -343,23 +341,29 @@ fn resolve_level_up_prompt(
                         }
                     }
                     ChoiceItem::Spell(spell_id, source) => {
-                        let result =
-                            systems::helpers::get_component_mut::<Spellbook>(world, entity)
-                                .add_spell(spell_id, source);
-                        match result {
-                            Ok(_) => {}
-                            Err(e) => {
-                                let error_message = format!(
-                                    "Failed to add spell {} to spellbook: {:?}",
-                                    spell_id, e
-                                );
-                                error!("{}", error_message);
-                                return Err(LevelUpError::InvalidDecision {
-                                    prompt,
-                                    decision: decision.clone(),
-                                    message: Some(error_message),
-                                });
+                        if let Ok((spellbook, resources)) =
+                            world.query_one_mut::<(&mut Spellbook, &ResourceMap)>(entity)
+                        {
+                            match spellbook.add_spell(spell_id, source, &resources) {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    let error_message = format!(
+                                        "Failed to add spell {} to spellbook: {:?}",
+                                        spell_id, e
+                                    );
+                                    error!("{}", error_message);
+                                    return Err(LevelUpError::InvalidDecision {
+                                        prompt,
+                                        decision: decision.clone(),
+                                        message: Some(error_message),
+                                    });
+                                }
                             }
+                        } else {
+                            panic!(
+                                "Failed to get spellbook and resources for entity {:?}",
+                                entity
+                            );
                         }
                     }
                 }
@@ -507,7 +511,7 @@ fn resolve_level_up_prompt(
                 spells: spell_replacements,
             },
         ) => {
-            if spell_replacements.len() != *num_replacements as usize {
+            if spell_replacements.len() > *num_replacements as usize {
                 return Err(LevelUpError::InvalidDecision {
                     prompt: prompt.clone(),
                     decision: decision.clone(),
@@ -542,26 +546,40 @@ fn resolve_level_up_prompt(
                     });
                 }
 
-                let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, entity);
-                match spellbook.remove_spell(old_spell, source) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        return Err(LevelUpError::InvalidDecision {
-                            prompt: prompt.clone(),
-                            decision: decision.clone(),
-                            message: Some(format!("Failed to remove spell {}: {:?}", old_spell, e)),
-                        });
+                if let Ok((spellbook, resources)) =
+                    world.query_one_mut::<(&mut Spellbook, &ResourceMap)>(entity)
+                {
+                    match spellbook.remove_spell(old_spell, source) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            return Err(LevelUpError::InvalidDecision {
+                                prompt: prompt.clone(),
+                                decision: decision.clone(),
+                                message: Some(format!(
+                                    "Failed to remove spell {}: {:?}",
+                                    old_spell, e
+                                )),
+                            });
+                        }
                     }
-                }
-                match spellbook.add_spell(new_spell, source) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        return Err(LevelUpError::InvalidDecision {
-                            prompt: prompt.clone(),
-                            decision: decision.clone(),
-                            message: Some(format!("Failed to add spell {}: {:?}", new_spell, e)),
-                        });
+                    match spellbook.add_spell(new_spell, source, &resources) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            return Err(LevelUpError::InvalidDecision {
+                                prompt: prompt.clone(),
+                                decision: decision.clone(),
+                                message: Some(format!(
+                                    "Failed to add spell {}: {:?}",
+                                    new_spell, e
+                                )),
+                            });
+                        }
                     }
+                } else {
+                    panic!(
+                        "Failed to get spellbook and resources for entity {:?}",
+                        entity
+                    );
                 }
             }
         }
@@ -642,7 +660,7 @@ pub struct LevelUpGains {
     pub hit_points: HitPoints,
     pub actions: Vec<ActionId>,
     pub effects: Vec<EffectId>,
-    pub resources: Vec<(ResourceId, ResourceBudgetKind)>,
+    pub resources: Vec<(ResourceId, ResourceBudgetKind, bool)>,
 }
 
 pub fn level_up_gains(

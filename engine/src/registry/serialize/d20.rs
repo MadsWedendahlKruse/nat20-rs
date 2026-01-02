@@ -113,7 +113,7 @@ fn get_spellcasting_ability_from_source(
                 );
             }
         }
-        SpellSource::Granted(_) => {
+        SpellSource::Granted { .. } => {
             // Use the highest spellcasting ability
             systems::helpers::get_component::<AbilityScoreMap>(world, caster)
                 .get_max_score(SPELL_CASTING_ABILITIES)

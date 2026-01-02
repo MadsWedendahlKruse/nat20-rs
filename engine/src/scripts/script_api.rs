@@ -9,7 +9,10 @@ use hecs::{Entity, World};
 use crate::{
     components::{
         actions::{
-            action::{ActionContext, ActionResult},
+            action::{
+                ActionContext, ActionKindResult, ActionOutcomeBundle, DamageOutcome,
+                DamageResolutionKind,
+            },
             targeting::TargetInstance,
         },
         damage::{
@@ -283,7 +286,7 @@ impl ScriptD20Result {
 #[derive(Clone)]
 pub enum ScriptEventView {
     ActionRequested(ScriptActionView),
-    ActionPerformed(ScriptActionView, Vec<ActionResult>),
+    ActionPerformed(ScriptActionPerformedView),
     D20CheckPerformed(ScriptD20CheckView),
 }
 
@@ -296,12 +299,10 @@ impl ScriptEventView {
                 ))
             }
 
-            // A direct action request
             EventKind::ActionRequested { action } => Some(ScriptEventView::ActionRequested(
                 ScriptActionView::from(action),
             )),
 
-            // A reaction request that is itself an action (e.g. reaction spell)
             EventKind::ReactionRequested { reaction } => {
                 let action = ActionData::from(reaction);
                 Some(ScriptEventView::ActionRequested(ScriptActionView::from(
@@ -309,11 +310,26 @@ impl ScriptEventView {
                 )))
             }
 
-            EventKind::ActionPerformed { action, results } => Some(
-                ScriptEventView::ActionPerformed(ScriptActionView::from(action), results.clone()),
-            ),
+            EventKind::ActionPerformed { action, results } => {
+                let action_view = ScriptActionView::from(action);
 
-            _ => None, // extend with more variants as needed
+                let mut script_results = Vec::new();
+                for result in results {
+                    if let TargetInstance::Entity(target_entity) = result.target {
+                        script_results.push(ScriptActionResultView::from_action_result(
+                            action.actor,
+                            target_entity,
+                            &result.kind,
+                        ));
+                    }
+                }
+
+                Some(ScriptEventView::ActionPerformed(
+                    ScriptActionPerformedView::new(action_view, script_results),
+                ))
+            }
+
+            _ => None,
         }
     }
 }
@@ -345,7 +361,7 @@ macro_rules! impl_event_accessors {
 impl_event_accessors!(ScriptEventView {
     is_d20_check_performed => as_d20_check_performed: D20CheckPerformed(ScriptD20CheckView),
     is_action_requested    => as_action_requested:    ActionRequested(ScriptActionView),
-    // is_action_performed    => as_action_performed:    ActionPerformed(ScriptActionView, Vec<ActionResult>),
+    is_action_performed    => as_action_performed:    ActionPerformed(ScriptActionPerformedView),
 });
 
 /// View of a "D20CheckPerformed" event.
@@ -473,9 +489,212 @@ impl From<&ActionData> for ScriptActionView {
     }
 }
 
-pub struct ScriptActionResult {
+#[derive(Clone)]
+pub struct ScriptActionPerformedView {
+    pub action: ScriptActionView,
+    pub results: Vec<ScriptActionResultView>,
+}
+
+impl ScriptActionPerformedView {
+    pub fn new(action: ScriptActionView, results: Vec<ScriptActionResultView>) -> Self {
+        Self { action, results }
+    }
+
+    pub fn results_len(&self) -> i32 {
+        self.results.len() as i32
+    }
+
+    pub fn results(&self) -> &Vec<ScriptActionResultView> {
+        &self.results
+    }
+}
+
+#[derive(Clone)]
+pub struct ScriptActionResultView {
     pub performer: ScriptEntity,
     pub target: ScriptEntity,
+    pub kind: ScriptActionKindResultView,
+}
+
+impl ScriptActionResultView {
+    pub fn from_action_result(performer: Entity, target: Entity, kind: &ActionKindResult) -> Self {
+        Self {
+            performer: ScriptEntity::from(performer),
+            target: ScriptEntity::from(target),
+            kind: ScriptActionKindResultView::from(kind),
+        }
+    }
+
+    pub fn is_against(&self, entity: &ScriptEntity) -> bool {
+        self.target.id == entity.id
+    }
+}
+
+#[derive(Clone)]
+pub enum ScriptActionKindResultView {
+    Standard(ScriptActionOutcomeBundleView),
+    Utility,
+    Composite {
+        actions: Vec<ScriptActionKindResultView>,
+    },
+    Reaction, // You can extend later if you want more details here.
+    Custom,
+}
+
+impl ScriptActionKindResultView {
+    pub fn from(kind: &ActionKindResult) -> Self {
+        match kind {
+            ActionKindResult::Standard(bundle) => {
+                ScriptActionKindResultView::Standard(ScriptActionOutcomeBundleView::from(bundle))
+            }
+            ActionKindResult::Utility => ScriptActionKindResultView::Utility,
+            ActionKindResult::Composite { actions } => ScriptActionKindResultView::Composite {
+                actions: actions
+                    .iter()
+                    .map(ScriptActionKindResultView::from)
+                    .collect(),
+            },
+            ActionKindResult::Reaction { .. } => ScriptActionKindResultView::Reaction,
+            ActionKindResult::Custom { .. } => ScriptActionKindResultView::Custom,
+        }
+    }
+}
+
+macro_rules! impl_action_kind_result_accessors {
+    ($enum_name:ident {
+        $(
+            $is_name:ident => $as_name:ident : $variant:ident ( $ty:ty )
+        ),+ $(,)?
+    }) => {
+        impl $enum_name {
+            $(
+                pub fn $is_name(&self) -> bool {
+                    matches!(self, Self::$variant(_))
+                }
+
+                pub fn $as_name(&self) -> &$ty {
+                    if let Self::$variant(value) = self {
+                        value
+                    } else {
+                        panic!(concat!("Not a ", stringify!($variant), " result"));
+                    }
+                }
+            )+
+        }
+    };
+}
+
+impl_action_kind_result_accessors!(ScriptActionKindResultView {
+    is_standard => as_standard: Standard(ScriptActionOutcomeBundleView),
+    // if you later add more payload for composite, you can extend similarly
+});
+
+#[derive(Clone)]
+pub struct ScriptActionOutcomeBundleView {
+    damage: Option<ScriptDamageOutcomeView>,
+    // effect/healing can be added the same way when you need them
+}
+
+impl ScriptActionOutcomeBundleView {
+    pub fn from(bundle: &ActionOutcomeBundle) -> Self {
+        Self {
+            damage: bundle.damage.as_ref().map(ScriptDamageOutcomeView::from),
+        }
+    }
+
+    pub fn has_damage(&self) -> bool {
+        self.damage.is_some()
+    }
+
+    pub fn get_damage(&self) -> &ScriptDamageOutcomeView {
+        self.damage.as_ref().expect("No damage outcome")
+    }
+}
+
+#[derive(Clone)]
+pub struct ScriptDamageOutcomeView {
+    kind: ScriptDamageResolutionKindView,
+    damage_roll: Option<ScriptDamageRollResult>,
+    damage_taken: Option<ScriptDamageMitigationResult>,
+    // If you want: new_life_state: Option<ScriptLifeStateView>
+}
+
+impl ScriptDamageOutcomeView {
+    pub fn from(outcome: &DamageOutcome) -> Self {
+        Self {
+            kind: ScriptDamageResolutionKindView::from(&outcome.kind),
+            damage_roll: outcome.damage_roll.clone().map(ScriptDamageRollResult::new),
+            damage_taken: outcome
+                .damage_taken
+                .clone()
+                .map(ScriptDamageMitigationResult::new),
+        }
+    }
+
+    pub fn get_kind(&self) -> &ScriptDamageResolutionKindView {
+        &self.kind
+    }
+
+    pub fn has_damage_roll(&self) -> bool {
+        self.damage_roll.is_some()
+    }
+
+    pub fn get_damage_roll(&self) -> &ScriptDamageRollResult {
+        self.damage_roll.as_ref().expect("No damage roll")
+    }
+
+    pub fn has_damage_taken(&self) -> bool {
+        self.damage_taken.is_some()
+    }
+
+    pub fn get_damage_taken(&self) -> &ScriptDamageMitigationResult {
+        self.damage_taken.as_ref().expect("No damage taken")
+    }
+
+    /// Total damage rolled (pre-mitigation). Returns 0 if absent.
+    pub fn damage_roll_total(&self) -> i32 {
+        self.damage_roll
+            .as_ref()
+            .map(|v| v.inner.read().total)
+            .unwrap_or(0)
+    }
+
+    /// Total damage taken (post-mitigation). Returns 0 if absent.
+    pub fn damage_taken_total(&self) -> i32 {
+        self.damage_taken
+            .as_ref()
+            .map(|v| v.inner.read().total)
+            .unwrap_or(0)
+    }
+}
+
+#[derive(Clone)]
+pub enum ScriptDamageResolutionKindView {
+    Unconditional,
+    AttackRoll,
+    SavingThrow,
+}
+
+impl ScriptDamageResolutionKindView {
+    pub fn from(kind: &DamageResolutionKind) -> Self {
+        match kind {
+            DamageResolutionKind::Unconditional => Self::Unconditional,
+            DamageResolutionKind::AttackRoll { .. } => Self::AttackRoll,
+            DamageResolutionKind::SavingThrow { .. } => Self::SavingThrow,
+        }
+    }
+
+    pub fn is_unconditional(&self) -> bool {
+        matches!(self, Self::Unconditional)
+    }
+
+    pub fn is_attack_roll(&self) -> bool {
+        matches!(self, Self::AttackRoll)
+    }
+
+    pub fn is_saving_throw(&self) -> bool {
+        matches!(self, Self::SavingThrow)
+    }
 }
 
 /// Which entity are we talking about? We keep this abstract so scripts do

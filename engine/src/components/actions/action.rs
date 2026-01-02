@@ -358,7 +358,7 @@ pub trait ActionProvider {
     /// Each action is paired with its context, which provides additional information
     /// about how the action can be performed (e.g. weapon type, spell level, etc.)
     /// as well as the resource cost of the action.
-    fn actions(&self) -> ActionMap;
+    fn actions(&self, world: &World, entity: Entity) -> ActionMap;
 }
 
 impl ActionKind {
