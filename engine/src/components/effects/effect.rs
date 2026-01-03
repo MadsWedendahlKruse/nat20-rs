@@ -2,7 +2,6 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
 
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 
 use crate::{
     components::{
@@ -12,8 +11,8 @@ use crate::{
         },
         effects::hooks::{
             ActionHook, ApplyEffectHook, ArmorClassHook, AttackRollHook, AttackRollResultHook,
-            D20CheckHooks, DamageRollHook, DamageRollResultHook, DamageTakenHook, ResourceCostHook,
-            UnapplyEffectHook,
+            D20CheckHooks, DamageRollHook, DamageRollResultHook, DeathHook,
+            PostDamageMitigationHook, PreDamageMitigationHook, ResourceCostHook, UnapplyEffectHook,
         },
         id::{ActionId, EffectId, IdProvider},
         items::equipment::armor::ArmorClass,
@@ -117,7 +116,9 @@ pub struct Effect {
     pub post_damage_roll: DamageRollResultHook,
     pub on_action: ActionHook,
     pub on_resource_cost: ResourceCostHook,
-    pub damage_taken: DamageTakenHook,
+    pub pre_damage_mitigation: PreDamageMitigationHook,
+    pub post_damage_mitigation: PostDamageMitigationHook,
+    pub on_death: DeathHook,
 }
 
 impl Effect {
@@ -149,8 +150,18 @@ impl Effect {
                  _: &ActionContext,
                  _: &mut ResourceAmountMap| {},
             ) as ResourceCostHook,
-            damage_taken: Arc::new(|_: &World, _: Entity, _: &mut DamageMitigationResult| {})
-                as DamageTakenHook,
+            pre_damage_mitigation: Arc::new(
+                |_: &World, _: Entity, _: &EffectInstance, _: &mut DamageRollResult| {},
+            ) as PreDamageMitigationHook,
+            post_damage_mitigation: Arc::new(
+                |_: &World, _: Entity, _: &mut DamageMitigationResult| {},
+            ) as PostDamageMitigationHook,
+            on_death: Arc::new(
+                |_: &mut World,
+                 _victim: Entity,
+                 _killer: Option<Entity>,
+                 _applier: Option<Entity>| {},
+            ) as DeathHook,
             replaces: None,
         }
     }
@@ -172,15 +183,8 @@ impl IdProvider for Effect {
 pub struct EffectInstance {
     pub effect_id: EffectId,
     pub source: ModifierSource,
-
+    pub applier: Option<Entity>,
     pub lifetime: EffectLifetime,
-    // TODO: ChatGPT seems quite fixated on making sure we remove the TurnListener
-    // when the effect expires, but the TurnScheduler already removes listeners
-    // when they fire, which is where the effect gets removed(!), so I don't think
-    // this is necessary?
-
-    // If this instance schedules expiry, store the scheduler handle so we can cancel.
-    // pub expiry_listener_id: Option<TurnListenerId>,
 }
 
 impl EffectInstance {
@@ -189,6 +193,7 @@ impl EffectInstance {
             effect_id,
             source,
             lifetime,
+            applier: None,
         }
     }
 
@@ -255,6 +260,7 @@ impl EffectInstanceTemplate {
             effect_id: self.effect_id.clone(),
             source,
             lifetime: self.lifetime.instantiate(applier, target),
+            applier: Some(applier),
         }
     }
 

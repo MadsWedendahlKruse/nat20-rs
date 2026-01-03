@@ -6,10 +6,10 @@ use crate::{
         ScriptActionContext, ScriptActionKindResultView, ScriptActionOutcomeBundleView,
         ScriptActionPerformedView, ScriptActionResultView, ScriptActionView, ScriptD20CheckDCKind,
         ScriptD20CheckView, ScriptD20Result, ScriptDamageMitigationResult, ScriptDamageOutcomeView,
-        ScriptDamageResolutionKindView, ScriptDamageRollResult, ScriptEntity, ScriptEntityView,
-        ScriptEventRef, ScriptEventView, ScriptLoadoutView, ScriptReactionBodyContext,
-        ScriptReactionPlan, ScriptReactionTriggerContext, ScriptResourceCost, ScriptResourceView,
-        ScriptSavingThrow,
+        ScriptDamageResolutionKindView, ScriptDamageRollResult, ScriptEffectView, ScriptEntity,
+        ScriptEntityView, ScriptEventRef, ScriptEventView, ScriptLoadoutView,
+        ScriptOptionalEntityView, ScriptReactionBodyContext, ScriptReactionPlan,
+        ScriptReactionTriggerContext, ScriptResourceCost, ScriptResourceView, ScriptSavingThrow,
     },
 };
 
@@ -21,6 +21,15 @@ impl CustomType for ScriptEntity {
     }
 }
 
+impl CustomType for ScriptEffectView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("EffectView")
+            .with_fn("has_applier", |s: &mut Self| s.has_applier())
+            .with_fn("get_applier", |s: &mut Self| s.get_applier().id);
+    }
+}
+
 impl CustomType for ScriptDamageRollResult {
     fn build(mut builder: TypeBuilder<Self>) {
         builder
@@ -28,7 +37,27 @@ impl CustomType for ScriptDamageRollResult {
             .with_get("source", |s: &mut Self| s.source())
             .with_fn("clamp_damage_dice_min", |s: &mut Self, min: i64| {
                 s.clamp_damage_dice_min(min as u32);
-            });
+            })
+            .with_fn("has_actor", |s: &mut Self| s.has_actor())
+            .with_fn("get_actor", |s: &mut Self| s.get_actor().id)
+            .with_fn("is_action_attack_roll", |s: &mut Self| {
+                s.is_action_attack_roll()
+            })
+            .with_fn("is_action_saving_throw", |s: &mut Self| {
+                s.is_action_saving_throw()
+            })
+            .with_fn("is_action_unconditional", |s: &mut Self| {
+                s.is_action_unconditional()
+            })
+            .with_fn(
+                "add_damage",
+                |s: &mut Self, amount: String, damage_type: String| {
+                    s.add_damage(
+                        amount.parse().unwrap(),
+                        serde_plain::from_str(&damage_type).unwrap(),
+                    );
+                },
+            );
     }
 }
 
@@ -385,6 +414,15 @@ impl CustomType for ScriptEntityView {
                 |s: &mut Self| s.resources.clone(),
                 |s: &mut Self, v: ScriptResourceView| s.resources = v,
             );
+    }
+}
+
+impl CustomType for ScriptOptionalEntityView {
+    fn build(mut builder: TypeBuilder<Self>) {
+        builder
+            .with_name("OptionalEntityView")
+            .with_get("is_some", |s: &mut Self| s.is_some())
+            .with_fn("get", |s: &mut Self| s.get().clone());
     }
 }
 

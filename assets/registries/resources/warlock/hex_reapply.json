@@ -1,0 +1,5 @@
+{
+    "id": "nat20_rs::resource.warlock.hex_reapply",
+    "kind": "flat",
+    "recharge": "never"
+}

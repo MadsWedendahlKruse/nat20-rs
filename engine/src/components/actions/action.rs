@@ -158,9 +158,11 @@ pub enum ActionKind {
         condition: ActionCondition,
         payload: ActionPayload,
     },
-    Utility {/* ... */},
     Composite {
         actions: Vec<ActionKind>,
+    },
+    Variant {
+        variants: Vec<ActionId>,
     },
     Reaction {
         reaction: ScriptId,
@@ -380,17 +382,6 @@ impl ActionKind {
                 }
             }
 
-            ActionKind::Utility { .. } => {
-                let _ = game_state.process_event(Event::action_performed_event(
-                    &game_state,
-                    action_data,
-                    targets
-                        .iter()
-                        .map(|target| (*target, ActionKindResult::Utility))
-                        .collect(),
-                ));
-            }
-
             ActionKind::Composite { actions } => {
                 for action in actions {
                     match action {
@@ -402,6 +393,12 @@ impl ActionKind {
                         _ => action.perform(game_state, action_data, targets),
                     }
                 }
+            }
+
+            ActionKind::Variant { .. } => {
+                panic!(
+                    "ActionKind::Variants should be resolved to a specific variant before performing"
+                );
             }
 
             ActionKind::Reaction { .. } => {
@@ -422,8 +419,8 @@ impl Debug for ActionKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ActionKind::Standard { .. } => write!(f, "Standard"),
-            ActionKind::Utility { .. } => write!(f, "Utility"),
             ActionKind::Composite { actions } => write!(f, "Composite({:?})", actions),
+            ActionKind::Variant { variants } => write!(f, "Variants({:?})", variants),
             ActionKind::Reaction { .. } => write!(f, "Reaction"),
             ActionKind::Custom(_) => write!(f, "CustomAction"),
         }

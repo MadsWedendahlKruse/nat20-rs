@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use hecs::{Entity, World};
 use tracing::{debug, warn};
+use uuid::Uuid;
 
 use crate::{
     components::{
@@ -358,14 +359,14 @@ pub fn available_reactions_to_event(
                     )
                     .is_ok()
                     {
-                        reactions.push(ReactionData {
+                        reactions.push(ReactionData::new(
                             reactor,
-                            event: event.clone().into(),
-                            reaction_id: reaction_id.clone(),
-                            context: context.clone(),
-                            resource_cost: resource_cost.clone(),
+                            event.clone().into(),
+                            reaction_id.clone(),
+                            context.clone(),
+                            resource_cost.clone(),
                             target,
-                        });
+                        ));
                     }
                 }
             }
@@ -489,9 +490,19 @@ fn perform_unconditional(
         }
     });
 
-    // If there is no damage, we can emit the ActionPerformed immediately.
-    let Some(damage_function) = payload.damage() else {
-        let result = ActionKindResult::Standard(ActionOutcomeBundle {
+    let Some(damage_roll) = get_damage_roll(
+        &game_state.world,
+        action_data.actor,
+        &action_data.action_id,
+        payload,
+        &None,
+        "Unconditional Damage".to_string(),
+        &action_data.context,
+        true,
+        false,
+    ) else {
+        // If there is no damage, we can emit the ActionPerformed immediately.
+        let result: ActionKindResult = ActionKindResult::Standard(ActionOutcomeBundle {
             damage: None,
             effect: effect_outcome,
             healing: healing_outcome,
@@ -505,9 +516,6 @@ fn perform_unconditional(
     };
 
     // Otherwise, do the damage roll event, and in the callback emit the combined result.
-    let damage_roll =
-        damage_function(&game_state.world, action_data.actor, &action_data.context).roll_raw(false);
-
     let damage_event = Event::new(EventKind::DamageRollPerformed(
         action_data.actor,
         damage_roll,
@@ -608,6 +616,7 @@ fn perform_attack_roll(
                 let damage_roll = get_damage_roll(
                     &game_state.world,
                     action_data.actor,
+                    &action_data.action_id,
                     &payload,
                     &damage_on_miss,
                     "Attack Miss".to_string(),
@@ -744,6 +753,7 @@ fn perform_saving_throw(
                 let Some(damage_roll) = get_damage_roll(
                     &game_state.world,
                     action_data.actor,
+                    &action_data.action_id,
                     &payload,
                     &damage_on_save,
                     "Successful Save".to_string(),
@@ -825,6 +835,7 @@ fn perform_saving_throw(
 fn get_damage_roll(
     world: &World,
     entity: Entity,
+    action: &ActionId,
     payload: &ActionPayload,
     damage_on_failure: &Option<DamageOnFailure>,
     failure_label: String,
@@ -847,8 +858,9 @@ fn get_damage_roll(
         return None;
     };
 
-    let damage_roll =
+    let mut damage_roll =
         systems::damage::damage_roll_fn(damage_function.as_ref(), world, entity, context, crit);
+    damage_roll.action = Some((entity, action.clone()));
 
     if let Some(damage_on_failure) = damage_on_failure {
         match damage_on_failure {
@@ -899,6 +911,7 @@ fn get_effect_outcome(
                         entity: target,
                         effect: effect.effect_id.clone(),
                     },
+                    &action_data.instance_id,
                 );
             }
         }

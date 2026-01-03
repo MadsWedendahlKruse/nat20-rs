@@ -12,7 +12,7 @@ use crate::{
         actions::action::ActionContext,
         d20::{D20Check, D20CheckResult},
         dice::{DiceSet, DiceSetRoll, DiceSetRollResult},
-        id::SpellId,
+        id::{ActionId, SpellId},
         items::equipment::{
             slots::EquipmentSlot,
             weapon::{Weapon, WeaponKind},
@@ -107,8 +107,6 @@ impl Default for DamageComponentResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum DamageSource {
-    // TODO: Could also just use the entire weapon instead? Would be a lot of cloning unless
-    // we introduce a lifetime for a reference
     Weapon(WeaponKind),
     Spell(SpellId),
 }
@@ -174,6 +172,7 @@ impl Display for DamageSource {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DamageRoll {
     /// Separate the primary so we know where to apply e.g. ability modifiers
+    /// TODO: Or just use index 0 as the primary and have all others be bonuses?
     pub primary: DamageComponent,
     pub bonus: Vec<DamageComponent>,
     pub source: DamageSource,
@@ -192,7 +191,7 @@ impl DamageRoll {
         self.bonus.push(DamageComponent::new(dice, damage_type));
     }
 
-    pub fn roll_raw(&self, crit: bool) -> DamageRollResult {
+    pub fn roll(&self, crit: bool) -> DamageRollResult {
         if crit {
             self.roll_internal(2)
         } else {
@@ -222,6 +221,7 @@ impl DamageRoll {
             components: results,
             total,
             source: self.source.clone(),
+            action: None,
         }
     }
 
@@ -256,8 +256,11 @@ impl fmt::Display for DamageRoll {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DamageRollResult {
     pub components: Vec<DamageComponentResult>,
-    pub total: i32,
     pub source: DamageSource,
+    pub total: i32,
+    // TODO: I don't think a full `ActionData` is necessary here, so let's just
+    // store the actor and action id for now
+    pub action: Option<(Entity, ActionId)>,
 }
 
 impl DamageRollResult {
@@ -270,6 +273,11 @@ impl DamageRollResult {
                 c.result.subtotal
             })
             .sum();
+    }
+
+    pub fn add_component(&mut self, component: DamageComponentResult) {
+        self.total += component.result.subtotal;
+        self.components.push(component);
     }
 }
 
@@ -289,6 +297,7 @@ impl Default for DamageRollResult {
             components: vec![DamageComponentResult::default()],
             total: 0,
             source: DamageSource::Weapon(WeaponKind::Melee),
+            action: None,
         }
     }
 }
@@ -461,6 +470,7 @@ impl DamageResistances {
             components,
             total,
             source: roll.source.clone(),
+            action: roll.action.clone(),
         }
     }
 
@@ -540,6 +550,7 @@ pub struct DamageMitigationResult {
     pub components: Vec<DamageComponentMitigation>,
     pub source: DamageSource,
     pub total: i32,
+    pub action: Option<(Entity, ActionId)>,
 }
 
 impl DamageMitigationResult {
@@ -549,6 +560,11 @@ impl DamageMitigationResult {
             comp.recalculate_total();
             self.total += comp.after_mods;
         }
+    }
+
+    pub fn add_component(&mut self, component: DamageComponentMitigation) {
+        self.total += component.after_mods;
+        self.components.push(component);
     }
 }
 
@@ -568,6 +584,7 @@ impl Default for DamageMitigationResult {
             components: Vec::new(),
             total: 0,
             source: DamageSource::default(),
+            action: None,
         }
     }
 }
@@ -653,7 +670,7 @@ mod tests {
     #[rstest]
     fn damage_roll_values(damage_roll: DamageRoll) {
         println!("Roll: {}", damage_roll);
-        let result = damage_roll.roll_raw(false);
+        let result = damage_roll.roll(false);
         assert_eq!(result.components.len(), 2);
         // 2d6 + 1d4 + 2 (str mod)
         // Min roll: 2 + 1 + 2 = 5
@@ -665,7 +682,7 @@ mod tests {
     #[rstest]
     fn damage_roll_crit(damage_roll: DamageRoll) {
         println!("Roll: {}", damage_roll);
-        let result = damage_roll.roll_raw(true);
+        let result = damage_roll.roll(true);
         assert_eq!(result.components.len(), 2);
         // 4d6 (2 * 2d6) + 2d4 (2 * 1d4) + 2 (str mod)
         // Min roll: 4 + 2 + 2 = 8
@@ -985,6 +1002,7 @@ mod tests {
             ],
             total: 9,
             source: DamageSource::Weapon(WeaponKind::Melee),
+            action: None,
         }
     }
 }

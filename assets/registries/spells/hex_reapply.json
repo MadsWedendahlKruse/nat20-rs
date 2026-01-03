@@ -1,0 +1,29 @@
+{
+    "id": "nat20_rs::spell.hex_reapply",
+    "description": "You've killed a target affected by your Hex spell. You can use a bonus action to apply Hex to a new target without expending a spell slot.",
+    "base_level": 1,
+    "school": "necromancy",
+    "concentration": true,
+    "kind": {
+        "variants": {
+            "variants": [
+                "nat20_rs::action.hex.strength",
+                "nat20_rs::action.hex.dexterity",
+                "nat20_rs::action.hex.constitution",
+                "nat20_rs::action.hex.intelligence",
+                "nat20_rs::action.hex.wisdom",
+                "nat20_rs::action.hex.charisma"
+            ]
+        }
+    },
+    "targeting": {
+        "kind": "single",
+        "range": "90 feet",
+        "require_line_of_sight": true,
+        "allowed_targets": "not_dead"
+    },
+    "resource_cost": {
+        "nat20_rs::resource.bonus_action": 1,
+        "nat20_rs::resource.warlock.hex_reapply": 1
+    }
+}

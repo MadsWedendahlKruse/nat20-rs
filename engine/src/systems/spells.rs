@@ -1,6 +1,7 @@
 use std::{cmp::max, collections::HashMap, sync::LazyLock};
 
 use hecs::{Entity, World};
+use tracing::debug;
 
 use crate::{
     components::{
@@ -16,6 +17,7 @@ use crate::{
             spellbook::{ClassSpellcastingState, Spellbook},
         },
     },
+    engine::event::ActionExecutionInstanceId,
     registry::registry::ClassesRegistry,
     systems,
 };
@@ -209,18 +211,39 @@ pub fn add_concentration_instance(
     world: &mut World,
     caster: Entity,
     instance: ConcentrationInstance,
+    action_instance: &ActionExecutionInstanceId,
 ) {
-    let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, caster);
-    spellbook
-        .concentration_tracker_mut()
-        .instances
-        .push(instance);
+    debug!(
+        "Adding concentration instance for entity {:?}: {:?} ({:?})",
+        caster, instance, action_instance
+    );
+
+    let current_action = {
+        let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, caster);
+        let tracker = spellbook.concentration_tracker_mut();
+        tracker.action_instance().cloned()
+    };
+
+    if let Some(existing_action_instance) = current_action
+        && existing_action_instance != *action_instance
+    {
+        break_concentration(world, caster);
+    }
+
+    {
+        let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, caster);
+        spellbook
+            .concentration_tracker_mut()
+            .add_instance(instance, action_instance);
+    }
 }
 
 pub fn break_concentration(world: &mut World, target: Entity) {
+    debug!("Breaking concentration for entity {:?}", target);
+
     let instances_to_break: Vec<ConcentrationInstance> = {
         let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(world, target);
-        std::mem::take(&mut spellbook.concentration_tracker_mut().instances)
+        spellbook.concentration_tracker_mut().take_instances()
     };
 
     for instance in instances_to_break {

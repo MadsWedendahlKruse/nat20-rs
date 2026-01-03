@@ -97,10 +97,10 @@
         },
         "prepared_spells_per_level": {
             "1": 2,
-            "2": 2,
-            "3": 2,
-            "4": 2,
-            "5": 2,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
             "6": 2,
             "7": 2,
             "8": 2,
@@ -144,6 +144,7 @@
             "nat20_rs::spell.eldritch_blast",
             "nat20_rs::spell.expeditious_retreat",
             "nat20_rs::spell.hellish_rebuke",
+            "nat20_rs::spell.hex",
             "nat20_rs::spell.poison_spray"
         ]
     },

@@ -19,7 +19,7 @@ pub fn damage_roll(
         (effect.effect().pre_damage_roll)(world, entity, &mut damage_roll);
     }
 
-    let mut result = damage_roll.roll_raw(crit);
+    let mut result = damage_roll.roll(crit);
 
     for effect in systems::effects::effects(world, entity).iter() {
         (effect.effect().post_damage_roll)(world, entity, &mut result);

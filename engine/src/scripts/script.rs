@@ -161,10 +161,12 @@ pub enum ScriptFunction {
     ArmorClassHook,
     AttackRollHook,
     DamageRollResultHook,
-    DamageTakenHook,
+    PreDamageMitigationHook,
+    PostDamageMitigationHook,
     ReactionBody,
     ReactionTrigger,
     ResourceCostHook,
+    DeathHook,
 }
 
 impl ScriptFunction {
@@ -174,10 +176,12 @@ impl ScriptFunction {
             ScriptFunction::ArmorClassHook => "armor_class_hook",
             ScriptFunction::AttackRollHook => "attack_roll_hook",
             ScriptFunction::DamageRollResultHook => "damage_roll_result_hook",
-            ScriptFunction::DamageTakenHook => "damage_taken_hook",
+            ScriptFunction::PreDamageMitigationHook => "pre_damage_mitigation_hook",
+            ScriptFunction::PostDamageMitigationHook => "post_damage_mitigation_hook",
             ScriptFunction::ReactionBody => "reaction_body",
             ScriptFunction::ReactionTrigger => "reaction_trigger",
             ScriptFunction::ResourceCostHook => "resource_cost_hook",
+            ScriptFunction::DeathHook => "death_hook",
         }
     }
 

@@ -9,6 +9,7 @@ use crate::{
         damage::{
             AttackRoll, AttackRollResult, DamageMitigationResult, DamageRoll, DamageRollResult,
         },
+        effects::effect::EffectInstance,
         id::ActionId,
         items::equipment::armor::ArmorClass,
         resource::ResourceAmountMap,
@@ -28,7 +29,12 @@ pub type DamageRollResultHook = Arc<dyn Fn(&World, Entity, &mut DamageRollResult
 pub type ActionHook = Arc<dyn Fn(&mut World, &ActionData) + Send + Sync>;
 pub type ResourceCostHook =
     Arc<dyn Fn(&World, Entity, &ActionId, &ActionContext, &mut ResourceAmountMap) + Send + Sync>;
-pub type DamageTakenHook = Arc<dyn Fn(&World, Entity, &mut DamageMitigationResult) + Send + Sync>;
+pub type PreDamageMitigationHook =
+    Arc<dyn Fn(&World, Entity, &EffectInstance, &mut DamageRollResult) + Send + Sync>;
+pub type PostDamageMitigationHook =
+    Arc<dyn Fn(&World, Entity, &mut DamageMitigationResult) + Send + Sync>;
+// Entitys in order: 1. victim, 2. killer (if any), 3. effect applier (if any)
+pub type DeathHook = Arc<dyn Fn(&mut World, Entity, Option<Entity>, Option<Entity>) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct D20CheckHooks {

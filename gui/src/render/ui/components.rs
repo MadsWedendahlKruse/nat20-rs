@@ -1467,19 +1467,20 @@ fn render_seconds(ui: &imgui::Ui, seconds: &f32) {
     let seconds = *seconds as u32;
     let minutes = seconds / 60;
     let remaining_seconds = seconds % 60;
+    let mut segments = Vec::new();
     if minutes > 0 {
-        TextSegment::new(
-            format!("{} minutes, {} seconds", minutes, remaining_seconds),
+        segments.push((
+            format!("{} minutes", minutes),
             TextKind::Details,
-        )
-        .render(ui);
-    } else {
-        TextSegment::new(
+        ))
+    } 
+    if seconds > 0 {
+        segments.push((
             format!("{} seconds", remaining_seconds),
             TextKind::Details,
-        )
-        .render(ui);
+        ))
     }
+    TextSegments::new(segments).render(ui);
 }
 
 fn render_turns(ui: &imgui::Ui, turns: &u32) {

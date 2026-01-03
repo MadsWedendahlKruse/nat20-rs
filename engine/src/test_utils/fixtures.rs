@@ -445,6 +445,12 @@ pub mod creatures {
                         "nat20_rs",
                         "class.warlock",
                     ))),
+                    LevelUpDecision::spells(
+                        "choice.spells",
+                        &ClassId::new("nat20_rs", "class.warlock"),
+                        &None,
+                        vec![SpellId::new("nat20_rs", "spell.hex")],
+                    ),
                     LevelUpDecision::ReplaceSpells { spells: Vec::new() },
                     // Level 3
                     LevelUpDecision::single_choice(ChoiceItem::Class(ClassId::new(

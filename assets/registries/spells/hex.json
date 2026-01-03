@@ -1,0 +1,34 @@
+{
+    "id": "nat20_rs::spell.hex",
+    "description": "You place a curse on a creature that you can see within range. Until the spell ends, you deal an extra 1d6 Necrotic damage to the target whenever you hit it with an attack roll. Also, choose one ability when you cast the spell. The target has Disadvantage on ability checks made with the chosen ability. If the target drops to 0 Hit Points before this spell ends, you can take a Bonus Action on a later turn to curse a new creature.",
+    "base_level": 1,
+    "school": "necromancy",
+    "concentration": true,
+    "kind": {
+        "variants": {
+            "variants": [
+                "nat20_rs::action.hex.strength",
+                "nat20_rs::action.hex.dexterity",
+                "nat20_rs::action.hex.constitution",
+                "nat20_rs::action.hex.intelligence",
+                "nat20_rs::action.hex.wisdom",
+                "nat20_rs::action.hex.charisma"
+            ]
+        }
+    },
+    "targeting": {
+        "kind": "single",
+        "range": "90 feet",
+        "require_line_of_sight": true,
+        "allowed_targets": "not_dead"
+    },
+    "resource_cost": {
+        "nat20_rs::resource.bonus_action": 1
+    },
+    "granted_spells": [
+        [
+            "nat20_rs::spell.hex_reapply",
+            1
+        ]
+    ]
+}

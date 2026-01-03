@@ -1,0 +1,20 @@
+{
+    "id": "nat20_rs::effect.spell.hex.wisdom",
+    "kind": "debuff",
+    "description": "The target takes 1d6 necrotic damage when attacked by the caster and has Disadvantage on Wisdom ability checks.",
+    "modifiers": [
+        {
+            "saving_throw": "wisdom disadvantage"
+        }
+    ],
+    "pre_damage_mitigation": [
+        {
+            "script": "nat20_rs::script.effect.spell.hex"
+        }
+    ],
+    "on_death": [
+        {
+            "script": "nat20_rs::script.effect.spell.hex"
+        }
+    ]
+}

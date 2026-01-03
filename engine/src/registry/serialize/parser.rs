@@ -142,6 +142,20 @@ impl Evaluable for DiceExpression {
     }
 }
 
+impl DiceExpression {
+    pub fn evaluate_without_variables(&self) -> Result<(i32, i32, i32), EvaluationError> {
+        let count = self.count_expression.evaluate_without_variables()?;
+        let size = self.size_expression.evaluate_without_variables()?;
+        let modifier = if let Some(mod_expr) = &self.modifier_expression {
+            mod_expr.evaluate_without_variables()?
+        } else {
+            0
+        };
+
+        Ok((count, size, modifier))
+    }
+}
+
 #[derive(Debug)]
 pub struct Parser<'a> {
     input: &'a str,

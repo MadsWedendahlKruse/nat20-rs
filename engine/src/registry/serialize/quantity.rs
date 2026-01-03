@@ -151,7 +151,8 @@ pub type TimeExpressionDefinition = QuantityExpressionDefinition<TimeDim>;
 mod tests {
     use crate::{
         components::{
-            id::{ItemId, SpellId},
+            class::ClassAndSubclass,
+            id::{ClassId, ItemId, SpellId},
             spells::spellbook::{GrantedSpellSource, SpellSource},
         },
         registry::serialize::variables::PARSER_VARIABLES,
@@ -177,10 +178,10 @@ mod tests {
         let entity = world.spawn(());
 
         let action_context = ActionContext::Spell {
-            source: SpellSource::Granted {
-                source: GrantedSpellSource::Item(ItemId::new("nat20_rs", "item.wand_of_testing")),
-                level: 5,
-            },
+            source: SpellSource::Class(ClassAndSubclass {
+                class: ClassId::new("nat20_rs", "class.wizard"),
+                subclass: None,
+            }),
             level: 5,
             id: SpellId::new("nat20_rs", "spell.test"),
         };
@@ -210,10 +211,10 @@ mod tests {
         let entity = world.spawn(());
 
         let action_context = ActionContext::Spell {
-            source: SpellSource::Granted {
-                source: GrantedSpellSource::Item(ItemId::new("nat20_rs", "item.wand_of_testing")),
-                level: 3,
-            },
+            source: SpellSource::Class(ClassAndSubclass {
+                class: ClassId::new("nat20_rs", "class.wizard"),
+                subclass: None,
+            }),
             level: 3,
             id: SpellId::new("nat20_rs", "spell.test"),
         };

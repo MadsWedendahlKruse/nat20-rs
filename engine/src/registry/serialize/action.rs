@@ -73,6 +73,9 @@ pub enum ActionKindDefinition {
     Composite {
         actions: Vec<ActionKindDefinition>,
     },
+    Variants {
+        variants: Vec<ActionId>,
+    },
     // Same story here: you probably will not serialize these directly
     // for now, so they can live only on the runtime enum.
     Reaction {
@@ -130,6 +133,8 @@ impl From<ActionKindDefinition> for ActionKind {
                 actions: actions.into_iter().map(ActionKind::from).collect(),
             },
 
+            ActionKindDefinition::Variants { variants } => ActionKind::Variant { variants },
+
             ActionKindDefinition::Reaction { script } => ActionKind::Reaction { reaction: script },
         }
     }
@@ -148,13 +153,18 @@ impl RegistryReferenceCollector for ActionKindDefinition {
                     action.collect_registry_references(collector);
                 }
             }
+            ActionKindDefinition::Variants { .. } => {
+                // TODO: Although the variant references an ActionId, that might
+                // refer to the action associated with a spell, so the action ID
+                // would not be present in the action registry directly. So how do
+                // we validate that?
+            }
             ActionKindDefinition::Reaction { script } => {
                 collector.add(RegistryReference::Script(
                     script.clone(),
                     ScriptFunction::ReactionBody,
                 ));
             }
-            _ => { /* No references to collect */ }
         }
     }
 }

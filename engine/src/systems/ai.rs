@@ -67,7 +67,9 @@ pub fn recommeneded_target_attitude(
             best
         }
 
-        ActionKind::Utility {} => todo!(),
+        ActionKind::Variant { variants } => {
+            todo!()
+        }
 
         ActionKind::Custom(_) => todo!(),
 

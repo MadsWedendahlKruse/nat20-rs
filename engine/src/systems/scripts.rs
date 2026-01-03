@@ -18,8 +18,9 @@ use crate::{
     scripts::{
         script_api::{
             ScriptActionView, ScriptDamageMitigationResult, ScriptDamageRollResult,
-            ScriptEntityRole, ScriptEntityView, ScriptEventRef, ScriptReactionBodyContext,
-            ScriptReactionPlan, ScriptReactionTriggerContext,
+            ScriptEffectView, ScriptEntityRole, ScriptEntityView, ScriptEventRef,
+            ScriptOptionalEntityView, ScriptReactionBodyContext, ScriptReactionPlan,
+            ScriptReactionTriggerContext,
         },
         script_engine::SCRIPT_ENGINES,
     },
@@ -186,15 +187,16 @@ pub fn evaluate_damage_roll_result_hook(
     }
 }
 
-pub fn evaluate_damage_taken_hook(
-    damage_taken_hook: &ScriptId,
+pub fn evaluate_pre_damage_mitigation_hook(
+    pre_damage_mitigation_hook: &ScriptId,
     entity_view: &ScriptEntityView,
-    damage_mitigation_result: &ScriptDamageMitigationResult,
+    effect: &ScriptEffectView,
+    damage_roll_result: &ScriptDamageRollResult,
 ) {
-    let script = ScriptsRegistry::get(damage_taken_hook).expect(
+    let script = ScriptsRegistry::get(pre_damage_mitigation_hook).expect(
         format!(
-            "Damage taken hook script not found in registry: {:?}",
-            damage_taken_hook
+            "Pre damage mitigation hook script not found in registry: {:?}",
+            pre_damage_mitigation_hook
         )
         .as_str(),
     );
@@ -202,12 +204,73 @@ pub fn evaluate_damage_taken_hook(
     let engine = engine_lock
         .get_mut(&script.language)
         .expect(format!("No script engine found for language: {:?}", script.language).as_str());
-    match engine.evaluate_damage_taken_hook(script, entity_view, damage_mitigation_result) {
+    match engine.evaluate_pre_damage_mitigation_hook(
+        script,
+        entity_view,
+        effect,
+        damage_roll_result,
+    ) {
+        Ok(()) => {}
+        Err(err) => {
+            error!(
+                "Error evaluating pre-damage taken hook script {:?} for entity {:?}: {:?}",
+                pre_damage_mitigation_hook, entity_view.entity, err
+            );
+        }
+    }
+}
+
+pub fn evaluate_post_damage_mitigation_hook(
+    damage_mitigation_hook: &ScriptId,
+    entity_view: &ScriptEntityView,
+    damage_mitigation_result: &ScriptDamageMitigationResult,
+) {
+    let script = ScriptsRegistry::get(damage_mitigation_hook).expect(
+        format!(
+            "Post damage mitigation hook script not found in registry: {:?}",
+            damage_mitigation_hook
+        )
+        .as_str(),
+    );
+    let mut engine_lock = SCRIPT_ENGINES.lock().unwrap();
+    let engine = engine_lock
+        .get_mut(&script.language)
+        .expect(format!("No script engine found for language: {:?}", script.language).as_str());
+    match engine.evaluate_post_damage_mitigation_hook(script, entity_view, damage_mitigation_result)
+    {
         Ok(()) => {}
         Err(err) => {
             error!(
                 "Error evaluating damage taken hook script {:?} for entity {:?}: {:?}",
-                damage_taken_hook, entity_view.entity, err
+                damage_mitigation_hook, entity_view.entity, err
+            );
+        }
+    }
+}
+
+pub fn evaluate_death_hook(
+    death_hook: &ScriptId,
+    victim_entity_view: &ScriptEntityView,
+    killer_entity_view: &ScriptOptionalEntityView,
+    applier_entity_view: &ScriptOptionalEntityView,
+) {
+    let script = ScriptsRegistry::get(death_hook)
+        .expect(format!("Death hook script not found in registry: {:?}", death_hook).as_str());
+    let mut engine_lock = SCRIPT_ENGINES.lock().unwrap();
+    let engine = engine_lock
+        .get_mut(&script.language)
+        .expect(format!("No script engine found for language: {:?}", script.language).as_str());
+    match engine.evaluate_death_hook(
+        script,
+        victim_entity_view,
+        killer_entity_view,
+        applier_entity_view,
+    ) {
+        Ok(()) => {}
+        Err(err) => {
+            error!(
+                "Error evaluating death hook script {:?} for entity {:?}: {:?}",
+                death_hook, victim_entity_view.entity, err
             );
         }
     }

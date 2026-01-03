@@ -9,8 +9,9 @@ use crate::scripts::{
     rhai::rhai_engine::RhaiScriptEngine,
     script::{Script, ScriptError, ScriptLanguage},
     script_api::{
-        ScriptActionView, ScriptDamageMitigationResult, ScriptDamageRollResult, ScriptEntityView,
-        ScriptReactionBodyContext, ScriptReactionPlan, ScriptReactionTriggerContext,
+        ScriptActionView, ScriptDamageMitigationResult, ScriptDamageRollResult, ScriptEffectView,
+        ScriptEntityView, ScriptOptionalEntityView, ScriptReactionBodyContext, ScriptReactionPlan,
+        ScriptReactionTriggerContext,
     },
 };
 
@@ -80,10 +81,26 @@ pub trait ScriptEngine {
         damage_roll_result: &ScriptDamageRollResult,
     ) -> Result<(), ScriptError>;
 
-    fn evaluate_damage_taken_hook(
+    fn evaluate_pre_damage_mitigation_hook(
+        &mut self,
+        script: &Script,
+        entity: &ScriptEntityView,
+        effect: &ScriptEffectView,
+        damage_roll_result: &ScriptDamageRollResult,
+    ) -> Result<(), ScriptError>;
+
+    fn evaluate_post_damage_mitigation_hook(
         &mut self,
         script: &Script,
         entity: &ScriptEntityView,
         damage_mitigation_result: &ScriptDamageMitigationResult,
+    ) -> Result<(), ScriptError>;
+
+    fn evaluate_death_hook(
+        &mut self,
+        script: &Script,
+        victim_entity_view: &ScriptEntityView,
+        killer_entity_view: &ScriptOptionalEntityView,
+        applier_entity_view: &ScriptOptionalEntityView,
     ) -> Result<(), ScriptError>;
 }

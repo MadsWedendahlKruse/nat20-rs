@@ -8,6 +8,10 @@ use crate::{
         ability::{Ability, AbilityScoreMap},
         d20::D20CheckDC,
         damage::{AttackRollResult, DamageMitigationResult, DamageResistances, DamageRollResult},
+        effects::{
+            effect::{EffectInstance, EffectLifetime},
+            hooks::DeathHook,
+        },
         health::{hit_points::HitPoints, life_state::LifeState},
         level::CharacterLevels,
         modifier::{Modifiable, ModifierSet, ModifierSource},
@@ -63,10 +67,20 @@ pub fn damage(
             DamageResistances::new()
         };
 
-    let mut mitigation_result = resistances.apply(damage_roll_result);
+    let mut damage_roll_result = damage_roll_result.clone();
+    for effect in systems::effects::effects(&game_state.world, target).iter() {
+        (effect.effect().pre_damage_mitigation)(
+            &game_state.world,
+            target,
+            effect,
+            &mut damage_roll_result,
+        );
+    }
+
+    let mut mitigation_result = resistances.apply(&damage_roll_result);
 
     for effect in systems::effects::effects(&game_state.world, target).iter() {
-        (effect.effect().damage_taken)(&game_state.world, target, &mut mitigation_result);
+        (effect.effect().post_damage_mitigation)(&game_state.world, target, &mut mitigation_result);
     }
 
     let (damage_taken, killed_by_damage, mut new_life_state, removed_temp_hp_source) =
@@ -139,6 +153,43 @@ pub fn damage(
 
         if let Ok(_) = game_state.world.get::<&CharacterTag>(target) {
             new_life_state = Some(LifeState::unconscious());
+        }
+
+        // Trigger death hooks and remove effects that are not permanent
+        let hooks = systems::effects::effects(&game_state.world, target)
+            .iter()
+            .map(|e| (e.clone(), e.effect().on_death.clone()))
+            .collect::<Vec<(EffectInstance, DeathHook)>>();
+
+        let killer = damage_roll_result
+            .action
+            .as_ref()
+            .and_then(|(actor, _)| Some(actor));
+
+        for (effect, hook) in hooks {
+            hook(
+                &mut game_state.world,
+                target,
+                killer.cloned(),
+                effect.applier,
+            );
+
+            if !matches!(effect.lifetime, EffectLifetime::Permanent) {
+                if let Some(applier) = effect.applier
+                    && applier != target
+                {
+                    // Check if the applier is concentrating on the target and break concentration if so
+                    let mut spellbook = systems::helpers::get_component_mut::<Spellbook>(
+                        &mut game_state.world,
+                        applier,
+                    );
+                    spellbook
+                        .concentration_tracker_mut()
+                        .remove_instances_by_entity(target);
+                }
+
+                systems::effects::remove_effect(&mut game_state.world, target, &effect.effect_id);
+            }
         }
     }
 

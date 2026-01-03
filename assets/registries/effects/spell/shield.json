@@ -7,7 +7,7 @@
             "modifier": "+5"
         }
     ],
-    "on_damage_taken": [
+    "post_damage_mitigation": [
         {
             "script": "nat20_rs::script.spell.shield"
         }

@@ -228,9 +228,12 @@ impl EventLog {
 
 pub type EventQueue = VecDeque<Event>;
 
+pub type ActionExecutionInstanceId = Uuid;
+
 // TODO: struct name?
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActionData {
+    pub instance_id: ActionExecutionInstanceId,
     pub actor: Entity,
     pub action_id: ActionId,
     pub context: ActionContext,
@@ -239,6 +242,23 @@ pub struct ActionData {
 }
 
 impl ActionData {
+    pub fn new(
+        actor: Entity,
+        action_id: ActionId,
+        context: ActionContext,
+        resource_cost: ResourceAmountMap,
+        targets: Vec<TargetInstance>,
+    ) -> Self {
+        Self {
+            instance_id: Uuid::new_v4(),
+            actor,
+            action_id,
+            context,
+            resource_cost,
+            targets,
+        }
+    }
+
     pub fn entity_targets(&self) -> Vec<Entity> {
         self.targets
             .iter()
@@ -255,6 +275,7 @@ impl ActionData {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReactionData {
+    pub instance_id: ActionExecutionInstanceId,
     pub reactor: Entity,
     // The event that triggered this reaction
     pub event: Box<Event>,
@@ -264,9 +285,31 @@ pub struct ReactionData {
     pub target: TargetInstance,
 }
 
+impl ReactionData {
+    pub fn new(
+        reactor: Entity,
+        event: Event,
+        reaction_id: ActionId,
+        context: ActionContext,
+        resource_cost: ResourceAmountMap,
+        target: TargetInstance,
+    ) -> Self {
+        Self {
+            instance_id: Uuid::new_v4(),
+            reactor,
+            event: Box::new(event),
+            reaction_id,
+            context,
+            resource_cost,
+            target,
+        }
+    }
+}
+
 impl From<&ReactionData> for ActionData {
     fn from(reaction: &ReactionData) -> Self {
         ActionData {
+            instance_id: reaction.instance_id,
             actor: reaction.reactor,
             action_id: reaction.reaction_id.clone(),
             context: reaction.context.clone(),

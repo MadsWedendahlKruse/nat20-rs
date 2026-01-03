@@ -1,0 +1,34 @@
+{
+    "id": "nat20_rs::spell.hex.wisdom",
+    "description": "You place a curse on a creature that you can see within range. Until the spell ends, you deal an extra 1d6 Necrotic damage to the target whenever you hit it with an attack roll. Also, the target has Disadvantage on Wisdom ability checks. If the target drops to 0 Hit Points before this spell ends, you can take a Bonus Action on a later turn to curse a new creature.",
+    "base_level": 1,
+    "school": "necromancy",
+    "concentration": true,
+    "kind": {
+        "standard": {
+            "payload": {
+                "effect": {
+                    "effect_id": "nat20_rs::effect.spell.hex.wisdom",
+                    "lifetime": {
+                        "at_turn_boundary": {
+                            "entity": "applier",
+                            "boundary": "start",
+                            "duration": {
+                                "time": "1 hour"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "targeting": {
+        "kind": "single",
+        "range": "90 feet",
+        "require_line_of_sight": true,
+        "allowed_targets": "not_dead"
+    },
+    "resource_cost": {
+        "nat20_rs::resource.bonus_action": 1
+    }
+}

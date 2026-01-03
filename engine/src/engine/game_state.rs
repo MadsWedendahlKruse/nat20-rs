@@ -507,6 +507,7 @@ impl GameState {
         spend_resources: bool,
     ) -> Result<(), ActionError> {
         let ActionData {
+            instance_id: _,
             actor,
             action_id,
             context: action_context,

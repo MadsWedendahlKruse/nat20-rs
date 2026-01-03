@@ -24,7 +24,7 @@ use crate::{
     components::{
         actions::action::{ActionContext, ActionMap, ActionProvider},
         class::{CastingReadinessModel, ClassAndSubclass, SpellAccessModel, SpellcastingRules},
-        id::{FeatId, ItemId, ResourceId, SpeciesId, SpellId},
+        id::{EffectId, FeatId, ItemId, ResourceId, SpeciesId, SpellId},
         resource::{ResourceAmount, ResourceAmountMap, ResourceBudgetKind, ResourceMap},
         spells::spell::ConcentrationTracker,
     },
@@ -174,7 +174,8 @@ pub enum GrantedSpellSource {
     Item(ItemId),
     Feat(FeatId),
     Species(SpeciesId),
-    // add more as needed
+    Effect(EffectId),
+    ParentSpell(SpellId),
 }
 
 /// A class-independent spell source (items/feats/race/boons).
@@ -555,6 +556,21 @@ impl Spellbook {
                     .insert(spell_id.clone(), *level);
             }
         }
+
+        // TODO: Little bit funky
+        if let Some(spell) = SpellsRegistry::get(spell_id) {
+            for (spell_id, level) in spell.granted_spells() {
+                self.add_spell(
+                    spell_id,
+                    &SpellSource::Granted {
+                        source: GrantedSpellSource::ParentSpell(spell.id().clone()),
+                        level: *level,
+                    },
+                    resources,
+                )?;
+            }
+        }
+
         Ok(())
     }
 

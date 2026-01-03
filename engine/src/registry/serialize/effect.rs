@@ -1,6 +1,6 @@
 use hecs::{Entity, World};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     components::{
@@ -11,10 +11,10 @@ use crate::{
             DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
         },
         effects::{
-            effect::{Effect, EffectKind},
+            effect::{Effect, EffectInstance, EffectKind},
             hooks::{
-                ActionHook, ArmorClassHook, AttackRollHook, DamageRollResultHook, DamageTakenHook,
-                ResourceCostHook,
+                ActionHook, ArmorClassHook, AttackRollHook, DamageRollResultHook, DeathHook,
+                PostDamageMitigationHook, PreDamageMitigationHook, ResourceCostHook,
             },
         },
         health::hit_points::{HitPoints, TemporaryHitPoints},
@@ -45,7 +45,7 @@ use crate::{
         script::ScriptFunction,
         script_api::{
             ScriptActionView, ScriptDamageMitigationResult, ScriptDamageRollResult,
-            ScriptEntityView, ScriptResourceCost,
+            ScriptEffectView, ScriptEntityView, ScriptOptionalEntityView, ScriptResourceCost,
         },
     },
     systems,
@@ -123,12 +123,15 @@ pub struct EffectDefinition {
     #[serde(default)]
     pub post_damage_roll: Vec<DamageRollResultHookDefinition>,
     #[serde(default)]
-    pub on_damage_taken: Vec<DamageTakenHookDefinition>,
-    /// “Big” custom logic lives here
+    pub pre_damage_mitigation: Vec<PreDamageMitigationHookDefinition>,
+    #[serde(default)]
+    pub post_damage_mitigation: Vec<PostDamageMitigationHookDefinition>,
     #[serde(default)]
     pub on_action: Vec<ActionHookDefinition>,
     #[serde(default)]
     pub on_resource_cost: Vec<ResourceCostHookDefinition>,
+    #[serde(default)]
+    pub on_death: Vec<DeathHookDefinition>,
 }
 
 impl From<EffectDefinition> for Effect {
@@ -175,10 +178,16 @@ impl From<EffectDefinition> for Effect {
             effect.post_damage_roll = DamageRollResultHookDefinition::combine_hooks(hooks);
         }
 
-        // Build damage_taken hooks
+        // Build pre_damage_taken hooks
         {
-            let hooks = collect_effect_hooks(&definition.on_damage_taken, &effect_id);
-            effect.damage_taken = DamageTakenHookDefinition::combine_hooks(hooks);
+            let hooks = collect_effect_hooks(&definition.pre_damage_mitigation, &effect_id);
+            effect.pre_damage_mitigation = PreDamageMitigationHookDefinition::combine_hooks(hooks);
+        }
+        // Build post_damage_mitigation hooks
+        {
+            let hooks = collect_effect_hooks(&definition.post_damage_mitigation, &effect_id);
+            effect.post_damage_mitigation =
+                PostDamageMitigationHookDefinition::combine_hooks(hooks);
         }
 
         // Build armor class hooks
@@ -197,6 +206,12 @@ impl From<EffectDefinition> for Effect {
         {
             let hooks = collect_effect_hooks(&definition.on_action, &effect_id);
             effect.on_action = ActionHookDefinition::combine_hooks(hooks);
+        }
+
+        // Build on_death hooks
+        {
+            let hooks = collect_effect_hooks(&definition.on_death, &effect_id);
+            effect.on_death = DeathHookDefinition::combine_hooks(hooks);
         }
 
         effect
@@ -727,14 +742,63 @@ impl HookEffect<ResourceCostHook> for ResourceCostHookDefinition {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum DamageTakenHookDefinition {
+pub enum PreDamageMitigationHookDefinition {
     Script { script: ScriptId },
 }
 
-impl HookEffect<DamageTakenHook> for DamageTakenHookDefinition {
-    fn build_hook(&self, _effect: &EffectId) -> DamageTakenHook {
+impl HookEffect<PreDamageMitigationHook> for PreDamageMitigationHookDefinition {
+    fn build_hook(&self, _effect: &EffectId) -> PreDamageMitigationHook {
         match self {
-            DamageTakenHookDefinition::Script { script } => {
+            PreDamageMitigationHookDefinition::Script { script } => {
+                let script_id = script.clone();
+                Arc::new(
+                    move |world: &World,
+                          entity: Entity,
+                          effect: &EffectInstance,
+                          damage_roll_result: &mut DamageRollResult| {
+                        let entity_view = ScriptEntityView::new_from_world(world, entity);
+                        let effect_view = ScriptEffectView::from(effect);
+                        let script_damage_roll_result =
+                            ScriptDamageRollResult::take_from(damage_roll_result);
+
+                        systems::scripts::evaluate_pre_damage_mitigation_hook(
+                            &script_id,
+                            &entity_view,
+                            &effect_view,
+                            &script_damage_roll_result,
+                        );
+
+                        *damage_roll_result = script_damage_roll_result.into_inner();
+                    },
+                )
+            }
+        }
+    }
+
+    fn combine_hooks(hooks: Vec<PreDamageMitigationHook>) -> PreDamageMitigationHook {
+        Arc::new(
+            move |world: &World,
+                  entity: Entity,
+                  effect: &EffectInstance,
+                  damage_roll_result: &mut DamageRollResult| {
+                for hook in &hooks {
+                    hook(world, entity, effect, damage_roll_result);
+                }
+            },
+        )
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PostDamageMitigationHookDefinition {
+    Script { script: ScriptId },
+}
+
+impl HookEffect<PostDamageMitigationHook> for PostDamageMitigationHookDefinition {
+    fn build_hook(&self, _effect: &EffectId) -> PostDamageMitigationHook {
+        match self {
+            PostDamageMitigationHookDefinition::Script { script } => {
                 let script_id = script.clone();
                 Arc::new(
                     move |world: &World,
@@ -744,7 +808,7 @@ impl HookEffect<DamageTakenHook> for DamageTakenHookDefinition {
                         let script_damage_mitigation_result =
                             ScriptDamageMitigationResult::take_from(damage_mitigation_result);
 
-                        systems::scripts::evaluate_damage_taken_hook(
+                        systems::scripts::evaluate_post_damage_mitigation_hook(
                             &script_id,
                             &entity_view,
                             &script_damage_mitigation_result,
@@ -757,7 +821,7 @@ impl HookEffect<DamageTakenHook> for DamageTakenHookDefinition {
         }
     }
 
-    fn combine_hooks(hooks: Vec<DamageTakenHook>) -> DamageTakenHook {
+    fn combine_hooks(hooks: Vec<PostDamageMitigationHook>) -> PostDamageMitigationHook {
         Arc::new(
             move |world: &World,
                   entity: Entity,
@@ -768,4 +832,88 @@ impl HookEffect<DamageTakenHook> for DamageTakenHookDefinition {
             },
         )
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DeathHookDefinition {
+    Script { script: ScriptId },
+}
+
+impl HookEffect<DeathHook> for DeathHookDefinition {
+    fn build_hook(&self, _effect: &EffectId) -> DeathHook {
+        match self {
+            DeathHookDefinition::Script { script } => {
+                let script_id = script.clone();
+                Arc::new(
+                    move |world: &mut World,
+                          victim: Entity,
+                          killer: Option<Entity>,
+                          applier: Option<Entity>| {
+                        // 1) Take each distinct entity exactly once.
+                        let mut taken: HashMap<Entity, ScriptEntityView> = HashMap::new();
+
+                        take_entity_view_once(world, &mut taken, victim);
+                        if let Some(killer_entity) = killer {
+                            take_entity_view_once(world, &mut taken, killer_entity);
+                        }
+                        if let Some(applier_entity) = applier {
+                            take_entity_view_once(world, &mut taken, applier_entity);
+                        }
+
+                        // 2) Build script inputs as temporary views (clones are OK here),
+                        //    but ensure they drop before we replace back into the world.
+                        {
+                            let victim_view: &ScriptEntityView =
+                                taken.get(&victim).expect("Victim must be taken");
+
+                            let killer_view =
+                                ScriptOptionalEntityView::from(killer.and_then(|e| taken.get(&e)));
+
+                            let applier_view =
+                                ScriptOptionalEntityView::from(applier.and_then(|e| taken.get(&e)));
+
+                            systems::scripts::evaluate_death_hook(
+                                &script_id,
+                                victim_view,
+                                &killer_view,
+                                &applier_view,
+                            );
+
+                            // killer_view and applier_view drop at the end of this scope.
+                        }
+
+                        // 3) Replace back exactly once per entity (no aliasing ambiguity).
+                        //    Drain ensures we move the owned ScriptEntityView out.
+                        for (_entity, view) in taken.drain() {
+                            view.replace_in_world(world);
+                        }
+                    },
+                )
+            }
+        }
+    }
+
+    fn combine_hooks(hooks: Vec<DeathHook>) -> DeathHook {
+        Arc::new(
+            move |world: &mut World,
+                  victim: Entity,
+                  killer: Option<Entity>,
+                  applier: Option<Entity>| {
+                for hook in &hooks {
+                    hook(world, victim, killer, applier);
+                }
+            },
+        )
+    }
+}
+
+fn take_entity_view_once(
+    world: &mut World,
+    taken: &mut HashMap<Entity, ScriptEntityView>,
+    entity: Entity,
+) {
+    taken
+        .entry(entity)
+        .or_insert_with(|| ScriptEntityView::take_from_world(world, entity));
 }

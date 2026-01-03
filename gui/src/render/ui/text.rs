@@ -15,7 +15,7 @@ pub fn damage_type_color(damage_type: &DamageType) -> [f32; 4] {
         DamageType::Acid => [0.0, 1.0, 0.0, 1.0],
         DamageType::Poison => [0.5, 0.9, 0.0, 1.0],
         DamageType::Force => [0.9, 0.0, 0.0, 1.0],
-        DamageType::Necrotic => [0.5, 1.0, 0.25, 1.0],
+        DamageType::Necrotic => [0.25, 0.7, 0.25, 1.0],
         DamageType::Psychic => [1.0, 0.5, 1.0, 1.0],
         DamageType::Radiant => [1.0, 0.9, 0.0, 1.0],
         DamageType::Thunder => [0.5, 0.0, 1.0, 1.0],

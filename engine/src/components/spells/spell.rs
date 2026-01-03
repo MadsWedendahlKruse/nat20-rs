@@ -11,6 +11,7 @@ use crate::{
         id::{EffectId, IdProvider, ScriptId, SpellId},
         resource::ResourceAmountMap,
     },
+    engine::event::ActionExecutionInstanceId,
     registry::serialize::spell::SpellDefinition,
     systems,
 };
@@ -34,8 +35,18 @@ pub struct Spell {
     id: SpellId,
     base_level: u8,
     school: MagicSchool,
+    // TODO: Replace with a SpellFlags enum/bitflags?
+    // TODO: Add verbal/somatic flags?
     concentration: bool,
     action: Action,
+    /// TODO: Is there a better way to represent this?
+    ///
+    /// Some spells like Hex or Hunter's Mark grant an alternative version of themselves
+    /// which doesn't cost a spell slot, but can only be cast under certain conditions.
+    /// It seems like easiest way is just to grant those alternative spells directly,
+    /// though they won't be able to be used until the conditions are met, e.g. killing
+    /// an enemy marked by the original spell.
+    granted_spells: Vec<(SpellId, u8)>,
 }
 
 impl Spell {
@@ -49,6 +60,7 @@ impl Spell {
         resource_cost: ResourceAmountMap,
         targeting: Arc<TargetingFunction>,
         reaction_trigger: Option<ScriptId>,
+        granted_spells: Vec<(SpellId, u8)>,
     ) -> Self {
         let action_id = id.clone().into();
 
@@ -66,6 +78,7 @@ impl Spell {
                 cooldown: None,
                 reaction_trigger,
             },
+            granted_spells,
         }
     }
 
@@ -91,6 +104,10 @@ impl Spell {
 
     pub fn requires_concentration(&self) -> bool {
         self.concentration
+    }
+
+    pub fn granted_spells(&self) -> &Vec<(SpellId, u8)> {
+        &self.granted_spells
     }
 }
 
@@ -126,16 +143,47 @@ impl ConcentrationInstance {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConcentrationTracker {
-    pub instances: Vec<ConcentrationInstance>,
+    instances: Vec<ConcentrationInstance>,
+    action_instance: Option<ActionExecutionInstanceId>,
 }
 
 impl ConcentrationTracker {
-    pub fn add_instance(&mut self, instance: ConcentrationInstance) {
+    pub fn instances(&self) -> &Vec<ConcentrationInstance> {
+        &self.instances
+    }
+
+    pub fn add_instance(
+        &mut self,
+        instance: ConcentrationInstance,
+        action_instance: &ActionExecutionInstanceId,
+    ) {
         self.instances.push(instance);
+        self.action_instance = Some(action_instance.clone());
+    }
+
+    /// In most cases we would want to remove all instances at once, but if e.g.
+    /// a spell applies effects to multiple targets, and one of the targets dies,
+    /// then we need to be able to remove just that one instance.
+    pub fn remove_instances_by_entity(&mut self, entity: Entity) {
+        self.instances.retain(|instance| match instance {
+            ConcentrationInstance::Effect { entity: e, .. } => *e != entity,
+        });
+        if self.instances.is_empty() {
+            self.action_instance = None;
+        }
     }
 
     pub fn is_concentrating(&self) -> bool {
         !self.instances.is_empty()
+    }
+
+    pub fn take_instances(&mut self) -> Vec<ConcentrationInstance> {
+        self.action_instance = None;
+        std::mem::take(&mut self.instances)
+    }
+
+    pub fn action_instance(&self) -> Option<&ActionExecutionInstanceId> {
+        self.action_instance.as_ref()
     }
 }
 
@@ -143,6 +191,7 @@ impl Default for ConcentrationTracker {
     fn default() -> Self {
         Self {
             instances: Vec::new(),
+            action_instance: None,
         }
     }
 }

@@ -110,16 +110,16 @@ impl AIController for RandomController {
                         } => todo!(),
                     }
 
-                    let action = ActionData {
-                        actor: *actor,
-                        action_id: action_id.clone(),
-                        context: context.clone(),
-                        resource_cost: resource_cost.clone(),
-                        targets: targets
+                    let action = ActionData::new(
+                        *actor,
+                        action_id.clone(),
+                        context.clone(),
+                        resource_cost.clone(),
+                        targets
                             .iter()
                             .map(|entity| TargetInstance::Entity(*entity))
                             .collect(),
-                    };
+                    );
 
                     let path = match systems::movement::path_to_target(game_state, &action, true) {
                         Ok(result) => match result {
@@ -139,18 +139,7 @@ impl AIController for RandomController {
                         actor: *actor,
                         decision: Some(ActionDecision {
                             response_to: prompt.id,
-                            kind: ActionDecisionKind::Action {
-                                action: ActionData {
-                                    actor: *actor,
-                                    action_id: action_id.clone(),
-                                    context: context.clone(),
-                                    resource_cost: resource_cost.clone(),
-                                    targets: targets
-                                        .iter()
-                                        .map(|entity| TargetInstance::Entity(*entity))
-                                        .collect(),
-                                },
-                            },
+                            kind: ActionDecisionKind::Action { action },
                         }),
                         path,
                     };

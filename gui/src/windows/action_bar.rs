@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use hecs::Entity;
 use imgui::{ChildFlags, MouseButton};
 use nat20_rs::{
@@ -9,13 +11,14 @@ use nat20_rs::{
         d20::RollMode,
         id::{ActionId, Name, ResourceId},
         modifier::Modifiable,
-        resource::{ResourceAmountMap, ResourceMap},
+        resource::{RechargeRule, ResourceAmount, ResourceAmountMap, ResourceMap},
         speed::Speed,
     },
     engine::{
         event::{ActionData, ActionDecision, ActionDecisionKind, ActionPromptKind},
         game_state::GameState,
     },
+    registry::registry::ResourcesRegistry,
     systems::{
         self,
         geometry::{RaycastHit, RaycastHitKind},
@@ -48,6 +51,9 @@ use crate::{
 pub enum ActionBarState {
     Action {
         actions: ActionMap,
+    },
+    Variant {
+        variants: ActionMap,
     },
     Context {
         action: ActionId,
@@ -125,6 +131,10 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
                         render_resources(ui, game_state, self.entity);
                     }
 
+                    ActionBarState::Variant { variants } => {
+                        render_actions(ui, game_state, self.entity, &mut new_state, variants);
+                    }
+
                     ActionBarState::Context {
                         action,
                         contexts_and_costs,
@@ -191,12 +201,31 @@ fn render_actions(
                 ) {
                     continue;
                 }
-                // Don't render actions that cost a reaction
+                // Don't render actions that either:
+                // 1. Can only be used as reactions
+                // 2. Cost a resource which never recharges and which is the entity
+                //    currently doesn't have any of. This probably means the action
+                //    is only usable under certain conditions which aren't currently
+                //    met.
+
+                // TODO: This works for now to hide stuff like Reapply Hex, but it's
+                // definitely not ideal. Probably better to "mark" these actions somehow
                 if contexts_and_costs.iter().all(|(_, cost)| {
                     cost.contains_key(&ResourceId::new("nat20_rs", "resource.reaction"))
+                        || cost.iter().any(|(res_id, amount)| {
+                            let resources = systems::helpers::get_component::<ResourceMap>(
+                                &game_state.world,
+                                entity,
+                            );
+                            !resources.can_afford(res_id, amount)
+                                && ResourcesRegistry::get(res_id).unwrap().recharge
+                                    == RechargeRule::Never
+                        })
                 }) {
                     continue;
                 }
+
+                for (_, cost) in contexts_and_costs.iter() {}
 
                 let mut action_usable = false;
                 for (context, cost) in contexts_and_costs.iter_mut() {
@@ -229,22 +258,24 @@ fn render_actions(
                 let disabled_token = ui.begin_disabled(!action_usable);
 
                 if ui.button(&action_id.to_string()) {
-                    if contexts_and_costs.len() == 1 {
-                        *new_state = Some(ActionBarState::Targets {
-                            action: ActionData {
-                                actor: entity,
-                                action_id: action_id.clone(),
-                                context: contexts_and_costs[0].0.clone(),
-                                resource_cost: contexts_and_costs[0].1.clone(),
-                                targets: Vec::new(),
-                            },
-                            potential_target: None,
-                        });
-                    } else {
-                        *new_state = Some(ActionBarState::Context {
-                            action: action_id.clone(),
-                            contexts_and_costs: contexts_and_costs.clone(),
-                        });
+                    let action = systems::actions::get_action(action_id).unwrap();
+
+                    match action.kind() {
+                        ActionKind::Variant { variants } => {
+                            *new_state = Some(ActionBarState::Variant {
+                                variants: variants
+                                    .iter()
+                                    .map(|variant_action_id| {
+                                        // Assume all variants have the same contexts and costs
+                                        (variant_action_id.clone(), contexts_and_costs.clone())
+                                    })
+                                    .collect(),
+                            });
+                        }
+
+                        _ => {
+                            select_action(entity, new_state, action_id, contexts_and_costs);
+                        }
                     }
                 }
 
@@ -267,6 +298,31 @@ fn render_actions(
                 }
             }
         });
+}
+
+fn select_action(
+    entity: Entity,
+    new_state: &mut Option<ActionBarState>,
+    action_id: &ActionId,
+    contexts_and_costs: &mut Vec<(ActionContext, HashMap<ResourceId, ResourceAmount>)>,
+) {
+    if contexts_and_costs.len() == 1 {
+        *new_state = Some(ActionBarState::Targets {
+            action: ActionData::new(
+                entity,
+                action_id.clone(),
+                contexts_and_costs[0].0.clone(),
+                contexts_and_costs[0].1.clone(),
+                Vec::new(),
+            ),
+            potential_target: None,
+        });
+    } else {
+        *new_state = Some(ActionBarState::Context {
+            action: action_id.clone(),
+            contexts_and_costs: contexts_and_costs.clone(),
+        });
+    }
 }
 
 fn render_resources(ui: &imgui::Ui, game_state: &mut GameState, entity: Entity) {
@@ -335,13 +391,13 @@ fn render_context_selection(
 
         if clicked {
             *new_state = Some(ActionBarState::Targets {
-                action: ActionData {
+                action: ActionData::new(
                     actor,
-                    action_id: action.clone(),
-                    context: context.clone(),
-                    resource_cost: cost.clone(),
-                    targets: Vec::new(),
-                },
+                    action.clone(),
+                    context.clone(),
+                    cost.clone(),
+                    Vec::new(),
+                ),
                 potential_target: None,
             });
         }

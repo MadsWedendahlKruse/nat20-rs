@@ -10,15 +10,17 @@ use crate::{
     components::{
         actions::{
             action::{
-                ActionContext, ActionKindResult, ActionOutcomeBundle, DamageOutcome,
-                DamageResolutionKind,
+                ActionCondition, ActionContext, ActionKind, ActionKindResult, ActionOutcomeBundle,
+                DamageOutcome, DamageResolutionKind,
             },
             targeting::TargetInstance,
         },
         damage::{
-            DamageMitigationEffect, DamageMitigationResult, DamageRollResult, MitigationOperation,
+            DamageComponentResult, DamageMitigationEffect, DamageMitigationResult,
+            DamageRollResult, DamageType, MitigationOperation,
         },
         dice::{DiceSet, DiceSetRoll},
+        effects::effect::EffectInstance,
         id::{ActionId, ResourceId},
         items::equipment::loadout::Loadout,
         modifier::{Modifiable, ModifierSet, ModifierSource},
@@ -175,6 +177,35 @@ impl Into<Entity> for ScriptEntity {
 }
 
 #[derive(Clone)]
+pub struct ScriptEffectView {
+    pub effect_id: String,
+    pub source: String,
+    pub applier: Option<ScriptEntity>,
+}
+
+impl ScriptEffectView {
+    pub fn has_applier(&self) -> bool {
+        self.applier.is_some()
+    }
+
+    pub fn get_applier(&self) -> &ScriptEntity {
+        self.applier
+            .as_ref()
+            .expect("No applier associated with this effect")
+    }
+}
+
+impl From<&EffectInstance> for ScriptEffectView {
+    fn from(instance: &EffectInstance) -> Self {
+        ScriptEffectView {
+            effect_id: instance.effect_id.to_string(),
+            source: instance.source.to_string(),
+            applier: instance.applier.map(ScriptEntity::from),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct ScriptDamageRollResult {
     inner: ScriptShared<DamageRollResult>,
 }
@@ -198,6 +229,62 @@ impl ScriptDamageRollResult {
         }
 
         inner.recalculate_total();
+    }
+
+    pub fn has_actor(&self) -> bool {
+        self.inner.read().action.is_some()
+    }
+
+    pub fn get_actor(&self) -> ScriptEntity {
+        let inner = self.inner.read();
+        let (actor_entity, _) = inner
+            .action
+            .as_ref()
+            .expect("No action associated with this damage roll result");
+        ScriptEntity::from(*actor_entity)
+    }
+
+    pub fn is_action_attack_roll(&self) -> bool {
+        self.is_action_condition_type(|cond| matches!(cond, ActionCondition::AttackRoll { .. }))
+    }
+
+    pub fn is_action_saving_throw(&self) -> bool {
+        self.is_action_condition_type(|cond| matches!(cond, ActionCondition::SavingThrow { .. }))
+    }
+
+    pub fn is_action_unconditional(&self) -> bool {
+        self.is_action_condition_type(|cond| matches!(cond, ActionCondition::None))
+    }
+
+    fn is_action_condition_type(&self, predicate: fn(&ActionCondition) -> bool) -> bool {
+        let inner = self.inner.read();
+        if let Some((_, action_id)) = &inner.action {
+            return is_action_condition_type(action_id, predicate);
+        }
+        false
+    }
+
+    pub fn add_damage(&mut self, bonus: ScriptDiceRollBonus, damage_type: DamageType) {
+        let mut inner = self.inner.write();
+        match bonus {
+            ScriptDiceRollBonus::Flat(int_expression) => {
+                let flat_bonus = int_expression.evaluate_without_variables().unwrap();
+                // TODO: Not sure how to add a flat bonus properly here.
+            }
+            ScriptDiceRollBonus::Dice(dice_expression) => {
+                let (num_dice, die_size, modifier) =
+                    dice_expression.evaluate_without_variables().unwrap();
+                let result = DiceSetRoll {
+                    dice: DiceSet::from_str(format!("{}d{}", num_dice, die_size).as_str()).unwrap(),
+                    modifiers: ModifierSet::from(ModifierSource::Base, modifier),
+                }
+                .roll();
+                inner.add_component(DamageComponentResult {
+                    result,
+                    damage_type,
+                });
+            }
+        }
     }
 }
 
@@ -225,9 +312,50 @@ impl ScriptDamageMitigationResult {
         }
         inner.recalculate_total();
     }
+
+    pub fn has_action(&self) -> bool {
+        self.inner.read().action.is_some()
+    }
+
+    pub fn get_actor(&self) -> ScriptEntity {
+        let inner = self.inner.read();
+        let (actor_entity, _) = inner
+            .action
+            .as_ref()
+            .expect("No action associated with this damage mitigation result");
+        ScriptEntity::from(*actor_entity)
+    }
+
+    pub fn is_action_attack_roll(&self) -> bool {
+        self.is_action_condition_type(|cond| matches!(cond, ActionCondition::AttackRoll { .. }))
+    }
+
+    pub fn is_action_saving_throw(&self) -> bool {
+        self.is_action_condition_type(|cond| matches!(cond, ActionCondition::SavingThrow { .. }))
+    }
+
+    pub fn is_action_unconditional(&self) -> bool {
+        self.is_action_condition_type(|cond| matches!(cond, ActionCondition::None))
+    }
+
+    pub fn is_action_condition_type(&self, predicate: fn(&ActionCondition) -> bool) -> bool {
+        let inner = self.inner.read();
+        if let Some((_, action_id)) = &inner.action {
+            return is_action_condition_type(action_id, predicate);
+        }
+        false
+    }
 }
 
 impl_script_shared_methods!(ScriptDamageMitigationResult, DamageMitigationResult);
+
+fn is_action_condition_type(action_id: &ActionId, predicate: fn(&ActionCondition) -> bool) -> bool {
+    let action = systems::actions::get_action(action_id).unwrap();
+    match &action.kind {
+        ActionKind::Standard { condition, .. } => predicate(condition),
+        _ => false,
+    }
+}
 
 #[derive(Clone)]
 pub struct ScriptD20CheckDCKind {
@@ -740,12 +868,12 @@ pub struct ScriptSavingThrow {
 
 /// Bonus to apply to a D20 roll.
 #[derive(Clone)]
-pub enum ScriptD20Bonus {
+pub enum ScriptDiceRollBonus {
     Flat(IntExpression),
     Dice(DiceExpression),
 }
 
-impl ScriptD20Bonus {
+impl ScriptDiceRollBonus {
     pub fn evaluate(
         &self,
         world: &hecs::World,
@@ -753,10 +881,10 @@ impl ScriptD20Bonus {
         action_context: &ActionContext,
     ) -> i32 {
         match self {
-            ScriptD20Bonus::Flat(expr) => expr
+            ScriptDiceRollBonus::Flat(expr) => expr
                 .evaluate(world, entity, action_context, &PARSER_VARIABLES)
                 .unwrap(),
-            ScriptD20Bonus::Dice(expr) => {
+            ScriptDiceRollBonus::Dice(expr) => {
                 let (num_dice, size, modifier) = expr
                     .evaluate(world, entity, action_context, &PARSER_VARIABLES)
                     .unwrap();
@@ -772,14 +900,14 @@ impl ScriptD20Bonus {
     }
 }
 
-impl FromStr for ScriptD20Bonus {
+impl FromStr for ScriptDiceRollBonus {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(flat) = Parser::new(s).parse_int_expression() {
-            Ok(ScriptD20Bonus::Flat(flat))
+            Ok(ScriptDiceRollBonus::Flat(flat))
         } else if let Ok(expr) = Parser::new(s).parse_dice_expression() {
-            Ok(ScriptD20Bonus::Dice(expr))
+            Ok(ScriptDiceRollBonus::Dice(expr))
         } else {
             Err(format!("Invalid ScriptD20Bonus expression: {}", s))
         }
@@ -797,15 +925,15 @@ pub enum ScriptReactionPlan {
     Sequence(Vec<ScriptReactionPlan>),
 
     /// Add a flat modifier to the most recent D20 roll for this event.
-    ModifyD20Result { bonus: ScriptD20Bonus },
+    ModifyD20Result { bonus: ScriptDiceRollBonus },
 
     /// Add a flat modifier to the DC for this event.
-    ModifyD20DC { modifier: ScriptD20Bonus },
+    ModifyD20DC { modifier: ScriptDiceRollBonus },
 
     /// Reroll the most recent D20 roll for this event with an optional modifier.
     /// Can also be set to force using the new roll.
     RerollD20Result {
-        bonus: Option<ScriptD20Bonus>,
+        bonus: Option<ScriptDiceRollBonus>,
         force_use_new: bool,
     },
 
@@ -890,6 +1018,69 @@ impl ScriptEntityView {
     pub fn replace_in_world(self, world: &mut World) {
         let entity: Entity = self.entity.clone().into();
         self.resources.replace_in_world(world, entity);
+    }
+}
+
+#[derive(Clone)]
+pub struct ScriptOptionalEntityView {
+    pub inner: Option<ScriptEntityView>,
+}
+
+impl ScriptOptionalEntityView {
+    pub fn empty() -> Self {
+        ScriptOptionalEntityView { inner: None }
+    }
+
+    pub fn new_from_world(world: &World, entity: Option<Entity>) -> Self {
+        if let Some(e) = entity {
+            ScriptOptionalEntityView {
+                inner: Some(ScriptEntityView::new_from_world(world, e)),
+            }
+        } else {
+            ScriptOptionalEntityView { inner: None }
+        }
+    }
+
+    pub fn take_from_world(world: &mut World, entity: Option<Entity>) -> Self {
+        if let Some(e) = entity {
+            ScriptOptionalEntityView {
+                inner: Some(ScriptEntityView::take_from_world(world, e)),
+            }
+        } else {
+            ScriptOptionalEntityView { inner: None }
+        }
+    }
+
+    pub fn replace_in_world(self, world: &mut World) {
+        if let Some(view) = self.inner {
+            view.replace_in_world(world);
+        }
+    }
+
+    pub fn is_some(&self) -> bool {
+        self.inner.is_some()
+    }
+
+    pub fn get(&self) -> &ScriptEntityView {
+        self.inner
+            .as_ref()
+            .expect("No entity in ScriptOptionalEntityView")
+    }
+}
+
+impl From<&ScriptEntityView> for ScriptOptionalEntityView {
+    fn from(view: &ScriptEntityView) -> Self {
+        ScriptOptionalEntityView {
+            inner: Some(view.clone()),
+        }
+    }
+}
+
+impl From<Option<&ScriptEntityView>> for ScriptOptionalEntityView {
+    fn from(view: Option<&ScriptEntityView>) -> Self {
+        ScriptOptionalEntityView {
+            inner: view.cloned(),
+        }
     }
 }
 

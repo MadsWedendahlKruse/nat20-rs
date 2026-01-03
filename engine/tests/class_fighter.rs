@@ -47,13 +47,13 @@ mod tests {
 
         let _ = game_state.submit_decision(ActionDecision::without_response_to(
             ActionDecisionKind::Action {
-                action: ActionData {
-                    actor: fighter,
-                    action_id: action_id.clone(),
-                    context: contexts_and_costs[0].0.clone(),
-                    resource_cost: contexts_and_costs[0].1.clone(),
-                    targets: vec![TargetInstance::Entity(fighter)],
-                },
+                action: ActionData::new(
+                    fighter,
+                    action_id.clone(),
+                    contexts_and_costs[0].0.clone(),
+                    contexts_and_costs[0].1.clone(),
+                    vec![TargetInstance::Entity(fighter)],
+                ),
             },
         ));
 
@@ -153,7 +153,7 @@ mod tests {
                 DamageType::Force,
                 DamageSource::Spell(SpellId::new("nat20_rs", "test.spell")),
             )
-            .roll_raw(false),
+            .roll(false),
             None,
         );
 
@@ -168,13 +168,13 @@ mod tests {
 
         let result = systems::actions::perform_action(
             &mut game_state,
-            &ActionData {
-                actor: fighter,
-                action_id: action_id.clone(),
-                context: contexts_and_costs[0].0.clone(),
-                resource_cost: contexts_and_costs[0].1.clone(),
-                targets: vec![TargetInstance::Entity(fighter)],
-            },
+            &ActionData::new(
+                fighter,
+                action_id.clone(),
+                contexts_and_costs[0].0.clone(),
+                contexts_and_costs[0].1.clone(),
+                vec![TargetInstance::Entity(fighter)],
+            ),
         );
         println!("Second Wind Result: {:?}", result);
 
@@ -221,13 +221,13 @@ mod tests {
         let contexts_and_costs = available_actions.get(&action_id).unwrap();
         let _ = game_state.submit_decision(ActionDecision::without_response_to(
             ActionDecisionKind::Action {
-                action: ActionData {
-                    actor: fighter,
-                    action_id: action_id.clone(),
-                    context: contexts_and_costs[0].0.clone(),
-                    resource_cost: contexts_and_costs[0].1.clone(),
-                    targets: vec![],
-                },
+                action: ActionData::new(
+                    fighter,
+                    action_id.clone(),
+                    contexts_and_costs[0].0.clone(),
+                    contexts_and_costs[0].1.clone(),
+                    vec![],
+                ),
             },
         ));
 
@@ -253,13 +253,13 @@ mod tests {
         let contexts_and_costs = available_actions.get(&action_id).unwrap();
         let _ = game_state.submit_decision(ActionDecision::without_response_to(
             ActionDecisionKind::Action {
-                action: ActionData {
-                    actor: fighter,
-                    action_id: action_id.clone(),
-                    context: contexts_and_costs[0].0.clone(),
-                    resource_cost: contexts_and_costs[0].1.clone(),
-                    targets: vec![],
-                },
+                action: ActionData::new(
+                    fighter,
+                    action_id.clone(),
+                    contexts_and_costs[0].0.clone(),
+                    contexts_and_costs[0].1.clone(),
+                    vec![],
+                ),
             },
         ));
 
