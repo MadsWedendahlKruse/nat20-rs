@@ -167,6 +167,9 @@ pub enum TargetingError {
     NoLineOfSight {
         target: TargetInstance,
     },
+    InvalidTarget {
+        target: TargetInstance,
+    },
 }
 
 /// Defines the range parameters for targeting an action.
@@ -373,6 +376,20 @@ impl TargetingContext {
                     return Err(TargetingError::NoLineOfSight {
                         target: target.clone(),
                     });
+                }
+            }
+
+            // Check allowed targets
+            match target {
+                TargetInstance::Entity(entity) => {
+                    if !self.allowed_targets.matches(world, entity) {
+                        return Err(TargetingError::InvalidTarget {
+                            target: target.clone(),
+                        });
+                    }
+                }
+                TargetInstance::Point(_) => {
+                    // Points are always allowed
                 }
             }
         }
