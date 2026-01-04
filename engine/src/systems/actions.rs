@@ -270,6 +270,13 @@ fn get_targeted_entities(game_state: &mut GameState, action_data: &ActionData) -
                     &shape_pose,
                 );
 
+                // Only keep the entities that are valid targets
+                entities_in_shape.retain(|entity| {
+                    targeting_context
+                        .allowed_targets
+                        .matches(&game_state.world, entity)
+                });
+
                 // Check if any of the entities are behind cover and remove them
                 // TODO: Not sure what the best way to do this is, I guess it
                 // depends on the shape?
