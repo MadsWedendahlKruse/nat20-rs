@@ -29,15 +29,21 @@ pub enum MagicSchool {
     Transmutation,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpellFlag {
+    Concentration,
+    Verbal,
+    Somatic,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(from = "SpellDefinition")]
 pub struct Spell {
     id: SpellId,
     base_level: u8,
     school: MagicSchool,
-    // TODO: Replace with a SpellFlags enum/bitflags?
-    // TODO: Add verbal/somatic flags?
-    concentration: bool,
+    flags: Vec<SpellFlag>,
     action: Action,
     /// TODO: Is there a better way to represent this?
     ///
@@ -55,7 +61,7 @@ impl Spell {
         description: String,
         base_level: u8,
         school: MagicSchool,
-        concentration: bool,
+        flags: Vec<SpellFlag>,
         kind: ActionKind,
         resource_cost: ResourceAmountMap,
         targeting: Arc<TargetingFunction>,
@@ -68,7 +74,7 @@ impl Spell {
             id,
             school,
             base_level,
-            concentration,
+            flags,
             action: Action {
                 id: action_id,
                 description,
@@ -102,8 +108,12 @@ impl Spell {
         &self.action
     }
 
-    pub fn requires_concentration(&self) -> bool {
-        self.concentration
+    pub fn flags(&self) -> &Vec<SpellFlag> {
+        &self.flags
+    }
+
+    pub fn has_flag(&self, flag: SpellFlag) -> bool {
+        self.flags.contains(&flag)
     }
 
     pub fn granted_spells(&self) -> &Vec<(SpellId, u8)> {

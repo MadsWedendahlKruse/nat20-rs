@@ -3,6 +3,10 @@
     "description": "You spray toxic mist at a creature within range. Make a ranged spell attack against the target. On a hit, the target takes 1d12 Poison damage.",
     "base_level": 0,
     "school": "necromancy",
+    "flags": [
+        "verbal",
+        "somatic"
+    ],
     "kind": {
         "standard": {
             "condition": {

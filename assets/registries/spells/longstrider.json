@@ -3,6 +3,10 @@
     "description": "You touch a creature. Its speed increases by 10 feet until the spell ends.",
     "base_level": 1,
     "school": "transmutation",
+    "flags": [
+        "verbal",
+        "somatic"
+    ],
     "kind": {
         "standard": {
             "payload": {

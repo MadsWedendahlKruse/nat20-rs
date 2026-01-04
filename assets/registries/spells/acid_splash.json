@@ -3,6 +3,10 @@
     "description": "You create an acidic bubble at a point within range, where it explodes in a 5-foot-radius Sphere. Each creature in that Sphere must succeed on a Dexterity saving throw or take 1d6 Acid damage",
     "base_level": 0,
     "school": "evocation",
+    "flags": [
+        "verbal",
+        "somatic"
+    ],
     "kind": {
         "standard": {
             "condition": {

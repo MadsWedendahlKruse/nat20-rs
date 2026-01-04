@@ -23,7 +23,10 @@ use crate::{
         items::equipment::loadout::Loadout,
         modifier::{Modifiable, ModifierSource},
         resource::{RechargeRule, ResourceAmountMap, ResourceMap},
-        spells::{spell::ConcentrationInstance, spellbook::Spellbook},
+        spells::{
+            spell::{ConcentrationInstance, SpellFlag},
+            spellbook::Spellbook,
+        },
     },
     engine::{
         event::{
@@ -910,7 +913,7 @@ fn get_effect_outcome(
         // Add concentration tracking if needed
         let spell_id = action_data.action_id.clone().into();
         if let Some(spell) = SpellsRegistry::get(&spell_id) {
-            if spell.requires_concentration() {
+            if spell.has_flag(SpellFlag::Concentration) {
                 systems::spells::add_concentration_instance(
                     world,
                     action_data.actor,

@@ -3,7 +3,11 @@
     "description": "You've killed a target affected by your Hex spell. You can use a bonus action to apply Hex to a new target without expending a spell slot.",
     "base_level": 1,
     "school": "necromancy",
-    "concentration": true,
+    "flags": [
+        "verbal",
+        "somatic",
+        "concentration"
+    ],
     "kind": {
         "variants": {
             "variants": [

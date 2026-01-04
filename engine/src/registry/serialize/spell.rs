@@ -4,7 +4,7 @@ use crate::{
     components::{
         id::{ScriptId, SpellId},
         resource::ResourceAmountMap,
-        spells::spell::{MagicSchool, Spell},
+        spells::spell::{MagicSchool, Spell, SpellFlag},
     },
     registry::{
         registry_validation::{ReferenceCollector, RegistryReference, RegistryReferenceCollector},
@@ -20,7 +20,7 @@ pub struct SpellDefinition {
     pub base_level: u8,
     pub school: MagicSchool,
     #[serde(default)]
-    pub concentration: bool,
+    pub flags: Vec<SpellFlag>,
     pub kind: ActionKindDefinition,
     pub resource_cost: ResourceAmountMap,
     pub targeting: TargetingDefinition,
@@ -44,7 +44,7 @@ impl From<SpellDefinition> for Spell {
             value.description,
             value.base_level,
             value.school,
-            value.concentration,
+            value.flags,
             value.kind.into(),
             value.resource_cost,
             value.targeting.function(),

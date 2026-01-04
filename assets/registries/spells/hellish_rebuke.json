@@ -3,6 +3,10 @@
     "description": "The creature that damaged you is momentarily surrounded by green flames. It makes a Dexterity saving throw, taking 2d10 Fire damage on a failed save or half as much damage on a successful one",
     "base_level": 1,
     "school": "evocation",
+    "flags": [
+        "verbal",
+        "somatic"
+    ],
     "kind": {
         "standard": {
             "condition": {

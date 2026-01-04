@@ -1642,8 +1642,11 @@ impl ImguiRenderableWithContext<(&World, Entity)>
                     _ => {}
                 }
 
-                if let Some(spell) = spell && spell.requires_concentration(){
-                    TextSegment::new("Concentration", TextKind::Details).render(ui);
+                if let Some(spell) = spell {
+                    ui.separator();
+                    for flag in spell.flags() {
+                        TextSegment::new(format!("{:?}", flag), TextKind::Details).render(ui);
+                    }
                 }
 
                 ui.separator();
