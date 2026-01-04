@@ -25,6 +25,7 @@ use crate::{
     },
     systems::{
         self,
+        d20::D20CheckDCKind,
         movement::{MovementError, PathResult},
         time::RestKind,
     },
@@ -596,10 +597,6 @@ impl GameState {
                                         &self.world,
                                         &mut session.pending_events_mut().front_mut().unwrap(),
                                     );
-                                    println!(
-                                        "Event after modification: {:#?}",
-                                        session.pending_events().front().unwrap(),
-                                    );
                                 }
 
                                 ReactionResult::NoEffect => { /* Do nothing */ }
@@ -612,14 +609,20 @@ impl GameState {
             }
 
             EventKind::D20CheckPerformed(entity, kind, dc_kind) => {
+                let dc = match dc_kind {
+                    // TODO: Do we ever need to recalculate DCs for saving throws or skills?
+                    D20CheckDCKind::SavingThrow(_) | D20CheckDCKind::Skill(_) => dc_kind.clone(),
+                    D20CheckDCKind::AttackRoll(target, _) => {
+                        // Recalculate AC in case it changed due to reactions
+                        let armor_class = systems::loadout::armor_class(&self.world, *target);
+                        D20CheckDCKind::AttackRoll(*target, armor_class)
+                    }
+                };
+
                 let _ = self.process_event_scoped(
                     self.scope_for_entity(*entity),
-                    Event::new(EventKind::D20CheckResolved(
-                        *entity,
-                        kind.clone(),
-                        dc_kind.clone(),
-                    ))
-                    .as_response_to(event.id),
+                    Event::new(EventKind::D20CheckResolved(*entity, kind.clone(), dc))
+                        .as_response_to(event.id),
                 );
             }
 

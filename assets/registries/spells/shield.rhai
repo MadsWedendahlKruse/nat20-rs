@@ -25,15 +25,6 @@ fn reaction_trigger(context) {
     return false;
 }
 
-fn reaction_body(context) {
-    // TODO: For actions with multiple attack rolls (e.g. Eldritch Blast), this 
-    // only increases the DC of the first one.
-    if context.event.is_d20_check_performed() {
-        ReactionPlan::modify_d20_dc("5")
-    }
-    ReactionPlan::none()
-}
-
 fn post_damage_mitigation_hook(entity_view, damage_mitigation_result) {
     if damage_mitigation_result.source == "nat20_rs::spell.magic_missile" {
         damage_mitigation_result.add_immunity();

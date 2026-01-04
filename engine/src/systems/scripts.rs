@@ -355,7 +355,6 @@ pub fn apply_reaction_plan(
                     let action = reaction_data.reaction_id.clone();
                     move |_world: &World, event: &mut Event| {
                         if let EventKind::D20CheckPerformed(_, _, ref mut dc_kind) = event.kind {
-                            println!("Applying ModifyD20DC with modifier {}", modifier_value);
                             match dc_kind {
                                 D20CheckDCKind::SavingThrow(d20_check_dc) => {
                                     d20_check_dc.dc.add_modifier(

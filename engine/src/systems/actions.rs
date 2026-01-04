@@ -336,11 +336,6 @@ pub fn available_reactions_to_event(
 
         if let Some(trigger) = &reaction.reaction_trigger {
             let Some(script_event) = ScriptEventView::from_event(event) else {
-                // warn!(
-                //     "Event {:?} could not be converted to ScriptEventView for reaction trigger {:?}",
-                //     event.kind.name(),
-                //     reaction_id
-                // );
                 continue;
             };
             let context = ScriptReactionTriggerContext {

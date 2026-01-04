@@ -8,32 +8,21 @@
         "somatic"
     ],
     "kind": {
-        "composite": {
-            "actions": [
-                {
-                    "reaction": {
-                        "script": "nat20_rs::script.spell.shield"
-                    }
-                },
-                {
-                    "standard": {
-                        "payload": {
-                            "effect": {
-                                "effect_id": "nat20_rs::effect.spell.shield",
-                                "lifetime": {
-                                    "at_turn_boundary": {
-                                        "entity": "applier",
-                                        "boundary": "start",
-                                        "duration": {
-                                            "turns": 1
-                                        }
-                                    }
-                                }
+        "standard": {
+            "payload": {
+                "effect": {
+                    "effect_id": "nat20_rs::effect.spell.shield",
+                    "lifetime": {
+                        "at_turn_boundary": {
+                            "entity": "applier",
+                            "boundary": "start",
+                            "duration": {
+                                "turns": 1
                             }
                         }
                     }
                 }
-            ]
+            }
         }
     },
     "resource_cost": {

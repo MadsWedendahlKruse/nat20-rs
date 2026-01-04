@@ -133,6 +133,8 @@ impl RenderableMutWithContext<&mut GameState> for ActionBarWindow {
 
                     ActionBarState::Variant { variants } => {
                         render_actions(ui, game_state, self.entity, &mut new_state, variants);
+                        ui.separator();
+                        right_click_cancel(ui, gui_state, game_state, &mut new_state, self.entity);
                     }
 
                     ActionBarState::Context {
@@ -374,6 +376,9 @@ fn render_context_selection(
             ui.same_line();
         }
 
+        let disabled_token =
+            ui.begin_disabled(!systems::resources::can_afford(&game_state.world, actor, cost).0);
+
         let clicked = match context {
             ActionContext::Weapon { slot } => {
                 render_button_with_padding(ui, format!("{}", slot).as_str(), [10.0, 10.0])
@@ -402,6 +407,8 @@ fn render_context_selection(
             });
         }
 
+        disabled_token.end();
+
         if ui.is_item_hovered() {
             ui.tooltip(|| {
                 (action, context, cost).render_with_context(ui, (&game_state.world, actor));
@@ -411,6 +418,16 @@ fn render_context_selection(
 
     ui.separator();
 
+    right_click_cancel(ui, gui_state, game_state, new_state, actor);
+}
+
+fn right_click_cancel(
+    ui: &imgui::Ui,
+    gui_state: &mut GuiState,
+    game_state: &mut GameState,
+    new_state: &mut Option<ActionBarState>,
+    actor: Entity,
+) {
     let right_click_cancel =
         if gui_state.cursor_ray_result.is_some() && ui.is_mouse_clicked(MouseButton::Right) {
             gui_state.cursor_ray_result.take();
