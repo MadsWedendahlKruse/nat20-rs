@@ -1,6 +1,9 @@
-pub static RENDER_IMGUI_DEMO: &str = "render.ui.imgui.show_demo_window";
-pub static RENDER_NAVIGATION_DEBUG: &str = "render.ui.navigation.debug_window";
-pub static RENDER_NAVIGATION_NAVMESH: &str = "render.ui.navigation.render_navmesh";
 pub static RENDER_CAMERA_DEBUG: &str = "render.ui.camera.debug_window";
 pub static RENDER_GRID: &str = "render.ui.world.render_grid";
+pub static RENDER_IMGUI_ABOUT: &str = "render.ui.imgui.show_about_window";
+pub static RENDER_IMGUI_DEMO: &str = "render.ui.imgui.show_demo_window";
+pub static RENDER_IMGUI_METRICS: &str = "render.ui.imgui.show_metrics_window";
+pub static RENDER_IMGUI_USER_GUIDE: &str = "render.ui.imgui.show_user_guide";
 pub static RENDER_LINE_OF_SIGHT_DEBUG: &str = "render.ui.line_of_sight.debug_window";
+pub static RENDER_NAVIGATION_DEBUG: &str = "render.ui.navigation.debug_window";
+pub static RENDER_NAVIGATION_NAVMESH: &str = "render.ui.navigation.render_navmesh";

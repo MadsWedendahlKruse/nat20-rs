@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    hash::Hash,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use glow::HasContext;
 use hecs::Entity;
@@ -11,16 +8,13 @@ use parry3d::na::Vector3;
 use winit::window::Window;
 
 use crate::{
-    render::{
-        ui::entities::CreatureRenderMode,
-        world::{
-            camera::OrbitCamera,
-            frame_uniforms::FrameUniforms,
-            grid::GridRenderer,
-            line::LineRenderer,
-            mesh::{Mesh, MeshRenderMode},
-            program::BasicProgram,
-        },
+    render::world::{
+        camera::OrbitCamera,
+        frame_uniforms::FrameUniforms,
+        grid::GridRenderer,
+        line::LineRenderer,
+        mesh::{Mesh, MeshRenderMode},
+        program::BasicProgram,
     },
     state::settings::GuiSettings,
     windows::anchor::WindowManager,

@@ -251,6 +251,18 @@ impl Default for GuiSettings {
     fn default() -> Self {
         Self::new(BTreeMap::from([
             (
+                state::parameters::RENDER_IMGUI_ABOUT.to_string(),
+                Setting::Bool(false),
+            ),
+            (
+                state::parameters::RENDER_IMGUI_METRICS.to_string(),
+                Setting::Bool(false),
+            ),
+            (
+                state::parameters::RENDER_IMGUI_USER_GUIDE.to_string(),
+                Setting::Bool(false),
+            ),
+            (
                 state::parameters::RENDER_IMGUI_DEMO.to_string(),
                 Setting::Bool(false),
             ),

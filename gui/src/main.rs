@@ -83,12 +83,7 @@ fn main() {
 
                 main_menu.render(ui, &mut gui_state);
 
-                let show_demo = gui_state
-                    .settings
-                    .get_mut::<bool>(state::parameters::RENDER_IMGUI_DEMO);
-                if *show_demo {
-                    ui.show_demo_window(show_demo);
-                }
+                render_imgui_windows(&mut gui_state, ui);
 
                 winit_platform.prepare_render(ui, &window);
                 let draw_data = imgui_context.render();
@@ -166,6 +161,36 @@ fn main() {
             }
         })
         .expect("EventLoop error");
+}
+
+fn render_imgui_windows(gui_state: &mut GuiState, ui: &mut imgui::Ui) {
+    let show_demo = gui_state
+        .settings
+        .get_mut::<bool>(state::parameters::RENDER_IMGUI_DEMO);
+    if *show_demo {
+        ui.show_demo_window(show_demo);
+    }
+
+    let show_about = gui_state
+        .settings
+        .get_mut::<bool>(state::parameters::RENDER_IMGUI_ABOUT);
+    if *show_about {
+        ui.show_about_window(show_about);
+    }
+
+    let show_metrics = gui_state
+        .settings
+        .get_mut::<bool>(state::parameters::RENDER_IMGUI_METRICS);
+    if *show_metrics {
+        ui.show_metrics_window(show_metrics);
+    }
+
+    let show_user_guide = gui_state
+        .settings
+        .get_mut::<bool>(state::parameters::RENDER_IMGUI_USER_GUIDE);
+    if *show_user_guide {
+        ui.show_user_guide();
+    }
 }
 
 const DEFAULT_LOG_LEVEL: &str = "info";
