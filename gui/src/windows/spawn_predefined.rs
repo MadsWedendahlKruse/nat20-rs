@@ -206,7 +206,8 @@ fn set_unique_name(world: &mut World, entity: Entity) {
         counter += 1;
     }
 
-    if counter < 1 {
+    // Counter is going to be at least 1 here because the original name was found
+    if counter < 2 {
         // Name is already unique, no need to update
         return;
     }
