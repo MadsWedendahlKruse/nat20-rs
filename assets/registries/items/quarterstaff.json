@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "nat20_rs::item.quarterstaff",
+    "id": "nat20_core::item.quarterstaff",
     "name": "Quarterstaff",
     "description": "A sturdy quarterstaff, useful for both combat and support.",
     "weight": 1.8143696,

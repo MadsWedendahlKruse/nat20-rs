@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "nat20_rs::item.shortbow",
+    "id": "nat20_core::item.shortbow",
     "name": "Shortbow",
     "description": "A lightweight bMass::new::<pound>(ow,) ideal for quick shots.",
     "weight": 0.9071848,

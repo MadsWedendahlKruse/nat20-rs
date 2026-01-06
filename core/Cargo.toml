@@ -1,0 +1,32 @@
+[package]
+name = "nat20_core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+enum-iterator = "2.1.0"
+hecs = { version = "0.10.5", features = ["std", "macros", "serde"] }
+rand = "0.9.1"
+rstest = "0.25.0"
+strum = { version = "0.27.1", features = ["derive"] }
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
+paste = "1"
+parry3d = { version = "0.24", features = ["serde-serialize"] }
+obj-rs = "0.7.4"
+rerecast = { version = "0.2.0", features = ["serialize"] }
+glam = "0.30.8"
+polyanya = { version = "0.15.1", features = ["serde"] }
+uom = { version = "0.37.0", features = ["f32", "serde"] }
+num-traits = "0.2.19"
+serde = "1.0.228"
+serde_with = "3.16.0"
+serde_json = "1.0.145"
+serde_plain = "1.0.2"
+rhai = { version = "1.23.6", features = ["sync"] }
+tracing = "0.1.43"
+tracing-subscriber = { version = "0.3.22", features = ["fmt", "time", "env-filter"] }
+strsim = "0.11.1"
+
+[lib]
+name = "nat20_core"
+path = "src/lib.rs"

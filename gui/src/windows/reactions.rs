@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use hecs::Entity;
-use nat20_rs::{
+use nat20_core::{
     components::id::Name,
     engine::{
         event::{ActionDecision, ActionDecisionKind, ActionPromptId, Event, ReactionData},

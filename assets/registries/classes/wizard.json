@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::class.wizard",
+    "id": "nat20_core::class.wizard",
     "hit_die": "d6",
     "hp_per_level": 4,
     "default_abilities": {
@@ -20,7 +20,7 @@
     ],
     "subclass_level": 3,
     "subclasses": [
-        "nat20_rs::subclass.wizard.evoker"
+        "nat20_core::subclass.wizard.evoker"
     ],
     "feat_levels": [
         8,
@@ -47,7 +47,7 @@
     "spellcasting": {
         "progression": "full",
         "spellcasting_ability": "intelligence",
-        "spellcasting_resource": "nat20_rs::resource.spell_slot",
+        "spellcasting_resource": "nat20_core::resource.spell_slot",
         "access_model": "learned",
         "readiness_model": "prepared",
         "cantrips_per_level": {
@@ -96,19 +96,19 @@
         },
         "spell_replacement_model": "long_rest",
         "spell_list": [
-            "nat20_rs::spell.acid_splash",
-            "nat20_rs::spell.counterspell",
-            "nat20_rs::spell.expeditious_retreat",
-            "nat20_rs::spell.false_life",
-            "nat20_rs::spell.fire_bolt",
-            "nat20_rs::spell.fireball",
-            "nat20_rs::spell.longstrider",
-            "nat20_rs::spell.magic_missile",
-            "nat20_rs::spell.poison_spray",
-            "nat20_rs::spell.ray_of_frost",
-            "nat20_rs::spell.ray_of_sickness",
-            "nat20_rs::spell.scorching_ray",
-            "nat20_rs::spell.shield"
+            "nat20_core::spell.acid_splash",
+            "nat20_core::spell.counterspell",
+            "nat20_core::spell.expeditious_retreat",
+            "nat20_core::spell.false_life",
+            "nat20_core::spell.fire_bolt",
+            "nat20_core::spell.fireball",
+            "nat20_core::spell.longstrider",
+            "nat20_core::spell.magic_missile",
+            "nat20_core::spell.poison_spray",
+            "nat20_core::spell.ray_of_frost",
+            "nat20_core::spell.ray_of_sickness",
+            "nat20_core::spell.scorching_ray",
+            "nat20_core::spell.shield"
         ]
     },
     "effects_by_level": {},

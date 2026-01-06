@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::spell.burning_hands",
+    "id": "nat20_core::spell.burning_hands",
     "description": "A thin sheet of flames shoots forth from you. Each creature in a 15-foot Cone makes a Dexterity saving throw, taking 3d6 Fire damage on a failed save or half as much damage on a successful one. Flammable objects in the Cone that aren’t being worn or carried start burning.",
     "base_level": 1,
     "school": "evocation",
@@ -19,7 +19,7 @@
         }
     },
     "resource_cost": {
-        "nat20_rs::resource.action": 1
+        "nat20_core::resource.action": 1
     },
     "targeting": {
         "_comment": "TODO: Not sure about the range. Also using sphere instead of cone for now.",

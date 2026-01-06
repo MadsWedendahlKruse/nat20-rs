@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::spell.ray_of_sickness",
+    "id": "nat20_core::spell.ray_of_sickness",
     "description": "You shoot a greenish ray at a creature within range. Make a ranged spell attack against the target. On a hit, the target takes 2d8 Poison damage and has the Poisoned condition until the end of your next turn.",
     "base_level": 1,
     "school": "necromancy",
@@ -15,7 +15,7 @@
             "payload": {
                 "damage": "(2 + (spell_level - 1))d8;poison",
                 "effect": {
-                    "effect_id": "nat20_rs::effect.condition.poisoned",
+                    "effect_id": "nat20_core::effect.condition.poisoned",
                     "lifetime": {
                         "at_turn_boundary": {
                             "entity": "applier",
@@ -30,7 +30,7 @@
         }
     },
     "resource_cost": {
-        "nat20_rs::resource.action": 1
+        "nat20_core::resource.action": 1
     },
     "targeting": {
         "kind": "single",

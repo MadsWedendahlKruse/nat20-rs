@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "nat20_rs::item.shortsword",
+    "id": "nat20_core::item.shortsword",
     "name": "Shortsword",
     "description": "A versatile shortsword, effective in close combat.",
     "weight": 0.9071848,

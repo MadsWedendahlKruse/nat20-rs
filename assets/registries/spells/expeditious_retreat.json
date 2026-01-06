@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::spell.expeditious_retreat",
+    "id": "nat20_core::spell.expeditious_retreat",
     "description": "You take the Dash action, and until the spell ends, you can take that action again as a Bonus Action.",
     "base_level": 1,
     "school": "transmutation",
@@ -15,7 +15,7 @@
                     "standard": {
                         "payload": {
                             "effect": {
-                                "effect_id": "nat20_rs::effect.dash",
+                                "effect_id": "nat20_core::effect.dash",
                                 "lifetime": {
                                     "at_turn_boundary": {
                                         "entity": "applier",
@@ -33,7 +33,7 @@
                     "standard": {
                         "payload": {
                             "effect": {
-                                "effect_id": "nat20_rs::effect.spell.expeditious_retreat",
+                                "effect_id": "nat20_core::effect.spell.expeditious_retreat",
                                 "lifetime": {
                                     "at_turn_boundary": {
                                         "entity": "applier",
@@ -52,6 +52,6 @@
     },
     "targeting": "self",
     "resource_cost": {
-        "nat20_rs::resource.action": 1
+        "nat20_core::resource.action": 1
     }
 }

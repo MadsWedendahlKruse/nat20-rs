@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::spell.hellish_rebuke",
+    "id": "nat20_core::spell.hellish_rebuke",
     "description": "The creature that damaged you is momentarily surrounded by green flames. It makes a Dexterity saving throw, taking 2d10 Fire damage on a failed save or half as much damage on a successful one",
     "base_level": 1,
     "school": "evocation",
@@ -19,7 +19,7 @@
         }
     },
     "resource_cost": {
-        "nat20_rs::resource.reaction": 1
+        "nat20_core::resource.reaction": 1
     },
     "targeting": {
         "kind": "single",
@@ -27,5 +27,5 @@
         "require_line_of_sight": true,
         "allowed_targets": "not_dead"
     },
-    "reaction_trigger": "nat20_rs::script.spell.hellish_rebuke"
+    "reaction_trigger": "nat20_core::script.spell.hellish_rebuke"
 }

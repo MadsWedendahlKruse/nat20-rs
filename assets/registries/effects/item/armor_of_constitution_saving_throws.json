@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::effect.item.armor_of_constitution_saving_throws",
+    "id": "nat20_core::effect.item.armor_of_constitution_saving_throws",
     "kind": "buff",
     "description": "While wearing this armor, you have advantage on Constitution saving throws.",
     "duration": "conditional",

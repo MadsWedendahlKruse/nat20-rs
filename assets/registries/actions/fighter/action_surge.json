@@ -1,11 +1,11 @@
 {
-    "id": "nat20_rs::action.fighter.action_surge",
+    "id": "nat20_core::action.fighter.action_surge",
     "description": "You can push yourself beyond your normal limits for a moment. On your turn, you can take one additional action.",
     "kind": {
         "standard": {
             "payload": {
                 "effect": {
-                    "effect_id": "nat20_rs::effect.fighter.action_surge",
+                    "effect_id": "nat20_core::effect.fighter.action_surge",
                     "lifetime": {
                         "at_turn_boundary": {
                             "entity": "applier",
@@ -21,7 +21,7 @@
     },
     "targeting": "self",
     "resource_cost": {
-        "nat20_rs::resource.fighter.action_surge": 1
+        "nat20_core::resource.fighter.action_surge": 1
     },
     "cooldown": "short_rest"
 }

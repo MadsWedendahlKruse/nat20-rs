@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use hecs::Entity;
-use nat20_rs::{
+use nat20_core::{
     components::id::Name,
     engine::{
         encounter::{Encounter, EncounterId},

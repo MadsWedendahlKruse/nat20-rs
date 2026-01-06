@@ -1,5 +1,5 @@
-export const EXTRA_ATTACK_RESOURCE_ID = "nat20_rs::resource.extra_attack";
-export const ACTION_RESOURCE_ID = "nat20_rs::resource.action";
+export const EXTRA_ATTACK_RESOURCE_ID = "nat20_core::resource.extra_attack";
+export const ACTION_RESOURCE_ID = "nat20_core::resource.action";
 
 private fn should_apply_extra_attack(action_view) {
     // 1. Only apply to weapon attacks

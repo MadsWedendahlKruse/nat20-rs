@@ -1,13 +1,13 @@
 {
-    "id": "nat20_rs::subclass.fighter.champion",
+    "id": "nat20_core::subclass.fighter.champion",
     "base": {
         "effects_by_level": {
             "15": [
-                "nat20_rs::effect.fighter.champion.superior_critical"
+                "nat20_core::effect.fighter.champion.superior_critical"
             ],
             "3": [
-                "nat20_rs::effect.fighter.champion.improved_critical",
-                "nat20_rs::effect.fighter.champion.remarkable_athlete"
+                "nat20_core::effect.fighter.champion.improved_critical",
+                "nat20_core::effect.fighter.champion.remarkable_athlete"
             ]
         },
         "prompts_by_level": {
@@ -18,13 +18,13 @@
                         "label": "Fighting Style",
                         "options": [
                             {
-                                "feat": "nat20_rs::feat.fighting_style.archery"
+                                "feat": "nat20_core::feat.fighting_style.archery"
                             },
                             {
-                                "feat": "nat20_rs::feat.fighting_style.defense"
+                                "feat": "nat20_core::feat.fighting_style.defense"
                             },
                             {
-                                "feat": "nat20_rs::feat.fighting_style.great_weapon_fighting"
+                                "feat": "nat20_core::feat.fighting_style.great_weapon_fighting"
                             }
                         ],
                         "picks": 1,

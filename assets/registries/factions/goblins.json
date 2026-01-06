@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::faction.goblins",
+    "id": "nat20_core::faction.goblins",
     "name": "Goblins",
     "attitudes": {},
     "default_cross_attitude": "hostile",

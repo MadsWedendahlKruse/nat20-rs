@@ -4,7 +4,7 @@ use std::{
 };
 
 use hecs::{Entity, World};
-use nat20_rs::{
+use nat20_core::{
     components::{
         ability::{Ability, AbilityScoreDistribution, AbilityScoreMap},
         id::{Name, SpellId},

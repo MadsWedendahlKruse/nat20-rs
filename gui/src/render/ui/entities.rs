@@ -1,5 +1,5 @@
 use hecs::{Entity, World};
-use nat20_rs::{
+use nat20_core::{
     components::{
         ability::AbilityScoreMap,
         damage::DamageResistances,

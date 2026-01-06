@@ -1,12 +1,12 @@
 {
-    "id": "nat20_rs::background.soldier",
+    "id": "nat20_core::background.soldier",
     "ability_scores": [
         "strength",
         "constitution",
         "charisma"
     ],
     "_comment": "Placeholder feat",
-    "feat": "nat20_rs::feat.fighting_style.archery",
+    "feat": "nat20_core::feat.fighting_style.archery",
     "skill_proficiencies": [
         "athletics",
         "intimidation"
@@ -20,15 +20,15 @@
                     "items": [
                         [
                             1,
-                            "nat20_rs::item.spear"
+                            "nat20_core::item.spear"
                         ],
                         [
                             1,
-                            "nat20_rs::item.shortbow"
+                            "nat20_core::item.shortbow"
                         ],
                         [
                             1,
-                            "nat20_rs::item.travelers_clothes"
+                            "nat20_core::item.travelers_clothes"
                         ]
                     ],
                     "money": "14 GP"

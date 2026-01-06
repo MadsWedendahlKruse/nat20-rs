@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, sync::LazyLock};
 
 use imgui::TreeNodeFlags;
-use nat20_rs::{
+use nat20_core::{
     engine::{game_state::GameState, geometry::WorldPath},
     systems,
 };

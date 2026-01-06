@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::class.warlock",
+    "id": "nat20_core::class.warlock",
     "hit_die": "d8",
     "hp_per_level": 5,
     "default_abilities": {
@@ -20,7 +20,7 @@
     ],
     "subclass_level": 3,
     "subclasses": [
-        "nat20_rs::subclass.warlock.fiend_patron"
+        "nat20_core::subclass.warlock.fiend_patron"
     ],
     "feat_levels": [
         19,
@@ -48,7 +48,7 @@
     "spellcasting": {
         "progression": "none",
         "spellcasting_ability": "charisma",
-        "spellcasting_resource": "nat20_rs::resource.warlock.pact_magic_spell_slot",
+        "spellcasting_resource": "nat20_core::resource.warlock.pact_magic_spell_slot",
         "access_model": "learned",
         "readiness_model": "known",
         "cantrips_per_level": {
@@ -141,18 +141,18 @@
         },
         "spell_replacement_model": "level_up",
         "spell_list": [
-            "nat20_rs::spell.eldritch_blast",
-            "nat20_rs::spell.expeditious_retreat",
-            "nat20_rs::spell.hellish_rebuke",
-            "nat20_rs::spell.hex",
-            "nat20_rs::spell.poison_spray"
+            "nat20_core::spell.eldritch_blast",
+            "nat20_core::spell.expeditious_retreat",
+            "nat20_core::spell.hellish_rebuke",
+            "nat20_core::spell.hex",
+            "nat20_core::spell.poison_spray"
         ]
     },
     "effects_by_level": {},
     "resources_by_level": {
         "1": [
             {
-                "id": "nat20_rs::resource.warlock.pact_magic_spell_slot",
+                "id": "nat20_core::resource.warlock.pact_magic_spell_slot",
                 "budget": {
                     "1": "1"
                 },
@@ -161,7 +161,7 @@
         ],
         "2": [
             {
-                "id": "nat20_rs::resource.warlock.pact_magic_spell_slot",
+                "id": "nat20_core::resource.warlock.pact_magic_spell_slot",
                 "budget": {
                     "1": "2"
                 },
@@ -170,7 +170,7 @@
         ],
         "3": [
             {
-                "id": "nat20_rs::resource.warlock.pact_magic_spell_slot",
+                "id": "nat20_core::resource.warlock.pact_magic_spell_slot",
                 "budget": {
                     "2": "2"
                 },
@@ -179,7 +179,7 @@
         ],
         "5": [
             {
-                "id": "nat20_rs::resource.warlock.pact_magic_spell_slot",
+                "id": "nat20_core::resource.warlock.pact_magic_spell_slot",
                 "budget": {
                     "3": "2"
                 },
@@ -188,7 +188,7 @@
         ],
         "7": [
             {
-                "id": "nat20_rs::resource.warlock.pact_magic_spell_slot",
+                "id": "nat20_core::resource.warlock.pact_magic_spell_slot",
                 "budget": {
                     "4": "2"
                 },
@@ -197,7 +197,7 @@
         ],
         "9": [
             {
-                "id": "nat20_rs::resource.warlock.pact_magic_spell_slot",
+                "id": "nat20_core::resource.warlock.pact_magic_spell_slot",
                 "budget": {
                     "5": "2"
                 },

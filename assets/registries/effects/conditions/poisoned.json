@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::effect.condition.poisoned",
+    "id": "nat20_core::effect.condition.poisoned",
     "kind": "debuff",
     "description": "You have Disadvantage on attack rolls and ability checks.",
     "modifiers": [

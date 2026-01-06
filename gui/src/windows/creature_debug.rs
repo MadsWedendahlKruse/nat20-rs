@@ -1,5 +1,5 @@
 use hecs::Entity;
-use nat20_rs::{
+use nat20_core::{
     components::{
         ai::PlayerControlledTag,
         d20::D20CheckDC,

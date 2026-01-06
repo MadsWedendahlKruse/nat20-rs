@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::class.fighter",
+    "id": "nat20_core::class.fighter",
     "hit_die": "d10",
     "hp_per_level": 6,
     "default_abilities": {
@@ -20,7 +20,7 @@
     ],
     "subclass_level": 3,
     "subclasses": [
-        "nat20_rs::subclass.fighter.champion"
+        "nat20_core::subclass.fighter.champion"
     ],
     "feat_levels": [
         4,
@@ -52,59 +52,59 @@
     ],
     "effects_by_level": {
         "5": [
-            "nat20_rs::effect.extra_attack"
+            "nat20_core::effect.extra_attack"
         ],
         "11": [
-            "nat20_rs::effect.fighter.two_extra_attacks"
+            "nat20_core::effect.fighter.two_extra_attacks"
         ],
         "20": [
-            "nat20_rs::effect.fighter.three_extra_attacks"
+            "nat20_core::effect.fighter.three_extra_attacks"
         ]
     },
     "resources_by_level": {
         "1": [
             {
-                "id": "nat20_rs::resource.fighter.second_wind",
+                "id": "nat20_core::resource.fighter.second_wind",
                 "budget": "2"
             }
         ],
         "2": [
             {
-                "id": "nat20_rs::resource.fighter.action_surge",
+                "id": "nat20_core::resource.fighter.action_surge",
                 "budget": "1"
             }
         ],
         "4": [
             {
-                "id": "nat20_rs::resource.fighter.second_wind",
+                "id": "nat20_core::resource.fighter.second_wind",
                 "budget": "3"
             }
         ],
         "9": [
             {
-                "id": "nat20_rs::resource.fighter.indomitable",
+                "id": "nat20_core::resource.fighter.indomitable",
                 "budget": "1"
             }
         ],
         "10": [
             {
-                "id": "nat20_rs::resource.fighter.second_wind",
+                "id": "nat20_core::resource.fighter.second_wind",
                 "budget": "4"
             }
         ],
         "13": [
             {
-                "id": "nat20_rs::resource.fighter.indomitable",
+                "id": "nat20_core::resource.fighter.indomitable",
                 "budget": "2"
             }
         ],
         "17": [
             {
-                "id": "nat20_rs::resource.fighter.action_surge",
+                "id": "nat20_core::resource.fighter.action_surge",
                 "budget": "2"
             },
             {
-                "id": "nat20_rs::resource.fighter.indomitable",
+                "id": "nat20_core::resource.fighter.indomitable",
                 "budget": "3"
             }
         ]
@@ -117,13 +117,13 @@
                     "label": "Fighting Style",
                     "options": [
                         {
-                            "feat": "nat20_rs::feat.fighting_style.archery"
+                            "feat": "nat20_core::feat.fighting_style.archery"
                         },
                         {
-                            "feat": "nat20_rs::feat.fighting_style.defense"
+                            "feat": "nat20_core::feat.fighting_style.defense"
                         },
                         {
-                            "feat": "nat20_rs::feat.fighting_style.great_weapon_fighting"
+                            "feat": "nat20_core::feat.fighting_style.great_weapon_fighting"
                         }
                     ],
                     "picks": 1,
@@ -140,19 +140,19 @@
                                 "items": [
                                     [
                                         1,
-                                        "nat20_rs::item.chainmail"
+                                        "nat20_core::item.chainmail"
                                     ],
                                     [
                                         1,
-                                        "nat20_rs::item.greatsword"
+                                        "nat20_core::item.greatsword"
                                     ],
                                     [
                                         1,
-                                        "nat20_rs::item.flail"
+                                        "nat20_core::item.flail"
                                     ],
                                     [
                                         8,
-                                        "nat20_rs::item.javelin"
+                                        "nat20_core::item.javelin"
                                     ]
                                 ],
                                 "money": "4 GP"
@@ -163,19 +163,19 @@
                                 "items": [
                                     [
                                         1,
-                                        "nat20_rs::item.studded_leather_armor"
+                                        "nat20_core::item.studded_leather_armor"
                                     ],
                                     [
                                         1,
-                                        "nat20_rs::item.scimitar"
+                                        "nat20_core::item.scimitar"
                                     ],
                                     [
                                         1,
-                                        "nat20_rs::item.shortsword"
+                                        "nat20_core::item.shortsword"
                                     ],
                                     [
                                         1,
-                                        "nat20_rs::item.longbow"
+                                        "nat20_core::item.longbow"
                                     ]
                                 ],
                                 "money": "11 GP"
@@ -196,14 +196,14 @@
     },
     "actions_by_level": {
         "1": [
-            "nat20_rs::action.fighter.second_wind"
+            "nat20_core::action.fighter.second_wind"
         ],
         "2": [
-            "nat20_rs::action.fighter.action_surge",
-            "nat20_rs::action.fighter.tactical_mind"
+            "nat20_core::action.fighter.action_surge",
+            "nat20_core::action.fighter.tactical_mind"
         ],
         "9": [
-            "nat20_rs::action.fighter.indomitable"
+            "nat20_core::action.fighter.indomitable"
         ]
     }
 }

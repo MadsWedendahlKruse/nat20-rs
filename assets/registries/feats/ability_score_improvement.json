@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::feat.ability_score_improvement",
+    "id": "nat20_core::feat.ability_score_improvement",
     "description": "Increase one ability score of your choice by 2, or increase two ability scores of your choice by 1. This feat can’t increase an ability score above 20. You can take this feat more than once.",
     "prerequisite": {
         "minimum_level": 4
@@ -7,7 +7,7 @@
     "prompts": [
         {
             "ability_score_improvement": {
-                "feat": "nat20_rs::feat.ability_score_improvement",
+                "feat": "nat20_core::feat.ability_score_improvement",
                 "budget": 2,
                 "abilities": [
                     "strength",

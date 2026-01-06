@@ -1,6 +1,6 @@
 use std::{borrow::Cow, fmt::Display};
 
-use nat20_rs::components::{damage::DamageType, items::item::ItemRarity};
+use nat20_core::components::{damage::DamageType, items::item::ItemRarity};
 
 use crate::render::ui::utils::ImguiRenderable;
 

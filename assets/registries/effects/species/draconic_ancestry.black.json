@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::effect.dragonborn.draconic_ancestry.black",
+    "id": "nat20_core::effect.dragonborn.draconic_ancestry.black",
     "kind": "buff",
     "description": "Your lineage stems from a dragon progenitor. You have resistance to acid damage.",
     "modifiers": [

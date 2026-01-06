@@ -1,4 +1,4 @@
-export const HEX_REAPPLY_RESOURCE_ID = "nat20_rs::resource.warlock.hex_reapply";
+export const HEX_REAPPLY_RESOURCE_ID = "nat20_core::resource.warlock.hex_reapply";
 
 fn pre_damage_mitigation_hook(entity_view, effect_view, damage_roll_result) {
     if damage_roll_result.is_action_attack_roll()

@@ -29,7 +29,7 @@ fn reaction_body(context) {
     // If the target succeeds, counterspell does nothing.
     let on_success = ReactionPlan::none();
     // If the target fails, the spell is canceled and the spell slot is refunded.
-    let on_failure = ReactionPlan::cancel_trigger_event(["nat20_rs::resource.spell_slot"]);
+    let on_failure = ReactionPlan::cancel_trigger_event(["nat20_core::resource.spell_slot"]);
 
     // Combine into a saving throw reaction plan where the actor which triggered
     // the reaction is the one making the saving throw.

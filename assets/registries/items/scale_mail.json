@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "nat20_rs::item.scale_mail",
+    "id": "nat20_core::item.scale_mail",
     "name": "Scale Mail",
     "description": "A suit of scale mail armor, providing good protection with moderate weight.",
     "weight": 20.411657,
@@ -13,6 +13,6 @@
     "limited": 2
   },
   "effects": [
-    "nat20_rs::effect.item.armor_stealth_disadvantage"
+    "nat20_core::effect.item.armor_stealth_disadvantage"
   ]
 }

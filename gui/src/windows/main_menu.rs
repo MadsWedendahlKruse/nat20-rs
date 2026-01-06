@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufReader};
 
 use imgui::{ChildFlags, MouseButton};
-use nat20_rs::{
+use nat20_core::{
     components::{
         health::{hit_points::HitPoints, life_state::LifeState},
         id::Name,

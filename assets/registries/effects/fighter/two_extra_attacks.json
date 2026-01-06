@@ -1,16 +1,16 @@
 {
-    "id": "nat20_rs::effect.fighter.two_extra_attacks",
+    "id": "nat20_core::effect.fighter.two_extra_attacks",
     "kind": "buff",
     "description": "You can attack three times instead of once whenever you take the Attack action on your turn.",
     "on_action": [
         {
-            "script": "nat20_rs::script.effect.fighter.two_extra_attacks"
+            "script": "nat20_core::script.effect.fighter.two_extra_attacks"
         }
     ],
     "on_resource_cost": [
         {
-            "script": "nat20_rs::script.effect.fighter.two_extra_attacks"
+            "script": "nat20_core::script.effect.fighter.two_extra_attacks"
         }
     ],
-    "replaces": "nat20_rs::effect.extra_attack"
+    "replaces": "nat20_core::effect.extra_attack"
 }

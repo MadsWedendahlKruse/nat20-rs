@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "nat20_rs::item.travelers_clothes",
+    "id": "nat20_core::item.travelers_clothes",
     "name": "Traveler's Clothes",
     "description": "Resilient garments designed for travel in various environments.",
     "weight": 1.8143696,

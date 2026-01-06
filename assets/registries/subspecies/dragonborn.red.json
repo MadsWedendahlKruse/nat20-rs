@@ -1,8 +1,8 @@
 {
-    "id": "nat20_rs::subspecies.dragonborn.red",
+    "id": "nat20_core::subspecies.dragonborn.red",
     "effects_by_level": {
         "1": [
-            "nat20_rs::effect.dragonborn.draconic_ancestry.red"
+            "nat20_core::effect.dragonborn.draconic_ancestry.red"
         ]
     }
 }

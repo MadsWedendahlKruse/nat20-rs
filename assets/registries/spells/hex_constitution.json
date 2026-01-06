@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::spell.hex.constitution",
+    "id": "nat20_core::spell.hex.constitution",
     "description": "You place a curse on a creature that you can see within range. Until the spell ends, you deal an extra 1d6 Necrotic damage to the target whenever you hit it with an attack roll. Also, the target has Disadvantage on Constitution ability checks. If the target drops to 0 Hit Points before this spell ends, you can take a Bonus Action on a later turn to curse a new creature.",
     "base_level": 1,
     "school": "necromancy",
@@ -12,7 +12,7 @@
         "standard": {
             "payload": {
                 "effect": {
-                    "effect_id": "nat20_rs::effect.spell.hex.constitution",
+                    "effect_id": "nat20_core::effect.spell.hex.constitution",
                     "lifetime": {
                         "at_turn_boundary": {
                             "entity": "applier",
@@ -33,6 +33,6 @@
         "allowed_targets": "not_dead"
     },
     "resource_cost": {
-        "nat20_rs::resource.bonus_action": 1
+        "nat20_core::resource.bonus_action": 1
     }
 }

@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::effect.fighter.champion.remarkable_athlete",
+    "id": "nat20_core::effect.fighter.champion.remarkable_athlete",
     "kind": "buff",
     "description": "Thanks to your athleticism, you have Advantage on Initiative rolls and Strength (Athletics) checks. In addition, immediately after you score a Critical Hit, you can move up to half your Speed without provoking Opportunity Attacks",
     "modifiers": [

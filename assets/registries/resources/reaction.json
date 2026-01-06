@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::resource.reaction",
+    "id": "nat20_core::resource.reaction",
     "kind": "flat",
     "recharge": "turn"
 }

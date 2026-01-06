@@ -1,11 +1,11 @@
 {
-    "id": "nat20_rs::action.dash",
+    "id": "nat20_core::action.dash",
     "description": "You double your movement speed until the end of the turn.",
     "kind": {
         "standard": {
             "payload": {
                 "effect": {
-                    "effect_id": "nat20_rs::effect.dash",
+                    "effect_id": "nat20_core::effect.dash",
                     "lifetime": {
                         "at_turn_boundary": {
                             "entity": "applier",
@@ -21,6 +21,6 @@
     },
     "targeting": "self",
     "resource_cost": {
-        "nat20_rs::resource.action": 1
+        "nat20_core::resource.action": 1
     }
 }

@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "nat20_rs::item.robe",
+    "id": "nat20_core::item.robe",
     "name": "Robe",
     "description": "A simple robe, providing minimal protection.",
     "weight": 1.8143696,

@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::subclass.wizard.evoker",
+    "id": "nat20_core::subclass.wizard.evoker",
     "base": {
         "effects_by_level": {}
     }

@@ -1,15 +1,15 @@
 {
-    "id": "nat20_rs::effect.extra_attack",
+    "id": "nat20_core::effect.extra_attack",
     "kind": "buff",
     "description": "You can attack twice, instead of once, whenever you take the Attack action on your turn.",
     "on_action": [
         {
-            "script": "nat20_rs::script.effect.extra_attack"
+            "script": "nat20_core::script.effect.extra_attack"
         }
     ],
     "on_resource_cost": [
         {
-            "script": "nat20_rs::script.effect.extra_attack"
+            "script": "nat20_core::script.effect.extra_attack"
         }
     ]
 }

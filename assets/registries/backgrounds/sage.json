@@ -1,12 +1,12 @@
 {
-    "id": "nat20_rs::background.sage",
+    "id": "nat20_core::background.sage",
     "ability_scores": [
         "wisdom",
         "intelligence",
         "charisma"
     ],
     "_comment": "Placeholder feat",
-    "feat": "nat20_rs::feat.fighting_style.archery",
+    "feat": "nat20_core::feat.fighting_style.archery",
     "skill_proficiencies": [
         "arcana",
         "history"
@@ -20,11 +20,11 @@
                     "items": [
                         [
                             1,
-                            "nat20_rs::item.quarterstaff"
+                            "nat20_core::item.quarterstaff"
                         ],
                         [
                             1,
-                            "nat20_rs::item.robe"
+                            "nat20_core::item.robe"
                         ]
                     ],
                     "money": "8 GP"

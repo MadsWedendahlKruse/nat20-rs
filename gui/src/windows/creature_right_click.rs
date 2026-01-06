@@ -1,5 +1,5 @@
 use hecs::Entity;
-use nat20_rs::engine::game_state::GameState;
+use nat20_core::engine::game_state::GameState;
 use strum::IntoEnumIterator;
 
 use crate::{

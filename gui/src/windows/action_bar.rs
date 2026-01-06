@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use hecs::Entity;
 use imgui::{ChildFlags, MouseButton};
-use nat20_rs::{
+use nat20_core::{
     components::{
         actions::{
             action::{ActionCondition, ActionContext, ActionKind, ActionMap},
@@ -213,7 +213,7 @@ fn render_actions(
                 // TODO: This works for now to hide stuff like Reapply Hex, but it's
                 // definitely not ideal. Probably better to "mark" these actions somehow
                 if contexts_and_costs.iter().all(|(_, cost)| {
-                    cost.contains_key(&ResourceId::new("nat20_rs", "resource.reaction"))
+                    cost.contains_key(&ResourceId::new("nat20_core", "resource.reaction"))
                         || cost.iter().any(|(res_id, amount)| {
                             let resources = systems::helpers::get_component::<ResourceMap>(
                                 &game_state.world,
@@ -796,7 +796,7 @@ fn render_range_preview(
     gui_state: &mut GuiState,
     game_state: &mut GameState,
     action: &mut ActionData,
-    targeting_context: &nat20_rs::components::actions::targeting::TargetingContext,
+    targeting_context: &nat20_core::components::actions::targeting::TargetingContext,
 ) {
     let normal_range = targeting_context.range.normal().get::<meter>();
     let max_range = targeting_context.range.max().get::<meter>();

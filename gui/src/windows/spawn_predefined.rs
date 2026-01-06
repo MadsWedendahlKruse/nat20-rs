@@ -2,7 +2,7 @@ use core::f32;
 
 use hecs::{Entity, World};
 use imgui::MouseButton;
-use nat20_rs::{
+use nat20_core::{
     components::id::Name,
     engine::game_state::GameState,
     entities::{

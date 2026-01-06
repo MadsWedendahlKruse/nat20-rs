@@ -1,8 +1,8 @@
-export const ACTION_RESOURCE_ID = "nat20_rs::resource.action";
-export const BONUS_ACTION_RESOURCE_ID = "nat20_rs::resource.bonus_action";
+export const ACTION_RESOURCE_ID = "nat20_core::resource.action";
+export const BONUS_ACTION_RESOURCE_ID = "nat20_core::resource.bonus_action";
 
 fn resource_cost_hook(action_view, entity_view) {
-    if action_view.action_id != "nat20_rs::action.dash" {
+    if action_view.action_id != "nat20_core::action.dash" {
         return;
     }
 

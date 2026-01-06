@@ -1,5 +1,5 @@
 use hecs::Entity;
-use nat20_rs::{
+use nat20_core::{
     engine::game_state::GameState,
     systems::{self, geometry::LineOfSightResult},
 };

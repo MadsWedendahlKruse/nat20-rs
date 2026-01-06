@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::effect.item.ring_of_attacking",
+    "id": "nat20_core::effect.item.ring_of_attacking",
     "kind": "buff",
     "description": "While wearing this ring, you have advantage on attack rolls.",
     "duration": "conditional",

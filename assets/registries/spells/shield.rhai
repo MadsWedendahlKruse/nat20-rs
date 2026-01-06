@@ -9,7 +9,7 @@ fn reaction_trigger(context) {
         }
         // Note that we're checking for the ID of the Magic Missile *action*
         // here, not the spell itself.
-        return action.action_id == "nat20_rs::action.magic_missile";
+        return action.action_id == "nat20_core::action.magic_missile";
     }
 
     if event.is_d20_check_performed() {
@@ -26,7 +26,7 @@ fn reaction_trigger(context) {
 }
 
 fn post_damage_mitigation_hook(entity_view, damage_mitigation_result) {
-    if damage_mitigation_result.source == "nat20_rs::spell.magic_missile" {
+    if damage_mitigation_result.source == "nat20_core::spell.magic_missile" {
         damage_mitigation_result.add_immunity();
     }
 }

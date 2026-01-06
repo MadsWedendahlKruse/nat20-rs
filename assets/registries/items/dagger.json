@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "nat20_rs::item.dagger",
+    "id": "nat20_core::item.dagger",
     "name": "Dagger",
     "description": "A simple dagger.",
     "weight": 0.4535924,

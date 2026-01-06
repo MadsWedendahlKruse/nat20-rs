@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::spell.longstrider",
+    "id": "nat20_core::spell.longstrider",
     "description": "You touch a creature. Its speed increases by 10 feet until the spell ends.",
     "base_level": 1,
     "school": "transmutation",
@@ -11,7 +11,7 @@
         "standard": {
             "payload": {
                 "effect": {
-                    "effect_id": "nat20_rs::effect.spell.longstrider",
+                    "effect_id": "nat20_core::effect.spell.longstrider",
                     "lifetime": {
                         "at_turn_boundary": {
                             "entity": "applier",
@@ -36,6 +36,6 @@
         "allowed_targets": "not_dead"
     },
     "resource_cost": {
-        "nat20_rs::resource.action": 1
+        "nat20_core::resource.action": 1
     }
 }

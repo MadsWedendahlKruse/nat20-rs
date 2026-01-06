@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "nat20_rs::item.javelin",
+    "id": "nat20_core::item.javelin",
     "name": "Javelin",
     "description": "A versatile javelin, effective in both melee and ranged combat.",
     "weight": 0.9071848,

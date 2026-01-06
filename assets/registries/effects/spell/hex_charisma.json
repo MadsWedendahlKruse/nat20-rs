@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::effect.spell.hex.charisma",
+    "id": "nat20_core::effect.spell.hex.charisma",
     "kind": "debuff",
     "description": "The target takes 1d6 necrotic damage when attacked by the caster and has Disadvantage on Charisma ability checks.",
     "modifiers": [
@@ -9,12 +9,12 @@
     ],
     "pre_damage_mitigation": [
         {
-            "script": "nat20_rs::script.effect.spell.hex"
+            "script": "nat20_core::script.effect.spell.hex"
         }
     ],
     "on_death": [
         {
-            "script": "nat20_rs::script.effect.spell.hex"
+            "script": "nat20_core::script.effect.spell.hex"
         }
     ]
 }

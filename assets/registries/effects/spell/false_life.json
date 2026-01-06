@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::effect.false_life",
+    "id": "nat20_core::effect.false_life",
     "kind": "buff",
     "description": "You've bolstered yourself with a necromantic facsimile of life, granting you temporary hit points for the duration.",
     "modifiers": [

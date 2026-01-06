@@ -14,7 +14,7 @@ imgui-winit-support = { version = "0.13.0", git = "https://github.com/imgui-rs/i
 image = "0.23"
 raw-window-handle = "0.6.0"
 winit = { version = "0.30", features = ["rwh_06"] }
-nat20_rs = { path = "../engine" }
+nat20_core = { path = "../core" }
 strum = { version = "0.27.1", features = ["derive"] }
 bytemuck = { version = "1", features = ["derive"] }
 hecs = { version = "0.10.5", features = ["std", "macros", "serde"] }

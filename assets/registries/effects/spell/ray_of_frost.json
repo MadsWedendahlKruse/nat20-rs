@@ -1,5 +1,5 @@
 {
-    "id": "nat20_rs::effect.spell.ray_of_frost",
+    "id": "nat20_core::effect.spell.ray_of_frost",
     "kind": "debuff",
     "description": "Your movement speed is reduced by 10 feet until the start of your next turn.",
     "modifiers": [

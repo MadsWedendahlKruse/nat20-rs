@@ -1,6 +1,6 @@
 {
   "item": {
-    "id": "nat20_rs::item.greatsword",
+    "id": "nat20_core::item.greatsword",
     "name": "Greatsword",
     "description": "A large two-handed sword, capable of dealing heavy damage.",
     "weight": 2.7215543,

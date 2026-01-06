@@ -1,10 +1,10 @@
 # [package]
-# name = "nat20_rs" # the name of the package
+# name = "nat20_core" # the name of the package
 # version = "0.1.0"    # the current version, obeying semver
 
 [workspace]
 members = [
-    "engine", "gui"
+    "core", "gui"
 ]
 
 [patch.crates-io]

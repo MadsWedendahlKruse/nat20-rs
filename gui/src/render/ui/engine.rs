@@ -1,7 +1,7 @@
 use chrono::format;
 use hecs::World;
 use imgui::TreeNodeFlags;
-use nat20_rs::{
+use nat20_core::{
     components::{actions::targeting::TargetInstance, id::Name},
     engine::event::{ActionData, EncounterEvent, Event, EventKind, EventLog},
     systems::{
