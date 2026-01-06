@@ -81,9 +81,10 @@ impl MainMenuWindow {
 
         let geometry_name = "test_terrain_2";
         // Attempt to load from the local cache first
-        let geometry = if let Ok(file) =
-            File::open(format!(".local/cache/geometry/{}.json", geometry_name))
-        {
+        let geometry = if let Ok(file) = File::open(format!(
+            "assets/models/geometry/cache/{}.json",
+            geometry_name
+        )) {
             serde_json::from_reader(BufReader::new(file)).expect("Failed to load cached geometry")
         } else {
             let geometry = WorldGeometry::from_obj_path(
@@ -91,8 +92,11 @@ impl MainMenuWindow {
                 &initial_config.clone().build(),
             );
             // Save to local cache for next time
-            let file = File::create(format!(".local/cache/geometry/{}.json", geometry_name))
-                .expect("Failed to create cache file for geometry");
+            let file = File::create(format!(
+                "assets/models/geometry/cache/{}.json",
+                geometry_name
+            ))
+            .expect("Failed to create cache file for geometry");
             serde_json::to_writer_pretty(file, &geometry).expect("Failed to write cached geometry");
             geometry
         };
