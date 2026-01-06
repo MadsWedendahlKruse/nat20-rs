@@ -98,11 +98,11 @@ This makes the system inherently moddable: new spells or items can be added by d
 
 The engine uses an **event-based architecture** where everything is represented as an event, from rolling a D20 to performing an action. This allows for very transparent combat-logging, so you can see exactly what happened at every step of combat, and to allow reactions that can be triggered by whatever you want (`core/src/engine/event`).
 
-_insert image_
+<img width="550" height="304" alt="event_log_hellish_rebuke" src="https://github.com/user-attachments/assets/b1ba17ee-5e05-4213-8e7f-0986f3287a32" />
 
 The payload of each event tracks every dice roll and bonus modifier that went into it, so you can see exactly how a final result was computed.
 
-_insert image_
+<img width="714" height="161" alt="event_log_dice_breakdown" src="https://github.com/user-attachments/assets/9ed466d9-3823-43d6-b00e-aa9748ef66fb" />
 
 ### Game/encounter orchestration
 The `core/src/engine` module orchestrates the overall game state (`core/src/engine/game_state`), including the ECS world, combat encounters (`core/src/engine/encounter`), and event/interaction state. 
