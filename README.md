@@ -1,4 +1,7 @@
 # Nat20
+_**natural 20** (noun)_ \
+_The result of rolling a twenty-sided die and obtaining a value of 20, before applying any modifiers, often representing an exceptional outcome._ \
+_- Oxford Dictionary (probably)_
 
 ## Overview
 
@@ -104,8 +107,8 @@ The payload of each event tracks every dice roll and bonus modifier that went in
 
 <img width="714" height="161" alt="event_log_dice_breakdown" src="https://github.com/user-attachments/assets/9ed466d9-3823-43d6-b00e-aa9748ef66fb" />
 
-### Game/encounter orchestration
-The `core/src/engine` module orchestrates the overall game state (`core/src/engine/game_state`), including the ECS world, combat encounters (`core/src/engine/encounter`), and event/interaction state. 
+### Game state/encounter orchestration
+The `core/src/engine` module containts the overall **game state** (`core/src/engine/game_state`), which is the judge, jury, and executioner of the engine. The game state includes the ECS world, combat encounters (`core/src/engine/encounter`), and event/interaction state. Whenever a creature wants to do basically anything, a request is sent to the game state, which will then validate, e.g. that it's the creatures turn if they're in combat or that they have enough resources to perform an action.
 
 ### Auxiliary systems
 - **Geometry & movement**: collision, line-of-sight, and navigation/pathing use [`parry3d`](https://crates.io/crates/parry3d), [`rerecast`](https://crates.io/crates/rerecast), and [`polyanya`](https://crates.io/crates/polyanya) (`engine/src/engine/geometry` and `engine/src/systems/geometry`/`movement`).
