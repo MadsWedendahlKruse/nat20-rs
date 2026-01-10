@@ -4,6 +4,7 @@ use hecs::{Entity, World};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    chain_hook_field,
     components::{
         actions::action::ActionContext,
         damage::{
@@ -168,6 +169,126 @@ impl Effect {
 
     pub fn id(&self) -> &EffectId {
         &self.id
+    }
+
+    /// TODO: This is definitely not the most elegant way to combine hooks. It could
+    /// be argued that the hooks should perhaps be stored in a vector instead, or some
+    /// other similar structure, which allows storing multiple hooks of the same type.
+    /// However, it's also worth considering if *any* event would actually need to have
+    /// multiple hooks for the same type? Would it ever make sense to define something
+    /// like an effect which adds +2 and +1 to a skill? That's a question for another
+    /// day - right now this works :^)
+    pub fn combine_hooks(&mut self, other: &Effect) {
+        chain_hook_field!(
+            self,
+            other,
+            on_apply,
+            |world: &mut World, entity: Entity, action_context: Option<&ActionContext>|,
+            (world, entity, action_context)
+        );
+        chain_hook_field!(
+            self,
+            other,
+            on_unapply,
+            |world: &mut World, entity: Entity|,
+            (world, entity)
+        );
+        chain_hook_field!(
+            self,
+            other,
+            pre_attack_roll,
+            |world: &World, entity: Entity, attack_roll: &mut AttackRoll|,
+            (world, entity, attack_roll)
+        );
+        chain_hook_field!(
+            self,
+            other,
+            post_attack_roll,
+            |world: &World, entity: Entity, attack_roll_result: &mut AttackRollResult|,
+            (world, entity, attack_roll_result)
+        );
+        chain_hook_field!(
+            self,
+            other,
+            on_armor_class,
+            |world: &World, entity: Entity, armor_class: &mut ArmorClass|,
+            (world, entity, armor_class)
+        );
+        chain_hook_field!(
+            self,
+            other,
+            pre_damage_roll,
+            |world: &World, entity: Entity, damage_roll: &mut DamageRoll|,
+            (world, entity, damage_roll)
+        );
+        chain_hook_field!(
+            self,
+            other,
+            post_damage_roll,
+            |world: &World, entity: Entity, damage_roll_result: &mut DamageRollResult|,
+            (world, entity, damage_roll_result)
+        );
+        chain_hook_field!(
+            self,
+            other,
+            on_action,
+            |world: &mut World, action_data: &ActionData|,
+            (world, action_data)
+        );
+        chain_hook_field!(
+            self,
+            other,
+            on_resource_cost,
+            |world: &World,
+             entity: Entity,
+             action_id: &ActionId,
+             action_context: &ActionContext,
+             resource_costs: &mut ResourceAmountMap|,
+            (world, entity, action_id, action_context, resource_costs)
+        );
+        chain_hook_field!(
+            self,
+            other,
+            pre_damage_mitigation,
+            |world: &World,
+             entity: Entity,
+             effect_instance: &EffectInstance,
+             damage_roll_result: &mut DamageRollResult|,
+            (world, entity, effect_instance, damage_roll_result)
+        );
+        chain_hook_field!(
+            self,
+            other,
+            post_damage_mitigation,
+            |world: &World, entity: Entity, mitigation_result: &mut DamageMitigationResult|,
+            (world, entity, mitigation_result)
+        );
+        chain_hook_field!(
+            self,
+            other,
+            on_death,
+            |world: &mut World,
+             victim: Entity,
+             killer: Option<Entity>,
+             applier: Option<Entity>|,
+            (world, victim, killer, applier)
+        );
+        for (skill, hooks) in &other.on_skill_check {
+            self.on_skill_check
+                .entry(*skill)
+                .and_modify(|existing_hooks| {
+                    existing_hooks.combine_hooks(hooks);
+                })
+                .or_insert_with(|| hooks.clone());
+        }
+        for (saving_throw, hooks) in &other.on_saving_throw {
+            self.on_saving_throw
+                .entry(*saving_throw)
+                .and_modify(|existing_hooks| {
+                    existing_hooks.combine_hooks(hooks);
+                })
+                .or_insert_with(|| hooks.clone());
+        }
     }
 }
 

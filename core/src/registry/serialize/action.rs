@@ -44,7 +44,6 @@ pub enum ActionConditionDefinition {
 pub struct EffectInstanceDefinition {
     pub effect_id: EffectId,
     pub lifetime: EffectLifetimeTemplate,
-    pub children: Vec<(EffectId, EffectLifetimeTemplate)>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

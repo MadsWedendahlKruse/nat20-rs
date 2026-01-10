@@ -7,7 +7,7 @@ use strum::IntoEnumIterator;
 use crate::{
     components::{
         ability::Ability,
-        d20::{D20CheckDC, D20CheckSet},
+        d20::{D20CheckDC, D20CheckMap},
         effects::hooks::D20CheckHooks,
     },
     systems::{self},
@@ -84,7 +84,7 @@ impl From<SavingThrowKind> for String {
     }
 }
 
-pub type SavingThrowSet = D20CheckSet<SavingThrowKind>;
+pub type SavingThrowSet = D20CheckMap<SavingThrowKind>;
 
 pub type SavingThrowDC = D20CheckDC<SavingThrowKind>;
 

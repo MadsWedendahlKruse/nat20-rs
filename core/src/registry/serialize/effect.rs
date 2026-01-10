@@ -6,11 +6,12 @@ use crate::{
     components::{
         ability::AbilityScoreMap,
         actions::action::ActionContext,
-        d20::{D20CheckKey, D20CheckSet},
+        d20::{D20CheckKey, D20CheckMap},
         damage::{
             DamageMitigationEffect, DamageMitigationResult, DamageResistances, DamageRollResult,
         },
         effects::{
+            condition::{self, Condition},
             effect::{Effect, EffectInstance, EffectKind},
             hooks::{
                 ActionHook, ArmorClassHook, AttackRollHook, DamageRollResultHook, DeathHook,
@@ -59,27 +60,6 @@ pub enum TimeDurationDefinition {
     Turns { turns: u32 },
 }
 
-// impl Evaluable for TimeDurationDefinition {
-//     type Output = TimeDuration;
-
-//     fn evaluate(
-//         &self,
-//         world: &World,
-//         entity: Entity,
-//         action_context: &ActionContext,
-//         variables: &VariableMap,
-//     ) -> Result<Self::Output, EvaluationError> {
-//         match self {
-//             TimeDurationDefinition::RealTime { time } => Ok(TimeDuration::RealTime {
-//                 seconds: time
-//                     .evaluate(world, entity, action_context, variables)?
-//                     .value,
-//             }),
-//             TimeDurationDefinition::Turns { turns } => Ok(TimeDuration::Turns { turns: *turns }),
-//         }
-//     }
-// }
-
 impl From<TimeDurationDefinition> for TimeDuration {
     fn from(definition: TimeDurationDefinition) -> Self {
         match definition {
@@ -100,6 +80,9 @@ pub struct EffectDefinition {
     /// If present, this effect replaces another effect with the given id
     #[serde(default)]
     pub replaces: Option<EffectId>,
+
+    #[serde(default)]
+    pub conditions: Vec<Condition>,
 
     /// Simple effect modifiers like:
     /// - Ability score changes
@@ -212,6 +195,10 @@ impl From<EffectDefinition> for Effect {
         {
             let hooks = collect_effect_hooks(&definition.on_death, &effect_id);
             effect.on_death = DeathHookDefinition::combine_hooks(hooks);
+        }
+
+        for condition in definition.conditions {
+            effect.combine_hooks(&condition.effect());
         }
 
         effect
@@ -437,7 +424,7 @@ impl EffectModifier {
     }
 
     fn apply_d20_check_modifier<K>(
-        modifiable: &mut D20CheckSet<K>,
+        modifiable: &mut D20CheckMap<K>,
         modifier: &D20CheckModifierProvider<K>,
         source: ModifierSource,
         phase: EffectPhase,

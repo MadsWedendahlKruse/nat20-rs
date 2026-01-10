@@ -2,14 +2,7 @@
     "id": "nat20_core::effect.condition.poisoned",
     "kind": "debuff",
     "description": "You have Disadvantage on attack rolls and ability checks.",
-    "modifiers": [
-        {
-            "skill": "all disadvantage"
-        }
-    ],
-    "pre_attack_roll": [
-        {
-            "modifier": "disadvantage"
-        }
+    "conditions": [
+        "poisoned"
     ]
 }

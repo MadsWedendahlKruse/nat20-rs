@@ -292,7 +292,7 @@ pub trait D20CheckKey: Eq + Hash + IntoEnumIterator + Copy {}
 impl<T: Eq + Hash + IntoEnumIterator + Copy> D20CheckKey for T {}
 
 #[derive(Debug, Clone)]
-pub struct D20CheckSet<K>
+pub struct D20CheckMap<K>
 where
     K: D20CheckKey,
 {
@@ -301,7 +301,7 @@ where
     get_hooks: fn(&K, &World, Entity) -> Vec<D20CheckHooks>,
 }
 
-impl<K> D20CheckSet<K>
+impl<K> D20CheckMap<K>
 where
     K: D20CheckKey,
 {
@@ -369,7 +369,7 @@ where
     }
 }
 
-impl<K> KeyedModifiable<K> for D20CheckSet<K>
+impl<K> KeyedModifiable<K> for D20CheckMap<K>
 where
     K: D20CheckKey,
 {
