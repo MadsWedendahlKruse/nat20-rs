@@ -22,6 +22,10 @@ In the GUI, you can spawn some creatures and run through a combat encounter to s
 
 In the future, the engine is intended to be usable as a library that can be integrated into other projects, such as a full-fledged game or a virtual tabletop application.
 
+Here's an example of the Fireball scenario described earlier :fire::
+
+![nat20_demo](https://github.com/user-attachments/assets/950921bc-09e3-4ea7-bc01-bd29ce95628a)
+
 ## Engine architecture
 
 ### ECS core
