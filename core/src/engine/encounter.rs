@@ -97,13 +97,13 @@ impl Encounter {
             EntityFilter::All => self.participants.iter().cloned().collect(),
 
             EntityFilter::Characters => world
-                .query::<&CharacterTag>()
+                .query::<(Entity, &CharacterTag)>()
                 .iter()
                 .map(|(e, _)| e)
                 .collect(),
 
             EntityFilter::Monsters => world
-                .query::<&MonsterTag>()
+                .query::<(Entity, &MonsterTag)>()
                 .iter()
                 .map(|(e, _)| e)
                 .collect(),
@@ -113,7 +113,7 @@ impl Encounter {
             }
 
             EntityFilter::LifeStates(life_states) => world
-                .query::<&LifeState>()
+                .query::<(Entity, &LifeState)>()
                 .iter()
                 .filter_map(|(e, ls)| {
                     if life_states.contains(ls) {
@@ -125,7 +125,7 @@ impl Encounter {
                 .collect(),
 
             EntityFilter::NotLifeStates(life_states) => world
-                .query::<&LifeState>()
+                .query::<(Entity, &LifeState)>()
                 .iter()
                 .filter_map(|(e, ls)| {
                     if !life_states.contains(ls) {

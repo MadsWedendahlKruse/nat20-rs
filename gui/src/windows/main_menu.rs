@@ -1,5 +1,6 @@
 use std::{fs::File, io::BufReader};
 
+use hecs::Entity;
 use imgui::{ChildFlags, MouseButton};
 use nat20_core::{
     components::{
@@ -316,7 +317,7 @@ impl MainMenuWindow {
 
                 let mut entities = game_state
                     .world
-                    .query::<&Name>()
+                    .query::<(Entity, &Name)>()
                     .into_iter()
                     .map(|(entity, name)| (entity, name.clone()))
                     .collect::<Vec<_>>();
@@ -536,7 +537,7 @@ impl MainMenuWindow {
         }
 
         // TODO: I feel like this should be somewhere else
-        for (entity, pose) in game_state.world.query::<&CreaturePose>().iter() {
+        for (entity, pose) in game_state.world.query::<(Entity, &CreaturePose)>().iter() {
             systems::geometry::get_shape(&game_state.world, entity).map(|(shape, shape_pose)| {
                 let key = format!("{:#?}", shape);
                 if let Some(mesh) = mesh_cache.get(&key) {
@@ -622,7 +623,7 @@ impl MainMenuWindow {
     }
 
     fn render_creature_labels(ui: &imgui::Ui, game_state: &GameState, camera: &OrbitCamera) {
-        for (entity, name) in game_state.world.query::<&Name>().iter() {
+        for (entity, name) in game_state.world.query::<(Entity, &Name)>().iter() {
             if let Some(pose) = game_state.world.get::<&CreaturePose>(entity).ok() {
                 let translation = pose.translation.vector;
                 let pos = camera.world_to_screen(&Point3::new(
