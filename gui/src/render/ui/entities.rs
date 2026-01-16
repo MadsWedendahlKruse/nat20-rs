@@ -134,10 +134,8 @@ where
 }
 
 pub fn render_species_if_present(ui: &imgui::Ui, world: &World, entity: Entity) {
-    let mut query = world
-        .query_one::<(&SpeciesId, &Option<SubspeciesId>)>(entity)
-        .unwrap();
-    if let Some((species, subspecies)) = query.get() {
+    let mut query = world.query_one::<(&SpeciesId, &Option<SubspeciesId>)>(entity);
+    if let Ok((species, subspecies)) = query.get() {
         (species.clone(), subspecies.clone()).render(ui);
     }
 }

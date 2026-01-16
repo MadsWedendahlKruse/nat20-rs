@@ -85,7 +85,7 @@ impl RenderableMutWithContext<&mut GameState> for SpawnPredefinedWindow {
             &mut opened,
             || {
                 self.world
-                    .query::<&Name>()
+                    .query::<(Entity, &Name)>()
                     .into_iter()
                     .for_each(|(entity, name)| {
                         if ui.collapsing_header(
@@ -200,7 +200,7 @@ fn set_unique_name(world: &mut World, entity: Entity) {
     while world
         .query::<&Name>()
         .iter()
-        .any(|(_, n)| n.as_str() == unique_name)
+        .any(|n| n.as_str() == unique_name)
     {
         unique_name = format!("{} ({})", name, counter);
         counter += 1;
